@@ -1,0 +1,21 @@
+"use client";
+
+import Link from "next/link";
+import { ArrowRight, Check, CheckCircle2, FileSearch, LockKeyhole, ShieldCheck, Sparkles } from "lucide-react";
+import { FormEvent, useState } from "react";
+import { useParams } from "next/navigation";
+import "./referral.css";
+import "../../prescore-ui-v1.css";
+
+export default function ReferralPage() {
+  const params = useParams<{ code: string }>();
+  const code = String(params?.code || "AGENT-ANTON-001").toUpperCase();
+  const [done, setDone] = useState(false); const [saving, setSaving] = useState(false); const [error, setError] = useState("");
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setSaving(true); setError(""); const form = new FormData(event.currentTarget);
+    const response = await fetch("/api/agent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "lead", agentCode: code, companyName: form.get("companyName"), companyInn: form.get("companyInn"), contactName: form.get("contactName"), phone: form.get("phone"), email: form.get("email"), consent: form.get("consent") === "on", source: "Реферальная ссылка" }) });
+    if (!response.ok) { const body = await response.json() as { error?: string }; setError(body.error || "Не удалось отправить данные"); setSaving(false); return; }
+    setDone(true); setSaving(false);
+  }
+  return <main className="ref-shell"><section className="ref-story"><Link href="/" className="ref-brand">Прескор</Link><div><span><Sparkles /> ПРИГЛАШЕНИЕ ОТ ПАРТНЁРА</span><h1>Узнайте кредитную позицию бизнеса до обращения в банк.</h1><p>Оставьте данные компании. Партнёр увидит заявку в своём кабинете и поможет пройти путь от анализа до подходящего банковского продукта.</p><ul><li><FileSearch /> Единое заключение по выпискам, БФО, Правовой контур, контрактам и БКИ</li><li><ShieldCheck /> Расчётный лимит, стоп-факторы и подходящие маршруты</li><li><LockKeyhole /> Передача данных банку — только после отдельного согласия</li></ul></div><small>Код партнёра: {code}</small></section><section className="ref-panel">{done ? <div className="ref-success"><CheckCircle2 /><span>ЗАЯВКА ПРИНЯТА</span><h2>Вы появились в кабинете партнёра</h2><p>Партнёр свяжется с вами и объяснит, какие данные нужны для полного анализа.</p><Link href="/checkout">Открыть Prescore Full <ArrowRight /></Link></div> : <form onSubmit={submit}><span>ПЕРВЫЙ ШАГ</span><h2>Оставить данные компании</h2><p>Это ещё не заявка в банк и не согласие на запрос кредитной истории.</p><label>Название компании<input name="companyName" placeholder="ООО «Компания»" required /></label><label>ИНН<input name="companyInn" inputMode="numeric" pattern="[0-9]{10}|[0-9]{12}" required /></label><label>Контактное лицо<input name="contactName" required /></label><div className="ref-grid"><label>Телефон<input name="phone" type="tel" /></label><label>Email<input name="email" type="email" /></label></div><label className="ref-consent"><input type="checkbox" name="consent" required /><span>Даю <Link href="/consent" target="_blank">согласие на обработку персональных данных</Link> и ознакомлен(а) с <Link href="/privacy" target="_blank">Политикой конфиденциальности</Link>. Подтверждаю передачу указанных данных партнёру Прескор для связи по аналитической услуге.</span></label>{error && <p className="ref-error">{error}</p>}<button disabled={saving}>{saving ? "Отправляю…" : <>Передать партнёру <ArrowRight /></>}</button><small><Check /> Информационно-аналитическая услуга. Одобрение и выдача кредита не гарантируются.</small></form>}</section></main>;
+}
