@@ -24,6 +24,8 @@ import { normalizeTransaction } from "./credit-engine/normalization/transaction-
 import { canonicalToLegacyFacts } from "./credit-engine/normalization/compatibility-adapter.ts";
 import { deduplicateTransactions, EXACT_DUPLICATE_RULE } from "./credit-engine/normalization/deduplication.ts";
 import { linkInternalTransfersAndReversals } from "./credit-engine/normalization/transfer-matching.ts";
+import type { ClassificationSummary, TransactionClassification } from "./credit-engine/contracts/classification.ts";
+import { classifyEconomicTransaction, summarizeClassifications } from "./credit-engine/classification/classifier.ts";
 
 export type TransactionDirection = "in" | "out" | "unknown";
 
@@ -76,6 +78,7 @@ export type NormalizedTransaction = {
   possibleReversalOfTransactionId?: string;
   relatedPartyStatus?: RelatedPartyStatus;
   isOwnAccountTransfer?: boolean;
+  classification?: TransactionClassification;
 };
 
 export type StopFactor = {
@@ -229,6 +232,7 @@ export type AnalysisResult = {
   deduplication?: DeduplicationDiagnostic;
   infrastructureVersions?: InfrastructureVersions;
   normalization?: NormalizationSummary;
+  classification?: ClassificationSummary;
   transactionsTruncated?: boolean;
   storedTransactionCount?: number;
   originalTransactionCount?: number;
@@ -647,12 +651,16 @@ function analyzeCombinedStatement(
   const identity = deriveIdentity(documents, accounts, header);
   const warnings: string[] = [];
 
+  const shadowClassifications: Array<{ transaction: CanonicalTransaction; classification: TransactionClassification }> = [];
   const transactions = canonicalBatch.retained.map((item): NormalizedTransaction => {
     const facts = canonicalToLegacyFacts(item);
     const payerInn = normalizeInn(item.rawValues.payerInn || "");
     const recipientInn = normalizeInn(item.rawValues.recipientInn || "");
     const internal = Boolean(identity.inn && payerInn === identity.inn && recipientInn === identity.inn);
-    return { ...facts, ...getCategory(facts.purpose, facts.direction, internal) };
+    const legacyClassification = getCategory(facts.purpose, facts.direction, internal);
+    const classification = classifyEconomicTransaction(item, { legacyCategory: legacyClassification.category });
+    shadowClassifications.push({ transaction: item, classification });
+    return { ...facts, ...legacyClassification, classification };
   });
 
   if (!transactions.length) throw new Error("Документы найдены, но даты или суммы не удалось распознать");
@@ -1028,6 +1036,7 @@ function analyzeCombinedStatement(
       probableDuplicateCount: canonicalBatch.deduplication.probableDuplicateCount,
     },
     normalization: canonicalBatch.normalization,
+    classification: summarizeClassifications(shadowClassifications),
     warnings,
     methodologyVersion: "PRESCORE-CORE-2026.08",
   };

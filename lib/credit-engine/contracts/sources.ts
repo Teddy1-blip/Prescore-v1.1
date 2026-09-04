@@ -142,6 +142,7 @@ export type InfrastructureVersions = {
   statementParser: string;
   transactionNormalizer: string;
   transactionClassifier: string;
+  economicClassifier: string;
   integrity: string;
 };
 
@@ -149,5 +150,6 @@ export const INFRASTRUCTURE_VERSIONS: InfrastructureVersions = {
   statementParser: "PRESCORE-STATEMENT-PARSER-1",
   transactionNormalizer: "PRESCORE-TX-NORMALIZER-1",
   transactionClassifier: "PRESCORE-TX-CLASSIFIER-1",
+  economicClassifier: "PRESCORE-TX-CLASSIFIER-2.0.0-SHADOW",
   integrity: "PRESCORE-INTEGRITY-1",
 };
