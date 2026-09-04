@@ -4,6 +4,7 @@ import type { QuarterlyFinancialReport } from "../../../lib/quarterly-report";
 import { applyAnalysisControls, readControlState } from "../../../lib/admin-controls";
 import { readableAnalysis, requireApiUser, unauthorized } from "../api-auth";
 import { analysisView, resolveAnalysisTier } from "../../../lib/entitlements";
+import { structuredAttachmentIsUntrusted } from "../../../lib/credit-engine/source-foundation";
 
 type PreparedStatement = {
   bind: (...values: unknown[]) => PreparedStatement;
@@ -171,6 +172,9 @@ export async function POST(request: Request) {
     const body = await request.json() as { type?: string; analysis?: AnalysisPayload & Record<string, unknown>; deal?: Record<string, unknown>; analysisId?: string; companyName?: string; companyInn?: string; agentCode?: string; consentAt?: string; creditHistory?: CreditHistoryReport; quarterlyReport?: QuarterlyFinancialReport; applications?: Array<{ bank?: string; product?: string; amount?: number }> };
     if (body.type === "analysis" && body.analysis) {
       return Response.json({ error: "Расчётный результат создаётся и изменяется только серверными модулями" }, { status: 409 });
+    }
+    if (structuredAttachmentIsUntrusted(body)) {
+      return Response.json({ error: "Готовые значения БКИ и квартальной отчётности не принимаются. Передайте исходный файл в /api/source-documents для серверной проверки." }, { status: 409 });
     }
     if ((body.type === "credit-history" || body.type === "quarterly-report") && body.analysisId) {
       const rows = await db.batch([db.prepare("SELECT payload, owner_email AS ownerEmail FROM analyses WHERE id = ? LIMIT 1").bind(body.analysisId)]);

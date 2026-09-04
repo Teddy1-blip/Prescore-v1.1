@@ -42,7 +42,7 @@ test("combines several statements of one company", () => {
   assert.deepEqual(analysis.bankNames.sort(), ["Т-Банк", "Уралсиб"].sort());
 });
 
-test("silently drops a statement with another INN and reports only unrecognized formats", () => {
+test("rejects another INN and exposes an explicit per-file screening result", () => {
   const own = statement({ account: "40702810111110000001", inn: "5032333146", company: "ООО СИТИМЭЙТС", bank: "ПАО БАНК УРАЛСИБ" });
   const foreign = statement({ account: "40702810222220000002", inn: "7701234567", company: "ООО ДРУГОЙ КЛИЕНТ", bank: "АО ТИНЬКОФФ БАНК" });
   const screened = screenBankStatements([
@@ -53,5 +53,5 @@ test("silently drops a statement with another INN and reports only unrecognized 
   assert.equal(screened.companyInn, "5032333146");
   assert.deepEqual(screened.accepted.map((item) => item.fileName), ["own.txt"]);
   assert.deepEqual(screened.unrecognizedFiles, ["unknown.txt"]);
-  assert.equal(JSON.stringify(screened).includes("foreign.txt"), false);
+  assert.equal(screened.screeningResults.find((item) => item.fileName === "foreign.txt")?.status, "COMPANY_MISMATCH");
 });

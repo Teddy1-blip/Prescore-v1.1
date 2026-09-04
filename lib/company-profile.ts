@@ -1,3 +1,5 @@
+import type { SourceEnvelope } from "./credit-engine/contracts/sources";
+
 export type CompanyProfileData = {
   inn: string;
   source: string;
@@ -24,6 +26,7 @@ export type CompanyProfileData = {
     fieldsPresent?: string[];
   };
   legal: { legalCases: number; enforcements: number; enforcementDebt: number; inspections: number; bankruptcyMessages: number };
+  sourceManifest?: { bfo?: SourceEnvelope; external?: SourceEnvelope[] };
   sourceStatus?: Array<{ endpoint: string; status: "available" | "partial" | "unavailable"; retrievedAt: string }>;
   externalBanks?: Array<{ name: string; bik: string; account: string; status: "BANK_FOUND_IN_EXTERNAL_DATA"; evidence: string }>;
   timeline?: Array<{ eventType: string; eventDate: string; entityType: string; description: string; source: string; severityCandidate: "information" | "review" }>;

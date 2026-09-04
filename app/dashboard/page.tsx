@@ -17,7 +17,7 @@ import {
 import CheckoProfile from "./checko-profile";
 import BankOffers from "./bank-offers";
 import CreditHistory from "./credit-history";
-import type { CreditHistoryReport } from "../../lib/credit-history";
+import type { CreditHistoryReport, CreditSubjectRelationship } from "../../lib/credit-history";
 import type { QuarterlyFinancialReport } from "../../lib/quarterly-report";
 import { buildActionPlan } from "../../lib/action-plan";
 import { creditPolicyLayerCounts, creditPolicySummary } from "../../lib/credit-policy";
@@ -155,45 +155,47 @@ export default function Dashboard() {
     notify(`Создано заявок: ${body.deals.length}. Они появились у брокера.`);
   }
 
-  async function attachCreditHistory(report: CreditHistoryReport) {
+  async function attachCreditHistory(file: File, relationship: CreditSubjectRelationship): Promise<CreditHistoryReport> {
     if (!selected) throw new Error("Сначала выполните анализ банковских выписок.");
-    if (report.subjectType === "Юридическое лицо" && report.subjectInn && selected.companyInn && report.subjectInn !== selected.companyInn) {
-      throw new Error(`ИНН отчёта БКИ ${report.subjectInn} не совпадает с ИНН выбранной компании ${selected.companyInn}.`);
-    }
     const previous = analyses;
     try {
-      const response = await fetch("/api/workspace", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "credit-history", analysisId: selected.id, creditHistory: report }),
-      });
-      const body = await response.json() as { analysis?: StoredAnalysis; error?: string };
-      if (!response.ok || !body.analysis) throw new Error(body.error || "save");
+      const form = new FormData();
+      form.set("analysisId", selected.id);
+      form.set("sourceType", "BKI");
+      form.set("relationship", relationship);
+      form.set("file", file);
+      const response = await fetch("/api/source-documents", { method: "POST", body: form });
+      const body = await response.json() as { analysis?: StoredAnalysis; report?: CreditHistoryReport; error?: string };
+      if (!response.ok || !body.analysis || !body.report) throw new Error(body.error || "save");
       const updated = body.analysis;
       setAnalyses((items) => items.map((item) => item.id === selected.id ? updated : item));
       setSaveWarning("");
       notify("Кредитный портфель добавлен к анализу");
-    } catch {
+      return body.report;
+    } catch (caught) {
       setAnalyses(previous);
-      throw new Error("Портфель рассчитан, но сохранить его в кабинете не удалось.");
+      throw new Error(caught instanceof Error ? caught.message : "Портфель рассчитан, но сохранить его в кабинете не удалось.");
     }
   }
 
-  async function attachQuarterlyReport(report: QuarterlyFinancialReport) {
+  async function attachQuarterlyReport(file: File): Promise<QuarterlyFinancialReport> {
     if (!selected) throw new Error("Сначала выполните анализ банковских выписок.");
     const previous = analyses;
     try {
-      const response = await fetch("/api/workspace", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "quarterly-report", analysisId: selected.id, quarterlyReport: report }),
-      });
-      const body = await response.json() as { analysis?: StoredAnalysis; error?: string };
-      if (!response.ok || !body.analysis) throw new Error(body.error || "save");
+      const form = new FormData();
+      form.set("analysisId", selected.id);
+      form.set("sourceType", "QUARTERLY");
+      form.set("file", file);
+      const response = await fetch("/api/source-documents", { method: "POST", body: form });
+      const body = await response.json() as { analysis?: StoredAnalysis; report?: QuarterlyFinancialReport; error?: string };
+      if (!response.ok || !body.analysis || !body.report) throw new Error(body.error || "save");
       const updated = body.analysis;
       setAnalyses((items) => items.map((item) => item.id === selected.id ? updated : item));
       setSaveWarning(""); notify("Квартальная отчётность добавлена в общее заключение");
-    } catch {
+      return body.report;
+    } catch (caught) {
       setAnalyses(previous);
-      throw new Error("Q‑оценка рассчитана, но сохранить её в кабинете не удалось.");
+      throw new Error(caught instanceof Error ? caught.message : "Q‑оценка рассчитана, но сохранить её в кабинете не удалось.");
     }
   }
 

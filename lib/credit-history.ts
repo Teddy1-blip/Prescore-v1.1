@@ -51,6 +51,14 @@ export type CreditHistorySummary = {
   knownRatesCount: number;
   weightedAnnualRate: number | null;
   debtServiceQuality: DebtServiceQuality;
+  knownValues?: {
+    originalAmount: boolean;
+    outstandingPrincipal: boolean;
+    totalOutstanding: boolean;
+    monthlyPayment: boolean;
+    overdueAmount: boolean;
+    guaranteeExposure: boolean;
+  };
 };
 
 export type CreditHistoryReport = {
@@ -412,6 +420,14 @@ function finishReport(input: FinishInput): CreditHistoryReport {
     knownRatesCount: rated.length,
     weightedAnnualRate,
     debtServiceQuality,
+    knownValues: {
+      originalAmount: active.some((item) => item.originalAmount !== null) || input.summaryOverrides?.originalAmount !== undefined,
+      outstandingPrincipal: active.some((item) => item.outstandingPrincipal !== null) || input.summaryOverrides?.outstandingPrincipal !== undefined,
+      totalOutstanding: active.some((item) => item.totalOutstanding !== null || item.outstandingPrincipal !== null) || input.summaryOverrides?.totalOutstanding !== undefined,
+      monthlyPayment: active.some((item) => item.monthlyPayment !== null || item.nextPaymentAmount !== null) || input.summaryOverrides?.monthlyPayment !== undefined,
+      overdueAmount: active.some((item) => item.overdueAmount !== null) || input.summaryOverrides?.overdueAmount !== undefined,
+      guaranteeExposure: active.some((item) => item.guaranteeAmount !== null) || input.summaryOverrides?.guaranteeExposure !== undefined,
+    },
   };
   return { ...input, summary: { ...base, ...input.summaryOverrides } };
 }

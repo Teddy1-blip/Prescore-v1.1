@@ -1,5 +1,6 @@
 import { readableAnalysis, requireApiUser, unauthorized } from "../api-auth";
 import { resolveAnalysisTier, type AnalysisTier } from "../../../lib/entitlements";
+import { INFRASTRUCTURE_VERSIONS, type SourceEnvelope } from "../../../lib/credit-engine/contracts/sources";
 
 type PreparedStatement = {
   bind: (...values: unknown[]) => PreparedStatement;
@@ -334,6 +335,54 @@ function normalizeProfile(inn: string, responses: Record<string, CheckoResponse 
   const endpoints = inn.length === 12
     ? ["entrepreneur", "legal-cases", "bankruptcy-messages", "contracts", "timeline", "fedresurs"]
     : ["company", "finances", "legal-cases", "enforcements", "inspections", "bankruptcy-messages", "contracts", "timeline", "fedresurs", "bank"];
+  const normalizedFieldCodes: Record<string, string> = {
+    revenue: "2110", profit: "2400", assets: "1600", currentAssets: "1200", equity: "1300",
+    currentLiabilities: "1500", receivables: "1230", cash: "1250", payables: "1520",
+    nonCurrentAssets: "1100", inventories: "1210", inputVat: "1220", longTermLiabilities: "1400",
+    longTermBorrowings: "1410", shortTermBorrowings: "1510", costOfSales: "2120", grossProfit: "2100",
+    operatingProfit: "2200", interestExpense: "2330", profitBeforeTax: "2300",
+  };
+  const financeFields = new Set(finances.fieldsPresent);
+  const bfoStatus = failedMethods.includes("finances") ? "FAILED" as const : finances.latestYear ? "READY" as const : "EMPTY" as const;
+  const bfo: SourceEnvelope | undefined = inn.length === 12 ? undefined : {
+    sourceId: `bfo:${inn}:${retrievedAt}`,
+    sourceType: "BFO",
+    status: bfoStatus,
+    companyInn: inn,
+    sourceName: "Официальная бухгалтерская отчётность",
+    periodFrom: finances.latestYear ? `${finances.latestYear}-01-01` : undefined,
+    periodTo: finances.latestYear ? `${finances.latestYear}-12-31` : undefined,
+    receivedAt: retrievedAt,
+    parserVersion: "PRESCORE-BFO-NORMALIZER-1",
+    integrityVersion: INFRASTRUCTURE_VERSIONS.integrity,
+    confidence: bfoStatus === "READY" ? Math.round(Math.min(100, financeFields.size / Object.keys(normalizedFieldCodes).length * 100)) : null,
+    warnings: bfoStatus === "FAILED" ? ["Источник БФО недоступен."] : bfoStatus === "EMPTY" ? ["В источнике нет бухгалтерской отчётности."] : [],
+    rawReference: `external:/finances:${retrievedAt}`,
+    fieldAvailability: Object.fromEntries(Object.entries(normalizedFieldCodes).map(([field, code]) => [field, financeFields.has(code) ? "KNOWN" : "UNKNOWN"])),
+  };
+  const external: SourceEnvelope[] = endpoints.filter((endpoint) => endpoint !== "finances").map((endpoint) => {
+    const response = responses[endpoint] || (endpoint === "company" ? responses.company : endpoint === "entrepreneur" ? responses.entrepreneur : undefined);
+    const status = failedMethods.includes(endpoint) ? "FAILED" as const : response ? "READY" as const : "EMPTY" as const;
+    const knownField = endpoint === "legal-cases" ? "legalCases"
+      : endpoint === "enforcements" ? "enforcements"
+        : endpoint === "inspections" ? "inspections"
+          : endpoint === "bankruptcy-messages" ? "bankruptcyMessages"
+            : undefined;
+    return {
+      sourceId: `external:${endpoint}:${inn}:${retrievedAt}`,
+      sourceType: endpoint === "contracts" ? "EIS" as const : "CHECKO" as const,
+      status,
+      companyInn: inn,
+      sourceName: endpoint === "contracts" ? "Открытый реестр закупок" : `Официальные и открытые источники /${endpoint}`,
+      receivedAt: retrievedAt,
+      parserVersion: "PRESCORE-EXTERNAL-NORMALIZER-1",
+      integrityVersion: INFRASTRUCTURE_VERSIONS.integrity,
+      confidence: null,
+      warnings: status === "FAILED" ? [`Источник /${endpoint} недоступен.`] : [],
+      rawReference: `external:/${endpoint}:${retrievedAt}`,
+      fieldAvailability: knownField ? { [knownField]: status === "READY" ? "KNOWN" : "UNKNOWN" } : undefined,
+    };
+  });
   const profile = {
     inn,
     source: "Официальные и открытые источники",
@@ -357,6 +406,7 @@ function normalizeProfile(inn: string, responses: Record<string, CheckoResponse 
     },
     finances,
     legal,
+    sourceManifest: { bfo, external },
     sourceStatus: endpoints.map((endpoint) => ({
       endpoint: `/${endpoint}`,
       status: failedMethods.includes(endpoint)

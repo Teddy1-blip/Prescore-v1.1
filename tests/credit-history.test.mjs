@@ -94,6 +94,9 @@ test("keeps unavailable legacy NBKI balance, payment and rate as missing", () =>
   assert.equal(report.obligations[0].monthlyPayment, null);
   assert.equal(report.obligations[0].annualRate, null);
   assert.equal(report.summary.guaranteeExposure, 500000);
+  assert.equal(report.summary.knownValues?.outstandingPrincipal, false);
+  assert.equal(report.summary.knownValues?.monthlyPayment, false);
+  assert.equal(report.summary.knownValues?.guaranteeExposure, true);
 
   const result = compareCreditPortfolio({
     report,

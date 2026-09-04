@@ -16,7 +16,7 @@ const initials = (value: string) => value.replace(/^(ООО|ПАО|АО|ИП)\s*
 
 type AnalysisSummary = Omit<AnalysisResult, "transactions"> & { transactions?: AnalysisResult["transactions"] };
 
-export default function CheckoProfile({ analysis, onAttachQuarterly }: { analysis: AnalysisSummary | null; onAttachQuarterly: (report: QuarterlyFinancialReport) => Promise<void> }) {
+export default function CheckoProfile({ analysis, onAttachQuarterly }: { analysis: AnalysisSummary | null; onAttachQuarterly: (file: File) => Promise<QuarterlyFinancialReport> }) {
   const inn = (analysis?.companyInn ?? "").replace(/\D/g, "");
   const [profile, setProfile] = useState<CompanyProfileData | null>(null);
   const [unified, setUnified] = useState<UnifiedRiskContext | null>(null);

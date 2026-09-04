@@ -94,7 +94,7 @@ export default function CreditHistory({
   onAttach,
 }: {
   analysis: CreditAnalysisContext | null;
-  onAttach: (report: CreditHistoryReport) => Promise<void>;
+  onAttach: (file: File, relationship: CreditSubjectRelationship) => Promise<CreditHistoryReport>;
 }) {
   const input = useRef<HTMLInputElement>(null);
   const [consent, setConsent] = useState(false);
@@ -103,6 +103,7 @@ export default function CreditHistory({
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
   const [report, setReport] = useState<CreditHistoryReport | null>(analysis?.creditHistory ?? null);
+  const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [relationship, setRelationship] = useState<CreditSubjectRelationship>(analysis?.creditHistory?.relationshipToCompany ?? "Не указано");
   const [saved, setSaved] = useState(Boolean(analysis?.creditHistory));
 
@@ -116,9 +117,11 @@ export default function CreditHistory({
       const text = await extractPdfText(file, setProgress);
       const parsed = parseCreditHistoryText(text, file.name);
       setReport(parsed);
+      setSourceFile(file);
       setRelationship(parsed.relationshipToCompany);
     } catch (caught) {
       setReport(null);
+      setSourceFile(null);
       setError(caught instanceof Error ? caught.message : "Не удалось разобрать отчёт БКИ.");
     } finally {
       setProcessing(false);
@@ -127,11 +130,15 @@ export default function CreditHistory({
   }
 
   async function attach() {
-    if (!report || !analysis) return;
+    if (!report || !analysis || !sourceFile) return;
     if (report.subjectType === "Физическое лицо" && relationship === "Не указано") { setError("Укажите роль физического лица относительно компании. Личный и корпоративный долг нельзя смешивать."); return; }
     setProcessing(true); setError("");
-    const affectsCompanyDebt = report.subjectType === "Юридическое лицо" || (relationship === "ИП-заёмщик" && analysis.companyInn.length === 12 && report.subjectInn === analysis.companyInn);
-    try { await onAttach({ ...report, relationshipToCompany: report.subjectType === "Юридическое лицо" ? "Компания-заёмщик" : relationship, affectsCompanyDebt }); setSaved(true); }
+    try {
+      const verified = await onAttach(sourceFile, report.subjectType === "Юридическое лицо" ? "Компания-заёмщик" : relationship);
+      setReport(verified);
+      setSourceFile(null);
+      setSaved(true);
+    }
     catch (caught) { setError(caught instanceof Error ? caught.message : "Не удалось добавить БКИ к анализу."); }
     finally { setProcessing(false); }
   }
@@ -153,7 +160,7 @@ export default function CreditHistory({
   return <>
     <div className="ps-credit-heading">
       <div><span>СЛОЙ C · КРЕДИТНАЯ ИСТОРИЯ</span><h1>БКИ и кредитный портфель</h1><p>Загрузите PDF СБ БКИ или НБКИ. Прескор сформирует реестр обязательств и сверит долг с выписками, БФО и правовым контуром.</p></div>
-      {report && <div className="ps-heading-actions"><button className="ps-outline-button" onClick={() => downloadXlsx(`Кредитный_портфель_${report.subjectInn || "БКИ"}.xlsx`, creditWorkbook(report))}><Download /> Портфель и календарь · Excel</button><button className="ps-outline-button" onClick={() => { setReport(null); setSaved(false); }}><RefreshCw /> Другой отчёт</button></div>}
+      {report && <div className="ps-heading-actions"><button className="ps-outline-button" onClick={() => downloadXlsx(`Кредитный_портфель_${report.subjectInn || "БКИ"}.xlsx`, creditWorkbook(report))}><Download /> Портфель и календарь · Excel</button><button className="ps-outline-button" onClick={() => { setReport(null); setSourceFile(null); setSaved(false); }}><RefreshCw /> Другой отчёт</button></div>}
     </div>
 
     {!report && <div className="ps-credit-upload-layout">
@@ -161,12 +168,12 @@ export default function CreditHistory({
         <label className="ps-credit-consent"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} /><span><b>Подтверждаю законное основание</b><small>Отчёт получен с согласия субъекта кредитной истории либо на ином законном основании. Я вправе передать его для информационно‑аналитической обработки.</small></span></label>
         <div className={`${dragging ? "ps-credit-dropzone dragging" : "ps-credit-dropzone"}${!consent ? " disabled" : ""}`} onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={drop}>
           <input ref={input} type="file" accept=".pdf,application/pdf" onChange={(event: ChangeEvent<HTMLInputElement>) => void parse(event.target.files?.[0])} />
-          {processing ? <><LoaderCircle className="spin" /><h2>Разбираем страницы отчёта…</h2><p>{progress}% · файл обрабатывается локально в браузере</p></> : <><UploadCloud /><span>СБ БКИ / НБКИ · PDF</span><h2>Перетащите кредитный отчёт</h2><p>Текстовый PDF до 35 МБ. Исходный документ не отправляется в серверное хранилище.</p><button disabled={!consent} onClick={() => input.current?.click()}>Выбрать PDF</button></>}
+          {processing ? <><LoaderCircle className="spin" /><h2>Разбираем страницы отчёта…</h2><p>{progress}% · выполняется предварительная проверка</p></> : <><UploadCloud /><span>СБ БКИ / НБКИ · PDF</span><h2>Перетащите кредитный отчёт</h2><p>Текстовый PDF до 35 МБ. Исходный документ не сохраняется в серверном хранилище.</p><button disabled={!consent} onClick={() => input.current?.click()}>Выбрать PDF</button></>}
         </div>
         {error && <div className="ps-upload-error"><AlertTriangle /><span><b>Отчёт не обработан</b><small>{error}</small></span></div>}
       </section>
       <aside className="ps-credit-side">
-        <div className="ps-card"><LockKeyhole /><h3>Данные остаются под контролем</h3><p>PDF разбирается локально. При добавлении к анализу сохраняются только структурированные поля портфеля и агрегаты, без исходного файла.</p></div>
+        <div className="ps-card"><LockKeyhole /><h3>Данные остаются под контролем</h3><p>Предпросмотр выполняется локально. При добавлении сервер повторно проверяет PDF и сохраняет только структурированные поля портфеля и агрегаты, без исходного файла.</p></div>
         <div className="ps-card"><FileSearch /><h3>Что сформируем</h3><p>Кредитор, продукт, сумма или лимит, остаток, платёж, ставка, просрочка, статус и качество обслуживания долга.</p></div>
       </aside>
     </div>}
@@ -221,7 +228,7 @@ export default function CreditHistory({
         <div className="ps-credit-insights">{combined?.insights.map((item) => <article className={item.tone} key={item.title}><header><i /><span><small>{item.tone === "positive" ? "ПОЛОЖИТЕЛЬНЫЙ ФАКТОР" : item.tone === "critical" ? "КРИТИЧЕСКИЙ СИГНАЛ" : item.tone === "warning" ? "НУЖНА СВЕРКА" : "ОГРАНИЧЕНИЕ ДАННЫХ"}</small><h3>{item.title}</h3></span></header><p><b>Факт:</b> {item.facts}</p><p><b>Влияние:</b> {item.impact}</p><p><b>Действие:</b> {item.action}</p></article>)}</div>
         <div className="ps-credit-layer-strip"><span><Check /> B · Выписки</span><span><Gauge /> F · БФО</span><span><ShieldCheck /> L · Правовой контур</span><span className="active"><WalletCards /> C · БКИ</span></div>
         <p className="ps-legal-disclaimer">Результат носит исключительно информационно‑аналитический характер. Это не банковское решение, не гарантия одобрения, не кредитный рейтинг банка и не оферта. Итоговые условия и лимит определяет кредитор после собственной проверки.</p>
-        <button className="ps-credit-attach" disabled={mismatch || relationshipMissing || processing || saved} onClick={() => void attach()}>{saved ? <><CheckCircle2 /> БКИ добавлено в анализ</> : <><WalletCards /> Добавить портфель к текущему анализу <ArrowRight /></>}</button>
+        <button className="ps-credit-attach" disabled={mismatch || relationshipMissing || processing || saved || !sourceFile} onClick={() => void attach()}>{saved ? <><CheckCircle2 /> БКИ добавлено в анализ</> : <><WalletCards /> Добавить портфель к текущему анализу <ArrowRight /></>}</button>
       </section>}
 
       {!analysis && <div className="ps-analytic-note"><AlertTriangle /><span><b>Портфель сформирован отдельно</b><small>Чтобы сверить платежи и уточнить расчётный лимит, сначала выполните анализ банковских выписок выбранной компании.</small></span></div>}

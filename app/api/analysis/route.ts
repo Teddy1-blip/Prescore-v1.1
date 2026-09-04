@@ -1,4 +1,5 @@
 import { analysisForStorage, analyzeBankStatements, screenBankStatements, type StatementInput } from "../../../lib/prescore";
+import { sha256Hex } from "../../../lib/credit-engine/source-foundation";
 import { applyAnalysisControls, readControlState } from "../../../lib/admin-controls";
 import { requireApiUser, unauthorized } from "../api-auth";
 import { analysisView, ensureFreeEntitlement, grantFullEntitlement, resolveAnalysisTier } from "../../../lib/entitlements";
@@ -14,18 +15,22 @@ export async function POST(request: Request) {
     const statements = Array.isArray(body.statements) ? body.statements : [];
     if (!statements.length || statements.length > MAX_FILES) return Response.json({ error: "Добавьте от 1 до 30 выписок" }, { status: 400 });
     let totalLength = 0;
-    const candidates: StatementInput[] = statements.map((item, index) => {
+    const rawCandidates = statements.map((item, index) => {
       const text = String(item?.text || "");
       const fileName = String(item?.fileName || `statement-${index + 1}.txt`).slice(0, 180);
       totalLength += text.length;
       return { text, fileName };
     });
     if (totalLength > MAX_SOURCE_LENGTH) return Response.json({ error: "Суммарный размер выписок превышает 60 МБ" }, { status: 413 });
+    const candidates: StatementInput[] = await Promise.all(rawCandidates.map(async (item) => {
+      const contentHash = await sha256Hex(item.text);
+      return { ...item, contentHash, sourceId: `statement:${contentHash}` };
+    }));
     const screened = screenBankStatements(candidates);
     if (!screened.accepted.length) return Response.json({ error: "Загруженные выписки не распознаны. Отправьте файлы на support@prescore.ru для проверки формата." }, { status: 400 });
     const safeStatements = screened.accepted;
     const rejectedFiles = screened.unrecognizedFiles;
-    const result = analyzeBankStatements(safeStatements);
+    const result = analyzeBankStatements(safeStatements, { screeningResults: screened.screeningResults });
     const { env } = await import("cloudflare:workers");
     type Statement = { bind: (...values: unknown[]) => Statement; run: () => Promise<unknown>; first: <T = unknown>() => Promise<T | null> };
     const db = env.DB as unknown as { prepare: (query: string) => Statement; batch: (statements: Statement[]) => Promise<Array<{ results: unknown[] }>> };
@@ -52,7 +57,13 @@ export async function POST(request: Request) {
     const controls = await readControlState(db);
     const controlled = applyAnalysisControls(result, controls);
     const tier = await resolveAnalysisTier(db, { analysisId: result.id, userEmail: user.email, companyInn: result.companyInn, privileged: user.isAdmin });
-    return Response.json({ analysis: analysisView(controlled, tier), processedBy: "server", tier, rejectedFiles });
+    return Response.json({
+      analysis: analysisView(controlled, tier),
+      processedBy: "server",
+      tier,
+      rejectedFiles,
+      screeningResults: screened.screeningResults,
+    });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Не удалось выполнить анализ" }, { status: 400 });
   }

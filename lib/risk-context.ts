@@ -93,6 +93,12 @@ export function buildUnifiedRiskContext(profile: CompanyProfileData, analysis: A
 
   return {
     version: "RISK-CONTEXT-2026.08",
+    sourceManifest: {
+      ...(analysis.sourceManifest ?? { bankStatements: [] }),
+      bfo: profile.sourceManifest?.bfo ?? analysis.sourceManifest?.bfo,
+      external: profile.sourceManifest?.external ?? analysis.sourceManifest?.external,
+    },
+    integrity: analysis.integrity,
     readiness: { code, fullData, hardStop, missing: [!hasBfo && "БФО", !analysis.quarterlyReport && "Квартальная отчётность", !bki && "БКИ"].filter(Boolean) },
     factors: activeFactors,
     globalStops,

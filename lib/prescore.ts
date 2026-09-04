@@ -1,5 +1,14 @@
 import type { CreditHistoryInsight, CreditHistoryReport, CreditPortfolioComparison } from "./credit-history";
 import type { QuarterlyFinancialReport } from "./quarterly-report";
+import {
+  INFRASTRUCTURE_VERSIONS,
+  type AnalysisIntegritySummary,
+  type AnalysisSourceManifest,
+  type DeduplicationDiagnostic,
+  type InfrastructureVersions,
+  type StatementScreeningResult,
+} from "./credit-engine/contracts/sources.ts";
+import { buildAnalysisIntegrity, sourceReference } from "./credit-engine/source-foundation.ts";
 
 export type TransactionDirection = "in" | "out" | "unknown";
 
@@ -31,6 +40,14 @@ export type NormalizedTransaction = {
   categoryConfidence?: "high" | "medium" | "low";
   classificationEvidence?: string;
   account: string;
+  sourceId?: string;
+  sourceFileId?: string;
+  sourceFileName?: string;
+  bank?: string;
+  sourceRow?: number;
+  rawReference?: string;
+  parserVersion?: string;
+  classifierVersion?: string;
 };
 
 export type StopFactor = {
@@ -88,7 +105,12 @@ export type ProductFit = {
   conditions: string[];
 };
 
-export type StatementInput = { text: string; fileName: string };
+export type StatementInput = {
+  text: string;
+  fileName: string;
+  sourceId?: string;
+  contentHash?: string;
+};
 
 export type StatementInspection = {
   fileName: string;
@@ -98,6 +120,10 @@ export type StatementInspection = {
   accounts: string[];
   periodFrom: string;
   periodTo: string;
+  coveragePeriodFrom?: string;
+  coveragePeriodTo?: string;
+  openingBalanceKnown?: boolean;
+  endingBalanceKnown?: boolean;
 };
 
 export type AnalysisResult = {
@@ -169,12 +195,22 @@ export type AnalysisResult = {
   creditPortfolioComparison?: CreditPortfolioComparison;
   creditHistoryInsights?: CreditHistoryInsight[];
   quarterlyReport?: QuarterlyFinancialReport;
+  sourceManifest?: AnalysisSourceManifest;
+  integrity?: AnalysisIntegritySummary;
+  screeningResults?: StatementScreeningResult[];
+  deduplication?: DeduplicationDiagnostic;
+  infrastructureVersions?: InfrastructureVersions;
+  transactionsTruncated?: boolean;
+  storedTransactionCount?: number;
+  originalTransactionCount?: number;
 };
 
 type AccountBlock = {
   account: string;
   openingBalance: number | null;
   endingBalance: number | null;
+  periodFrom: string;
+  periodTo: string;
 };
 
 type ParsedDocument = Record<string, string> & { __account?: string };
@@ -357,6 +393,8 @@ function parseExchange(text: string) {
           account: currentAccount,
           openingBalance: field(accountFields, "НачальныйОстаток") ? cleanNumber(accountFields.НачальныйОстаток) : null,
           endingBalance: field(accountFields, "КонечныйОстаток") ? cleanNumber(accountFields.КонечныйОстаток) : null,
+          periodFrom: normalizeDate(field(accountFields, "ДатаНачала")),
+          periodTo: normalizeDate(field(accountFields, "ДатаКонца")),
         });
       }
       accountFields = null;
@@ -419,6 +457,8 @@ export function inspectBankStatement(text: string, fileName = "bank.txt"): State
   const { header, accounts, documents } = parseExchange(text);
   const identity = deriveIdentity(documents, accounts, header);
   const dates = documents.map((doc) => normalizeDate(field(doc, "Дата"))).filter(Boolean).sort();
+  const declaredFrom = [...accounts.map((item) => item.periodFrom), normalizeDate(field(header, "ДатаНачала"))].filter(Boolean).sort()[0];
+  const declaredTo = [...accounts.map((item) => item.periodTo), normalizeDate(field(header, "ДатаКонца"))].filter(Boolean).sort().at(-1);
   return {
     fileName,
     companyInn: identity.inn,
@@ -427,29 +467,77 @@ export function inspectBankStatement(text: string, fileName = "bank.txt"): State
     accounts: [...new Set(accounts.map((item) => item.account).filter(Boolean))],
     periodFrom: dates[0] || normalizeDate(field(header, "ДатаНачала")),
     periodTo: dates[dates.length - 1] || normalizeDate(field(header, "ДатаКонца")),
+    coveragePeriodFrom: declaredFrom || dates[0] || undefined,
+    coveragePeriodTo: declaredTo || dates[dates.length - 1] || undefined,
+    openingBalanceKnown: accounts.length > 0 && accounts.every((item) => item.openingBalance !== null),
+    endingBalanceKnown: accounts.length > 0 && accounts.every((item) => item.endingBalance !== null),
   };
 }
 
 export function screenBankStatements(inputs: StatementInput[], anchorInn = "") {
   const recognized: Array<StatementInput & { inspection: StatementInspection }> = [];
   const unrecognizedFiles: string[] = [];
+  const provisional: Array<{ input: StatementInput; inspection?: StatementInspection; status?: StatementScreeningResult["status"]; reason?: string }> = [];
   for (const input of inputs) {
     try {
-      if (!input.text.toLowerCase().includes("1cclientbankexchange")) throw new Error("unsupported");
+      if (!input.text.toLowerCase().includes("1cclientbankexchange")) {
+        unrecognizedFiles.push(input.fileName);
+        provisional.push({ input, status: "UNSUPPORTED", reason: "Файл не содержит заголовок 1CClientBankExchange." });
+        continue;
+      }
       const inspection = inspectBankStatement(input.text, input.fileName);
-      if (!inspection.companyInn) throw new Error("owner");
+      if (!inspection.companyInn) {
+        unrecognizedFiles.push(input.fileName);
+        provisional.push({ input, inspection, status: "INVALID", reason: "Не удалось определить ИНН владельца счёта." });
+        continue;
+      }
       recognized.push({ ...input, inspection });
-    } catch {
+      provisional.push({ input, inspection });
+    } catch (error) {
       unrecognizedFiles.push(input.fileName);
+      provisional.push({ input, status: "UNRECOGNIZED", reason: error instanceof Error ? error.message : "Структура выписки не распознана." });
     }
   }
   const companyInn = anchorInn || recognized[0]?.inspection.companyInn || "";
+  const accepted: StatementInput[] = [];
+  const seenHashes = new Set<string>();
+  const screeningResults: StatementScreeningResult[] = provisional.map((item) => {
+    const inspection = item.inspection;
+    let status = item.status;
+    let reason = item.reason;
+    if (!status && inspection) {
+      if (inspection.companyInn !== companyInn) {
+        status = "COMPANY_MISMATCH";
+        reason = `ИНН файла ${inspection.companyInn} не совпадает с ИНН выбранной компании ${companyInn}.`;
+      } else if (item.input.contentHash && seenHashes.has(item.input.contentHash)) {
+        status = "DUPLICATE";
+        reason = "Файл с таким SHA-256 уже присутствует в наборе.";
+      } else {
+        status = "ACCEPTED";
+        if (item.input.contentHash) seenHashes.add(item.input.contentHash);
+        accepted.push(item.input);
+      }
+    }
+    return {
+      fileName: item.input.fileName,
+      status: status ?? "INVALID",
+      detectedInn: inspection?.companyInn,
+      expectedInn: companyInn || undefined,
+      bankName: inspection?.bankName,
+      periodFrom: inspection?.coveragePeriodFrom ?? inspection?.periodFrom,
+      periodTo: inspection?.coveragePeriodTo ?? inspection?.periodTo,
+      sourceId: item.input.sourceId,
+      contentHash: item.input.contentHash,
+      openingBalanceStatus: inspection ? (inspection.openingBalanceKnown ? "KNOWN" : "UNKNOWN") : undefined,
+      endingBalanceStatus: inspection ? (inspection.endingBalanceKnown ? "KNOWN" : "UNKNOWN") : undefined,
+      reason,
+    };
+  });
   return {
     companyInn,
-    accepted: companyInn
-      ? recognized.filter((item) => item.inspection.companyInn === companyInn).map(({ text, fileName }) => ({ text, fileName }))
-      : [],
+    accepted: companyInn ? accepted : [],
     unrecognizedFiles,
+    screeningResults,
   };
 }
 
@@ -468,49 +556,112 @@ function scoreLabel(score: number) {
   return "D";
 }
 
-function analyzeCombinedStatement(text: string, fileName: string, sourceFiles: string[], bankNames: string[]): AnalysisResult {
+type TransactionProvenance = Pick<NormalizedTransaction,
+  "sourceId" | "sourceFileId" | "sourceFileName" | "bank" | "rawReference" | "parserVersion" | "classifierVersion">;
+
+function mapDocumentToTransaction(
+  doc: ParsedDocument,
+  index: number,
+  accountSet: Set<string>,
+  identity: { inn: string },
+): NormalizedTransaction {
+  const payerAccount = normalizeAccount(field(doc, "ПлательщикСчет", "СчетПлательщика"));
+  const recipientAccount = normalizeAccount(field(doc, "ПолучательСчет", "СчетПолучателя"));
+  const payerInn = normalizeInn(field(doc, "ПлательщикИНН", "ИННПлательщика"));
+  const recipientInn = normalizeInn(field(doc, "ПолучательИНН", "ИННПолучателя"));
+  const matchedAccount = accountSet.has(payerAccount) ? payerAccount : accountSet.has(recipientAccount) ? recipientAccount : "";
+  const statementAccount = matchedAccount || normalizeAccount(doc.__account) || [...accountSet][0] || "";
+  let direction: TransactionDirection = "unknown";
+  if (payerAccount && accountSet.has(payerAccount)) direction = "out";
+  else if (recipientAccount && accountSet.has(recipientAccount)) direction = "in";
+  else if (statementAccount && payerAccount === statementAccount) direction = "out";
+  else if (statementAccount && recipientAccount === statementAccount) direction = "in";
+  else if (identity.inn && payerInn === identity.inn) direction = "out";
+  else if (identity.inn && recipientInn === identity.inn) direction = "in";
+  const internal = Boolean(identity.inn && payerInn === identity.inn && recipientInn === identity.inn);
+  const purpose = field(doc, "НазначениеПлатежа", "Назначение");
+  const counterparty = direction === "out" ? companySideName(doc, "recipient") : companySideName(doc, "payer");
+  const counterpartyInn = direction === "out" ? recipientInn : payerInn;
+  const classification = getCategory(purpose, direction, internal);
+  return {
+    id: field(doc, "Номер") || `${index + 1}`,
+    date: normalizeDate(field(doc, "Дата")),
+    amount: Math.abs(cleanNumber(field(doc, "Сумма"))),
+    direction,
+    counterparty: counterparty || "Контрагент не указан",
+    counterpartyInn,
+    purpose,
+    ...classification,
+    account: statementAccount,
+  };
+}
+
+function transactionDeduplicationKey(item: NormalizedTransaction) {
+  return [item.account, item.id, item.date, item.amount, item.direction, item.counterpartyInn, item.purpose.toLowerCase().replace(/\s+/g, " ").trim()].join("|");
+}
+
+function buildTransactionProvenance(inputs: StatementInput[]) {
+  const index = new Map<string, TransactionProvenance[]>();
+  for (const input of inputs) {
+    const { header, accounts, documents } = parseExchange(input.text);
+    const identity = deriveIdentity(documents, accounts, header);
+    const accountSet = new Set(accounts.map((item) => item.account).filter(Boolean));
+    const bank = bankNameFromDocuments(documents, accounts, header, input.fileName);
+    const sourceId = input.sourceId || `statement:${input.contentHash || input.fileName}`;
+    documents.forEach((doc, documentIndex) => {
+      const transaction = mapDocumentToTransaction(doc, documentIndex, accountSet, identity);
+      const key = transactionDeduplicationKey(transaction);
+      const candidates = index.get(key) ?? [];
+      candidates.push({
+        sourceId,
+        sourceFileId: sourceId,
+        sourceFileName: input.fileName,
+        bank,
+        rawReference: sourceReference(input.contentHash || ""),
+        parserVersion: INFRASTRUCTURE_VERSIONS.statementParser,
+        classifierVersion: INFRASTRUCTURE_VERSIONS.transactionClassifier,
+      });
+      index.set(key, candidates);
+    });
+  }
+  return index;
+}
+
+function analyzeCombinedStatement(
+  text: string,
+  fileName: string,
+  sourceFiles: string[],
+  bankNames: string[],
+  provenance?: Map<string, TransactionProvenance[]>,
+): AnalysisResult {
   const { header, accounts, documents } = parseExchange(text);
   const identity = deriveIdentity(documents, accounts, header);
   const accountSet = new Set(accounts.map((item) => item.account).filter(Boolean));
   const warnings: string[] = [];
 
   const mappedTransactions = documents.map((doc, index): NormalizedTransaction => {
-    const payerAccount = normalizeAccount(field(doc, "ПлательщикСчет", "СчетПлательщика"));
-    const recipientAccount = normalizeAccount(field(doc, "ПолучательСчет", "СчетПолучателя"));
-    const payerInn = normalizeInn(field(doc, "ПлательщикИНН", "ИННПлательщика"));
-    const recipientInn = normalizeInn(field(doc, "ПолучательИНН", "ИННПолучателя"));
-    const matchedAccount = accountSet.has(payerAccount) ? payerAccount : accountSet.has(recipientAccount) ? recipientAccount : "";
-    const statementAccount = matchedAccount || normalizeAccount(doc.__account) || [...accountSet][0] || "";
-    let direction: TransactionDirection = "unknown";
-    if (payerAccount && accountSet.has(payerAccount)) direction = "out";
-    else if (recipientAccount && accountSet.has(recipientAccount)) direction = "in";
-    else if (statementAccount && payerAccount === statementAccount) direction = "out";
-    else if (statementAccount && recipientAccount === statementAccount) direction = "in";
-    else if (identity.inn && payerInn === identity.inn) direction = "out";
-    else if (identity.inn && recipientInn === identity.inn) direction = "in";
-    const internal = Boolean(identity.inn && payerInn === identity.inn && recipientInn === identity.inn);
-    const purpose = field(doc, "НазначениеПлатежа", "Назначение");
-    const counterparty = direction === "out" ? companySideName(doc, "recipient") : companySideName(doc, "payer");
-    const counterpartyInn = direction === "out" ? recipientInn : payerInn;
-    const classification = getCategory(purpose, direction, internal);
-    return {
-      id: field(doc, "Номер") || `${index + 1}`,
-      date: normalizeDate(field(doc, "Дата")),
-      amount: Math.abs(cleanNumber(field(doc, "Сумма"))),
-      direction,
-      counterparty: counterparty || "Контрагент не указан",
-      counterpartyInn,
-      purpose,
-      ...classification,
-      account: statementAccount,
-    };
+    const transaction = mapDocumentToTransaction(doc, index, accountSet, identity);
+    const source = provenance?.get(transactionDeduplicationKey(transaction))?.shift();
+    return { ...transaction, ...source };
   }).filter((item) => item.date && item.amount > 0);
 
-  const seenTransactions = new Set<string>();
+  const seenTransactions = new Map<string, NormalizedTransaction>();
+  const duplicateCandidates: NonNullable<DeduplicationDiagnostic["candidates"]> = [];
+  let candidateOverflow = false;
   const transactions = mappedTransactions.filter((item) => {
-    const key = [item.account, item.id, item.date, item.amount, item.direction, item.counterpartyInn, item.purpose.toLowerCase().replace(/\s+/g, " ").trim()].join("|");
-    if (seenTransactions.has(key)) return false;
-    seenTransactions.add(key);
+    const key = transactionDeduplicationKey(item);
+    const retained = seenTransactions.get(key);
+    if (retained) {
+      if (duplicateCandidates.length < 25) duplicateCandidates.push({
+        retainedId: retained.id,
+        duplicateId: item.id,
+        rule: "account+documentId+date+amount+direction+counterpartyInn+normalizedPurpose",
+        sourceRefs: [...new Set([retained.sourceFileName, item.sourceFileName].filter((value): value is string => Boolean(value)))],
+      });
+      else candidateOverflow = true;
+      return false;
+    }
+    seenTransactions.set(key, item);
     return true;
   });
 
@@ -870,6 +1021,15 @@ function analyzeCombinedStatement(text: string, fileName: string, sourceFiles: s
     recommendations: structuredRecommendations.slice(0, 16),
     productFits,
     transactions,
+    deduplication: {
+      originalCount: mappedTransactions.length,
+      removedCount: mappedTransactions.length - transactions.length,
+      retainedCount: transactions.length,
+      sourceFiles,
+      rule: "account+documentId+date+amount+direction+counterpartyInn+normalizedPurpose",
+      candidates: duplicateCandidates.length ? duplicateCandidates : undefined,
+      candidatesTruncated: candidateOverflow || undefined,
+    },
     warnings,
     methodologyVersion: "PRESCORE-CORE-2026.08",
   };
@@ -878,10 +1038,23 @@ function analyzeCombinedStatement(text: string, fileName: string, sourceFiles: s
 export function analyzeBankStatement(text: string, fileName = "bank.txt"): AnalysisResult {
   const inspection = inspectBankStatement(text, fileName);
   if (!inspection.companyInn) throw new Error(`В выписке «${fileName}» не найден ИНН владельца счёта`);
-  return analyzeCombinedStatement(text, fileName, [fileName], [inspection.bankName]);
+  const input: StatementInput = { text, fileName, sourceId: `statement:${fileName}` };
+  const result = analyzeCombinedStatement(text, fileName, [fileName], [inspection.bankName], buildTransactionProvenance([input]));
+  return addSourceFoundation(result, [input], [inspection], [{
+    fileName,
+    status: "ACCEPTED",
+    detectedInn: inspection.companyInn,
+    expectedInn: inspection.companyInn,
+    bankName: inspection.bankName,
+    periodFrom: inspection.coveragePeriodFrom ?? inspection.periodFrom,
+    periodTo: inspection.coveragePeriodTo ?? inspection.periodTo,
+    sourceId: input.sourceId,
+    openingBalanceStatus: inspection.openingBalanceKnown ? "KNOWN" : "UNKNOWN",
+    endingBalanceStatus: inspection.endingBalanceKnown ? "KNOWN" : "UNKNOWN",
+  }]);
 }
 
-export function analyzeBankStatements(inputs: StatementInput[]): AnalysisResult {
+export function analyzeBankStatements(inputs: StatementInput[], options: { screeningResults?: StatementScreeningResult[] } = {}): AnalysisResult {
   if (!inputs.length) throw new Error("Добавьте хотя бы одну банковскую выписку");
   const inspections = inputs.map((input) => inspectBankStatement(input.text, input.fileName));
   const owner = inspections.find((item) => item.companyInn);
@@ -896,16 +1069,84 @@ export function analyzeBankStatements(inputs: StatementInput[]): AnalysisResult 
   const sourceFiles = inputs.map((item) => item.fileName);
   const bankNames = [...new Set(inspections.map((item) => item.bankName))];
   const label = inputs.length === 1 ? inputs[0].fileName : `${inputs.length} выписки · ${bankNames.join(", ")}`;
-  return analyzeCombinedStatement(combined, label, sourceFiles, bankNames);
+  const result = analyzeCombinedStatement(combined, label, sourceFiles, bankNames, buildTransactionProvenance(inputs));
+  const screeningResults = options.screeningResults ?? inspections.map((inspection, index): StatementScreeningResult => ({
+    fileName: inspection.fileName,
+    status: "ACCEPTED",
+    detectedInn: inspection.companyInn,
+    expectedInn: owner.companyInn,
+    bankName: inspection.bankName,
+    periodFrom: inspection.coveragePeriodFrom ?? inspection.periodFrom,
+    periodTo: inspection.coveragePeriodTo ?? inspection.periodTo,
+    sourceId: inputs[index].sourceId,
+    contentHash: inputs[index].contentHash,
+    openingBalanceStatus: inspection.openingBalanceKnown ? "KNOWN" : "UNKNOWN",
+    endingBalanceStatus: inspection.endingBalanceKnown ? "KNOWN" : "UNKNOWN",
+  }));
+  return addSourceFoundation(result, inputs, inspections, screeningResults);
+}
+
+function addSourceFoundation(
+  result: AnalysisResult,
+  inputs: StatementInput[],
+  inspections: StatementInspection[],
+  screeningResults: StatementScreeningResult[],
+): AnalysisResult {
+  const bankStatements = inputs.map((input, index) => {
+    const inspection = inspections[index];
+    const warnings: string[] = [];
+    if (!inspection.openingBalanceKnown) warnings.push("Начальный остаток не подтверждён для всех счетов источника.");
+    if (!inspection.endingBalanceKnown) warnings.push("Конечный остаток не подтверждён для всех счетов источника.");
+    return {
+      sourceId: input.sourceId || `statement:${input.contentHash || `${index + 1}:${input.fileName}`}`,
+      sourceType: "BANK_STATEMENT" as const,
+      status: "READY" as const,
+      companyInn: inspection.companyInn,
+      fileName: input.fileName,
+      sourceName: inspection.bankName,
+      periodFrom: inspection.coveragePeriodFrom ?? inspection.periodFrom,
+      periodTo: inspection.coveragePeriodTo ?? inspection.periodTo,
+      receivedAt: result.createdAt,
+      parserVersion: INFRASTRUCTURE_VERSIONS.statementParser,
+      classifierVersion: INFRASTRUCTURE_VERSIONS.transactionClassifier,
+      integrityVersion: INFRASTRUCTURE_VERSIONS.integrity,
+      confidence: null,
+      warnings,
+      rawReference: sourceReference(input.contentHash || ""),
+      contentHash: input.contentHash,
+      fieldAvailability: {
+        openingBalance: inspection.openingBalanceKnown ? "KNOWN" as const : "UNKNOWN" as const,
+        endingBalance: inspection.endingBalanceKnown ? "KNOWN" as const : "UNKNOWN" as const,
+      },
+    };
+  });
+  const sourceManifest: AnalysisSourceManifest = { bankStatements };
+  const integrityWarnings = screeningResults
+    .filter((item) => item.status !== "ACCEPTED")
+    .map((item) => `${item.fileName}: ${item.status}${item.reason ? ` — ${item.reason}` : ""}`);
+  return {
+    ...result,
+    sourceManifest,
+    screeningResults,
+    infrastructureVersions: INFRASTRUCTURE_VERSIONS,
+    integrity: buildAnalysisIntegrity(sourceManifest, result.transactions, integrityWarnings),
+  };
 }
 
 export function analysisForStorage(result: AnalysisResult) {
+  // A truncated normalized list is an audit/display projection only. It must never be
+  // treated as the complete raw statement dataset for a future engine recalculation.
+  const originalTransactionCount = result.originalTransactionCount ?? result.transactions?.length ?? 0;
+  const transactions = (result.transactions ?? []).slice(0, 10_000).map((item) => ({
+    ...item,
+    account: item.account ? `••••${item.account.slice(-4)}` : "",
+    purpose: item.purpose.slice(0, 500),
+  }));
   return {
     ...result,
-    transactions: (result.transactions ?? []).slice(0, 10_000).map((item) => ({
-      ...item,
-      account: item.account ? `••••${item.account.slice(-4)}` : "",
-      purpose: item.purpose.slice(0, 500),
-    })),
+    transactions,
+    transactionsTruncated: Boolean(result.transactionsTruncated || originalTransactionCount > transactions.length),
+    storedTransactionCount: transactions.length,
+    originalTransactionCount,
   };
 }
