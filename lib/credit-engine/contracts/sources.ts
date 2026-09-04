@@ -32,6 +32,7 @@ export type SourceEnvelope = {
   periodTo?: string;
   receivedAt: string;
   parserVersion?: string;
+  normalizationVersion?: string;
   classifierVersion?: string;
   integrityVersion?: string;
   confidence: number | null;
@@ -88,8 +89,11 @@ export type DeduplicationDiagnostic = {
     duplicateId?: string;
     rule: string;
     sourceRefs: string[];
+    status?: "EXACT" | "PROBABLE";
   }>;
   candidatesTruncated?: boolean;
+  exactDuplicateCount?: number;
+  probableDuplicateCount?: number;
 };
 
 export type DataIntegritySummary = {
@@ -136,12 +140,14 @@ export type AnalysisIntegritySummary = {
 
 export type InfrastructureVersions = {
   statementParser: string;
+  transactionNormalizer: string;
   transactionClassifier: string;
   integrity: string;
 };
 
 export const INFRASTRUCTURE_VERSIONS: InfrastructureVersions = {
   statementParser: "PRESCORE-STATEMENT-PARSER-1",
+  transactionNormalizer: "PRESCORE-TX-NORMALIZER-1",
   transactionClassifier: "PRESCORE-TX-CLASSIFIER-1",
   integrity: "PRESCORE-INTEGRITY-1",
 };

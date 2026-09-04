@@ -9,6 +9,21 @@ import {
   type StatementScreeningResult,
 } from "./credit-engine/contracts/sources.ts";
 import { buildAnalysisIntegrity, sourceReference } from "./credit-engine/source-foundation.ts";
+import {
+  TRANSACTION_NORMALIZATION_VERSION,
+  type CanonicalTransaction,
+  type CanonicalTransactionQuality,
+  type DirectionEvidence,
+  type DuplicateStatus,
+  type NormalizationSummary,
+  type RelatedPartyStatus,
+  type TransferPairConfidence,
+} from "./credit-engine/contracts/transactions.ts";
+import { adaptOneCDocument } from "./credit-engine/normalization/one-c-parser-adapter.ts";
+import { normalizeTransaction } from "./credit-engine/normalization/transaction-normalizer.ts";
+import { canonicalToLegacyFacts } from "./credit-engine/normalization/compatibility-adapter.ts";
+import { deduplicateTransactions, EXACT_DUPLICATE_RULE } from "./credit-engine/normalization/deduplication.ts";
+import { linkInternalTransfersAndReversals } from "./credit-engine/normalization/transfer-matching.ts";
 
 export type TransactionDirection = "in" | "out" | "unknown";
 
@@ -30,9 +45,13 @@ export type TransactionCategory =
 
 export type NormalizedTransaction = {
   id: string;
+  canonicalTransactionId?: string;
+  bankDocumentId?: string;
   date: string;
   amount: number;
+  currency?: string;
   direction: TransactionDirection;
+  directionEvidence?: DirectionEvidence;
   counterparty: string;
   counterpartyInn: string;
   purpose: string;
@@ -48,6 +67,15 @@ export type NormalizedTransaction = {
   rawReference?: string;
   parserVersion?: string;
   classifierVersion?: string;
+  normalizationVersion?: string;
+  quality?: CanonicalTransactionQuality;
+  duplicateStatus?: DuplicateStatus;
+  duplicateOfTransactionId?: string;
+  transferPairId?: string;
+  transferPairConfidence?: TransferPairConfidence;
+  possibleReversalOfTransactionId?: string;
+  relatedPartyStatus?: RelatedPartyStatus;
+  isOwnAccountTransfer?: boolean;
 };
 
 export type StopFactor = {
@@ -200,6 +228,7 @@ export type AnalysisResult = {
   screeningResults?: StatementScreeningResult[];
   deduplication?: DeduplicationDiagnostic;
   infrastructureVersions?: InfrastructureVersions;
+  normalization?: NormalizationSummary;
   transactionsTruncated?: boolean;
   storedTransactionCount?: number;
   originalTransactionCount?: number;
@@ -556,75 +585,55 @@ function scoreLabel(score: number) {
   return "D";
 }
 
-type TransactionProvenance = Pick<NormalizedTransaction,
-  "sourceId" | "sourceFileId" | "sourceFileName" | "bank" | "rawReference" | "parserVersion" | "classifierVersion">;
+type CanonicalTransactionBatch = {
+  retained: CanonicalTransaction[];
+  eligibleOriginalCount: number;
+  deduplication: ReturnType<typeof deduplicateTransactions>;
+  normalization: NormalizationSummary;
+};
 
-function mapDocumentToTransaction(
-  doc: ParsedDocument,
-  index: number,
-  accountSet: Set<string>,
-  identity: { inn: string },
-): NormalizedTransaction {
-  const payerAccount = normalizeAccount(field(doc, "ПлательщикСчет", "СчетПлательщика"));
-  const recipientAccount = normalizeAccount(field(doc, "ПолучательСчет", "СчетПолучателя"));
-  const payerInn = normalizeInn(field(doc, "ПлательщикИНН", "ИННПлательщика"));
-  const recipientInn = normalizeInn(field(doc, "ПолучательИНН", "ИННПолучателя"));
-  const matchedAccount = accountSet.has(payerAccount) ? payerAccount : accountSet.has(recipientAccount) ? recipientAccount : "";
-  const statementAccount = matchedAccount || normalizeAccount(doc.__account) || [...accountSet][0] || "";
-  let direction: TransactionDirection = "unknown";
-  if (payerAccount && accountSet.has(payerAccount)) direction = "out";
-  else if (recipientAccount && accountSet.has(recipientAccount)) direction = "in";
-  else if (statementAccount && payerAccount === statementAccount) direction = "out";
-  else if (statementAccount && recipientAccount === statementAccount) direction = "in";
-  else if (identity.inn && payerInn === identity.inn) direction = "out";
-  else if (identity.inn && recipientInn === identity.inn) direction = "in";
-  const internal = Boolean(identity.inn && payerInn === identity.inn && recipientInn === identity.inn);
-  const purpose = field(doc, "НазначениеПлатежа", "Назначение");
-  const counterparty = direction === "out" ? companySideName(doc, "recipient") : companySideName(doc, "payer");
-  const counterpartyInn = direction === "out" ? recipientInn : payerInn;
-  const classification = getCategory(purpose, direction, internal);
-  return {
-    id: field(doc, "Номер") || `${index + 1}`,
-    date: normalizeDate(field(doc, "Дата")),
-    amount: Math.abs(cleanNumber(field(doc, "Сумма"))),
-    direction,
-    counterparty: counterparty || "Контрагент не указан",
-    counterpartyInn,
-    purpose,
-    ...classification,
-    account: statementAccount,
-  };
-}
-
-function transactionDeduplicationKey(item: NormalizedTransaction) {
-  return [item.account, item.id, item.date, item.amount, item.direction, item.counterpartyInn, item.purpose.toLowerCase().replace(/\s+/g, " ").trim()].join("|");
-}
-
-function buildTransactionProvenance(inputs: StatementInput[]) {
-  const index = new Map<string, TransactionProvenance[]>();
+function buildCanonicalTransactionBatch(inputs: StatementInput[]): CanonicalTransactionBatch {
+  const canonical: CanonicalTransaction[] = [];
   for (const input of inputs) {
     const { header, accounts, documents } = parseExchange(input.text);
     const identity = deriveIdentity(documents, accounts, header);
-    const accountSet = new Set(accounts.map((item) => item.account).filter(Boolean));
     const bank = bankNameFromDocuments(documents, accounts, header, input.fileName);
     const sourceId = input.sourceId || `statement:${input.contentHash || input.fileName}`;
-    documents.forEach((doc, documentIndex) => {
-      const transaction = mapDocumentToTransaction(doc, documentIndex, accountSet, identity);
-      const key = transactionDeduplicationKey(transaction);
-      const candidates = index.get(key) ?? [];
-      candidates.push({
+    const companyAccounts = accounts.map((item) => item.account).filter(Boolean);
+    documents.forEach((document, ordinal) => {
+      canonical.push(normalizeTransaction(adaptOneCDocument(document, {
+        companyInn: identity.inn,
+        companyAccounts,
+        bank,
         sourceId,
         sourceFileId: sourceId,
         sourceFileName: input.fileName,
-        bank,
+        sourceRow: null,
         rawReference: sourceReference(input.contentHash || ""),
         parserVersion: INFRASTRUCTURE_VERSIONS.statementParser,
-        classifierVersion: INFRASTRUCTURE_VERSIONS.transactionClassifier,
-      });
-      index.set(key, candidates);
+        ordinal,
+      })));
     });
   }
-  return index;
+  const eligible = canonical.filter((item) => item.date && item.amount !== null && item.amount > 0);
+  const deduplication = deduplicateTransactions(eligible);
+  const links = linkInternalTransfersAndReversals(deduplication.retained);
+  const summaryWarnings = [...new Set(canonical.flatMap((item) => item.quality.warnings))];
+  const normalization: NormalizationSummary = {
+    version: TRANSACTION_NORMALIZATION_VERSION,
+    originalCount: canonical.length,
+    normalizedCount: canonical.length,
+    retainedCount: deduplication.retained.length,
+    invalidCount: canonical.length - eligible.length,
+    exactDuplicateCount: deduplication.exactDuplicateCount,
+    probableDuplicateCount: deduplication.probableDuplicateCount,
+    ownTransferCount: deduplication.retained.filter((item) => item.isOwnAccountTransfer).length,
+    transferPairCount: links.transferPairCount,
+    possibleReversalCount: links.possibleReversalCount,
+    unknownDirectionCount: deduplication.retained.filter((item) => item.direction === "UNKNOWN").length,
+    warnings: summaryWarnings,
+  };
+  return { retained: deduplication.retained, eligibleOriginalCount: eligible.length, deduplication, normalization };
 }
 
 function analyzeCombinedStatement(
@@ -632,37 +641,18 @@ function analyzeCombinedStatement(
   fileName: string,
   sourceFiles: string[],
   bankNames: string[],
-  provenance?: Map<string, TransactionProvenance[]>,
+  canonicalBatch: CanonicalTransactionBatch,
 ): AnalysisResult {
   const { header, accounts, documents } = parseExchange(text);
   const identity = deriveIdentity(documents, accounts, header);
-  const accountSet = new Set(accounts.map((item) => item.account).filter(Boolean));
   const warnings: string[] = [];
 
-  const mappedTransactions = documents.map((doc, index): NormalizedTransaction => {
-    const transaction = mapDocumentToTransaction(doc, index, accountSet, identity);
-    const source = provenance?.get(transactionDeduplicationKey(transaction))?.shift();
-    return { ...transaction, ...source };
-  }).filter((item) => item.date && item.amount > 0);
-
-  const seenTransactions = new Map<string, NormalizedTransaction>();
-  const duplicateCandidates: NonNullable<DeduplicationDiagnostic["candidates"]> = [];
-  let candidateOverflow = false;
-  const transactions = mappedTransactions.filter((item) => {
-    const key = transactionDeduplicationKey(item);
-    const retained = seenTransactions.get(key);
-    if (retained) {
-      if (duplicateCandidates.length < 25) duplicateCandidates.push({
-        retainedId: retained.id,
-        duplicateId: item.id,
-        rule: "account+documentId+date+amount+direction+counterpartyInn+normalizedPurpose",
-        sourceRefs: [...new Set([retained.sourceFileName, item.sourceFileName].filter((value): value is string => Boolean(value)))],
-      });
-      else candidateOverflow = true;
-      return false;
-    }
-    seenTransactions.set(key, item);
-    return true;
+  const transactions = canonicalBatch.retained.map((item): NormalizedTransaction => {
+    const facts = canonicalToLegacyFacts(item);
+    const payerInn = normalizeInn(item.rawValues.payerInn || "");
+    const recipientInn = normalizeInn(item.rawValues.recipientInn || "");
+    const internal = Boolean(identity.inn && payerInn === identity.inn && recipientInn === identity.inn);
+    return { ...facts, ...getCategory(facts.purpose, facts.direction, internal) };
   });
 
   if (!transactions.length) throw new Error("Документы найдены, но даты или суммы не удалось распознать");
@@ -1022,14 +1012,22 @@ function analyzeCombinedStatement(
     productFits,
     transactions,
     deduplication: {
-      originalCount: mappedTransactions.length,
-      removedCount: mappedTransactions.length - transactions.length,
+      originalCount: canonicalBatch.eligibleOriginalCount,
+      removedCount: canonicalBatch.eligibleOriginalCount - transactions.length,
       retainedCount: transactions.length,
       sourceFiles,
-      rule: "account+documentId+date+amount+direction+counterpartyInn+normalizedPurpose",
-      candidates: duplicateCandidates.length ? duplicateCandidates : undefined,
-      candidatesTruncated: candidateOverflow || undefined,
+      rule: EXACT_DUPLICATE_RULE,
+      candidates: canonicalBatch.deduplication.candidates.length
+        ? canonicalBatch.deduplication.candidates.map((item) => ({
+          ...item,
+          status: item.rule === EXACT_DUPLICATE_RULE ? "EXACT" as const : "PROBABLE" as const,
+        }))
+        : undefined,
+      candidatesTruncated: canonicalBatch.deduplication.candidatesTruncated || undefined,
+      exactDuplicateCount: canonicalBatch.deduplication.exactDuplicateCount,
+      probableDuplicateCount: canonicalBatch.deduplication.probableDuplicateCount,
     },
+    normalization: canonicalBatch.normalization,
     warnings,
     methodologyVersion: "PRESCORE-CORE-2026.08",
   };
@@ -1039,7 +1037,7 @@ export function analyzeBankStatement(text: string, fileName = "bank.txt"): Analy
   const inspection = inspectBankStatement(text, fileName);
   if (!inspection.companyInn) throw new Error(`В выписке «${fileName}» не найден ИНН владельца счёта`);
   const input: StatementInput = { text, fileName, sourceId: `statement:${fileName}` };
-  const result = analyzeCombinedStatement(text, fileName, [fileName], [inspection.bankName], buildTransactionProvenance([input]));
+  const result = analyzeCombinedStatement(text, fileName, [fileName], [inspection.bankName], buildCanonicalTransactionBatch([input]));
   return addSourceFoundation(result, [input], [inspection], [{
     fileName,
     status: "ACCEPTED",
@@ -1069,7 +1067,7 @@ export function analyzeBankStatements(inputs: StatementInput[], options: { scree
   const sourceFiles = inputs.map((item) => item.fileName);
   const bankNames = [...new Set(inspections.map((item) => item.bankName))];
   const label = inputs.length === 1 ? inputs[0].fileName : `${inputs.length} выписки · ${bankNames.join(", ")}`;
-  const result = analyzeCombinedStatement(combined, label, sourceFiles, bankNames, buildTransactionProvenance(inputs));
+  const result = analyzeCombinedStatement(combined, label, sourceFiles, bankNames, buildCanonicalTransactionBatch(inputs));
   const screeningResults = options.screeningResults ?? inspections.map((inspection, index): StatementScreeningResult => ({
     fileName: inspection.fileName,
     status: "ACCEPTED",
@@ -1108,6 +1106,7 @@ function addSourceFoundation(
       periodTo: inspection.coveragePeriodTo ?? inspection.periodTo,
       receivedAt: result.createdAt,
       parserVersion: INFRASTRUCTURE_VERSIONS.statementParser,
+      normalizationVersion: INFRASTRUCTURE_VERSIONS.transactionNormalizer,
       classifierVersion: INFRASTRUCTURE_VERSIONS.transactionClassifier,
       integrityVersion: INFRASTRUCTURE_VERSIONS.integrity,
       confidence: null,
