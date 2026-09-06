@@ -26,6 +26,11 @@ import { deduplicateTransactions, EXACT_DUPLICATE_RULE } from "./credit-engine/n
 import { linkInternalTransfersAndReversals } from "./credit-engine/normalization/transfer-matching.ts";
 import type { ClassificationSummary, TransactionClassification } from "./credit-engine/contracts/classification.ts";
 import { classifyEconomicTransaction, summarizeClassifications } from "./credit-engine/classification/classifier.ts";
+import type { BankStatementMetricsV2, MetricsComparisonSummary } from "./credit-engine/contracts/metrics.ts";
+import { buildBankStatementMetricsV2 } from "./credit-engine/metrics/engine.ts";
+
+const METRICS_V2_OPENING_BALANCE = Symbol("metrics-v2-opening-balance");
+type AnalysisWithMetricsV2Input = AnalysisResult & { [METRICS_V2_OPENING_BALANCE]?: number | null };
 
 export type TransactionDirection = "in" | "out" | "unknown";
 
@@ -233,6 +238,8 @@ export type AnalysisResult = {
   infrastructureVersions?: InfrastructureVersions;
   normalization?: NormalizationSummary;
   classification?: ClassificationSummary;
+  metricsV2?: BankStatementMetricsV2;
+  metricsComparison?: MetricsComparisonSummary;
   transactionsTruncated?: boolean;
   storedTransactionCount?: number;
   originalTransactionCount?: number;
@@ -646,7 +653,7 @@ function analyzeCombinedStatement(
   sourceFiles: string[],
   bankNames: string[],
   canonicalBatch: CanonicalTransactionBatch,
-): AnalysisResult {
+): AnalysisWithMetricsV2Input {
   const { header, accounts, documents } = parseExchange(text);
   const identity = deriveIdentity(documents, accounts, header);
   const warnings: string[] = [];
@@ -957,6 +964,7 @@ function analyzeCombinedStatement(
   ];
 
   return {
+    [METRICS_V2_OPENING_BALANCE]: openingBalances.length ? openingBalances.reduce((sum, value) => sum + value, 0) : null,
     id: globalThis.crypto?.randomUUID?.() ?? `analysis-${Date.now()}`,
     companyName: identity.name || field(header, "Отправитель") || "Компания",
     companyInn: identity.inn,
@@ -1132,13 +1140,23 @@ function addSourceFoundation(
   const integrityWarnings = screeningResults
     .filter((item) => item.status !== "ACCEPTED")
     .map((item) => `${item.fileName}: ${item.status}${item.reason ? ` — ${item.reason}` : ""}`);
-  return {
+  const enriched: AnalysisResult = {
     ...result,
     sourceManifest,
     screeningResults,
     infrastructureVersions: INFRASTRUCTURE_VERSIONS,
     integrity: buildAnalysisIntegrity(sourceManifest, result.transactions, integrityWarnings),
   };
+  const shadow = buildBankStatementMetricsV2({
+    transactions: enriched.transactions,
+    integrity: enriched.integrity,
+    sourceManifest: enriched.sourceManifest,
+    periodFrom: enriched.periodFrom,
+    periodTo: enriched.periodTo,
+    openingBalance: (result as AnalysisWithMetricsV2Input)[METRICS_V2_OPENING_BALANCE] ?? null,
+    legacyMetrics: enriched.metrics,
+  });
+  return { ...enriched, ...shadow };
 }
 
 export function analysisForStorage(result: AnalysisResult) {
