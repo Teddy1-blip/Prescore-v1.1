@@ -1,6 +1,7 @@
 import { buildUnifiedRiskContext } from "../../../lib/risk-context";
 import type { AnalysisResult } from "../../../lib/prescore";
 import type { CompanyProfileData } from "../../../lib/company-profile";
+import { reconciliationForAnalysis } from "../../../lib/credit-engine/reconciliation/integration";
 import { applyAnalysisControls, readControlState } from "../../../lib/admin-controls";
 import { readableAnalysis, requireApiUser, unauthorized } from "../api-auth";
 import { resolveAnalysisTier } from "../../../lib/entitlements";
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
     const controls = await readControlState(db);
     const analysis = applyAnalysisControls(JSON.parse(analysisRow.payload) as AnalysisResult, controls);
     const profile = JSON.parse(profileRow.payload) as CompanyProfileData;
-    return Response.json({ ...buildUnifiedRiskContext(profile, analysis, controls), readOnly: access.access === "agent" });
+    return Response.json({ ...buildUnifiedRiskContext(profile, analysis, controls), ...reconciliationForAnalysis(analysis, profile), readOnly: access.access === "agent" });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Не удалось сформировать единое заключение" }, { status: 500 });
   }

@@ -14,6 +14,7 @@ import { compareCreditPortfolio, type CreditSubjectRelationship } from "../../..
 import { analysisForStorage, type AnalysisResult } from "../../../lib/prescore";
 import { analysisView, resolveAnalysisTier } from "../../../lib/entitlements";
 import { quarterlyFinancialShadow } from "../../../lib/credit-engine/financial-analysis/integration";
+import { reconciliationForAnalysis } from "../../../lib/credit-engine/reconciliation/integration";
 import { requireApiUser, unauthorized } from "../api-auth";
 
 type Statement = {
@@ -165,6 +166,7 @@ export async function POST(request: Request) {
       verifiedReport = report;
     }
 
+    updated = { ...updated, ...reconciliationForAnalysis(updated) };
     const stored = analysisForStorage(updated);
     await db.prepare("UPDATE analyses SET payload = ? WHERE id = ? AND owner_email = ?")
       .bind(JSON.stringify(stored), analysisId, row.ownerEmail).run();

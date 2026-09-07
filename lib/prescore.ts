@@ -1,6 +1,8 @@
 import type { CreditHistoryInsight, CreditHistoryReport, CreditPortfolioComparison } from "./credit-history";
 import type { QuarterlyFinancialReport } from "./quarterly-report";
 import type { FinancialShadowFields } from "./credit-engine/financial-analysis/integration";
+import type { ReconciliationShadowFields } from "./credit-engine/contracts/reconciliation.ts";
+import { reconciliationForAnalysis } from "./credit-engine/reconciliation/integration.ts";
 import {
   INFRASTRUCTURE_VERSIONS,
   type AnalysisIntegritySummary,
@@ -163,7 +165,7 @@ export type StatementInspection = {
   endingBalanceKnown?: boolean;
 };
 
-export type AnalysisResult = FinancialShadowFields & {
+export type AnalysisResult = FinancialShadowFields & ReconciliationShadowFields & {
   id: string;
   companyName: string;
   companyInn: string;
@@ -1157,7 +1159,8 @@ function addSourceFoundation(
     openingBalance: (result as AnalysisWithMetricsV2Input)[METRICS_V2_OPENING_BALANCE] ?? null,
     legacyMetrics: enriched.metrics,
   });
-  return { ...enriched, ...shadow };
+  const canonical = { ...enriched, ...shadow };
+  return { ...canonical, ...reconciliationForAnalysis(canonical) };
 }
 
 export function analysisForStorage(result: AnalysisResult) {
