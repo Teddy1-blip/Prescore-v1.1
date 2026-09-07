@@ -1,6 +1,7 @@
 import { readableAnalysis, requireApiUser, unauthorized } from "../api-auth";
 import { resolveAnalysisTier, type AnalysisTier } from "../../../lib/entitlements";
 import { INFRASTRUCTURE_VERSIONS, type SourceEnvelope } from "../../../lib/credit-engine/contracts/sources";
+import { checkoFinancialShadow } from "../../../lib/credit-engine/financial-analysis/integration";
 
 type PreparedStatement = {
   bind: (...values: unknown[]) => PreparedStatement;
@@ -406,6 +407,7 @@ function normalizeProfile(inn: string, responses: Record<string, CheckoResponse 
     },
     finances,
     legal,
+    ...checkoFinancialShadow(responses.finances, bfo, finances),
     sourceManifest: { bfo, external },
     sourceStatus: endpoints.map((endpoint) => ({
       endpoint: `/${endpoint}`,

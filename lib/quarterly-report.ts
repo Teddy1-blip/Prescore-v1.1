@@ -1,3 +1,6 @@
+import { BALANCE_CODES, INCOME_CODES, type QuarterlyFinancialMetadata } from "./credit-engine/contracts/financial-statements.ts";
+import { parseFinancialPeriod } from "./credit-engine/financial-analysis/periods.ts";
+
 export type QuarterlyFactor = {
   severity: "critical" | "warning" | "info";
   title: string;
@@ -17,6 +20,7 @@ export type QuarterlyFinancialReport = {
   parserConfidence: number;
   unitScale: number;
   unitLabel: string;
+  financialMetadataV2?: QuarterlyFinancialMetadata;
   values: {
     revenue: number | null;
     netProfit: number | null;
@@ -248,6 +252,25 @@ export function parseQuarterlyReportText(text: string, fileName: string): Quarte
     companyName: subject.companyName,
     companyInn: subject.companyInn,
     period: detectPeriod(normalized), extractedAt: new Date().toISOString(), parserConfidence, unitScale, unitLabel,
+    financialMetadataV2: {
+      scaleConfirmed: /млн\.?\s*руб|тыс\.?\s*руб|океи\s*384|единица измерения\s*:\s*(?:в\s+)?руб|океи\s*383/.test(lower),
+      rawScale: unitScale,
+      rawLines: Object.fromEntries([...Object.values(BALANCE_CODES), ...Object.values(INCOME_CODES)].map((code) => [code, valueAfterCode(lines, code)])),
+      labelValues: Object.fromEntries(Object.entries(codes).flatMap(([key, code]) => {
+        if (valueAfterCode(lines, code) !== null) return [];
+        // Cyrillic labels need explicit boundaries; keep legacy matching untouched.
+        const patterns = key === "revenue" ? [/^выручка(?=\s|$|\()/i, ...labels.revenue]
+          : key === "currentAssets" ? [/^оборотные активы/i]
+          : labels[key as keyof typeof labels];
+        const rawValue = valueAfterLabel(lines, patterns);
+        const line = lines.find((line) => patterns.some((pattern) => pattern.test(line.trim())));
+        const rawLabel = line?.trim().match(patterns.find((pattern) => pattern.test(line.trim()))!)?.[0];
+        return rawValue !== null && rawLabel ? [[code, { rawValue, rawLabel }]] : [];
+      })),
+      reportedNetAssets: valueAfterLabel(lines, labels.netAssets),
+      reportedNetAssetsLabel: lines.find((line) => labels.netAssets.some((pattern) => pattern.test(line)))?.match(/чистые активы/i)?.[0],
+      period: parseFinancialPeriod(normalized),
+    },
     values, ratios: { currentLiquidity, autonomy, receivablesToAssets, payablesToRevenue, netWorkingCapital },
     verdictCode, verdict,
     conclusion: `Распознано ${recognized} ключевых строк. Активы ${money(values.assets)}, капитал ${money(values.equity)}, выручка ${money(values.revenue)}, чистый результат ${money(values.netProfit)}.`,

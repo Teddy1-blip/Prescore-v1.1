@@ -13,6 +13,7 @@ import { extractDocumentText } from "../../../lib/credit-engine/server/document-
 import { compareCreditPortfolio, type CreditSubjectRelationship } from "../../../lib/credit-history";
 import { analysisForStorage, type AnalysisResult } from "../../../lib/prescore";
 import { analysisView, resolveAnalysisTier } from "../../../lib/entitlements";
+import { quarterlyFinancialShadow } from "../../../lib/credit-engine/financial-analysis/integration";
 import { requireApiUser, unauthorized } from "../api-auth";
 
 type Statement = {
@@ -158,6 +159,7 @@ export async function POST(request: Request) {
       updated = withRefreshedIntegrity({
         ...analysis,
         quarterlyReport: report,
+        ...quarterlyFinancialShadow(report, verifiedSource, analysis.financialStatementsV2),
         sourceManifest: { ...manifestOf(analysis), quarterly: verifiedSource },
       });
       verifiedReport = report;
@@ -170,7 +172,9 @@ export async function POST(request: Request) {
     const tier = await resolveAnalysisTier(db, { analysisId, userEmail: row.ownerEmail || user.email, companyInn: stored.companyInn, privileged: user.isAdmin });
     return Response.json({
       analysis: analysisView(applyAnalysisControls(stored, controls), tier),
-      report: verifiedReport,
+      report: sourceType === "QUARTERLY" && tier === "FREE"
+        ? Object.fromEntries(Object.entries(verifiedReport as Record<string, unknown>).filter(([key]) => key !== "financialMetadataV2"))
+        : verifiedReport,
       source: verifiedSource,
       processedBy: "server",
       originalFileStored: false,

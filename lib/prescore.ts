@@ -1,5 +1,6 @@
 import type { CreditHistoryInsight, CreditHistoryReport, CreditPortfolioComparison } from "./credit-history";
 import type { QuarterlyFinancialReport } from "./quarterly-report";
+import type { FinancialShadowFields } from "./credit-engine/financial-analysis/integration";
 import {
   INFRASTRUCTURE_VERSIONS,
   type AnalysisIntegritySummary,
@@ -162,7 +163,7 @@ export type StatementInspection = {
   endingBalanceKnown?: boolean;
 };
 
-export type AnalysisResult = {
+export type AnalysisResult = FinancialShadowFields & {
   id: string;
   companyName: string;
   companyInn: string;
