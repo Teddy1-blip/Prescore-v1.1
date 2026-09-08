@@ -2,6 +2,8 @@ import type { CreditHistoryInsight, CreditHistoryReport, CreditPortfolioComparis
 import type { QuarterlyFinancialReport } from "./quarterly-report";
 import type { FinancialShadowFields } from "./credit-engine/financial-analysis/integration";
 import type { ReconciliationShadowFields } from "./credit-engine/contracts/reconciliation.ts";
+import type { CreditPortfolioShadowFields } from "./credit-engine/contracts/credit-portfolio.ts";
+import { portfolioForAnalysis } from "./credit-engine/credit-portfolio/integration.ts";
 import { reconciliationForAnalysis } from "./credit-engine/reconciliation/integration.ts";
 import {
   INFRASTRUCTURE_VERSIONS,
@@ -165,7 +167,7 @@ export type StatementInspection = {
   endingBalanceKnown?: boolean;
 };
 
-export type AnalysisResult = FinancialShadowFields & ReconciliationShadowFields & {
+export type AnalysisResult = FinancialShadowFields & ReconciliationShadowFields & CreditPortfolioShadowFields & {
   id: string;
   companyName: string;
   companyInn: string;
@@ -1160,7 +1162,7 @@ function addSourceFoundation(
     legacyMetrics: enriched.metrics,
   });
   const canonical = { ...enriched, ...shadow };
-  return { ...canonical, ...reconciliationForAnalysis(canonical) };
+  return { ...canonical, ...reconciliationForAnalysis(canonical), ...portfolioForAnalysis(canonical, { completeTransactions: canonical.transactions, asOfDate: canonical.periodTo }) };
 }
 
 export function analysisForStorage(result: AnalysisResult) {

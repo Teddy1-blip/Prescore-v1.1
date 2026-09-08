@@ -15,6 +15,7 @@ import { analysisForStorage, type AnalysisResult } from "../../../lib/prescore";
 import { analysisView, resolveAnalysisTier } from "../../../lib/entitlements";
 import { quarterlyFinancialShadow } from "../../../lib/credit-engine/financial-analysis/integration";
 import { reconciliationForAnalysis } from "../../../lib/credit-engine/reconciliation/integration";
+import { portfolioForAnalysis } from "../../../lib/credit-engine/credit-portfolio/integration";
 import { requireApiUser, unauthorized } from "../api-auth";
 
 type Statement = {
@@ -167,6 +168,10 @@ export async function POST(request: Request) {
     }
 
     updated = { ...updated, ...reconciliationForAnalysis(updated) };
+    if (sourceType === "BKI") {
+      const asOfDate = [updated.periodTo, updated.creditHistory?.reportDate ?? ""].filter(date => /^\d{4}-\d{2}-\d{2}$/.test(date)).sort().at(-1) ?? "";
+      updated = { ...updated, ...portfolioForAnalysis(updated, { asOfDate }) };
+    }
     const stored = analysisForStorage(updated);
     await db.prepare("UPDATE analyses SET payload = ? WHERE id = ? AND owner_email = ?")
       .bind(JSON.stringify(stored), analysisId, row.ownerEmail).run();
