@@ -1,3 +1,4 @@
+import { buildRiskShadow } from "../../../lib/credit-engine/risk/integration";
 import { buildUnifiedRiskContext } from "../../../lib/risk-context";
 import type { AnalysisResult } from "../../../lib/prescore";
 import type { CompanyProfileData } from "../../../lib/company-profile";
@@ -27,7 +28,10 @@ export async function GET(request: Request) {
     const controls = await readControlState(db);
     const analysis = applyAnalysisControls(JSON.parse(analysisRow.payload) as AnalysisResult, controls);
     const profile = JSON.parse(profileRow.payload) as CompanyProfileData;
-    return Response.json({ ...buildUnifiedRiskContext(profile, analysis, controls), ...reconciliationForAnalysis(analysis, profile), readOnly: access.access === "agent" });
+    const reconciliation = reconciliationForAnalysis(analysis, profile);
+    const asOfDate = [analysis.periodTo, profile.fetchedAt?.slice(0, 10) ?? "", analysis.creditHistory?.reportDate ?? ""].filter(date => /^\d{4}-\d{2}-\d{2}$/.test(date)).sort().at(-1) ?? "";
+    const risk = buildRiskShadow({ analysis: { ...analysis, ...reconciliation }, companyProfile: profile, asOfDate });
+    return Response.json({ ...buildUnifiedRiskContext(profile, analysis, controls), ...reconciliation, ...risk, readOnly: access.access === "agent" });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Не удалось сформировать единое заключение" }, { status: 500 });
   }

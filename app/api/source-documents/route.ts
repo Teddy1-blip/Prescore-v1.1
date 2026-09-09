@@ -1,3 +1,4 @@
+import { buildRiskShadow } from "../../../lib/credit-engine/risk/integration";
 import { applyAnalysisControls, readControlState } from "../../../lib/admin-controls";
 import {
   INFRASTRUCTURE_VERSIONS,
@@ -172,6 +173,8 @@ export async function POST(request: Request) {
       const asOfDate = [updated.periodTo, updated.creditHistory?.reportDate ?? ""].filter(date => /^\d{4}-\d{2}-\d{2}$/.test(date)).sort().at(-1) ?? "";
       updated = { ...updated, ...portfolioForAnalysis(updated, { asOfDate }) };
     }
+    const riskAsOf = [updated.periodTo, updated.creditHistory?.reportDate ?? "", updated.financialAnalysisV2?.latestInterim?.snapshot.period.asOf ?? ""].filter(date => /^\d{4}-\d{2}-\d{2}$/.test(date)).sort().at(-1) ?? "";
+    updated = { ...updated, ...buildRiskShadow({ analysis: updated, asOfDate: riskAsOf }) };
     const stored = analysisForStorage(updated);
     await db.prepare("UPDATE analyses SET payload = ? WHERE id = ? AND owner_email = ?")
       .bind(JSON.stringify(stored), analysisId, row.ownerEmail).run();
