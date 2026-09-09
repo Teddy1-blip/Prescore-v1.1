@@ -246,3 +246,26 @@ for(const [report,envelope] of [[{subjectInn:"7701999999"},{}],[{relationshipToC
 for(const [reportDate,current] of [["2026-04-01",true],["2026-03-31",false]])test(`90-day BKI applicability boundary ${reportDate}`,()=>{
  const fs=bkiFacts(bureauReviewInput({reportDate}));assert.equal(fs.find(f=>f.semanticCode==="BKI_OVERDUE").status,current?"KNOWN":"UNKNOWN");assert.equal(fs.find(f=>f.semanticCode==="BKI_HISTORY_DAYS").confidence,current?"HIGH":"MEDIUM");
 });
+
+// Targeted hotfix: a confirmed historical zero is not a 1–29 day delinquency.
+for(const [days,severity,historyReason] of [[0,"MEDIUM",null],[null,"MEDIUM",null],[1,"MEDIUM","DELINQUENCY_1_29"],[29,"MEDIUM","DELINQUENCY_1_29"],[30,"HIGH","DELINQUENCY_30_59"],[59,"HIGH","DELINQUENCY_30_59"],[60,"CRITICAL","DELINQUENCY_60_PLUS"]]){
+ test(`BKI reason hotfix: overdue 1000, history ${days}`,()=>{
+  const r=run([F("BKI_OVERDUE",1000,{subjectKey:"hotfix-loan"}),F("BKI_HISTORY_DAYS",days,{subjectKey:"hotfix-loan"})]);
+  const current=finding(r,"RISK-BKI-CURRENT-OVERDUE");
+  assert.equal(evaluation(r,"RISK-BKI-CURRENT-OVERDUE").status,"TRIGGERED");assert.equal(current.scope,"CREDIT_RISK");assert.equal(current.severity,severity);
+  assert.deepEqual(current.reasonCodes.filter(code=>code!=="PRE_CREDIT_LAB_THRESHOLD").sort(),["CURRENT_OVERDUE",...(historyReason?[historyReason]:[])].sort());
+  assert.equal(r.findings.some(f=>f.scope==="DATA_REVIEW"),false);
+  if(days===0)assert.equal(evaluation(r,"RISK-BKI-HISTORICAL-DELINQUENCY").status,"NOT_TRIGGERED");
+ });
+}
+test("BKI reason hotfix: both confirmed zeros do not trigger either rule",()=>{
+ const r=run([F("BKI_OVERDUE",0,{subjectKey:"hotfix-loan"}),F("BKI_HISTORY_DAYS",0,{subjectKey:"hotfix-loan"})]);
+ for(const code of ["RISK-BKI-CURRENT-OVERDUE","RISK-BKI-HISTORICAL-DELINQUENCY"])assert.equal(evaluation(r,code).status,"NOT_TRIGGERED");
+ assert.equal(r.findings.length,0);
+});
+test("BKI reason hotfix: historical suppression retains audit and severity",()=>{
+ const fs=[F("BKI_OVERDUE",1000,{subjectKey:"hotfix-loan"}),F("BKI_HISTORY_DAYS",60,{subjectKey:"hotfix-loan"})],r=run(fs);
+ const current=finding(r,"RISK-BKI-CURRENT-OVERDUE"),history=evaluation(r,"RISK-BKI-HISTORICAL-DELINQUENCY");
+ assert.equal(current.severity,"CRITICAL");assert.equal(history.status,"TRIGGERED");assert.equal(history.suppressedBy,current.findingId);assert.equal(finding(r,"RISK-BKI-HISTORICAL-DELINQUENCY"),undefined);
+ const separate=run(fs,RISK_RULE_REGISTRY.filter(rule=>rule.code==="RISK-BKI-HISTORICAL-DELINQUENCY"));assert.equal(separate.findings[0].severity,"HIGH");assert.equal(separate.findings[0].scope,"CREDIT_RISK");
+});
