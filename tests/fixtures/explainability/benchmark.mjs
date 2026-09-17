@@ -1,0 +1,21 @@
+import {performance} from 'node:perf_hooks';
+import {baseline} from './builders.mjs';
+import {buildExplainability} from '../../../lib/credit-engine/explainability/engine.ts';
+import {validateExplainabilityInput,validateExplainabilityOutput} from '../../../lib/credit-engine/explainability/validation.ts';
+import {EXPLAINABILITY_POLICY} from '../../../lib/credit-engine/explainability/policy.ts';
+import {ClaimAssembly,makeSource} from '../../../lib/credit-engine/explainability/sources.ts';
+import {explainRisk,explainDrivers} from '../../../lib/credit-engine/explainability/risk.ts';
+import {explainContext} from '../../../lib/credit-engine/explainability/context.ts';
+import {explainIndex} from '../../../lib/credit-engine/explainability/index.ts';
+import {explainReadiness} from '../../../lib/credit-engine/explainability/readiness.ts';
+import {explainCapacity} from '../../../lib/credit-engine/explainability/capacity.ts';
+import {explainProducts} from '../../../lib/credit-engine/explainability/products.ts';
+import {explainRecommendations} from '../../../lib/credit-engine/explainability/recommendations.ts';
+import {explainActionPlan} from '../../../lib/credit-engine/explainability/action-plan.ts';
+import {sections,executive} from '../../../lib/credit-engine/explainability/sections.ts';
+import {resolveTemplate} from '../../../lib/credit-engine/explainability/templates.ts';
+import {formatValueRu} from '../../../lib/credit-engine/explainability/format.ts';
+import {auditExplainabilityCoverage} from '../../../lib/credit-engine/explainability/coverage.ts';
+import {checkExpectations} from './lab.mjs';
+export function benchmarkExplainability(){const x=baseline(),o=buildExplainability(x),a=new ClaimAssembly(x,EXPLAINABILITY_POLICY);explainRisk(a);explainContext(a);explainIndex(a);explainReadiness(a);explainCapacity(a);explainProducts(a);explainRecommendations(a);explainActionPlan(a);const result={workload:{claims:o.claims.length,sourceReferences:o.sourceReferences.length,valueBindings:o.valueBindings.length},measurements:{}};const run=(name,n,fn)=>{const t=performance.now();for(let i=0;i<n;i++)fn();result.measurements[name]={iterations:n,totalMs:+(performance.now()-t).toFixed(2)};};run('validation',1000,()=>validateExplainabilityInput(x));run('sourceReferences',1000,()=>o.sourceReferences.forEach(s=>makeSource(x,s.canonicalPath)));run('claimAssembly',1000,()=>{const a=new ClaimAssembly(x,EXPLAINABILITY_POLICY);explainRisk(a);explainContext(a);explainIndex(a);explainReadiness(a);});run('driverExplanation',1000,()=>{const b=new ClaimAssembly(x,EXPLAINABILITY_POLICY);explainRisk(b);explainDrivers(b);});run('capacityExplanation',1000,()=>explainCapacity(new ClaimAssembly(x,EXPLAINABILITY_POLICY)));run('productExplanation',1000,()=>explainProducts(new ClaimAssembly(x,EXPLAINABILITY_POLICY)));run('actionPlanExplanation',1000,()=>explainActionPlan(new ClaimAssembly(x,EXPLAINABILITY_POLICY)));run('templateResolution',1000,()=>resolveTemplate('RISK-BKI-CURRENT-OVERDUE'));run('formatting',1000,()=>formatValueRu(1234567.12,'RUB'));run('sectionAssembly',1000,()=>sections(a,o.status));run('finalization',1000,()=>JSON.stringify({sections:sections(a,o.status),executiveSummary:executive(a,o.status)}));run('claimBindingValidation',1000,()=>validateExplainabilityOutput(x,o,EXPLAINABILITY_POLICY));run('coverageAudit',1000,()=>auditExplainabilityCoverage());run('expectations',1000,()=>checkExpectations({input:x,expectations:{required:['INDEX_VALUE','CAPACITY'],recommendationCopy:true}},o));run('explainabilityBuilds',1000,()=>buildExplainability(x));run('completePipelines',200,()=>buildExplainability(baseline()));return result;}
+if(process.argv[1]?.endsWith('benchmark.mjs'))console.log(JSON.stringify(benchmarkExplainability(),null,2));
