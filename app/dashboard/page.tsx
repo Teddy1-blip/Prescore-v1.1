@@ -101,6 +101,7 @@ export default function Dashboard() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const requestedClient = params.get("client");
+    const requestedAnalysis = params.get("analysisId");
     const endpoint = requestedClient ? `/api/workspace?client=${encodeURIComponent(requestedClient)}&from=agent` : "/api/workspace";
     fetch(endpoint)
       .then(async (response) => {
@@ -112,6 +113,7 @@ export default function Dashboard() {
         setDeals(data.deals ?? []);
         setReadOnly(Boolean(data.readOnly));
         if (requestedClient && data.analyses?.some((item) => item.id === requestedClient)) setSelectedId(requestedClient);
+        else if (requestedAnalysis && data.analyses?.some((item) => item.id === requestedAnalysis)) setSelectedId(requestedAnalysis);
         else if (data.analyses?.[0]) setSelectedId(data.analyses[0].id);
       })
       .catch(() => setSaveWarning("Хранилище пока недоступно: анализ можно провести, но история не сохранится."))

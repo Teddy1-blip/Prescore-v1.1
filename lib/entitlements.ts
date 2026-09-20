@@ -1,3 +1,4 @@
+import { stagingFullAccessEnabled } from "./platform/staging-access.ts";
 import type { AnalysisResult, NormalizedTransaction } from "./prescore";
 
 export type AnalysisTier = "FREE" | "FULL";
@@ -66,6 +67,11 @@ export async function setAnalysisTier(db: EntitlementDatabase, analysisId: strin
 
 export async function resolveAnalysisTier(db: EntitlementDatabase, input: { analysisId: string; userEmail: string; companyInn: string; privileged?: boolean }) {
   if (input.privileged) return "FULL" as const;
+  if (stagingFullAccessEnabled()) {
+    const owned = await db.prepare("SELECT id FROM analyses WHERE id = ? AND owner_email = ? LIMIT 1")
+      .bind(input.analysisId, input.userEmail.toLowerCase()).first<{ id: string }>();
+    if (owned) return "FULL" as const;
+  }
   await ensureFreeEntitlement(db, input.analysisId, input.userEmail, input.companyInn);
   const row = await db.prepare("SELECT tier FROM analysis_entitlements WHERE analysis_id = ? AND user_email = ? LIMIT 1")
     .bind(input.analysisId, input.userEmail.toLowerCase()).first<{ tier?: string }>();

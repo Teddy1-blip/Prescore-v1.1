@@ -15,7 +15,7 @@ for(const [file,expected]of [
  ['app/privacy/page.tsx','Политика обработки персональных данных'],
  ['app/offer/page.tsx','оферта'],
  ['app/consent/page.tsx','Согласие'],
- ['app/checkout/page.tsx','6'],
+ ['app/checkout/checkout-form.tsx','6'],
  ['app/dashboard/page.tsx','АНАЛИЗ'],
  ['app/agent/page.tsx','РАБОТА С КЛИЕНТАМИ'],
  ['app/admin/admin-dashboard.tsx','Загру'],
