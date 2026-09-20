@@ -47,7 +47,7 @@ export function Credentials({returnTo,verified=false,verificationError=false}:{r
  <h3>{mode==='login'?'Вход':mode==='register'?'Регистрация':'Восстановление доступа'}</h3>
  {mode==='register'&&<Input label="Имя" name="name" autoComplete="name" required maxLength={120} disabled={busy}/>}
  <Input label="Электронная почта" type="email" name="email" autoComplete="username" required value={email} disabled={busy} onChange={e=>{setEmail(e.target.value);}}/>
- {mode!=='reset'&&<Input label="Пароль" type="password" name="password" autoComplete={mode==='register'?'new-password':'current-password'} minLength={mode==='register'?12:1} required disabled={busy}/>}
+ {mode!=='reset'&&<Input label="Пароль" type="password" name="password" autoComplete={mode==='register'?'new-password':'current-password'} minLength={mode==='register'?8:1} required disabled={busy}/>}
  <label><input type="checkbox" checked={remember} disabled={busy} onChange={e=>{setRemember(e.target.checked);if(!e.target.checked)rememberEmail('',false);}}/> Запомнить email на этом устройстве</label>
  <PrimaryAction disabled={busy}>{busy?'Подождите…':mode==='login'?'Войти':mode==='register'?'Создать аккаунт':'Восстановить доступ'}</PrimaryAction>
  <p role="status" aria-live="polite">{notice}</p>

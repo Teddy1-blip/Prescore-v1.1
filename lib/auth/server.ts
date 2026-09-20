@@ -23,7 +23,7 @@ function createAuth() {
  if(process.env.NODE_ENV==='production'&&!baseURL.startsWith('https://'))throw new Error('AUTH_HTTPS_REQUIRED');
  return betterAuth({
   appName:'Prescore',database:getPool(),secret,baseURL,trustedOrigins:[new URL(baseURL).origin],
-  emailAndPassword:{enabled:true,requireEmailVerification:true,minPasswordLength:12,revokeSessionsOnPasswordReset:true,sendResetPassword:async({user,url})=>sendAccountEmail(user.email,url,'Восстановление доступа к Prescore')},
+  emailAndPassword:{enabled:true,requireEmailVerification:true,minPasswordLength:8,revokeSessionsOnPasswordReset:true,sendResetPassword:async({user,url})=>sendAccountEmail(user.email,url,'Восстановление доступа к Prescore')},
   emailVerification:{sendOnSignUp:true,sendOnSignIn:false,autoSignInAfterVerification:false,sendVerificationEmail:async({user,url})=>sendAccountEmail(user.email,url,'Подтверждение почты Prescore')},
   session:{expiresIn:60*60*24*7,updateAge:60*60*24,cookieCache:{enabled:false}},
   rateLimit:{enabled:true,storage:'database',window:60,max:30,customRules:{'/send-verification-email':{window:60,max:3},'/sign-in/email':{window:60,max:5},'/request-password-reset':{window:60,max:3},'/sign-up/email':{window:60,max:3}}},

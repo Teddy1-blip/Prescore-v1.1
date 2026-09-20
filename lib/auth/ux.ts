@@ -8,7 +8,7 @@ export function authErrorMessage(error?: AuthFailure | null) {
  if (error?.status === 429 || error?.code === 'TOO_MANY_REQUESTS') return 'Слишком много попыток. Подождите минуту и повторите.';
  if (error?.code === 'EMAIL_NOT_VERIFIED') return 'Подтвердите электронную почту, чтобы войти.';
  if (error?.code === 'INVALID_EMAIL_OR_PASSWORD' || error?.code === 'INVALID_PASSWORD') return 'Неверная почта или пароль.';
- if (error?.code === 'PASSWORD_TOO_SHORT') return 'Пароль должен содержать не менее 12 символов.';
+ if (error?.code === 'PASSWORD_TOO_SHORT') return 'Пароль должен содержать не менее 8 символов.';
  if (error?.code === 'PASSWORD_TOO_LONG') return 'Пароль слишком длинный.';
  if (error?.code === 'INVALID_TOKEN' || error?.code === 'TOKEN_EXPIRED') return 'Ссылка недействительна или срок её действия истёк. Запросите новое письмо.';
  return 'Сервис временно недоступен. Повторите попытку позже.';

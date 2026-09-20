@@ -13,5 +13,5 @@ export default function ResetPassword(){
   try{const r=await authClient.resetPassword({newPassword:String(data.get('password')),token});
    if(r.error)setNotice(authErrorMessage(r.error));else{setDone(true);setNotice('Пароль изменён. Теперь можно войти в кабинет.');}
   }catch{setNotice(authErrorMessage());}finally{inFlight.current=false;setBusy(false);}
- }}><label>Пароль<input name="password" type="password" autoComplete="new-password" minLength={12} required disabled={busy||done}/></label><button disabled={busy||done}>{busy?'Подождите…':'Сохранить пароль'}</button><p role="status" aria-live="polite">{notice}</p><a href="/login">Вернуться ко входу</a></form></main>;
+ }}><label>Пароль<input name="password" type="password" autoComplete="new-password" minLength={8} required disabled={busy||done}/></label><button disabled={busy||done}>{busy?'Подождите…':'Сохранить пароль'}</button><p role="status" aria-live="polite">{notice}</p><a href="/login">Вернуться ко входу</a></form></main>;
 }
