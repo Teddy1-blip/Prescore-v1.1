@@ -42,7 +42,10 @@ def diagnostic(stderr):
 
 
 def run_git(args, cwd, env=None, input_text=None):
-    result = subprocess.run(['git', '-c', 'credential.helper=', '-c', 'http.sslVerify=true',
+    # Ephemeral repositories must not spawn detached maintenance processes that
+    # race with backup creation or temporary-directory cleanup on CI runners.
+    result = subprocess.run(['git', '-c', 'gc.auto=0', '-c', 'maintenance.auto=false',
+                             '-c', 'credential.helper=', '-c', 'http.sslVerify=true',
                              '-c', 'http.followRedirects=false', *args], cwd=cwd,
                             env=env, input=input_text, capture_output=True, text=True, timeout=180)
     if result.returncode:
