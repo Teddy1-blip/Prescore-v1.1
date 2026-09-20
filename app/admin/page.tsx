@@ -9,6 +9,6 @@ export const dynamic = "force-dynamic";
 export default async function AdminPage() {
   const user = await getChatGPTUser();
   if (!user) redirect("/login?returnTo=/admin");
-  if (user.email.toLowerCase() !== "dorogovab@gmail.com") redirect("/dashboard");
+  if (!user.roles.includes("ADMIN")) redirect("/dashboard");
   return <AdminDashboard />;
 }

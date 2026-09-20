@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import {Signature} from "./dashboard/report-v2/signature";
 import {
   ArrowRight, BadgeCheck, Banknote, BarChart3, Building2, Calculator,
   Check, ChevronRight, CircleAlert, CircleCheckBig, FileSearch, Gauge,
@@ -76,35 +77,16 @@ export default function Home() {
       <section className="ru-hero">
         <div className="ru-hero-copy">
           <span className="ru-kicker"><BadgeCheck /> Финтех-платформа для малого и среднего бизнеса</span>
-          <h1>Ваш бизнес в цифрах.<br /><em>Ключ к финансированию.</em></h1>
-          <p>Узнайте, почему банки могут отказать, что нужно исправить и какие финансовые продукты подходят вашей компании прямо сейчас.</p>
+          <h1>На что способна<br /><em>ваша компания?</em></h1>
+          <p>Полный финансово-кредитный анализ компании — 6 500 ₽. Поймите текущий профиль, расчётный запас обслуживания долга и следующие действия.</p>
           <div className="ru-hero-actions"><Link className="ru-button ru-button-primary" href="/login">Начать бесплатно <ArrowRight /></Link><Link className="ru-button ru-button-secondary" href="/checkout">FULL — 6 500 ₽</Link></div>
           <div className="ru-hero-notes"><span><Check /> FREE: финансовый dashboard и заявки</span><span><Check /> FULL: кредитный смысл и план действий</span></div>
         </div>
 
-        <div className="ru-dashboard-shot" id="product-demo" aria-label="Демонстрация личного кабинета Прескор">
-          <div className="ru-shot-top"><span><Brand light /></span><div><i /> Данные обновлены</div></div>
-          <div className="ru-shot-body">
-            <aside><span className="active"><Gauge /> Обзор</span><span><BarChart3 /> Показатели</span><span><CircleAlert /> Стоп-факторы <b>3</b></span><span><SearchCheck /> Рекомендации</span><span><Landmark /> Предложения</span></aside>
-            <div className="ru-shot-main">
-              <div className="ru-shot-heading"><span><small>ООО «Альфа Производство» · учебный пример</small><strong>Кредитный профиль</strong></span><button>Скачать PDF</button></div>
-              <div className="ru-score-row">
-                <div className="ru-index-card"><span>Индекс Прескор</span><strong>742</strong><small>из 1000</small><b><TrendingUp /> +28 за месяц</b></div>
-                <div><small>Среднемесячный оборот</small><strong>7,5 млн ₽</strong><span className="positive">Стабильный</span></div>
-                <div><small>Лимит после БКИ</small><strong>10,7 млн ₽</strong><span>До БКИ: 12,5 млн ₽</span></div>
-                <div><small>Уровень риска</small><strong>Низкий</strong><span className="positive">Профиль устойчив</span></div>
-              </div>
-              <div className="ru-shot-grid">
-                <div className="ru-turnover-card">
-                  <div><span><b>Обороты и долговая нагрузка</b><small>Последние 6 месяцев</small></span><em>₽ млн</em></div>
-                  <svg viewBox="0 0 570 185" role="img" aria-label="График оборотов и долговой нагрузки"><path d="M12 145 C75 132 105 88 160 105 S248 145 300 92 S385 55 438 78 S505 92 558 38 L558 175 L12 175Z" fill="url(#ruFill)" /><path d="M12 145 C75 132 105 88 160 105 S248 145 300 92 S385 55 438 78 S505 92 558 38" fill="none" stroke="#1769aa" strokeWidth="4" /><path d="M12 132 C80 128 120 121 178 125 S270 112 330 118 S435 104 558 108" fill="none" stroke="#ef8a3d" strokeWidth="3" strokeDasharray="7 7" /><defs><linearGradient id="ruFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#2d85c5" stopOpacity=".22" /><stop offset="1" stopColor="#2d85c5" stopOpacity="0" /></linearGradient></defs></svg>
-                  <div className="ru-chart-labels"><span>Март</span><span>Апрель</span><span>Май</span><span>Июнь</span><span>Июль</span><span>Август</span></div>
-                </div>
-                <div className="ru-factor-card"><span>ТРЕБУЕТ ВНИМАНИЯ</span><h3>3 стоп-фактора</h3><p><CircleAlert /> Высокая доля платежей физлицам</p><p><CircleAlert /> Один покупатель дает 48% выручки</p><p className="good"><CircleCheckBig /> Налоговая нагрузка в норме</p><button>Посмотреть план <ChevronRight /></button></div>
-              </div>
-              <div className="ru-ai-line"><SearchCheck /><span><small>РЕКОМЕНДАЦИЯ ПРЕСКОР</small><b>Снизьте концентрацию выручки — расчетный лимит может вырасти примерно на 15%</b></span><ChevronRight /></div>
-            </div>
-          </div>
+        <div className="pv-product-story" id="product-demo" aria-label="Что показывает полный анализ Prescore">
+          <span className="pv-eyebrow">ОТ ДАННЫХ К СЛЕДУЮЩЕМУ ШАГУ</span><h2>Финансовый профиль, который можно понять и использовать.</h2><Signature/>
+          <div className="pv-story-grid"><div><h3>Prescore Index</h3><span>Объяснимая оценка профиля компании</span></div><div><h3>Готовность к финансированию</h3><span>Текущее состояние и ограничения</span></div><div><h3>Запас обслуживания долга</h3><span>Расчётная дополнительная месячная нагрузка</span></div><div><h3>Механики и план действий</h3><span>Что подходит задаче и что проверить сначала</span></div></div>
+          <p>Аналитическая оценка не является решением банка, одобренным лимитом или гарантией финансирования.</p>
         </div>
       </section>
 

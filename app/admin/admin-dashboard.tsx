@@ -49,24 +49,28 @@ export default function AdminDashboard() {
   }, []);
 
   async function toggleModule(item: Module) {
+    if (!window.confirm(`${item.enabled ? "Отключить" : "Включить"} модуль «${item.label}» для всех кабинетов?`)) return;
     setBusyKey(`module:${item.moduleKey}`); setError("");
     try { await change({ type: "module", moduleKey: item.moduleKey, enabled: !item.enabled }); await load(); }
     catch (caught) { setError(caught instanceof Error ? caught.message : "Модуль не изменён"); }
     finally { setBusyKey(""); }
   }
   async function toggleControl(item: Control) {
+    if (!window.confirm(`Изменить настройку «${item.label}»? Изменение будет записано в журнал.`)) return;
     setBusyKey(item.controlKey); setError("");
     try { await change({ type: "control", controlKey: item.controlKey, enabled: !item.enabled }); await load(); }
     catch (caught) { setError(caught instanceof Error ? caught.message : "Показатель не изменён"); }
     finally { setBusyKey(""); }
   }
   async function bulkControls(category: ControlCategory, enabled: boolean) {
+    if (!window.confirm(`${enabled ? "Включить" : "Отключить"} всю группу «${controlLabels[category]}»?`)) return;
     setBusyKey(`bulk:${category}`); setError("");
     try { await change({ type: "bulk-control", category, enabled }); await load(); }
     catch (caught) { setError(caught instanceof Error ? caught.message : "Группа не изменена"); }
     finally { setBusyKey(""); }
   }
   async function toggleAccess(item: Subscription) {
+    if (!window.confirm(`${item.tier === "FULL" ? "Закрыть" : "Открыть"} FULL для анализа ${item.analysisId}?`)) return;
     setBusyKey(`access:${item.id}`); setError("");
     try { await change({ type: "access", id: item.id, enabled: item.tier !== "FULL" }); await load(); }
     catch (caught) { setError(caught instanceof Error ? caught.message : "Доступ не изменён"); }
@@ -86,7 +90,7 @@ export default function AdminDashboard() {
   const statusMax = Math.max(1, ...data.applicationStatuses.map((item) => Number(item.count)));
   const normalizedQuery = controlQuery.trim().toLocaleLowerCase("ru-RU");
   const visibleControls = data.controls.filter((item) => item.category === controlCategory && (!normalizedQuery || `${item.label} ${item.groupName} ${item.description} ${item.controlKey}`.toLocaleLowerCase("ru-RU").includes(normalizedQuery)));
-  return <main className="ad-shell"><aside className="ad-sidebar"><Link href="/"><strong>Прескор</strong><small>АДМИН</small></Link><nav><a href="#overview"><LayoutDashboard /> Обзор</a><a href="#modules"><Gauge /> Модули</a><a href="#controls"><Settings2 /> Показатели</a><a href="#access"><UsersRound /> Доступы</a><a href="#applications"><BriefcaseBusiness /> Заявки</a><a href="#storage"><Database /> Хранилище</a></nav><div><ShieldCheck /><b>{data.admin.displayName}</b><small>{data.admin.email}</small></div></aside><section className="ad-main"><header><span><small>ЦЕНТР УПРАВЛЕНИЯ</small><b>Все данные Прескор</b></span><div><button onClick={() => void load()}><RefreshCw /> Обновить</button><Link href="/agent">Кабинет агента</Link><Link href="/dashboard">Кабинет клиента</Link></div></header><div className="ad-content">
+  return <main className="ad-shell"><aside className="ad-sidebar"><Link href="/"><strong>Прескор</strong><small>АДМИН</small></Link><nav><a href="#overview"><LayoutDashboard /> Обзор</a><a href="#modules"><Gauge /> Модули</a><a href="#controls"><Settings2 /> Показатели</a><a href="#access"><UsersRound /> Доступы</a><a href="#applications"><BriefcaseBusiness /> Заявки</a><a href="#storage"><Database /> Хранилище</a></nav><div><ShieldCheck /><b>{data.admin.displayName}</b><small>{data.admin.email}</small></div><Link className="pv-logout" href="/logout">Выйти из кабинета</Link><Link className="pv-logout" href="/logout">Выйти из кабинета</Link></aside><section className="ad-main"><header><span><small>ЦЕНТР УПРАВЛЕНИЯ</small><b>Все данные Прескор</b></span><div><button onClick={() => void load()}><RefreshCw /> Обновить</button><Link href="/agent">Кабинет агента</Link><Link href="/dashboard">Кабинет клиента</Link></div></header><div className="ad-content">
     {error && <div className="ad-error">{error}</div>}
     <section className="ad-heading" id="overview"><div><span>ОПЕРАЦИОННЫЙ ДАШБОРД</span><h1>Клиенты, оплаты, доступы и продуктовые сигналы</h1><p>Единый контроль аналитики, заявок, документов и разовых доступов FULL к конкретным версиям анализа.</p></div><button onClick={() => setFormOpen(!formOpen)}><Plus /> Открыть FULL</button></section>
     {formOpen && <SubscriptionForm saved={async () => { await load(); setFormOpen(false); }} />}

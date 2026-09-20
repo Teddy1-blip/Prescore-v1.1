@@ -1,3 +1,4 @@
+import {getRuntime} from "../../../lib/platform/runtime";
 import { analysisForStorage, analyzeBankStatements, screenBankStatements, type StatementInput } from "../../../lib/prescore";
 import { sha256Hex } from "../../../lib/credit-engine/source-foundation";
 import { applyAnalysisControls, readControlState } from "../../../lib/admin-controls";
@@ -31,7 +32,7 @@ export async function POST(request: Request) {
     const safeStatements = screened.accepted;
     const rejectedFiles = screened.unrecognizedFiles;
     const result = analyzeBankStatements(safeStatements, { screeningResults: screened.screeningResults });
-    const { env } = await import("cloudflare:workers");
+    const env = getRuntime();
     type Statement = { bind: (...values: unknown[]) => Statement; run: () => Promise<unknown>; first: <T = unknown>() => Promise<T | null> };
     const db = env.DB as unknown as { prepare: (query: string) => Statement; batch: (statements: Statement[]) => Promise<Array<{ results: unknown[] }>> };
     await db.prepare(`CREATE TABLE IF NOT EXISTS analyses (

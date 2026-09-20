@@ -84,14 +84,14 @@ export default function AgentDashboard() {
 
   return <main className="ag-shell">
     <aside className={menu ? "ag-sidebar open" : "ag-sidebar"}>
-      <div className="ag-brand"><Link href="/"><strong>Прескор</strong><small>АГЕНТ</small></Link><button onClick={() => setMenu(false)}><X /></button></div>
-      <nav><a className="active" href="#overview"><LayoutDashboard /> Обзор</a>{data?.modules?.prospects !== false && <Link href="/agent/prospects"><FileSpreadsheet /> База для прозвона</Link>}<a href="#clients"><UsersRound /> CRM клиентов</a><a href="#pipeline"><TrendingUp /> Воронка продаж</a><a href="#applications"><BriefcaseBusiness /> Заявки в банки и БГ</a><a href="#referral"><Link2 /> Реферальная ссылка</a><a href="#curator"><Network /> Куратор</a>{data?.agent.isAdmin && <Link href="/admin"><ShieldCheck /> Администратор</Link>}</nav>
+      <div className="ag-brand"><Link href="/"><strong>Прескор</strong><small>АГЕНТ</small></Link><button aria-label="Закрыть меню" onClick={() => setMenu(false)}><X /></button></div>
+      <nav aria-label="Разделы агента"><small>РАБОТА С КЛИЕНТАМИ</small><a className="active" href="#overview"><LayoutDashboard /> Обзор</a>{data?.modules?.prospects !== false && <Link href="/agent/prospects"><FileSpreadsheet /> База для прозвона</Link>}<a href="#clients"><UsersRound /> CRM клиентов</a><a href="#pipeline"><TrendingUp /> Воронка продаж</a><a href="#applications"><BriefcaseBusiness /> Заявки в банки и БГ</a><small>ПАРТНЁРСТВО</small><a href="#referral"><Link2 /> Реферальная ссылка</a><a href="#curator"><Network /> Куратор</a>{data?.agent.isAdmin && <Link href="/admin"><ShieldCheck /> Администратор</Link>}</nav>
       <div className="ag-subscription-card"><BadgeRussianRuble /><small>ВАШ ДОХОД С FULL-АНАЛИЗОВ</small><b>30% с каждого заказа</b><p>1 950 ₽ за каждый оплаченный FULL-анализ привлечённого клиента.</p></div>
       <div className="ag-user"><i>АП</i><span><b>{data?.agent.name ?? "Агент Прескор"}</b><small>Партнёрский кабинет</small></span></div>
-    </aside>
+    <Link className="pv-logout" href="/logout">Выйти из кабинета</Link></aside>
 
     <section className="ag-main">
-      <header className="ag-top"><button onClick={() => setMenu(true)}><Menu /></button><div><span>Партнёрский кабинет</span><b>{effectiveAgentCode || "Загрузка…"}</b></div><div><button title="Помощь"><CircleHelp /></button><Link href="/dashboard">Кабинет клиента <ExternalLink /></Link></div></header>
+      <header className="ag-top"><button aria-label="Открыть меню" onClick={() => setMenu(true)}><Menu /></button><div><span>Партнёрский кабинет</span><b>{effectiveAgentCode || "Загрузка…"}</b></div><div><button title="Помощь"><CircleHelp /></button><Link href="/dashboard">Кабинет клиента <ExternalLink /></Link></div></header>
       {loading ? <div className="ag-loading"><LoaderCircle /><b>Загружаю агентский кабинет…</b></div> : <div className="ag-content">
         <section className="ag-heading" id="overview"><div><span>АГЕНТСКАЯ ПАНЕЛЬ</span><h1>Клиенты, заявки и доход — в одной воронке</h1><p>Добавляйте клиентов сами или получайте их по персональной ссылке. Полное аналитическое досье открывается в том же виде, что и у клиента.</p></div><button onClick={() => setLeadOpen(true)}><UserPlus /> Добавить клиента</button></section>
 

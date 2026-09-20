@@ -1,3 +1,4 @@
+import {getRuntime} from "../../../lib/platform/runtime";
 import { requireApiUser, unauthorized } from "../api-auth";
 
 type PreparedStatement = {
@@ -11,7 +12,7 @@ type RuntimeDatabase = {
 };
 
 async function database() {
-  const { env } = await import("cloudflare:workers");
+  const env = getRuntime();
   return env.DB as unknown as RuntimeDatabase;
 }
 

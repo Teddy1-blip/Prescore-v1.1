@@ -1,3 +1,5 @@
+import {configuredProvider, generateWithFallback, minimizeQuestion} from "../../../lib/ai/providers";
+import {getRuntime} from "../../../lib/platform/runtime";
 import type { AnalysisResult } from "../../../lib/prescore";
 import type { CompanyProfileData } from "../../../lib/company-profile";
 import { buildUnifiedRiskContext } from "../../../lib/risk-context";
@@ -14,7 +16,7 @@ const DEFAULT_DAILY_LIMIT = 30;
 const DEFAULT_MINUTE_LIMIT = 5;
 
 async function runtime() {
-  const { env } = await import("cloudflare:workers");
+  const env = getRuntime();
   const values = env as unknown as Record<string, unknown>;
   return {
     db: env.DB as unknown as Database,
@@ -63,14 +65,6 @@ function publicMessage(row: AiMessage) {
   return { id: row.id, role: row.role, content: row.content, createdAt: row.createdAt };
 }
 
-function minimizeQuestion(value: string) {
-  return value
-    .replace(/[\w.+-]+@[\w.-]+\.[A-Za-zА-Яа-я]{2,}/g, "[email удалён]")
-    .replace(/\b\d{20}\b/g, "[счёт удалён]")
-    .replace(/\b\d{10,12}\b/g, "[идентификатор удалён]")
-    .replace(/(?:\+7|8)[\s()-]*\d(?:[\s()-]*\d){9}/g, "[телефон удалён]");
-}
-
 export async function GET(request: Request) {
   const user = await requireApiUser();
   if (!user) return unauthorized();
@@ -101,7 +95,7 @@ export async function POST(request: Request) {
     const question = String(body.question ?? "").trim();
     if (!analysisId || question.length < 3 || question.length > 1200) return Response.json({ error: "Введите вопрос от 3 до 1200 символов" }, { status: 400 });
     runtimeValues = await runtime();
-    const { db, apiKey, model, baseUrl, dailyLimit, minuteLimit } = runtimeValues;
+    const { db, model, dailyLimit, minuteLimit } = runtimeValues;
     await ensureSchema(db);
     const source = await ownedContext(db, analysisId, user);
     if (!source) return Response.json({ error: "Анализ не найден в вашем кабинете" }, { status: 404 });
@@ -114,54 +108,29 @@ export async function POST(request: Request) {
     const day = await db.prepare("SELECT COUNT(*) AS count FROM ai_usage WHERE owner_email = ? AND created_at >= ?").bind(user.email, sinceDay).first<{ count: number }>();
     if ((minute?.count ?? 0) >= minuteLimit || (day?.count ?? 0) >= dailyLimit) return Response.json({ error: "Лимит вопросов временно исчерпан. Попробуйте позже." }, { status: 429 });
 
-    if (!apiKey || !model) {
-      const answer = buildLocalAnalystAnswer(question, source.analysis, source.risk);
-      const userId = crypto.randomUUID(); const answerId = crypto.randomUUID();
-      await db.prepare(`INSERT INTO ai_conversations (id, analysis_id, owner_email, analysis_version, prompt_version, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET analysis_version = excluded.analysis_version, prompt_version = excluded.prompt_version, updated_at = excluded.updated_at`)
-        .bind(conversationId, analysisId, user.email, source.analysis.methodologyVersion || "PRESCORE-CORE-2026.08", AI_ANALYST_PROMPT_VERSION, now, now).run();
-      await db.prepare("INSERT INTO ai_messages (id, conversation_id, role, content, created_at) VALUES (?, ?, 'user', ?, ?)").bind(userId, conversationId, question, now).run();
-      const answerAt = new Date().toISOString();
-      await db.prepare("INSERT INTO ai_messages (id, conversation_id, role, content, created_at) VALUES (?, ?, 'assistant', ?, ?)").bind(answerId, conversationId, answer, answerAt).run();
-      await db.prepare("INSERT INTO ai_usage (id, conversation_id, owner_email, provider, model, input_tokens, output_tokens, latency_ms, success, error_type, created_at) VALUES (?, ?, ?, 'local-rules', 'deterministic', 0, 0, ?, 1, NULL, ?)").bind(crypto.randomUUID(), conversationId, user.email, Date.now() - started, answerAt).run();
-      return Response.json({ message: publicMessage({ id: answerId, role: "assistant", content: answer, createdAt: answerAt }), mode: "rules" });
-    }
-
     await db.prepare(`INSERT INTO ai_conversations (id, analysis_id, owner_email, analysis_version, prompt_version, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET analysis_version = excluded.analysis_version, prompt_version = excluded.prompt_version, updated_at = excluded.updated_at`)
       .bind(conversationId, analysisId, user.email, source.analysis.methodologyVersion || "PRESCORE-CORE-2026.08", AI_ANALYST_PROMPT_VERSION, now, now).run();
     const history = await db.prepare("SELECT id, role, content, created_at AS createdAt FROM ai_messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 8").bind(conversationId).all<AiMessage>();
     const providerQuestion = minimizeQuestion(question);
-    const sanitized = buildSanitizedCreditContext(providerQuestion, source.analysis, source.company, source.risk);
-    const response = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model,
-        temperature: 0.2,
-        max_tokens: 900,
-        messages: [
-          { role: "system", content: AI_ANALYST_SYSTEM_PROMPT },
-          { role: "system", content: `Текущий SanitizedCreditContext:\n${JSON.stringify(sanitized)}` },
-          ...(history.results ?? []).reverse().map((item) => ({ role: item.role, content: item.content })),
-          { role: "user", content: providerQuestion },
-        ],
-      }),
-      signal: AbortSignal.timeout(25_000),
-    });
-    if (!response.ok) throw new Error(response.status === 429 ? "overloaded" : "provider");
-    const payload = await response.json() as { choices?: Array<{ message?: { content?: string } }>; usage?: { prompt_tokens?: number; completion_tokens?: number } };
-    const answer = String(payload.choices?.[0]?.message?.content ?? "").trim();
-    if (!answer) throw new Error("empty");
+    const {analysis_id: omittedAnalysisId, ...sanitized} = buildSanitizedCreditContext(providerQuestion, source.analysis, source.company, source.risk);
+    void omittedAnalysisId; // Never transmit internal analysis identity to a provider.
+    const generated = await generateWithFallback(configuredProvider(), [
+      {role: "system", content: AI_ANALYST_SYSTEM_PROMPT},
+      {role: "system", content: `Текущий SanitizedCreditContext:\n${JSON.stringify(sanitized)}`},
+      ...(history.results ?? []).reverse().map(item => ({role: item.role, content: minimizeQuestion(item.content)})),
+      {role: "user", content: providerQuestion},
+    ], () => buildLocalAnalystAnswer(question, source.analysis, source.risk));
+    const answer = generated.text;
     const userId = crypto.randomUUID(); const answerId = crypto.randomUUID();
     await db.prepare("INSERT INTO ai_messages (id, conversation_id, role, content, created_at) VALUES (?, ?, 'user', ?, ?)").bind(userId, conversationId, question, now).run();
     await db.prepare("INSERT INTO ai_messages (id, conversation_id, role, content, created_at) VALUES (?, ?, 'assistant', ?, ?)").bind(answerId, conversationId, answer, new Date().toISOString()).run();
-    await db.prepare("INSERT INTO ai_usage (id, conversation_id, owner_email, provider, model, input_tokens, output_tokens, latency_ms, success, error_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, NULL, ?)")
-      .bind(crypto.randomUUID(), conversationId, user.email, "deepseek", model, payload.usage?.prompt_tokens ?? null, payload.usage?.completion_tokens ?? null, Date.now() - started, new Date().toISOString()).run();
-    return Response.json({ message: publicMessage({ id: answerId, role: "assistant", content: answer, createdAt: new Date().toISOString() }) });
-  } catch (error) {
+    await db.prepare("INSERT INTO ai_usage (id, conversation_id, owner_email, provider, model, input_tokens, output_tokens, latency_ms, success, error_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .bind(crypto.randomUUID(), conversationId, user.email, generated.mode === "provider" ? "deepseek" : "local-rules", generated.mode === "provider" ? model : "deterministic", generated.inputTokens, generated.outputTokens, Date.now() - started, generated.failure ? 0 : 1, generated.failure, new Date().toISOString()).run();
+    return Response.json({ message: publicMessage({ id: answerId, role: "assistant", content: answer, createdAt: new Date().toISOString() }), mode: generated.mode });
+  } catch {
     if (runtimeValues && conversationId) {
-      try { await runtimeValues.db.prepare("INSERT INTO ai_usage (id, conversation_id, owner_email, provider, model, latency_ms, success, error_type, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)").bind(crypto.randomUUID(), conversationId, user.email, "deepseek", runtimeValues.model || "not-configured", Date.now() - started, error instanceof Error ? error.message.slice(0, 40) : "unknown", new Date().toISOString()).run(); } catch { /* metadata logging must not mask the user-safe error */ }
+      try { await runtimeValues.db.prepare("INSERT INTO ai_usage (id, conversation_id, owner_email, provider, model, latency_ms, success, error_type, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)").bind(crypto.randomUUID(), conversationId, user.email, "deepseek", runtimeValues.model || "not-configured", Date.now() - started, "AI_REQUEST_FAILED", new Date().toISOString()).run(); } catch { /* metadata logging must not mask the user-safe error */ }
     }
     return Response.json({ error: "Кредитный аналитик временно перегружен. Попробуйте повторить вопрос. Сам анализ Prescore сохранён и доступен." }, { status: 503 });
   }

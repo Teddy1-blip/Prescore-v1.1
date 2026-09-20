@@ -1,3 +1,4 @@
+import {getRuntime} from "../../../lib/platform/runtime";
 import { analysisForStorage, type AnalysisResult } from "../../../lib/prescore";
 import { compareCreditPortfolio, type CreditHistoryReport } from "../../../lib/credit-history";
 import type { QuarterlyFinancialReport } from "../../../lib/quarterly-report";
@@ -18,7 +19,7 @@ type RuntimeDatabase = {
 };
 
 async function getDatabase() {
-  const { env } = await import("cloudflare:workers");
+  const env = getRuntime();
   return env.DB as unknown as RuntimeDatabase;
 }
 

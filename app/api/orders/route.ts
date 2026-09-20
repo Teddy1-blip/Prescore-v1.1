@@ -1,9 +1,10 @@
+import {getRuntime} from "../../../lib/platform/runtime";
 import { requireApiUser, unauthorized } from "../api-auth";
 
 type Statement = { bind: (...values: unknown[]) => Statement; run: () => Promise<unknown>; first: <T = unknown>() => Promise<T | null> };
 type Database = { prepare: (query: string) => Statement };
 
-async function database() { const { env } = await import("cloudflare:workers"); return env.DB as unknown as Database; }
+async function database() { const env = getRuntime(); return env.DB as unknown as Database; }
 async function ensure(db: Database) {
   await db.prepare(`CREATE TABLE IF NOT EXISTS payment_orders (
     id TEXT PRIMARY KEY, order_number TEXT NOT NULL UNIQUE, payer_type TEXT NOT NULL, payer_inn TEXT NOT NULL DEFAULT '',

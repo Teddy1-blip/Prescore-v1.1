@@ -1,11 +1,12 @@
+import {getRuntime} from "../../../../lib/platform/runtime";
 import { averagePartnerCommissionRate } from "../../../../lib/partner-commissions";
 import type { Gold44Record } from "../../../../lib/gold44";
-import { ADMIN_EMAIL, requireApiUser, unauthorized } from "../../api-auth";
+import { requireApiUser, unauthorized } from "../../api-auth";
 
 type PreparedStatement = { bind: (...values: unknown[]) => PreparedStatement; run: () => Promise<unknown>; first: <T = Record<string, unknown>>() => Promise<T | null> };
 type RuntimeDatabase = { prepare: (query: string) => PreparedStatement; batch: (statements: PreparedStatement[]) => Promise<Array<{ results: unknown[] }>> };
 
-async function database() { const { env } = await import("cloudflare:workers"); return env.DB as unknown as RuntimeDatabase; }
+async function database() { const env = getRuntime(); return env.DB as unknown as RuntimeDatabase; }
 
 async function ensureSchema(db: RuntimeDatabase) {
   await db.batch([
@@ -36,7 +37,7 @@ async function moduleAvailable(db: RuntimeDatabase) {
 async function accountFor(db: RuntimeDatabase, user: { email: string; displayName: string; isAdmin: boolean }) {
   const existing = await db.prepare("SELECT agent_code AS agentCode FROM agent_accounts WHERE user_email = ? LIMIT 1").bind(user.email).first<{ agentCode: string }>();
   if (existing) return existing.agentCode;
-  const code = user.isAdmin || user.email === ADMIN_EMAIL ? "AGENT-ANTON-001" : `AGENT-${crypto.randomUUID().replace(/-/g, "").slice(0, 10).toUpperCase()}`;
+  const code = user.isAdmin ? "AGENT-ANTON-001" : `AGENT-${crypto.randomUUID().replace(/-/g, "").slice(0, 10).toUpperCase()}`;
   await db.prepare("INSERT INTO agent_accounts (user_email, agent_code, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").bind(user.email, code, user.displayName || "Партнёр Прескор", new Date().toISOString(), new Date().toISOString()).run();
   return code;
 }
@@ -65,6 +66,7 @@ async function createGuaranteeDraft(db: RuntimeDatabase, agentCode: string, lead
 export async function GET(request: Request) {
   const user = await requireApiUser();
   if (!user) return unauthorized();
+  if (!user.roles.includes("AGENT") && !user.isAdmin) return Response.json({error:"Нет доступа к кабинету агента"},{status:403});
   try {
     const db = await database(); await ensureSchema(db); if (!await moduleAvailable(db)) return Response.json({ error: "Модуль базы для прозвона отключён администратором" }, { status: 403 }); const agentCode = await accountFor(db, user);
     const url = new URL(request.url); const status = String(url.searchParams.get("status") || "all");
@@ -95,6 +97,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const user = await requireApiUser();
   if (!user) return unauthorized();
+  if (!user.roles.includes("AGENT") && !user.isAdmin) return Response.json({error:"Нет доступа к кабинету агента"},{status:403});
   try {
     const db = await database(); await ensureSchema(db); if (!await moduleAvailable(db)) return Response.json({ error: "Модуль базы для прозвона отключён администратором" }, { status: 403 }); const agentCode = await accountFor(db, user);
     const body = await request.json() as Record<string, unknown>; const type = String(body.type || ""); const now = new Date().toISOString();

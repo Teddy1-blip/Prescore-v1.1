@@ -1,3 +1,4 @@
+import {getRuntime} from "../../../lib/platform/runtime";
 import { buildRiskShadow } from "../../../lib/credit-engine/risk/integration";
 import { buildUnifiedRiskContext } from "../../../lib/risk-context";
 import type { AnalysisResult } from "../../../lib/prescore";
@@ -16,7 +17,7 @@ export async function GET(request: Request) {
   const analysisId = new URL(request.url).searchParams.get("analysisId") || "";
   if (!analysisId) return Response.json({ error: "Не указан анализ" }, { status: 400 });
   try {
-    const { env } = await import("cloudflare:workers");
+    const env = getRuntime();
     const db = env.DB as unknown as Database;
     const access = await readableAnalysis<{ payload: string; companyInn: string; ownerEmail: string }>(db, analysisId, user);
     if (!access) return Response.json({ error: "Анализ не найден в вашем кабинете" }, { status: 404 });

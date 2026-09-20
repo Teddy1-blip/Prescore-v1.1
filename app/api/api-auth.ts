@@ -1,11 +1,11 @@
 import { getChatGPTUser } from "../chatgpt-auth";
 
-export const ADMIN_EMAIL = "dorogovab@gmail.com";
+
 
 export async function requireApiUser() {
   const user = await getChatGPTUser();
   if (!user?.email) return null;
-  return { ...user, email: user.email.trim().toLowerCase(), isAdmin: user.email.trim().toLowerCase() === ADMIN_EMAIL };
+  return { ...user, email: user.email.trim().toLowerCase(), isAdmin: user.roles.includes("ADMIN") };
 }
 
 export function unauthorized() {

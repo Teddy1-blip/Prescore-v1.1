@@ -41,3 +41,9 @@ next-env.d.ts
 /.sites-runtime/
 /outputs/
 /work/
+
+!.env.example
+
+# GitHub staging builds from source, never transport archives.
+source.tar.gz
+amvera-staging-upload/

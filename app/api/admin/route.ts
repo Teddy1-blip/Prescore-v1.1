@@ -1,3 +1,4 @@
+import {getRuntime} from "../../../lib/platform/runtime";
 import { getChatGPTUser } from "../../chatgpt-auth";
 import { controlDefinitions, ensureControlSettings, isKnownControlKey, readControlSettings, type ControlCategory } from "../../../lib/admin-controls";
 import { ensureEntitlementSchema, grantFullEntitlement, setAnalysisTier } from "../../../lib/entitlements";
@@ -5,7 +6,7 @@ import { ensureEntitlementSchema, grantFullEntitlement, setAnalysisTier } from "
 type PreparedStatement = { bind: (...values: unknown[]) => PreparedStatement; run: () => Promise<unknown>; first: <T = unknown>() => Promise<T | null> };
 type RuntimeDatabase = { prepare: (query: string) => PreparedStatement; batch: (statements: PreparedStatement[]) => Promise<Array<{ results: unknown[] }>> };
 
-const ADMIN_EMAIL = "dorogovab@gmail.com";
+
 const moduleDefaults = [
   ["overview", "Обзор и метрики"], ["analysis", "Анализ выписок"], ["report", "Скоринг и отчёт"],
   ["credit", "БКИ и кредитный портфель"], ["company", "БФО и правовой контур"], ["offers", "Умный подбор финансирования"],
@@ -15,11 +16,11 @@ const moduleDefaults = [
   ["prospects", "База закупок и прозвон Gold44 / ЕИС"],
 ] as const;
 
-async function db() { const { env } = await import("cloudflare:workers"); return env.DB as unknown as RuntimeDatabase; }
+async function db() { const env = getRuntime(); return env.DB as unknown as RuntimeDatabase; }
 
 async function authorize() {
   const user = await getChatGPTUser();
-  return user?.email.toLowerCase() === ADMIN_EMAIL ? user : null;
+  return user?.roles.includes("ADMIN") ? user : null;
 }
 
 async function ensureSchema(database: RuntimeDatabase) {

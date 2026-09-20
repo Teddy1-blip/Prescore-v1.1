@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import "./landing-ru.css";
+import "./components/ui-v2/product-system.css";
 
 export const metadata: Metadata = {
   title: "Прескор — скоринг и управление финансированием бизнеса",
@@ -21,7 +22,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ru">
-      <body>{children}</body>
+      <body className="prescore-v2">{children}</body>
     </html>
   );
 }

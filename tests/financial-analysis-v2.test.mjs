@@ -232,6 +232,7 @@ function checkoRouteHarness() {
     if (name.includes("financial-analysis/integration")) return { checkoFinancialShadow };
     if (name.includes("contracts/sources")) return { INFRASTRUCTURE_VERSIONS: { integrity: "PRESCORE-INTEGRITY-1" } };
     if (name.includes("api-auth") || name.includes("entitlements")) return {};
+    if (name.includes("platform/runtime")) return { getRuntime() { throw new Error("UNEXPECTED_RUNTIME_ACCESS"); } };
     throw new Error(`Unexpected import: ${name}`);
   });
   return exports;

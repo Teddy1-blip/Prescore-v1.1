@@ -1,3 +1,5 @@
+import {documentStorage} from "../../../lib/storage/documents";
+import {getRuntime} from "../../../lib/platform/runtime";
 import { requireApiUser, unauthorized } from "../api-auth";
 
 type PreparedStatement = {
@@ -11,7 +13,7 @@ type RuntimeDatabase = {
 };
 
 async function database() {
-  const { env } = await import("cloudflare:workers");
+  const env = getRuntime();
   return env.DB as unknown as RuntimeDatabase;
 }
 
@@ -46,13 +48,12 @@ export async function GET(request: Request) {
     await ensureSchema(db);
     const downloadId = url.searchParams.get("download")?.trim();
     if (downloadId) {
-      const result = await db.batch([db.prepare(user.isAdmin ? "SELECT file_name AS fileName, mime_type AS mimeType, content_base64 AS contentBase64 FROM client_documents WHERE id = ? LIMIT 1" : `SELECT d.file_name AS fileName, d.mime_type AS mimeType, d.content_base64 AS contentBase64 FROM client_documents d
+      const result = await db.batch([db.prepare(user.isAdmin ? "SELECT file_name AS fileName, mime_type AS mimeType, content_base64 AS contentBase64, storage_key AS storageKey FROM client_documents WHERE id = ? LIMIT 1" : `SELECT d.file_name AS fileName, d.mime_type AS mimeType, d.content_base64 AS contentBase64, d.storage_key AS storageKey FROM client_documents d
         WHERE d.id = ? AND (d.owner_email = ? OR EXISTS (SELECT 1 FROM agent_applications a JOIN agent_accounts u ON u.agent_code = a.agent_code WHERE a.id = d.application_id AND u.user_email = ?) OR EXISTS (SELECT 1 FROM agent_leads l JOIN agent_accounts u ON u.agent_code = l.agent_code WHERE l.company_inn = d.company_inn AND u.user_email = ?)) LIMIT 1`).bind(...(user.isAdmin ? [downloadId] : [downloadId, user.email, user.email, user.email]))]);
-      const file = (result[0]?.results as Array<{ fileName: string; mimeType: string; contentBase64: string }> | undefined)?.[0];
+      const file = (result[0]?.results as Array<{ fileName: string; mimeType: string; contentBase64: string; storageKey: string }> | undefined)?.[0];
       if (!file) return Response.json({ error: "Документ не найден" }, { status: 404 });
-      const binary = atob(file.contentBase64);
-      const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
-      return new Response(bytes, { headers: { "Content-Type": file.mimeType, "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(file.fileName)}`, "Cache-Control": "private, no-store" } });
+      const bytes = file.contentBase64 ? Uint8Array.from(atob(file.contentBase64), char => char.charCodeAt(0)) : await documentStorage().get(file.storageKey);
+      return new Response(bytes, { headers: { "Content-Type": file.mimeType, "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(file.fileName)}`, "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } });
     }
     const inn = (url.searchParams.get("inn") || "").replace(/\D/g, "");
     const applicationId = url.searchParams.get("applicationId")?.trim() || "";
@@ -62,8 +63,8 @@ export async function GET(request: Request) {
       : db.prepare(user.isAdmin ? `SELECT id, company_inn AS companyInn, analysis_id AS analysisId, application_id AS applicationId, category, file_name AS fileName, mime_type AS mimeType, size_bytes AS sizeBytes, uploaded_by AS uploadedBy, status, created_at AS createdAt FROM client_documents WHERE company_inn = ? ORDER BY created_at DESC` : `SELECT d.id, d.company_inn AS companyInn, d.analysis_id AS analysisId, d.application_id AS applicationId, d.category, d.file_name AS fileName, d.mime_type AS mimeType, d.size_bytes AS sizeBytes, d.uploaded_by AS uploadedBy, d.status, d.created_at AS createdAt FROM client_documents d WHERE d.company_inn = ? AND (d.owner_email = ? OR EXISTS (SELECT 1 FROM agent_leads l JOIN agent_accounts u ON u.agent_code = l.agent_code WHERE l.company_inn = d.company_inn AND u.user_email = ?)) ORDER BY d.created_at DESC`).bind(...(user.isAdmin ? [inn] : [inn, user.email, user.email]));
     const result = await db.batch([query]);
     return Response.json({ documents: result[0]?.results ?? [], maxBytes: MAX_BYTES, storage: "Пилотное защищённое хранилище" });
-  } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Не удалось загрузить документы" }, { status: 500 });
+  } catch {
+    return Response.json({ error: "Не удалось загрузить документы. Попробуйте позже." }, { status: 500 });
   }
 }
 
@@ -84,21 +85,34 @@ export async function POST(request: Request) {
     await ensureSchema(db);
     const analysisId = String(body.analysisId || "");
     const applicationId = String(body.applicationId || "");
-    if (!user.isAdmin) {
-      const accessQuery = analysisId
-        ? db.prepare("SELECT id FROM analyses WHERE id = ? AND owner_email = ? LIMIT 1").bind(analysisId, user.email)
-        : db.prepare(`SELECT d.id FROM deals d WHERE d.id = ? AND d.owner_email = ?
-          UNION SELECT a.id FROM agent_applications a JOIN agent_accounts u ON u.agent_code = a.agent_code WHERE a.id = ? AND u.user_email = ? LIMIT 1`).bind(applicationId, user.email, applicationId, user.email);
-      const access = await db.batch([accessQuery]);
-      if (!access[0]?.results?.length) return Response.json({ error: "Нет доступа к досье" }, { status: 403 });
+    if (!analysisId && !applicationId && !user.isAdmin) return Response.json({error:"Укажите анализ или заявку"},{status:400});
+    // Every supplied relationship must belong to the same company and be accessible.
+    if (analysisId) {
+      const query = user.isAdmin
+        ? db.prepare("SELECT id FROM analyses WHERE id = ? AND company_inn = ?").bind(analysisId, companyInn)
+        : db.prepare("SELECT id FROM analyses WHERE id = ? AND company_inn = ? AND owner_email = ?").bind(analysisId, companyInn, user.email);
+      if (!(await db.batch([query]))[0]?.results?.length) return Response.json({error:"Нет доступа к досье"},{status:403});
+    }
+    if (applicationId) {
+      const query = db.prepare(`SELECT d.id FROM deals d JOIN analyses a ON a.id = d.analysis_id
+        WHERE d.id = ? AND a.company_inn = ? AND (d.owner_email = ? OR ? = 1)
+        UNION SELECT ap.id FROM agent_applications ap JOIN agent_accounts u ON u.agent_code = ap.agent_code
+        JOIN agent_leads l ON l.id = ap.lead_id AND l.agent_code = ap.agent_code
+        WHERE ap.id = ? AND l.company_inn = ? AND (u.user_email = ? OR ? = 1)`)
+        .bind(applicationId,companyInn,user.email,user.isAdmin?1:0,applicationId,companyInn,user.email,user.isAdmin?1:0);
+      if (!(await db.batch([query]))[0]?.results?.length) return Response.json({error:"Нет доступа к досье"},{status:403});
     }
     const id = crypto.randomUUID();
     const createdAt = new Date().toISOString();
-    const storageKey = `pilot/${companyInn}/${body.applicationId || "dossier"}/${id}`;
-    await db.prepare(`INSERT INTO client_documents (id, company_inn, analysis_id, application_id, category, file_name, mime_type, size_bytes, content_base64, uploaded_by, status, storage_key, owner_email, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Загружен', ?, ?, ?)`)
-      .bind(id, companyInn, analysisId, applicationId, String(body.category || "Прочее").slice(0, 80), fileName, String(body.mimeType || "application/octet-stream"), sizeBytes, contentBase64, String(body.uploadedBy || "Клиент").slice(0, 80), storageKey, user.email, createdAt).run();
+    const bytes = Buffer.from(contentBase64,"base64");
+    if(bytes.length!==sizeBytes || bytes.length>MAX_BYTES) return Response.json({error:"Размер файла не совпадает с содержимым"},{status:400});
+    const stored = await documentStorage().put(bytes,String(body.mimeType || "application/octet-stream"));
+    const storageKey = stored.key;
+    try { await db.prepare(`INSERT INTO client_documents (id, company_inn, analysis_id, application_id, category, file_name, mime_type, size_bytes, content_base64, uploaded_by, status, storage_key, owner_email, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Загружен', ?, ?, ?)`)
+      .bind(id, companyInn, analysisId, applicationId, String(body.category || "Прочее").slice(0, 80), fileName, String(body.mimeType || "application/octet-stream"), sizeBytes, "", String(body.uploadedBy || "Клиент").slice(0, 80), storageKey, user.email, createdAt).run();
+    } catch (error) { await documentStorage().delete(storageKey); throw error; }
     return Response.json({ document: { id, companyInn, analysisId: body.analysisId || "", applicationId: body.applicationId || "", category: body.category || "Прочее", fileName, mimeType: body.mimeType || "application/octet-stream", sizeBytes, uploadedBy: body.uploadedBy || "Клиент", status: "Загружен", createdAt } }, { status: 201 });
-  } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Не удалось сохранить документ" }, { status: 500 });
+  } catch {
+    return Response.json({ error: "Не удалось сохранить документ. Повторите загрузку." }, { status: 500 });
   }
 }

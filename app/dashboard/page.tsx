@@ -8,7 +8,7 @@ import {
   MessageSquareText, RefreshCw, Search, ShieldCheck, Sparkles, Target, UploadCloud, UserRound,
   WalletCards, X, Zap, Trash2,
 } from "lucide-react";
-import { ChangeEvent, DragEvent, ReactNode, useEffect, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import "./dashboard.css";
 import {
   type AnalysisResult, type StatementInput, type StatementInspection,
@@ -30,6 +30,15 @@ import { metricControlKey } from "../../lib/admin-controls";
 import "../prescore-ui-v1.css";
 
 type View = "overview" | "analyze" | "report" | "credit" | "company" | "offers" | "analyst" | "crm" | "documents" | "method";
+const subscribeView = (onChange: () => void) => {
+  window.addEventListener("popstate", onChange);
+  return () => window.removeEventListener("popstate", onChange);
+};
+const readView = (): View => {
+  const requested = new URLSearchParams(window.location.search).get("view");
+  const allowed: View[] = ["overview", "analyze", "report", "credit", "company", "offers", "analyst", "crm", "documents", "method"];
+  return allowed.includes(requested as View) ? requested as View : "overview";
+};
 type StoredAnalysis = Omit<AnalysisResult, "transactions"> & {
   transactions?: AnalysisResult["transactions"];
   viewTier?: "FREE" | "FULL";
@@ -46,10 +55,10 @@ type Deal = {
 const nav: Array<{ id: View; label: string; icon: ReactNode }> = [
   { id: "overview", label: "Обзор", icon: <LayoutDashboard /> },
   { id: "analyze", label: "Новый анализ", icon: <FileSearch /> },
-  { id: "report", label: "Скоринг и отчёт", icon: <Gauge /> },
+  { id: "report", label: "Полный анализ", icon: <Gauge /> },
   { id: "credit", label: "БКИ и портфель", icon: <WalletCards /> },
-  { id: "company", label: "Заключение и БФО", icon: <Building2 /> },
-  { id: "offers", label: "Куда подаваться", icon: <Landmark /> },
+  { id: "company", label: "Компания и отчётность", icon: <Building2 /> },
+  { id: "offers", label: "Предложения банков", icon: <Landmark /> },
   { id: "analyst", label: "Кредитный аналитик", icon: <Sparkles /> },
   { id: "crm", label: "Заявки в банки", icon: <BriefcaseBusiness /> },
   { id: "documents", label: "Документы", icon: <Files /> },
@@ -64,7 +73,10 @@ const statementWord = (value: number) => value % 10 === 1 && value % 100 !== 11 
 const metricVisible = (controls: Record<string, boolean>, key: string) => controls[metricControlKey(key)] !== false;
 
 export default function Dashboard() {
-  const [view, setView] = useState<View>("overview");
+  // Additive, permission-filtered entry from the internal report. Hydration stays on overview.
+  const requestedView = useSyncExternalStore(subscribeView, readView, () => "overview" as View);
+  const [chosenView, setView] = useState<View | null>(null);
+  const view = chosenView ?? requestedView;
   const [menu, setMenu] = useState(false);
   const [analyses, setAnalyses] = useState<StoredAnalysis[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
@@ -224,16 +236,21 @@ export default function Dashboard() {
         <button onClick={() => setMenu(false)} aria-label="Закрыть меню"><X /></button>
       </div>
       <div className="ps-workspace-label">РАБОЧИЙ КАБИНЕТ</div>
-      <nav>{availableNav.map((item) => <button key={item.id} className={effectiveView === item.id ? "active" : ""} onClick={() => choose(item.id)}>{item.icon}<span>{item.label}</span>{item.id === "crm" && deals.length > 0 && <i>{deals.length}</i>}</button>)}</nav>
+      <nav aria-label="Разделы кабинета">{[
+        {title:"АНАЛИЗ", ids:["overview","report","analyze"]},
+        {title:"ФИНАНСИРОВАНИЕ", ids:["offers","crm"]},
+        {title:"ДАННЫЕ", ids:["documents","credit","company"]},
+        {title:"ПОМОЩЬ", ids:["analyst","method"]},
+      ].map(group => <div key={group.title}><small>{group.title}</small>{availableNav.filter(item=>group.ids.includes(item.id)).map(item=><button key={item.id} aria-current={effectiveView===item.id?"page":undefined} className={effectiveView === item.id ? "active" : ""} onClick={() => choose(item.id)}>{item.icon}<span>{item.label}</span>{item.id === "crm" && deals.length > 0 && <i>{deals.length}</i>}</button>)}</div>)}</nav>
       <div className="ps-source-card"><ShieldCheck /><span><small>КОНТУР ДАННЫХ</small><b>Минимизация исходных документов</b><p>TXT рассчитывается в защищённом серверном модуле без постоянного хранения; PDF БКИ разбирается в браузере. В досье сохраняется структурированный результат.</p></span></div>
       <div className="ps-sidebar-user"><i><UserRound /></i><span><b>Владелец кабинета</b><small>Приватная beta · РФ</small></span></div>
-    </aside>
+    <Link className="pv-logout" href="/logout">Выйти из кабинета</Link></aside>
 
     <section className="ps-main">
       <header className="ps-topbar">
         <button className="ps-menu-button" onClick={() => setMenu(true)} aria-label="Открыть меню"><Menu /></button>
         <div className="ps-company"><i>RU</i><span><b>{selected?.companyName ?? "Новая компания"}</b><small>{selected?.companyInn ? `ИНН ${selected.companyInn}` : "Банковский анализ"}</small></span></div>
-        <div className="ps-top-actions"><span className="ps-system-status"><i /> Расчётный модуль работает</span><Link className="ps-cabinet-switch" href="/login">Сменить кабинет</Link><button title="Помощь"><CircleHelp /></button>{!readOnly && modules.analysis !== false && <button className="ps-new-button" onClick={() => choose("analyze")}><Plus /> Новый анализ</button>}</div>
+        <div className="ps-top-actions"><span className="ps-system-status"><i /> Расчётный модуль работает</span><Link className="ps-cabinet-switch" href="/login">Сменить кабинет</Link><button title="Помощь" aria-label="Открыть методологию" onClick={()=>choose("method")}><CircleHelp /></button>{!readOnly && modules.analysis !== false && <button className="ps-new-button" onClick={() => choose("analyze")}><Plus /> Новый анализ</button>}</div>
       </header>
       <div className="ps-content">
         {saveWarning && <div className="ps-warning"><AlertTriangle />{saveWarning}</div>}

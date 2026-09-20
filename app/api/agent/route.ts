@@ -1,7 +1,8 @@
+import {getRuntime} from "../../../lib/platform/runtime";
 import { averagePartnerCommissionRate, partnerCommissions } from "../../../lib/partner-commissions";
 import { bankControlKey, productControlKey, readControlState } from "../../../lib/admin-controls";
 import { matchGuaranteePolicies } from "../../../lib/bank-guarantees";
-import { ADMIN_EMAIL, requireApiUser, unauthorized } from "../api-auth";
+import { requireApiUser, unauthorized } from "../api-auth";
 
 type PreparedStatement = {
   bind: (...values: unknown[]) => PreparedStatement;
@@ -15,7 +16,7 @@ type RuntimeDatabase = {
 };
 
 async function getDatabase() {
-  const { env } = await import("cloudflare:workers");
+  const env = getRuntime();
   return env.DB as unknown as RuntimeDatabase;
 }
 
@@ -103,7 +104,7 @@ function normalizeCode(value: string | null) {
 async function accountFor(db: RuntimeDatabase, user: { email: string; displayName: string; isAdmin: boolean }) {
   const existing = await db.prepare("SELECT agent_code AS agentCode, name FROM agent_accounts WHERE user_email = ? LIMIT 1").bind(user.email).first<{ agentCode: string; name: string }>();
   if (existing) return existing;
-  const agentCode = user.isAdmin || user.email === ADMIN_EMAIL ? OWNER_AGENT : `AGENT-${crypto.randomUUID().replace(/-/g, "").slice(0, 10).toUpperCase()}`;
+  const agentCode = user.isAdmin ? OWNER_AGENT : `AGENT-${crypto.randomUUID().replace(/-/g, "").slice(0, 10).toUpperCase()}`;
   const name = user.displayName || "Партнёр Прескор";
   await db.prepare("INSERT INTO agent_accounts (user_email, agent_code, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").bind(user.email, agentCode, name, new Date().toISOString(), new Date().toISOString()).run();
   return { agentCode, name };
@@ -127,6 +128,7 @@ async function createMatchedGuaranteeDraft(db: RuntimeDatabase, input: { agentCo
 export async function GET(request: Request) {
   const user = await requireApiUser();
   if (!user) return unauthorized();
+  if (!user.roles.includes("AGENT") && !user.isAdmin) return Response.json({error:"Нет доступа к кабинету агента"},{status:403});
   try {
     const db = await getDatabase();
     await ensureSchema(db);
@@ -194,6 +196,7 @@ export async function POST(request: Request) {
     const publicReferral = type === "subagent" || (type === "lead" && String(body.source || "") === "Реферальная ссылка");
     const user = publicReferral ? null : await requireApiUser();
     if (!publicReferral && !user) return unauthorized();
+    if (user && !user.roles.includes("AGENT") && !user.isAdmin) return Response.json({error:"Нет доступа к кабинету агента"},{status:403});
     const account = user ? await accountFor(db, user) : null;
     const agentCode = account?.agentCode || normalizeCode(String(body.agentCode || ""));
     if (!agentCode) return Response.json({ error: "Некорректная реферальная ссылка" }, { status: 400 });
@@ -290,6 +293,7 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   const user = await requireApiUser();
   if (!user) return unauthorized();
+  if (!user.roles.includes("AGENT") && !user.isAdmin) return Response.json({error:"Нет доступа к кабинету агента"},{status:403});
   try {
     const db = await getDatabase();
     await ensureSchema(db);

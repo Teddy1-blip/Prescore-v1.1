@@ -1,3 +1,4 @@
+import {getRuntime} from "../../../lib/platform/runtime";
 import { readableAnalysis, requireApiUser, unauthorized } from "../api-auth";
 import { resolveAnalysisTier, type AnalysisTier } from "../../../lib/entitlements";
 import { INFRASTRUCTURE_VERSIONS, type SourceEnvelope } from "../../../lib/credit-engine/contracts/sources";
@@ -26,7 +27,7 @@ const CACHE_MS = 24 * 60 * 60 * 1000;
 const ENDPOINT = "https://api.checko.ru/v2";
 
 async function runtime() {
-  const { env } = await import("cloudflare:workers");
+  const env = getRuntime();
   return {
     db: env.DB as unknown as RuntimeDatabase,
     apiKey: String((env as unknown as Record<string, unknown>).CHECKO_API_KEY ?? ""),

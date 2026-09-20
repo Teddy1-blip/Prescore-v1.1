@@ -1,3 +1,4 @@
+import {getRuntime} from "../../../lib/platform/runtime";
 import { buildRiskShadow } from "../../../lib/credit-engine/risk/integration";
 import { applyAnalysisControls, readControlState } from "../../../lib/admin-controls";
 import {
@@ -34,8 +35,7 @@ const BKI_MAX_BYTES = 35 * 1024 * 1024;
 const QUARTERLY_MAX_BYTES = 25 * 1024 * 1024;
 
 async function database() {
-  const runtimeModule = "cloudflare:workers";
-  const { env } = await import(runtimeModule);
+  const env = getRuntime();
   return env.DB as unknown as Database;
 }
 

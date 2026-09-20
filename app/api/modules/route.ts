@@ -1,3 +1,4 @@
+import {getRuntime} from "../../../lib/platform/runtime";
 import { requireApiUser, unauthorized } from "../api-auth";
 import { readControlSettings } from "../../../lib/admin-controls";
 
@@ -10,7 +11,7 @@ export async function GET() {
   const user = await requireApiUser();
   if (!user) return unauthorized();
   try {
-    const { env } = await import("cloudflare:workers");
+    const env = getRuntime();
     const db = env.DB as unknown as RuntimeDatabase;
     await db.prepare(`CREATE TABLE IF NOT EXISTS module_settings (module_key TEXT PRIMARY KEY, label TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`).run();
     const [result, controlSettings] = await Promise.all([

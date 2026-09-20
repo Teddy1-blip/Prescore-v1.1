@@ -1,3 +1,4 @@
+import {getRuntime} from "../../../lib/platform/runtime";
 import { notFound, redirect } from "next/navigation";
 import { requireChatGPTUser } from "../../chatgpt-auth";
 import type { AnalysisResult } from "../../../lib/prescore";
@@ -21,9 +22,9 @@ const date = (value: string) => value ? new Intl.DateTimeFormat("ru-RU").format(
 export default async function DynamicReportPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireChatGPTUser("/dashboard");
   const { id } = await params;
-  const { env } = await import("cloudflare:workers");
+  const env = getRuntime();
   const db = env.DB as unknown as Database;
-  const normalizedUser = { email: user.email.toLowerCase(), isAdmin: user.email.toLowerCase() === "dorogovab@gmail.com" };
+  const normalizedUser = { email: user.email.toLowerCase(), isAdmin: user.roles.includes("ADMIN") };
   const access = await readableAnalysis<{ payload: string; companyInn: string; ownerEmail: string }>(db, id, normalizedUser);
   if (!access) notFound();
   const row = access.row;

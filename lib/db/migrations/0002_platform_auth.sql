@@ -1,0 +1,11 @@
+CREATE TABLE IF NOT EXISTS "user" (id text PRIMARY KEY, name text NOT NULL, email text NOT NULL UNIQUE, "emailVerified" boolean NOT NULL DEFAULT false, image text, "createdAt" timestamptz NOT NULL DEFAULT now(), "updatedAt" timestamptz NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS "session" (id text PRIMARY KEY,"userId" text NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,token text NOT NULL UNIQUE,"expiresAt" timestamptz NOT NULL,"ipAddress" text,"userAgent" text,"createdAt" timestamptz NOT NULL DEFAULT now(),"updatedAt" timestamptz NOT NULL DEFAULT now());
+CREATE INDEX IF NOT EXISTS prescore_session_user_idx ON "session"("userId");
+CREATE TABLE IF NOT EXISTS account (id text PRIMARY KEY,"userId" text NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,"accountId" text NOT NULL,"providerId" text NOT NULL,"accessToken" text,"refreshToken" text,"idToken" text,"accessTokenExpiresAt" timestamptz,"refreshTokenExpiresAt" timestamptz,scope text,password text,"createdAt" timestamptz NOT NULL DEFAULT now(),"updatedAt" timestamptz NOT NULL DEFAULT now(),UNIQUE("providerId","accountId"));
+CREATE INDEX IF NOT EXISTS account_user ON account("userId");
+CREATE TABLE IF NOT EXISTS verification (id text PRIMARY KEY,identifier text NOT NULL,value text NOT NULL,"expiresAt" timestamptz NOT NULL,"createdAt" timestamptz NOT NULL DEFAULT now(),"updatedAt" timestamptz NOT NULL DEFAULT now());
+CREATE INDEX IF NOT EXISTS verification_identifier ON verification(identifier);
+CREATE TABLE IF NOT EXISTS "rateLimit" (id text PRIMARY KEY,key text NOT NULL UNIQUE,count integer NOT NULL,"lastRequest" bigint NOT NULL);
+CREATE TABLE IF NOT EXISTS platform_roles (user_id text NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,role text NOT NULL CHECK(role IN ('CLIENT','AGENT','ADMIN')),PRIMARY KEY(user_id,role));
+CREATE TABLE IF NOT EXISTS platform_security_events (id text PRIMARY KEY,user_id text,event text NOT NULL,created_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS platform_bootstrap (id text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT now());
