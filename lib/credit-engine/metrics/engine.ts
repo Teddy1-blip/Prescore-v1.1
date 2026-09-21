@@ -1,3 +1,5 @@
+import {applyConflictKnowledge} from "./conflicts.ts";
+import type {TransactionConflict} from "../normalization/conflicts.ts";
 import type { NormalizedTransaction } from "../../prescore.ts";
 import type { EconomicCategory, ClassificationConfidence, ClassificationTag } from "../contracts/classification.ts";
 import type { AnalysisIntegritySummary, AnalysisSourceManifest, MonthCoverageStatus } from "../contracts/sources.ts";
@@ -17,6 +19,7 @@ type LegacyMetrics = Record<string, number | null>;
 
 export type MetricsEngineInput = {
   transactions: NormalizedTransaction[];
+  conflicts?: TransactionConflict[];
   integrity?: AnalysisIntegritySummary;
   sourceManifest?: AnalysisSourceManifest;
   periodFrom?: string | null;
@@ -173,7 +176,7 @@ function monthKey(date: string | undefined) {
   return /^\d{4}-\d{2}/.test(date ?? "") ? (date ?? "").slice(0, 7) : null;
 }
 
-function calendarSeries(items: ClassifiedTransaction[], input: MetricsEngineInput): MonthlyCashFlowV2[] {
+function calendarSeries(items: ClassifiedTransaction[], input: MetricsEngineInput): Array<MonthlyCashFlowV2 & {operatingReceipts:number}> {
   const coverage = input.integrity?.calendarCoverage ?? [];
   const coverageByMonth = new Map(coverage.map((item) => [item.month, item]));
   const transactionMonths = [...new Set(items.map((item) => monthKey(item.date)).filter((item): item is string => Boolean(item)))];
@@ -204,13 +207,14 @@ function calendarSeries(items: ClassifiedTransaction[], input: MetricsEngineInpu
   });
 }
 
-function monthlyMetrics(monthly: MonthlyCashFlowV2[], operating: Aggregate, input: MetricsEngineInput, unknownShare: number) {
+function monthlyMetrics(monthly: Array<MonthlyCashFlowV2 & {operatingReceipts:number}>, operating: Aggregate, input: MetricsEngineInput, unknownShare: number) {
   const observed = monthly.filter((item) => item.coverage !== "MISSING");
   const full = monthly.filter((item) => item.coverage === "FULL");
   const observedAverage = observed.length ? observed.reduce((sum, item) => sum + item.operatingReceipts, 0) / observed.length : null;
-  const fullAverage = full.length ? full.reduce((sum, item) => sum + item.operatingReceipts, 0) / full.length : null;
+  const unobservedAccount = input.integrity?.calendarCoverage?.some(m=>m.warnings.includes('UNOBSERVED_ACCOUNT_PERIOD')) ?? false;
+  const fullAverage = !unobservedAccount && full.length ? full.reduce((sum, item) => sum + item.operatingReceipts, 0) / full.length : null;
   let trend: number | null = null;
-  if (full.length >= 4) {
+  if (!unobservedAccount && full.length >= 4) {
     const split = Math.floor(full.length / 2);
     const first = full.slice(0, split);
     const last = full.slice(-split);
@@ -228,7 +232,7 @@ function monthlyMetrics(monthly: MonthlyCashFlowV2[], operating: Aggregate, inpu
   const missingWarning = monthly.some((item) => item.coverage === "MISSING") ? ["MISSING_MONTH_NOT_ZERO"] : [];
   return {
     observedAverage: metric("BSM-OPER-010", input, { value: observedAverage, confidence: metricConfidence(operating, input.integrity, { unknownShare }), basis: "Operating cash receipts divided by observed non-missing months", included: OPERATING_RECEIPTS, aggregate: operating, warnings: missingWarning }),
-    fullAverage: metric("BSM-OPER-011", input, { value: fullAverage, confidence: metricConfidence(operating, input.integrity, { unknownShare }), basis: "Operating cash receipts divided by FULL calendar months only", included: OPERATING_RECEIPTS, aggregate: operating, warnings: [...partialWarning, ...missingWarning] }),
+    fullAverage: metric("BSM-OPER-011", input, { value: fullAverage, confidence: metricConfidence(operating, input.integrity, { unknownShare }), basis: "Operating cash receipts divided by FULL calendar months only", included: OPERATING_RECEIPTS, aggregate: operating, warnings: [...partialWarning, ...missingWarning, ...(unobservedAccount ? ["UNOBSERVED_ACCOUNT_PERIOD"] : [])] }),
     trend: metric("BSM-OPER-012", input, { value: trend, unit: "PERCENT", status: trend === null ? "UNKNOWN" : "KNOWN", basis: "Difference between average operating receipts in first and second halves of at least four FULL months", included: OPERATING_RECEIPTS, aggregate: operating, warnings: trend === null ? ["INSUFFICIENT_FULL_MONTHS_FOR_TREND"] : [] }),
     volatility: metric("BSM-OPER-013", input, { value: volatility, unit: "RATIO", status: volatility === null ? "UNKNOWN" : "KNOWN", basis: "Coefficient of variation across at least three FULL months", included: OPERATING_RECEIPTS, aggregate: operating, warnings: volatility === null ? ["INSUFFICIENT_FULL_MONTHS_FOR_VOLATILITY"] : [] }),
     peakToAverage: metric("BSM-OPER-014", input, { value: peakToAverage, unit: "RATIO", status: peakToAverage === null ? "UNKNOWN" : "KNOWN", basis: "Peak FULL-month operating receipts divided by FULL-month average; not a seasonality conclusion", included: OPERATING_RECEIPTS, aggregate: operating }),
@@ -664,5 +668,6 @@ export function buildBankStatementMetricsV2(input: MetricsEngineInput): { metric
     },
     monthly,
   };
+  applyConflictKnowledge(metricsV2, input.conflicts ?? []);
   return { metricsV2, metricsComparison: buildComparison(input.legacyMetrics, metricsV2, reasons) };
 }

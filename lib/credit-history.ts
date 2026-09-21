@@ -28,6 +28,7 @@ export type CreditObligation = {
   rateLabel: string;
   overdueAmount: number | null;
   maxDelinquencyDays: number | null;
+  fieldProvenance?: Record<string, { origin: "REPORTED" | "PARSER_DEFAULT" | "ESTIMATED" | "CONFLICTED"; value: number | null; reference: string }>;
   paymentQuality: DebtServiceQuality;
   collateral: string;
   guaranteeAmount: number | null;
@@ -224,6 +225,7 @@ function parseSbObligation(block: string, index: number): CreditObligation | nul
     rateLabel: rate === null ? "Ставка не указана" : "Полная стоимость кредита",
     overdueAmount: overdue,
     maxDelinquencyDays: maxDays,
+    fieldProvenance: maxDays === 0 ? {maxDelinquencyDays:{origin:"REPORTED",value:0,reference:"Explicit bureau payment-history codes/count"}} : {},
     paymentQuality: delinquencyQuality(maxDays, overdue),
     collateral,
     guaranteeAmount: null,
@@ -336,6 +338,7 @@ function parseNbkiObligation(block: string, index: number): CreditObligation | n
     rateLabel: rate === null ? "Ставка не указана" : "Полная стоимость",
     overdueAmount: overdue ?? (maxDays === 0 ? 0 : null),
     maxDelinquencyDays: maxDays,
+    fieldProvenance: maxDays === 0 ? {maxDelinquencyDays:{origin:"REPORTED",value:0,reference:"Explicit bureau payment-history codes/count"}} : {},
     paymentQuality: delinquencyQuality(maxDays, overdue),
     collateral: "",
     guaranteeAmount,

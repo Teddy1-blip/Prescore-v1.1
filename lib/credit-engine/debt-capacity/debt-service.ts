@@ -3,7 +3,7 @@ import {DEBT_CAPACITY_POLICY} from './policy.ts';
 import {eligibleMonths} from './operating-basis.ts';
 import {average,amount,reference,rank,money,weakest,refs,unique} from './common.ts';
 export function observedDebtService(x:DebtCapacityInputV1,p:DebtCapacityPolicyV1=DEBT_CAPACITY_POLICY):ObservedDebtServiceBasisV1{
- const ms=eligibleMonths(x),m=x.bankMetrics.debtService.debtServiceCashOutflow,adequate=m.status==='KNOWN'&&m.value!==null&&rank(m.confidence)>=rank(p.minimumEvidenceConfidence),v=adequate?average(ms.map(m=>m.debtService)):null;
+ const ms=eligibleMonths(x),m=x.bankMetrics.debtService.debtServiceCashOutflow,adequate=m.status==='KNOWN'&&m.value!==null&&rank(m.confidence)>=rank(p.minimumEvidenceConfidence),v=adequate?average(ms.map(m=>m.debtService!)):null;
  const references=[reference('BANK_METRIC','bankMetrics.debtService.debtServiceCashOutflow',m.value,m.confidence,{sourceMetricCode:m.code,asOf:m.periodTo,evidenceIds:m.evidence??[]}),...ms.map(v=>reference('BANK_MONTH',`bankMetrics.monthly[${v.month}].debtService`,v.debtService,m.confidence,{month:v.month,asOf:x.bankMetrics.period.to,sourceMetricCode:m.code}))];
  return {...amount(v===null?null:money(v),m.confidence,references,'AVERAGE_OBSERVED_DEBT_SERVICE_FULL_MONTHS_ONLY',[...m.warnings,...(!adequate?['OBSERVED_DEBT_SERVICE_UNKNOWN']:[]),'UNSPLIT_PAYMENT_NOT_PRINCIPAL_REDUCTION']),eligibleMonths:ms.map(m=>m.month),sourceMetricCodes:[m.code]};
 }

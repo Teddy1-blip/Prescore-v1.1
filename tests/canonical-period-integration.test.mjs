@@ -5,14 +5,16 @@ import {statementFixture} from './fixtures/block1-statements.mjs';
 import {buildCanonicalCreditAnalysis} from '../lib/credit-engine/production/orchestrator.ts';
 import {loadCanonicalReport} from '../lib/credit-engine/production/report-service.ts';
 function input() {
- // Anonymous reproduction: multi-account overlap, coverage starts in the month
+ // Anonymous reproduction: multiple accounts with a partial boundary month, coverage starts in the month
  // before the first transaction. No client transactions, amounts or identifiers.
  return analyzeBankStatements([1,2].map(n=>({fileName:`anonymous-${n}.txt`,text:statementFixture({inn:'9900000001',account:`4070281011111000000${n}`,periodFrom:'30.06.2025',periodTo:'31.07.2025',transactionDate:'07.07.2025',number:String(n)})})));
 }
 test('source-period integration covers zero-transaction boundary month without changing legacy period',()=>{
  const a=input();assert.equal(a.periodFrom,'2025-07-07');
  assert.equal(a.metricsV2.period.from,'2025-06-30');assert.equal(a.metricsV2.period.to,'2025-07-31');
- assert.equal(a.metricsV2.monthly[0].month,'2025-06');assert.equal(a.metricsV2.monthly[0].coverage,'OVERLAP');
+ assert.equal(a.metricsV2.monthly[0].month,'2025-06');assert.equal(a.metricsV2.monthly[0].coverage,'PARTIAL');
+ assert.equal(a.metricsV2.monthly[1].coverage,'FULL');
+ assert.equal(a.metricsV2.period.overlapMonths,0);
  const c=buildCanonicalCreditAnalysis({analysis:analysisForStorage(a)});
  assert.equal(c.debtCapacity.headlineCapacity.monthlyIncrementalDebtServiceCapacity.prudential,null);
  assert.equal(c.financingReadiness.level,'UNKNOWN');assert.equal(c.prescoreIndex.value,null);

@@ -34,15 +34,15 @@ export type MetricResult = {
 export type MonthlyCashFlowV2 = {
   month: string;
   coverage: MonthCoverageStatus;
-  operatingReceipts: number;
-  externalInflows: number;
-  externalOutflows: number;
-  supplierPayments: number;
-  taxPayments: number;
-  payrollPayments: number;
-  debtService: number;
-  unclearIndividualAndCash: number;
-  unknownInflows: number;
+  operatingReceipts: number | null;
+  externalInflows: number | null;
+  externalOutflows: number | null;
+  supplierPayments: number | null;
+  taxPayments: number | null;
+  payrollPayments: number | null;
+  debtService: number | null;
+  unclearIndividualAndCash: number | null;
+  unknownInflows: number | null;
   warnings: string[];
 };
 
@@ -189,6 +189,7 @@ export type BankStatementMetricsV2 = {
     classificationAmounts: Record<ClassificationConfidence, number>;
     warnings: string[];
   };
+  conflicts?: {version:string; groups:import("../normalization/conflicts.ts").TransactionConflict[]; undisputedOperatingReceipts:number; affectedMonthlyFields:Partial<Record<keyof MonthlyCashFlowV2,string[]>>};
   monthly: MonthlyCashFlowV2[];
 };
 

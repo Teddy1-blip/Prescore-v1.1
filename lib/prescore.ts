@@ -610,7 +610,7 @@ type CanonicalTransactionBatch = {
   normalization: NormalizationSummary;
 };
 
-function buildCanonicalTransactionBatch(inputs: StatementInput[]): CanonicalTransactionBatch {
+function buildCanonicalTransactionBatch(inputs: StatementInput[], resolutions: import("./credit-engine/normalization/conflicts.ts").ConflictResolution[] = []): CanonicalTransactionBatch {
   const canonical: CanonicalTransaction[] = [];
   for (const input of inputs) {
     const { header, accounts, documents } = parseExchange(input.text);
@@ -634,7 +634,7 @@ function buildCanonicalTransactionBatch(inputs: StatementInput[]): CanonicalTran
     });
   }
   const eligible = canonical.filter((item) => item.date && item.amount !== null && item.amount > 0);
-  const deduplication = deduplicateTransactions(eligible);
+  const deduplication = deduplicateTransactions(eligible, resolutions);
   const links = linkInternalTransfersAndReversals(deduplication.retained);
   const summaryWarnings = [...new Set(canonical.flatMap((item) => item.quality.warnings))];
   const normalization: NormalizationSummary = {
@@ -1035,6 +1035,7 @@ function analyzeCombinedStatement(
     productFits,
     transactions,
     deduplication: {
+      ...(canonicalBatch.deduplication.conflicts.length ? {conflicts:canonicalBatch.deduplication.conflicts} : {}),
       originalCount: canonicalBatch.eligibleOriginalCount,
       removedCount: canonicalBatch.eligibleOriginalCount - transactions.length,
       retainedCount: transactions.length,
@@ -1076,7 +1077,7 @@ export function analyzeBankStatement(text: string, fileName = "bank.txt"): Analy
   }]);
 }
 
-export function analyzeBankStatements(inputs: StatementInput[], options: { screeningResults?: StatementScreeningResult[] } = {}): AnalysisResult {
+export function analyzeBankStatements(inputs: StatementInput[], options: { screeningResults?: StatementScreeningResult[]; conflictResolutions?: import("./credit-engine/normalization/conflicts.ts").ConflictResolution[] } = {}): AnalysisResult {
   if (!inputs.length) throw new Error("Добавьте хотя бы одну банковскую выписку");
   const inspections = inputs.map((input) => inspectBankStatement(input.text, input.fileName));
   const owner = inspections.find((item) => item.companyInn);
@@ -1091,7 +1092,7 @@ export function analyzeBankStatements(inputs: StatementInput[], options: { scree
   const sourceFiles = inputs.map((item) => item.fileName);
   const bankNames = [...new Set(inspections.map((item) => item.bankName))];
   const label = inputs.length === 1 ? inputs[0].fileName : `${inputs.length} выписки · ${bankNames.join(", ")}`;
-  const result = analyzeCombinedStatement(combined, label, sourceFiles, bankNames, buildCanonicalTransactionBatch(inputs));
+  const result = analyzeCombinedStatement(combined, label, sourceFiles, bankNames, buildCanonicalTransactionBatch(inputs, options.conflictResolutions));
   const screeningResults = options.screeningResults ?? inspections.map((inspection, index): StatementScreeningResult => ({
     fileName: inspection.fileName,
     status: "ACCEPTED",
@@ -1124,6 +1125,7 @@ function addSourceFoundation(
       sourceType: "BANK_STATEMENT" as const,
       status: "READY" as const,
       companyInn: inspection.companyInn,
+      accountCoverage: parseExchange(input.text).accounts.map(a => ({account:a.account, periodFrom:a.periodFrom || inspection.coveragePeriodFrom, periodTo:a.periodTo || inspection.coveragePeriodTo})).filter(a => a.account),
       fileName: input.fileName,
       sourceName: inspection.bankName,
       periodFrom: inspection.coveragePeriodFrom ?? inspection.periodFrom,
@@ -1156,6 +1158,7 @@ function addSourceFoundation(
   };
   const shadow = buildBankStatementMetricsV2({
     transactions: enriched.transactions,
+    conflicts: enriched.deduplication?.conflicts,
     integrity: enriched.integrity,
     sourceManifest: enriched.sourceManifest,
     // Calendar coverage is derived from statement coverage, not transaction extrema.

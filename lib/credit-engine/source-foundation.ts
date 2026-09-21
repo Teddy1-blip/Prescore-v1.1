@@ -59,7 +59,7 @@ function nextMonth(month: string) {
   return date.toISOString().slice(0, 7);
 }
 
-export function analyzeCalendarCoverage(
+function sourceCalendarCoverage(
   sources: Array<Pick<SourceEnvelope, "sourceId" | "periodFrom" | "periodTo">>,
 ): MonthCoverage[] {
   const valid = sources.filter((item) => validIsoDate(item.periodFrom) && validIsoDate(item.periodTo) && item.periodFrom! <= item.periodTo!);
@@ -111,6 +111,25 @@ export function analyzeCalendarCoverage(
     });
   }
   return result;
+}
+
+// Company FULL requires all supplied accounts, not merely any account, on every day.
+// Same-account overlaps remain unresolved; distinct accounts are not duplicate sources.
+export function analyzeCalendarCoverage(sources: Array<Pick<SourceEnvelope, "sourceId" | "periodFrom" | "periodTo" | "accountCoverage">>): MonthCoverage[] {
+  if (!sources.length || sources.some(s => !s.accountCoverage?.length)) return sourceCalendarCoverage(sources);
+  const accounts = new Map<string, Array<Pick<SourceEnvelope, "sourceId" | "periodFrom" | "periodTo">>>();
+  for (const s of sources) for (const a of s.accountCoverage!) {
+    const rows = accounts.get(a.account) ?? [];
+    rows.push({sourceId:s.sourceId, periodFrom:a.periodFrom, periodTo:a.periodTo}); accounts.set(a.account, rows);
+  }
+  const window = sourceCalendarCoverage(sources);
+  const calendars = [...accounts.values()].map(rows => new Map(sourceCalendarCoverage(rows).map(m => [m.month,m])));
+  return window.map(m => {
+    const rows = calendars.map(c => c.get(m.month));
+    const commonDays = Array.from({length:m.calendarDays},(_,i)=>`${m.month}-${String(i+1).padStart(2,'0')}`).filter(day=>[...accounts.values()].every(sources=>sources.some(s=>s.periodFrom&&s.periodTo&&s.periodFrom<=day&&day<=s.periodTo))).length;
+    const status = rows.some(r => r?.status === 'OVERLAP') ? 'OVERLAP' : rows.every(r => r?.status === 'FULL') ? 'FULL' : rows.every(r => !r || r.status === 'MISSING') ? 'MISSING' : 'PARTIAL';
+    return {...m, status, daysCovered: commonDays, warnings: [...(accounts.size>1 && rows.some(r=>!r||r.status==='MISSING') && rows.some(r=>r&&r.status!=='MISSING') ? ['UNOBSERVED_ACCOUNT_PERIOD'] : []), ...(status === 'FULL' ? [] : status === 'OVERLAP' ? ['Перекрытие выгрузок одного счёта; требуется проверка.'] : ['Покрытие одного или нескольких представленных счетов неполное.'])]};
+  });
 }
 
 export function buildDataIntegritySummary(

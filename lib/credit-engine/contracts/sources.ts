@@ -39,6 +39,7 @@ export type SourceEnvelope = {
   warnings: string[];
   rawReference?: string;
   contentHash?: string;
+  accountCoverage?: Array<{ account: string; periodFrom?: string; periodTo?: string }>;
   fieldAvailability?: Record<string, ValueKnowledge>;
 };
 
@@ -79,6 +80,7 @@ export type StatementScreeningResult = {
 };
 
 export type DeduplicationDiagnostic = {
+  conflicts?: import("../normalization/conflicts.ts").TransactionConflict[];
   originalCount: number;
   removedCount: number;
   retainedCount: number;
