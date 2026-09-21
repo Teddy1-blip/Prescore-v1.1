@@ -53,13 +53,12 @@ export function SignalFlow({ active = 0, compact = false }: { active?: number; c
 }
 
 export function CapacityGraphic() {
-  return <svg viewBox="0 0 600 220" className="l3-capacity-graphic" role="img" aria-label="Условная схема: денежный поток покрывает текущие платежи, резерв и расчётную дополнительную нагрузку">
+  return <div className="l3-capacity-graphic"><svg viewBox="0 0 600 185" preserveAspectRatio="none" role="img" aria-label="Условная схема: денежный поток покрывает текущие платежи, резерв и расчётную дополнительную нагрузку">
     {[40,85,130,175].map(y=><line key={y} x1="20" y1={y} x2="580" y2={y} stroke="var(--l3-border)"/>)}
     <path d="M20 99 C65 99 74 75 116 83 S170 112 213 75 S268 43 307 62 S372 83 416 54 S490 48 533 34 L580 30 L580 175 L20 175Z" fill="var(--l3-accent-subtle)"/>
     <path d="M20 99 C65 99 74 75 116 83 S170 112 213 75 S268 43 307 62 S372 83 416 54 S490 48 533 34 L580 30" fill="none" stroke="var(--l3-teal)" strokeWidth="3"/>
     <path d="M20 148 H110 L165 140 H230 L285 125 H368 L410 132 H505 L550 110 H580" fill="none" stroke="var(--l3-violet)" strokeWidth="3"/>
-    {[20,130,240,350,460,570].map((x,i)=><text key={x} x={x} y="207" className="l3-svg-caption">{['ЯНВ','ФЕВ','МАР','АПР','МАЙ','ИЮН'][i]}</text>)}
-  </svg>;
+  </svg><div className="l3-chart-months" aria-hidden="true">{['ЯНВ','ФЕВ','МАР','АПР','МАЙ','ИЮН'].map(month=><span key={month}>{month}</span>)}</div></div>;
 }
 
 export function ActionTimeline() {

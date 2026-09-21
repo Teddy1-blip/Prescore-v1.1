@@ -40,7 +40,7 @@ export default function LandingV3(){
   useEffect(()=>{
     const media=window.matchMedia('(prefers-reduced-motion: reduce)');
     let observer:IntersectionObserver|undefined;
-    const setup=()=>{observer?.disconnect();if(media.matches||!story.current)return;observer=new IntersectionObserver(entries=>{const visible=entries.filter(x=>x.isIntersecting).sort((a,b)=>b.intersectionRatio-a.intersectionRatio)[0];if(visible)setPhase(Number((visible.target as HTMLElement).dataset.step));},{rootMargin:'-22% 0px -30% 0px',threshold:[0,.2,.5,.8]});story.current.querySelectorAll('[data-step]').forEach(el=>observer?.observe(el));};
+    const setup=()=>{observer?.disconnect();if(media.matches||!story.current)return;const intersections=new Map<Element,number>();observer=new IntersectionObserver(entries=>{for(const entry of entries){if(entry.isIntersecting)intersections.set(entry.target,entry.intersectionRatio);else intersections.delete(entry.target);}const visible=[...intersections].sort((a,b)=>b[1]-a[1])[0];if(visible)setPhase(Number((visible[0] as HTMLElement).dataset.step));},{rootMargin:'-22% 0px -30% 0px',threshold:[0,.2,.5,.8]});story.current.querySelectorAll('[data-step]').forEach(el=>observer?.observe(el));};
     setup();media.addEventListener('change',setup);return()=>{observer?.disconnect();media.removeEventListener('change',setup);};
   },[]);
   useEffect(()=>{if(!menuOpen)return;const close=(event:KeyboardEvent)=>{if(event.key==='Escape')setMenuOpen(false);};window.addEventListener('keydown',close);return()=>window.removeEventListener('keydown',close);},[menuOpen]);

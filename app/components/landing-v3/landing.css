@@ -21,7 +21,7 @@
   line-height:1.08}
 .l3 em{font-style:normal;
   color:var(--l3-teal)}
-.l3 svg{display:block}
+
 .l3 button,.l3 summary,.l3 a{touch-action:manipulation}
 .l3 :focus-visible{outline:3px solid var(--l3-teal);
   outline-offset:5px}
@@ -126,7 +126,8 @@
 .l3-hero-scene{margin-top:26px!important}
 .l3-flow{width:100%;
   position:relative}
-.l3-flow-wide{width:100%;
+.l3-flow-wide{display:block;
+  width:100%;
   height:auto}
 .l3-flow-tall{display:none;
   width:100%;
@@ -143,9 +144,9 @@
 .l3-svg-result{font:500 18px Inter,Arial,sans-serif;
   fill:var(--l3-abyss);
   letter-spacing:-.4px}
-.l3-flow [class*='l3-strands-']{opacity:.5;
+.l3-flow [class*='l3-strands-'] path{opacity:.5;
   transition:opacity .5s}
-.l3-flow[data-active='0'] .l3-strands-0,.l3-flow[data-active='1'] .l3-strands-1,.l3-flow[data-active='2'] .l3-strands-2,.l3-flow[data-active='3'] .l3-strands-3{opacity:1}
+.l3-flow[data-active='0'] .l3-strands-0 path,.l3-flow[data-active='1'] .l3-strands-1 path,.l3-flow[data-active='2'] .l3-strands-2 path,.l3-flow[data-active='3'] .l3-strands-3 path{opacity:1}
 .l3-flow-pulse{stroke-dasharray:6 90;
   animation:l3-signal 9s linear infinite;
   opacity:.75}
@@ -442,7 +443,7 @@
   letter-spacing:0}
 .l3-capacity-panel p,.l3-capacity-panel>small{font-size:11px;
   color:var(--l3-muted)}
-.l3-capacity-panel>svg{width:100%;
+.l3-capacity-graphic>svg{width:100%;
   height:140px;
   margin-top:8px}
 .l3-chart-legend{display:flex;
@@ -965,7 +966,7 @@
 .l3-capacity-panel{min-height:350px;
   padding:25px 0}
 .l3-capacity-panel h4{font-size:31px}
-.l3-capacity-panel>svg{height:170px}
+.l3-capacity-graphic>svg{height:170px}
 .l3-capacity-panel p{font-size:11px;
   margin-top:8px}
 .l3-capacity-panel>small{font-size:11px;
@@ -1103,7 +1104,7 @@
   scroll-behavior:auto!important}
 .l3 .l3-button:hover{transform:none}
 .l3-story-visual{position:static}
-.l3-flow [class*='l3-strands-']{opacity:.8}
+.l3-flow [class*='l3-strands-'] path{opacity:.8}
 .l3-motion-control{display:none}
 }
 
@@ -1136,3 +1137,12 @@
   max-width:410px}
 }
 
+/* The shared stylesheet enables smooth scrolling on html; keep the landing's
+   reduced-motion preference effective at the actual scroll container too. */
+@media(prefers-reduced-motion:reduce){html:has(.l3){scroll-behavior:auto!important}}
+
+.l3-capacity-graphic{width:100%;margin-top:12px}
+.l3-chart-months{display:flex;justify-content:space-between;font-size:11px;color:var(--l3-muted);margin-top:8px}
+/* Isolate the public footer from the legacy global footer layout. */
+.l3-footer{display:block;background:var(--l3-background);color:var(--l3-abyss)}
+.l3-footer-bottom>span,.l3-brand-dot{font-size:inherit}
