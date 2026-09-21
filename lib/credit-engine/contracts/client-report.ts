@@ -27,7 +27,7 @@ export type ClientReportVisualV1={
 };
 export type ClientReportModelV1={
  visual:ClientReportVisualV1;
- meta:{version:string;policyVersion:string;policyFingerprint:string;methodology:string;mode:'INTERNAL_PREVIEW';entitlement:'FREE'|'FULL';asOfDate:string};
+ meta:{version:string;policyVersion:string;policyFingerprint:string;methodology:string;mode:'INTERNAL_PREVIEW'|'SAVED_ANALYSIS';entitlement:'FREE'|'FULL';asOfDate:string};
  company:{name:string;inn:string};
  hero:{headline:string;summary:string;confidence:string;status:string;globalStop:boolean;cta:{label:string;target:string}};
  index:{value:PresentationMetricV1|null;status:string;confidence:string;components:{id:string;label:string;score:PresentationMetricV1;maximum:PresentationMetricV1}[]};

@@ -48,7 +48,7 @@ const css=fs.readFileSync('app/dashboard/report-v2/report-v2.css','utf8');
 for(const width of [360,390,768,1024])test('responsive breakpoint '+width,()=>assert.ok(css.includes('max-width:'+width+'px')));
 for(const pattern of ['@media print','@page','focus-visible','prefers-reduced-motion','overflow-x:auto','minmax(0,1fr)'])test('CSS contract '+pattern,()=>assert.ok(css.includes(pattern)));
 test('no fixed wide card dimensions',()=>assert.ok(!/(?:[;{])width:\s*(?:[4-9]\d\d|\d{4})px/.test(css)));
-test('protected preview is off by default and uses no production data',()=>{const s=fs.readFileSync('app/dashboard/report-v2/page.tsx','utf8');assert.ok(s.includes('PRESCORE_INTERNAL_REPORT_PREVIEW'));assert.ok(s.includes('notFound()'));assert.ok(!/fetch\(|localStorage|workspace|analysisId/.test(s));});
+test('synthetic preview remains explicit and gated separately from owned report',()=>{const s=fs.readFileSync('app/dashboard/report-v2/page.tsx','utf8');const preview=s.slice(s.indexOf('if (query.sample)'));assert.ok(preview.includes('PRESCORE_INTERNAL_REPORT_PREVIEW'));assert.ok(preview.includes('notFound()'));assert.ok(!/fetch\(|localStorage|workspace|analysisId/.test(preview));});
 
 test('omitted action rejected',()=>{const m=model();m.actionPlan.horizons.find(h=>h.items.length).items.pop();assert.throws(()=>validateClientReportModel(input,m));});
 test('changed readiness interpretation rejected',()=>{const m=model();m.readiness.level='Высокая готовность';assert.throws(()=>validateClientReportModel(input,m));});

@@ -258,6 +258,7 @@ export default function Dashboard() {
         {saveWarning && <div className="ps-warning"><AlertTriangle />{saveWarning}</div>}
         {readOnly && <div className="ps-access-status"><ShieldCheck /><span><b>Режим агента: досье закреплённого клиента</b><small>Доступно чтение аналитики и документов. Изменения, загрузки и заявки выполняются в кабинете агента.</small></span></div>}
         {selected && <div className="ps-access-status"><ShieldCheck /><span><b>Тариф анализа: {tier}</b><small>{tier === "FULL" ? "Полный интеллектуальный слой открыт для этой версии анализа." : "Финансовый dashboard и заявки доступны бесплатно. Экспертная интерпретация открывается отдельно."}</small></span>{tier === "FREE" && <Link href={`/checkout?analysisId=${encodeURIComponent(selected.id)}`}>Открыть FULL — 6 500 ₽</Link>}</div>}
+        {selected && tier === "FULL" && <Link href={`/dashboard/report-v2?analysisId=${encodeURIComponent(selected.id)}`}>Открыть канонический отчёт</Link>}
         {loadingWorkspace ? <Loading /> : <>
           {effectiveView === "overview" && <Overview analyses={analyses} deals={deals} selected={selected} controls={controls} openAnalysis={(id) => { setSelectedId(id); setView("report"); }} start={() => setView(readOnly ? "report" : "analyze")} />}
           {effectiveView === "analyze" && <Analyze onResult={acceptAnalysis} />}

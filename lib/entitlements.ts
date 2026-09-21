@@ -65,14 +65,14 @@ export async function setAnalysisTier(db: EntitlementDatabase, analysisId: strin
     .bind(tier, actor, tier, now, tier, now, now, analysisId).run();
 }
 
-export async function resolveAnalysisTier(db: EntitlementDatabase, input: { analysisId: string; userEmail: string; companyInn: string; privileged?: boolean }) {
+export async function resolveAnalysisTier(db: EntitlementDatabase, input: { analysisId: string; userEmail: string; companyInn: string; privileged?: boolean; readOnly?: boolean }) {
   if (input.privileged) return "FULL" as const;
   if (stagingFullAccessEnabled()) {
     const owned = await db.prepare("SELECT id FROM analyses WHERE id = ? AND owner_email = ? LIMIT 1")
       .bind(input.analysisId, input.userEmail.toLowerCase()).first<{ id: string }>();
     if (owned) return "FULL" as const;
   }
-  await ensureFreeEntitlement(db, input.analysisId, input.userEmail, input.companyInn);
+  if (!input.readOnly) await ensureFreeEntitlement(db, input.analysisId, input.userEmail, input.companyInn);
   const row = await db.prepare("SELECT tier FROM analysis_entitlements WHERE analysis_id = ? AND user_email = ? LIMIT 1")
     .bind(input.analysisId, input.userEmail.toLowerCase()).first<{ tier?: string }>();
   if (row?.tier === "FULL") return "FULL" as const;
@@ -83,7 +83,7 @@ export async function resolveAnalysisTier(db: EntitlementDatabase, input: { anal
       AND ? = (SELECT id FROM analyses WHERE company_inn = ? AND owner_email = ? ORDER BY created_at DESC LIMIT 1) LIMIT 1`)
       .bind(input.companyInn, input.userEmail.toLowerCase(), input.analysisId, input.companyInn, input.userEmail.toLowerCase()).first<{ id?: string }>();
     if (legacy?.id) {
-      await grantFullEntitlement(db, { ...input, orderId: legacy.id, grantedBy: "LEGACY_MIGRATION" });
+      if (!input.readOnly) await grantFullEntitlement(db, { ...input, orderId: legacy.id, grantedBy: "LEGACY_MIGRATION" });
       return "FULL" as const;
     }
   } catch { /* legacy table may not exist */ }
