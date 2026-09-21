@@ -78,3 +78,8 @@ for two distinct accounts on a one-day boundary month. Corrected to PARTIAL for 
 month and strengthened with FULL for the next month and overlapMonths=0, as required
 by the approved 010 account contract. Its source-window, UNKNOWN, and invalid-period
 rejection assertions are unchanged. This is not a Golden pack or a business-oracle edit.
+
+Live acceptance follow-up: report 013 correctly bound BKI_HISTORY_DAYS=0 but the
+generic metric label reused the current-overdue claim title. Added explicit labels
+for historical DAYS and current overdue RUB, with a permanent presentation regression.
+No value, scoring rule, layout or source changed.

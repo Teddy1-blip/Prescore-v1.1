@@ -59,3 +59,5 @@ test('healthy controls retain numeric operating totals and capacity; missing-dat
 
 test('011 absent account period does not supply a representative company average',()=>{const b=loadBusiness('CL-RU-BUS-011');eq(b.full.metricsV2.operating.fullMonthOperatingAverage.value,null);assert.ok(b.full.metricsV2.operating.fullMonthOperatingAverage.warnings.includes('UNOBSERVED_ACCOUNT_PERIOD'));});
 test('022 fabricated null without conflict evidence still fails the capacity validator',()=>{const input=structuredClone(b22.input);delete input.analysis.metricsV2.conflicts;assert.throws(()=>buildCanonicalCreditAnalysis(input),e=>e.stage==='CAPACITY');});
+
+test('013 live-report regression: historical DAYS are never labeled as current overdue RUB',()=>{const r=buildCanonicalCreditAnalysis(b13.input),metrics=r.model.primaryFactors.flatMap(f=>f.metrics);const history=metrics.find(m=>m.bindingCode==='BKI_HISTORY_DAYS');eq(history.value,0);eq(history.unit,'DAYS');eq(history.label,'Исторический максимум просрочки, дней');const current=metrics.find(m=>m.bindingCode==='BKI_OVERDUE');eq(current.value,1000);eq(current.unit,'RUB');eq(current.label,'Текущая просроченная сумма');});
