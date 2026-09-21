@@ -50,7 +50,7 @@ test("every header-authenticated page is forced dynamic", async () => {
 
 test("login hub exposes client, agent and administrator cabinets", async () => {
   const login = await readFile(new URL("../app/login/page.tsx", import.meta.url), "utf8");
-  const landing = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  const landing = await readFile(new URL("../app/components/landing-v3/landing.tsx", import.meta.url), "utf8");
   assert.match(login, /href="\/dashboard"/);
   assert.match(login, /href="\/agent"/);
   assert.match(login, /href="\/admin"/);

@@ -11,7 +11,7 @@ function load(file){file=path.resolve(file);if(cache.has(file))return cache.get(
  });return exports;
 }
 for(const [file,expected]of [
- ['app/page.tsx','На что способна ваша компания'],
+ ['app/page.tsx','Увидеть в цифрах'],
  ['app/privacy/page.tsx','Политика обработки персональных данных'],
  ['app/offer/page.tsx','оферта'],
  ['app/consent/page.tsx','Согласие'],
@@ -80,3 +80,14 @@ test('blocked localStorage is harmless; verification callbacks cannot redirect e
  assert.equal(authUx.verificationReturnPath('/agent?tab=leads'),'/login?verified=1&returnTo=%2Fagent%3Ftab%3Dleads');
 });
 test('expired verification takes precedence over verified flag',()=>{const html=renderToStaticMarkup(React.createElement(load('app/login/credentials.tsx').Credentials,{returnTo:'/dashboard',verified:true,verificationError:true}));assert.match(html,/срок её действия истёк/);assert.doesNotMatch(html,/Теперь можно войти/);});
+
+// Landing public routes must retain the existing auth and staging checkout guards.
+test('landing V3 preserves public entry points and labels synthetic data',()=>{
+ const html=renderToStaticMarkup(React.createElement(load('app/page.tsx').default));
+ assert.equal((html.match(/<h1[ >]/g)||[]).length,1);
+ for(const route of ['/login','/checkout','/agents','/agent','/admin','/privacy','/offer','/consent'])assert.ok(html.includes('href="'+route+'"'));
+ for(const id of ['how','product','pricing','faq'])assert.ok(html.includes('id="'+id+'"'));
+ assert.match(html,/синтетических данных/);assert.match(html,/не являются банковским решением/);
+ assert.match(html,/aria-controls="landing-navigation"/);assert.match(html,/aria-label="Остановить движение"/);
+ assert.equal((html.match(/<details>/g)||[]).length,6);
+});
