@@ -15,6 +15,8 @@ test('structural summary never echoes arbitrary fields, document contents or amo
 });
 test('regression: swallowed validator condition survives service without weakening validation',async()=>{
  const a=analysisForStorage(analyzeBankStatements([{text:statementFixture(),fileName:'anonymous.txt'}]));
+ // Simulate the pre-fix persisted input; the producer now uses source coverage.
+ a.metricsV2.period.from=a.periodFrom;a.metricsV2.period.to=a.periodTo;
  const before=JSON.stringify(a);const d={readAccess:async()=>({row:{payload:before,companyInn:a.companyInn},access:'owner'}),readTier:async()=> 'FULL',readProfile:async()=>undefined,includeInputDiagnostics:true};
  const r=await loadCanonicalReport(a.id,d);assert.equal(r.status,'UNAVAILABLE');assert.equal(r.diagnostic.stage,'CAPACITY');assert.equal(r.diagnostic.reason,'FULL_MONTH_OUTSIDE_BANK_PERIOD');assert.equal(r.diagnostic.category,'INCOMPATIBLE_INPUT');assert.ok(r.inputSummary.metricsPresent);assert.equal(JSON.stringify(a),before);
  const normal=await loadCanonicalReport(a.id,{...d,includeInputDiagnostics:false});assert.equal(normal.inputSummary,undefined);

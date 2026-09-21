@@ -1,6 +1,6 @@
 import {randomUUID} from 'node:crypto';
 import {validDate} from '../credit-portfolio/common.ts';
-export const DIAGNOSTIC_VERSION = 'PRESCORE-CANONICAL-DIAGNOSTICS-1.0.0';
+export const DIAGNOSTIC_VERSION = 'PRESCORE-CANONICAL-DIAGNOSTICS-1.0.1';
 // Exact matches only. Never publish a thrown message, even a validator's dynamic suffix.
 const capacityReasons = ['BANK_VERSION_OR_SHAPE','BANK_PERIOD_ORDER','MONTH_SHAPE','FUTURE_BANK_MONTH','MONTH_OUTSIDE_BANK_PERIOD','FULL_MONTH_OUTSIDE_BANK_PERIOD','NEGATIVE_OR_MISSING_MONTH_AMOUNT','BANK_MONTH_COUNTS','BANK_METRIC_STATE','BANK_METRIC_CONCEPT','CANONICAL_AVERAGE_MONTH_LINEAGE','BANK_QUALITY','FUTURE_OR_INVALID_AVAILABILITY','PORTFOLIO_IDENTITY'] as const;
 const inputReasons = ['FINANCIAL_COMPANY_MISMATCH','DUPLICATE_FINANCIAL_SNAPSHOT','DUPLICATE_ID_CONFLICT','INVALID_RISK_SUBJECT_OR_DATE','INVALID_RISK_FACT','RISK_FACT_ID_CONFLICT','CONTEXT_RISK_INPUT_UNAVAILABLE','CONTEXT_INPUT_MISMATCH'] as const;
@@ -38,4 +38,10 @@ export function inputSummary(value: unknown, profile: unknown) {
   financialHistory:array(record(a.financialAnalysisV2).history).length, profileFinancialHistory:array(record(p.financialAnalysisV2).history).length,
   analysisExternalSources:array(manifest.external).slice(0,40).map(source), profileExternalSources:array(pm.external).slice(0,40).map(source),
   originalTransactionCount:count(a.originalTransactionCount), displayTransactions:array(a.transactions).length, displayTransactionsTruncated:a.transactionsTruncated===true};
+}
+
+export function diagnosticMessage(reason: string): string | null {
+ if (reason === 'MONTH_OUTSIDE_BANK_PERIOD') return 'В сохранённых банковских метриках есть календарный месяц за пределами их периода. Для восстановления нужен полный исходник выписки; изменение одной даты не исправит ранее рассчитанные показатели.';
+ if (reason === 'FULL_MONTH_OUTSIDE_BANK_PERIOD') return 'Месяц отмечен как полный, но сохранённый период метрик покрывает его не целиком. Требуется восстановление метрик из полного исходника.';
+ return null;
 }

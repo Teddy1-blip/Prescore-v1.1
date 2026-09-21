@@ -1158,8 +1158,11 @@ function addSourceFoundation(
     transactions: enriched.transactions,
     integrity: enriched.integrity,
     sourceManifest: enriched.sourceManifest,
-    periodFrom: enriched.periodFrom,
-    periodTo: enriched.periodTo,
+    // Calendar coverage is derived from statement coverage, not transaction extrema.
+    // Use the same source window for every canonical metric and daily reconstruction.
+    // This runs only on complete upload input; never repair persisted display rows here.
+    periodFrom: bankStatements.map(source => source.periodFrom).filter((date): date is string => !!date).sort()[0] ?? enriched.periodFrom,
+    periodTo: bankStatements.map(source => source.periodTo).filter((date): date is string => !!date).sort().at(-1) ?? enriched.periodTo,
     openingBalance: (result as AnalysisWithMetricsV2Input)[METRICS_V2_OPENING_BALANCE] ?? null,
     legacyMetrics: enriched.metrics,
   });
