@@ -30,7 +30,7 @@ export async function loadCanonicalReport(analysisId: string, dependencies: Repo
     const result = buildCanonicalCreditAnalysis({analysis, companyProfile});
     // Only the presentation contract leaves this server boundary. Engines, evidence,
     // policy thresholds, raw source fields and the future AI seam stay server-side.
-    return {status: 'READY' as const, model: publicCanonicalModel(result.model)};
+    return {status: 'READY' as const, model: publicCanonicalModel(result.model, result)};
   } catch (error) {
     const details = diagnostic(error instanceof CanonicalUnavailable ? error.stage : stage, error instanceof CanonicalUnavailable ? error.reason : 'UNEXPECTED_FAILURE');
     console.error('canonical_report_unavailable', details);

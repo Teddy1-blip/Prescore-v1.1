@@ -1,7 +1,9 @@
+import {analysisV3Presentation} from '../client-report/analysis-v3.ts';
+import type {CanonicalCreditAnalysisV1} from './orchestrator.ts';
 import type {ClientReportModelV1} from '../contracts/client-report.ts';
 // Presentation-only redaction. Numeric results and claim IDs are unchanged.
 // Internal policy constants embedded in legacy binding names are not client copy.
-export function publicCanonicalModel(model: ClientReportModelV1): ClientReportModelV1 {
+export function publicCanonicalModel(model: ClientReportModelV1, result?: CanonicalCreditAnalysisV1): ClientReportModelV1 {
   const copy = structuredClone(model);
   function visit(value: unknown): void {
     if (!value || typeof value !== 'object') return;
@@ -14,5 +16,7 @@ export function publicCanonicalModel(model: ClientReportModelV1): ClientReportMo
     for (const child of Object.values(item)) visit(child);
   }
   visit(copy);
+  if (result) { const projection = analysisV3Presentation(result, copy); if (projection) copy.analysisV3 = projection; }
+  if (copy.meta.entitlement === 'FREE') delete copy.analysisV3;
   return copy;
 }

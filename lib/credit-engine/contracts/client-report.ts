@@ -1,3 +1,4 @@
+import type {AnalysisV3Presentation} from '../client-report/analysis-v3.ts';
 import type {ExplainabilityV1, ExplanationClaimV1} from './explainability.ts';
 import type {ActionPlanV1} from './action-plan.ts';
 import type {RecommendationSetV1} from './recommendations.ts';
@@ -26,6 +27,7 @@ export type ClientReportVisualV1={
  factorActions:Record<string,string[]>;
 };
 export type ClientReportModelV1={
+ analysisV3?:AnalysisV3Presentation;
  visual:ClientReportVisualV1;
  meta:{version:string;policyVersion:string;policyFingerprint:string;methodology:string;mode:'INTERNAL_PREVIEW'|'SAVED_ANALYSIS';entitlement:'FREE'|'FULL';asOfDate:string};
  company:{name:string;inn:string};
