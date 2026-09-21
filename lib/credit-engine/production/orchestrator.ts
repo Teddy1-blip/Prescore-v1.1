@@ -1,3 +1,4 @@
+import {safeReason} from './diagnostics.ts';
 import type { AnalysisResult } from '../../prescore.ts';
 import type { CompanyProfileData } from '../../company-profile.ts';
 import type { SourceEnvelope } from '../contracts/sources.ts';
@@ -30,7 +31,8 @@ export type CanonicalSavedInput = {
 };
 export class CanonicalUnavailable extends Error {
   readonly stage: string;
-  constructor(stage: string) { super('CANONICAL_REPORT_UNAVAILABLE'); this.stage = stage; }
+  readonly reason: string;
+  constructor(stage: string, reason = 'UNEXPECTED_FAILURE') { super('CANONICAL_REPORT_UNAVAILABLE'); this.stage = stage; this.reason = reason; }
 }
 function sourcesOf({analysis: a, companyProfile: p}: CanonicalSavedInput): SourceEnvelope[] {
   return [...(a.sourceManifest?.bankStatements ?? []),
@@ -46,8 +48,8 @@ export function canonicalAsOf(input: CanonicalSavedInput): string {
     ...(a.financialStatementsV2 ?? []).map(s => s.period.asOf),
     ...(p?.financialStatementsV2 ?? []).map(s => s.period.asOf)];
   const present = dates.filter((d): d is string => typeof d === 'string' && d.length > 0);
-  if (!present.length || present.some(d => !validDate(d.slice(0, 10)))) throw new CanonicalUnavailable('SOURCE_DATES');
-  if (!validDate(a.periodFrom) || !validDate(a.periodTo) || a.periodFrom > a.periodTo || sourcesOf(input).some(s => s.periodFrom && s.periodTo && s.periodFrom > s.periodTo)) throw new CanonicalUnavailable('SOURCE_DATES');
+  if (!present.length || present.some(d => !validDate(d.slice(0, 10)))) throw new CanonicalUnavailable('SOURCE_DATES', 'INVALID_SOURCE_DATES');
+  if (!validDate(a.periodFrom) || !validDate(a.periodTo) || a.periodFrom > a.periodTo || sourcesOf(input).some(s => s.periodFrom && s.periodTo && s.periodFrom > s.periodTo)) throw new CanonicalUnavailable('SOURCE_DATES', 'INVALID_SOURCE_DATES');
   return present.map(d => d.slice(0, 10)).sort().at(-1)!;
 }
 
@@ -58,8 +60,8 @@ export function buildCanonicalCreditAnalysis(input: CanonicalSavedInput) {
   try {
     const a = structuredClone(input.analysis), p = input.companyProfile ? structuredClone(input.companyProfile) : undefined;
     const allSources = sourcesOf(input);
-    if (!/^\d{10}(\d{2})?$/.test(a.companyInn) || p && p.inn !== a.companyInn || allSources.some(s => s.companyInn !== a.companyInn)) throw new CanonicalUnavailable(stage);
-    if (!a.metricsV2 || !a.sourceManifest?.bankStatements.length) throw new CanonicalUnavailable('BANK_METRICS_REQUIRED');
+    if (!/^\d{10}(\d{2})?$/.test(a.companyInn) || p && p.inn !== a.companyInn || allSources.some(s => s.companyInn !== a.companyInn)) throw new CanonicalUnavailable(stage, 'SOURCE_IDENTITY_MISMATCH');
+    if (!a.metricsV2 || !a.sourceManifest?.bankStatements.length) throw new CanonicalUnavailable('BANK_METRICS_REQUIRED', 'BANK_METRICS_MISSING');
     const asOfDate = canonicalAsOf(input);
     const manifest = {...a.sourceManifest, ...(p?.sourceManifest?.bfo ? {bfo: p.sourceManifest.bfo} : {}), external: [...(a.sourceManifest.external ?? []), ...(p?.sourceManifest?.external ?? [])]};
     stage = 'FINANCIAL_ANALYSIS';
@@ -69,7 +71,7 @@ export function buildCanonicalCreditAnalysis(input: CanonicalSavedInput) {
       const source = s.sourceType === 'QUARTERLY' ? manifest.quarterly : manifest.bfo;
       return source?.status === 'READY' && source.sourceId === s.sourceId && (!source.contentHash || source.contentHash === s.source.contentHash);
     }).map(s => [s.snapshotId, s])).values()];
-    if (snapshots.some(s => s.companyInn !== a.companyInn)) throw new CanonicalUnavailable(stage);
+    if (snapshots.some(s => s.companyInn !== a.companyInn)) throw new CanonicalUnavailable(stage, 'SOURCE_IDENTITY_MISMATCH');
     const financialAnalysis = snapshots.length ? buildFinancialAnalysis(snapshots) : undefined;
     stage = 'CREDIT_PORTFOLIO';
     const source = manifest.bki;
@@ -110,7 +112,7 @@ export function buildCanonicalCreditAnalysis(input: CanonicalSavedInput) {
   } catch (error) {
     if (error instanceof CanonicalUnavailable) throw error;
     // Neither raw provider errors nor client evidence are sent to the browser/logs.
-    throw new CanonicalUnavailable(stage);
+    throw new CanonicalUnavailable(stage, safeReason(error));
   }
 }
 export type CanonicalCreditAnalysisV1 = ReturnType<typeof buildCanonicalCreditAnalysis>;
