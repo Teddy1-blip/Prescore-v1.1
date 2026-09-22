@@ -82,3 +82,12 @@ viewport sizes, browser zoom 200%, prefers-reduced-motion and actual print media
 must be recorded as executed or blocked; static CSS checks alone are not browser
 acceptance. A synthetic local harness may use the current components and models
 computed from source inputs, without adding an auth bypass to application routes.
+
+The staging pipeline now gates delivery on an isolated presentation job. It
+bundles the existing screen and print components, computes synthetic models
+through the real source parsers/orchestrator, and serves only loopback test files.
+It receives no deployment secrets or application credentials. Playwright is a
+pinned development dependency. Screenshots/PDFs/results are retained as Actions
+artifacts. Viewports and reduced-motion are emulated browser settings; native
+200% zoom is tested in headed Chromium via X11 keys, with DPR/layout-width
+assertions and no CSS zoom. These results are ISOLATED CI, not LIVE staging.
