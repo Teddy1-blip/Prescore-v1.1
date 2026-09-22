@@ -15,7 +15,7 @@ await p.goto(base+'?analysisId=owned-analysis-qa&lab=CL-RU-BUS-001');await p.loc
 for(const n of cases){await p.goto(base+'?lab=CL-RU-BUS-'+n+'&print=1');await p.locator('.cr-report').waitFor();await p.emulateMedia({media:'print'});assert.equal(await p.evaluate(()=>matchMedia('print').matches),true);assert.ok(await p.locator('.cr-screen-only').evaluateAll(els=>els.every(el=>getComputedStyle(el).display==='none')));assert.ok(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await p.pdf({path:out+`/print-${n}.pdf`,format:'A4',printBackground:true});await p.screenshot({path:out+`/print-media-${n}.png`});result.checks.push({case:n,printMedia:'PASS',pdf:`print-${n}.pdf`});}await context.close();
 // Browser-native zoom through X11 keys in an isolated headed Chromium window.
 // No CSS zoom, device metrics override or page-scale emulation is used.
-const headed=await chromium.launch({headless:false,args:['--no-sandbox','--window-size=1440,1000']});
+const headed=await chromium.launch({headless:false,args:['--no-sandbox','--disable-gpu','--disable-dev-shm-usage','--window-size=1440,1000']});
 try{const z=await headed.newPage({viewport:null});await z.goto(base+'?lab=CL-RU-BUS-001');await z.locator('.av-report').waitFor();
 const before=await z.evaluate(()=>({dpr:devicePixelRatio,width:innerWidth,height:innerHeight}));
 const ids=execFileSync('xdotool',['search','--onlyvisible','--name','LOCAL synthetic canonical QA'],{encoding:'utf8'}).trim().split('\n');assert.ok(ids.length);const window=ids.at(-1);
@@ -23,7 +23,7 @@ execFileSync('xdotool',['windowfocus','--sync',window]);execFileSync('xdotool',[
 for(let i=0;i<5;i++)execFileSync('xdotool',['key','--clearmodifiers','ctrl+plus']);
 await z.waitForFunction(()=>devicePixelRatio>=1.99&&devicePixelRatio<=2.01);
 const zoom=await z.evaluate(()=>({dpr:devicePixelRatio,width:innerWidth,height:innerHeight,scroll:document.documentElement.scrollWidth,cssZoom:getComputedStyle(document.body).zoom}));
-assert.ok(zoom.scroll<=zoom.width);assert.ok(zoom.width<=before.width/2+2);assert.equal(zoom.cssZoom,'1');execFileSync('import',['-display',process.env.DISPLAY,'-window','root',out+'/browser-zoom-200.png']);
+assert.ok(zoom.scroll<=zoom.width);assert.ok(zoom.width<=before.width/2+2);assert.equal(zoom.cssZoom,'1');await z.bringToFront();await z.evaluate(()=>document.fonts.ready);await z.waitForTimeout(1500);execFileSync('import',['-display',process.env.DISPLAY,'-window','root',out+'/browser-zoom-200.png']);assert.ok(Number(execFileSync('identify',['-format','%k',out+'/browser-zoom-200.png'],{encoding:'utf8'}))>128,'native zoom evidence must contain a painted page, not a blank frame');
 await z.locator('.av-primary').focus();await z.keyboard.press('Enter');assert.equal(await z.locator(':target').evaluate(el=>el.open),true);
 result.checks.push({browserZoom200:'PASS',method:'headed Chromium native Ctrl+plus via X11; DPR=2 and layout width halved',before,zoom});
 }finally{await headed.close();}
