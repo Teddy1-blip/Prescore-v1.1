@@ -61,3 +61,24 @@ Saving scenario inputs/rates; lender offers; historical comparisons/snapshots;
 AI explanations; new PDF engine; upload/payment workflows; AGENT/ADMIN redesign;
 Landing reuse. Missing real-route scenario inputs are explicitly acknowledged.
 Live-QA findings and tool-specific NOT_RUN are in the final acceptance protocol.
+
+## Final presentation corrections (issue #3)
+
+Approved visual direction and analytical values are retained. Null NOT_APPLICABLE
+values now headline «Не применимо»; UNKNOWN still headlines «Недостаточно данных»,
+and known numeric zero remains numeric. Knowledge, origin, verification and
+confidence remain distinct. The existing Index status appears beside its signal
+in a dedicated badge. Exact duplicate adjacent captions and action text are
+shown once while all unique reasons, ordered steps and factor/action links remain.
+The mobile menu uses the same print URL as desktop, retaining the exact real
+analysisId or synthetic lab identifier. Recurring basis copy is Russian.
+
+Presentation regressions cover these states and links. The complete canonical
+outputs of all 24 business cases continue to match the accepted pre-UI hashes;
+no Golden/DRAFT/business expectations, engines, thresholds or weights change.
+
+Acceptance must distinguish render tests from browser results. All five required
+viewport sizes, browser zoom 200%, prefers-reduced-motion and actual print media
+must be recorded as executed or blocked; static CSS checks alone are not browser
+acceptance. A synthetic local harness may use the current components and models
+computed from source inputs, without adding an auth bypass to application routes.

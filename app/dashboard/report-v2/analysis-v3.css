@@ -10,3 +10,5 @@
 @media print{.av-report{color:#000;background:#fff}.av-report *{animation:none!important;transition:none!important}.av-header,.av-nav,.av-mobile-menu,.av-primary,.av-quick-factors,.av-back{display:none}.av-main{padding:0;max-width:none}.av-section{break-inside:avoid;padding:20px 0}.av-hero{gap:20px}.av-index-value strong{font-size:60px}}
 
 .av-period{font-size:11px;color:var(--muted);margin-top:14px!important;max-width:820px}
+
+.av-index-status{display:inline-block;margin-top:8px;padding:4px 10px;border:1px solid var(--line);border-radius:4px;background:var(--paper);font-size:12px;font-weight:600}.av-quick-factor{display:flex;flex-wrap:wrap;gap:6px 12px}.av-quick-factor a{border-bottom:1px solid var(--line)}
