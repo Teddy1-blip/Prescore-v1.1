@@ -23,7 +23,7 @@ execFileSync('xdotool',['windowfocus','--sync',window]);execFileSync('xdotool',[
 for(let i=0;i<5;i++)execFileSync('xdotool',['key','--clearmodifiers','ctrl+plus']);
 await z.waitForFunction(()=>devicePixelRatio>=1.99&&devicePixelRatio<=2.01);
 const zoom=await z.evaluate(()=>({dpr:devicePixelRatio,width:innerWidth,height:innerHeight,scroll:document.documentElement.scrollWidth,cssZoom:getComputedStyle(document.body).zoom}));
-assert.ok(zoom.scroll<=zoom.width);assert.ok(zoom.width<=before.width/2+2);assert.equal(zoom.cssZoom,'1');await z.screenshot({path:out+'/browser-zoom-200.png'});
+assert.ok(zoom.scroll<=zoom.width);assert.ok(zoom.width<=before.width/2+2);assert.equal(zoom.cssZoom,'1');execFileSync('import',['-display',process.env.DISPLAY,'-window','root',out+'/browser-zoom-200.png']);
 await z.locator('.av-primary').focus();await z.keyboard.press('Enter');assert.equal(await z.locator(':target').evaluate(el=>el.open),true);
 result.checks.push({browserZoom200:'PASS',method:'headed Chromium native Ctrl+plus via X11; DPR=2 and layout width halved',before,zoom});
 }finally{await headed.close();}
