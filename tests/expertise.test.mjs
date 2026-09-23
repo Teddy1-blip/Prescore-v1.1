@@ -43,3 +43,5 @@ test('future seam is allowlisted cloned public context with no raw documents/pol
 test('memo renderer escapes malicious text',()=>{const m=structuredClone(get('001').m);m.expertise.items[0].fact='<img src=x onerror=alert(1)>';const h=renderToStaticMarkup(createElement(ExpertiseMemo,{model:m}));assert.ok(h.includes('&lt;img'));assert.ok(!h.includes('<img'));});
 
 test('old optional-model previews do not link to absent expertise',async()=>{const {AnalysisV3}=await import('../app/dashboard/report-v2/analysis-v3.tsx');const m=structuredClone(get('001').m);delete m.expertise;const h=renderToStaticMarkup(createElement(AnalysisV3,{model:m}));assert.ok(!h.includes('href="#expertise"'));});
+
+test('memo summary container does not share its layout class with items',()=>{const h=renderToStaticMarkup(createElement(ExpertiseMemo,{model:get('001').m}));assert.equal((h.match(/class="ex-summary"/g)??[]).length,1);assert.ok(h.includes('ex-item-summary'));});

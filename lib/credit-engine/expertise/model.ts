@@ -58,7 +58,21 @@ function derive(r:CanonicalCreditAnalysisV1,m:ClientReportModelV1):PrescoreExper
   return id;
  }
  const memoIds:string[]=[],strengthIds:string[]=[],attentionIds:string[]=[],structureIds:string[]=[],checklistIds:string[]=[];
- for(const code of ['INDEX_VALUE','READINESS','CAPACITY']){const c=byCode(code);if(c)memoIds.push(add(c,'SUMMARY',{applicationStatus:r.debtCapacity.status==='NOT_RATABLE_GLOBAL_STOP'?'BLOCKS_ASSESSMENT':'CLARIFY'}));}
+ for(const code of ['INDEX_VALUE','READINESS','CAPACITY']){
+  const c=byCode(code);if(!c)continue;
+  const interpretation=code==='INDEX_VALUE'
+   ?'Индекс описывает текущий финансовый профиль в пределах доступного покрытия. Высокое значение не снимает ограничений доказательности.'
+   :code==='READINESS'
+   ?'Готовность отражает ограничения текущей оценки и задачи финансирования; это не решение конкретного кредитора.'
+   :m.hero.globalStop
+   ?'Из-за глобального ограничения числовая структура финансирования не предлагается.'
+   :r.debtCapacity.bankConflict
+   ?'Расхождение версий не позволяет использовать бесспорную часть поступлений в качестве полной базы обслуживания.'
+   :r.debtCapacity.status==='INSUFFICIENT_DATA'
+   ?'Согласованных оснований недостаточно, чтобы определить дополнительный месячный платёж.'
+   :'Дополнительный месячный платёж — ориентир нагрузки. Для заявки его нужно рассматривать вместе с графиком обязательств и ограничениями источников.';
+  memoIds.push(add(c,'SUMMARY',{interpretation,applicationStatus:r.debtCapacity.status==='NOT_RATABLE_GLOBAL_STOP'?'BLOCKS_ASSESSMENT':'CLARIFY'}));
+ }
  const recurring=r.debtCapacity.recurringView;
  // POSITIVE is already the upstream headroom state, not a new threshold/score.
  const rc=byCode('CAPACITY:recurringView');
