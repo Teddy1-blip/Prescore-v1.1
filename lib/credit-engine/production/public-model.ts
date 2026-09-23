@@ -1,3 +1,4 @@
+import {buildExpertise} from '../expertise/model.ts';
 import {analysisV3Presentation} from '../client-report/analysis-v3.ts';
 import type {CanonicalCreditAnalysisV1} from './orchestrator.ts';
 import type {ClientReportModelV1} from '../contracts/client-report.ts';
@@ -17,6 +18,8 @@ export function publicCanonicalModel(model: ClientReportModelV1, result?: Canoni
   }
   visit(copy);
   if (result) { const projection = analysisV3Presentation(result, copy); if (projection) copy.analysisV3 = projection; }
+  delete copy.expertise;
+  if (result && copy.meta.entitlement === 'FULL') copy.expertise = buildExpertise(result, copy);
   if (copy.meta.entitlement === 'FREE') delete copy.analysisV3;
   return copy;
 }
