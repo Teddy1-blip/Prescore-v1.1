@@ -45,3 +45,50 @@ test('memo renderer escapes malicious text',()=>{const m=structuredClone(get('00
 test('old optional-model previews do not link to absent expertise',async()=>{const {AnalysisV3}=await import('../app/dashboard/report-v2/analysis-v3.tsx');const m=structuredClone(get('001').m);delete m.expertise;const h=renderToStaticMarkup(createElement(AnalysisV3,{model:m}));assert.ok(!h.includes('href="#expertise"'));});
 
 test('memo summary container does not share its layout class with items',()=>{const h=renderToStaticMarkup(createElement(ExpertiseMemo,{model:get('001').m}));assert.equal((h.match(/class="ex-summary"/g)??[]).length,1);assert.ok(h.includes('ex-item-summary'));});
+
+const {expertiseEditorial,expertiseStatementStatus}=await import('../lib/credit-engine/expertise/editorial.ts');
+for(const [n,{m}]of cases){
+ test(n+' editorial is deterministic, read-only and each thesis clause has exact item lineage',()=>{
+  const before=JSON.stringify(m),v=expertiseEditorial(m);assert.deepEqual(v,expertiseEditorial(m));assert.equal(JSON.stringify(m),before);
+  assert.ok(v.sentences.length>=2&&v.sentences.length<=4);
+  assert.equal(v.sentences[0].role,'POSITION');assert.equal(v.sentences.at(-1).role,'STEP');
+  for(const s of v.sentences){const items=s.itemIds.map(id=>m.expertise.items.find(i=>i.id===id));assert.ok(items.every(Boolean));assert.deepEqual(s.claimIds,[...new Set(items.flatMap(i=>i.claimIds))]);assert.deepEqual(s.sourceReferenceIds,[...new Set(items.flatMap(i=>i.sourceReferenceIds))]);assert.ok(s.claimIds.length&&s.sourceReferenceIds.length);}
+  assert.equal(v.sentences.some(s=>s.role==='STRENGTH'),m.expertise.strengthIds.length>0);
+  assert.equal(expertiseEditorial({...m,meta:{...m.meta,entitlement:'FREE'}}),undefined);
+ });
+ test(n+' all checklist evidence retained with blockers and existing day7 focus first',()=>{
+  const v=expertiseEditorial(m),e=m.expertise,all=[...v.checklistFirst,...v.checklistOther];
+  assert.equal(v.checklistFirst.length,Math.min(5,e.checklistIds.length));assert.deepEqual([...all].sort(),[...e.checklistIds].sort());
+  const focus=new Set([...m.actionPlan.focusIds,...m.actionPlan.horizons.filter(h=>h.id==='day7').flatMap(h=>h.items.map(a=>a.id))]);
+  const group=id=>{const i=e.items.find(i=>i.id===id);return i.applicationStatus==='BLOCKS_ASSESSMENT'?0:i.actionIds.some(a=>focus.has(a))?1:i.applicationStatus==='CLARIFY'&&(m.recommendations.primary.some(a=>i.claimIds.includes(a.claimId))||m.readiness.constraints.some(f=>i.factorIds.includes(f.id)))?2:3;};
+  assert.deepEqual(all.map(group),all.map(group).sort());
+  for(const tier of [0,1,2,3])assert.deepEqual(all.filter(id=>group(id)===tier),e.checklistIds.filter(id=>group(id)===tier));
+ });
+ test(n+' financing hierarchy follows canonical primary/other products without losing items',()=>{
+  const v=expertiseEditorial(m),e=m.expertise;assert.deepEqual([...v.structurePrimary,...v.structureOther].sort(),[...e.structureIds].sort());
+  for(const id of v.structureOther){const i=e.items.find(i=>i.id===id);assert.ok(m.productFit.other.some(p=>i.claimIds.includes(p.claimId)));assert.ok(!m.productFit.primary.some(p=>i.claimIds.includes(p.claimId)));}
+  for(const p of m.productFit.primary)for(const i of e.items.filter(i=>i.category==='STRUCTURE'&&i.claimIds.includes(p.claimId)))assert.ok(v.structurePrimary.includes(i.id));
+ });
+ test(n+' CLIENT and print hide technical lineage and show supported creditor interpretation',()=>{
+  for(const print of [false,true]){const h=renderToStaticMarkup(createElement(ExpertiseMemo,{model:m,print}));const visible=h.replace(/<[^>]*>/g,' ');
+   assert.match(visible,/Вывод Prescore/);assert.match(visible,/Сформировано на основе данных анализа/);assert.doesNotMatch(visible,/Детерминированный анализ|explanation-claim:|source-reference:|claimIds|sourceReferenceIds/);
+   for(const i of m.expertise.items)for(const id of [...i.claimIds,...i.sourceReferenceIds])assert.ok(!visible.includes(id),id);
+   assert.doesNotMatch(h,/class="ex-lineage"/);assert.match(h,/class="ex-checklist-first"/);
+   if(m.expertise.checklistIds.length>5)assert.match(h,print?/<details(?=[^>]*class="ex-group ex-checklist-other")(?=[^>]*open="")[^>]*>/:/<details class="ex-group ex-checklist-other">/);
+   for(const id of [...m.expertise.creditor.convincing,...m.expertise.creditor.review,...m.expertise.creditor.structureLimits,...m.expertise.creditor.unknowns]){const i=m.expertise.items.find(i=>i.id===id);const text=i.knowledge==='KNOWN'?i.interpretation:i.limitation;assert.ok(h.includes(renderToStaticMarkup(createElement('p',null,text))));}
+  }
+ });
+}
+test('summary fact status never reuses CLARIFY checklist label; confidence preserved',()=>{
+ for(const {m}of cases.values())for(const i of m.expertise.items.filter(i=>i.category==='SUMMARY'||i.category==='STRENGTH'))assert.notEqual(expertiseStatementStatus(i),'Требуется документ или уточнение');
+ const i=get('001').m.expertise.items[0];assert.equal(i.confidence,'UNKNOWN');assert.equal(i.knowledge,'PARTIAL');assert.equal(expertiseStatementStatus(i),'Оценка ограничена данными');
+ assert.equal(expertiseStatementStatus({...i,knowledge:'KNOWN',confidence:'HIGH'}),'Рассчитано по доступным данным');
+});
+test('editorial thesis retains global stop and conflicting-source constraints, without positive invention',()=>{
+ for(const n of ['011','017','022'])assert.ok(!expertiseEditorial(get(n).m).sentences.some(s=>s.role==='STRENGTH'));
+ assert.match(expertiseEditorial(get('017').m).sentences.find(s=>s.role==='LIMITATION').text,/глобального ограничения/);
+ assert.match(expertiseEditorial(get('022').m).sentences.find(s=>s.role==='LIMITATION').text,/Расхождение версий/);
+});
+test('011 thesis leads with missing capacity evidence, not mere appearance of an obligation',()=>{
+ assert.match(expertiseEditorial(get('011').m).sentences.find(s=>s.role==='LIMITATION').text,/Согласованных оснований недостаточно/);
+});

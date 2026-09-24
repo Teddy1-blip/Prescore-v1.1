@@ -91,3 +91,33 @@ review storage/migrations separately. It is not implemented here.
   and actual memo content on synthetic reports. CI green alone is not rollout.
 
 Human acceptance remains required. Issue is not closed automatically.
+
+
+## Human-review editorial pass (issue #4, 2026-09-24)
+
+`expertise/editorial.ts` is a pure presentation projection over the already validated
+Expertise and ClientReport models. It does not modify the Expertise contract,
+canonical output, status, confidence, engines, policies or fixtures.
+
+- Statement labels are separate from CHECK application labels; PARTIAL/UNKNOWN
+  remains “Оценка ограничена данными”, including the partial Index in case 001.
+- “Вывод Prescore” contains 2–4 deterministic, item-backed sentences: existing
+  position, optional approved strength, existing limitation, canonical focus step.
+  Each sentence carries item/claim/source references in technical evidence.
+- Internal claim/source IDs are never text in CLIENT memo or print; anchors and
+  human-readable factor/source/action/date/confidence links remain.
+- First five checks follow BLOCKS_ASSESSMENT, existing day7/focus relationships,
+  primary recommendation/readiness relationships, then remaining items. Stable
+  order within groups; no new financial ranking. Others are collapsed on screen.
+- Creditor view shows each title, existing interpretation/limitation and proof link.
+- Monthly views, primary mechanisms and actually computed scenarios precede a
+  disclosure of other products. Full detail is retained.
+- Client heading uses analysis date; version/deterministic markers stay in footer
+  and metadata. Print opens every memo disclosure, including remaining checks.
+
+24-case tests cover lineage, deterministic projection, input immutability, FREE,
+UNKNOWN/global-stop/conflict semantics, ordering and complete screen/print evidence.
+The existing CI browser gate additionally checks the new presentation states,
+35 case/viewport combinations, keyboard navigation, reduced motion, native 200%
+zoom and print. Live staging verification is reported separately from isolated CI.
+Block 19 remains disconnected; issue stays open for human acceptance.
