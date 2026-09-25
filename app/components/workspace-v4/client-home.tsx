@@ -18,7 +18,7 @@ function SourceFlow({full,basic}:{full?:ClientReportModelV1;basic:WorkspaceModel
   const sources=sourceNames.length?sourceNames:["Банковская выписка"];
   return <section className="w4-sources" id="sources">
     <div className="w4-section-copy"><span className="w4-label">ИСТОЧНИКИ</span><h2>От данных — к выводу.</h2><p>Показываем, из чего собрана текущая финансовая картина. Отсутствующий источник остаётся отсутствующим.</p></div>
-    <div className="w4-flow" aria-label="Источники анализа">
+    <div className={"w4-flow w4-flow-"+Math.min(4,sources.length)} aria-label="Источники анализа">
       {sources.map((name,i)=><div className="w4-flow-node" key={name+i}><span>{"0"+(i+1)}</span><b>{name}</b><small>{i===0?"учтено в денежном потоке":"учтено в текущем анализе"}</small></div>)}
       <div className="w4-flow-result"><span>→</span><b>Прескор</b><small>факты → ограничения → действие</small></div>
     </div>
@@ -57,7 +57,8 @@ function FullHome({model,caseId}:{model:WorkspaceModelV1;caseId:string}){
   const b=model.basic;
   const constraint=r.readiness.constraints[0]??r.limitations[0];
   const next=r.recommendations.primary[0]??r.actionPlan.horizons.flatMap(h=>h.items)[0];
-  const indexWidth=r.index.value?.value==null?"0%":String(Math.max(0,Math.min(100,r.index.value.value/10)))+"%";
+  const indexNumber=typeof r.index.value?.value==="number"?r.index.value.value:null;
+  const indexWidth=indexNumber==null?"0%":String(Math.max(0,Math.min(100,indexNumber/10)))+"%";
   const reportHref="/dashboard/report-v2?lab="+encodeURIComponent(caseId);
   return <>
     <section className="w4-hero">
