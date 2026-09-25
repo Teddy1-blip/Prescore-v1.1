@@ -1,181 +1,198 @@
 import type { AnalysisResult } from "../prescore.ts";
-import { analysisView } from "../entitlements.ts";
-import type { ClientReportModelV1 } from "../credit-engine/contracts/client-report.ts";
+import type { BankStatementMetricsV2, MetricResult } from "../credit-engine/contracts/metrics.ts";
+import type { SourceStatus } from "../credit-engine/contracts/sources.ts";
 
-export const WORKSPACE_MODEL_VERSION = "PRESCORE-WORKSPACE-MODEL-1.0.0";
+export const WORKSPACE_MODEL_V1 = "PRESCORE-WORKSPACE-MODEL-1.0.0";
 
-export type WorkspaceAccessRole = "owner" | "agent" | "admin";
-export type WorkspaceTier = "FREE" | "FULL";
+export type WorkspaceModelStateV1 = "READY_BASIC" | "READY_FULL" | "NOT_FOUND" | "UNAVAILABLE";
+export type WorkspaceAvailabilityV1 = "READY" | "LOCKED" | "UNAVAILABLE" | "UNKNOWN";
+export type WorkspaceAccessRoleV1 = "OWNER" | "ASSIGNED_BROKER" | "ADMIN";
+export type WorkspaceFactV1 = {
+  value: number | null;
+  unit: MetricResult["unit"];
+  status: MetricResult["status"];
+  confidence: MetricResult["confidence"];
+  periodFrom: string | null;
+  periodTo: string | null;
+};
+
+export type WorkspaceOperationalStateV1 = {
+  documents: { status: "AVAILABLE" | "NONE" | "UNKNOWN"; count: number | null; analysisCount: number | null };
+  applications: {
+    status: "AVAILABLE" | "NONE" | "UNKNOWN";
+    count: number | null;
+    activeCount: number | null;
+    statuses: Array<{ status: string; count: number }> | null;
+  };
+};
 
 export type WorkspaceBasicV1 = {
-  company: { name: string; inn: string };
   analysis: {
     id: string;
+    company: { name: string; inn: string };
     createdAt: string;
-    periodFrom: string;
-    periodTo: string;
+    period: { from: string; to: string };
   };
   sources: {
-    statements: number;
-    accounts: number;
-    transactions: number;
-    banks: string[];
-    transactionsTruncated: boolean;
-    storedTransactionCount: number | null;
-    originalTransactionCount: number | null;
+    statements: { status: SourceStatus | "UNKNOWN"; count: number | null; bankNames: string[] | null; accountCount: number | null; periodFrom: string | null; periodTo: string | null };
+    completeness: number | null;
+    missingSources: string[] | null;
+    availability: Array<{ source: string; status: SourceStatus | "UNKNOWN"; periodFrom: string | null; periodTo: string | null }>;
   };
-  cashFlow: {
-    grossInflow: number;
-    operatingInflow: number;
-    nonOperatingInflow: number;
-    unknownInflow: number;
-    totalInflow: number;
-    totalOutflow: number;
-    netCashFlow: number;
-    averageMonthlyInflow: number;
-    monthlyTrend: number;
+  bankingFacts: {
+    grossInflow: WorkspaceFactV1;
+    grossOutflow: WorkspaceFactV1;
+    netCashFlow: WorkspaceFactV1;
+    operatingInflow: WorkspaceFactV1;
+    observedMonthlyOperatingAverage: WorkspaceFactV1;
+    fullMonthOperatingAverage: WorkspaceFactV1;
+    loanPrincipalPayments: WorkspaceFactV1;
+    interestPayments: WorkspaceFactV1;
+    unsplitDebtPayments: WorkspaceFactV1;
+    leasingPayments: WorkspaceFactV1;
+    taxPayments: WorkspaceFactV1;
+    socialContributions: WorkspaceFactV1;
+    transfersToIndividuals: WorkspaceFactV1;
+    endingBalance: WorkspaceFactV1;
+    averageDailyBalance: WorkspaceFactV1;
+    minimumDailyBalance: WorkspaceFactV1;
+    lowLiquidityDays: WorkspaceFactV1;
+    directCustomerTop1: WorkspaceFactV1;
+    directCustomerTop3: WorkspaceFactV1;
+    topCounterparties: Array<{ name: string; amount: number; share: number }> | null;
+    monthly: Array<{
+      month: string;
+      coverage: string;
+      operatingReceipts: number | null;
+      externalInflows: number | null;
+      externalOutflows: number | null;
+      taxPayments: number | null;
+      debtService: number | null;
+    }> | null;
   };
-  concentration: {
-    topOne: number;
-    topThree: number;
-    topFive: number;
-  };
-  liquidity: {
-    endingBalance: number | null;
-    averageDailyBalance: number | null;
-    minimumDailyBalance: number | null;
-    cashGapDays: number | null;
-    negativeBalanceDays: number | null;
-    liquidityDays: number | null;
-  };
-  observedOutflows: {
-    taxPayments: number;
-    creditPayments: number;
-    leasingPayments: number;
-    personalTransfers: number;
-  };
-  monthly: Array<{ month: string; inflow: number; outflow: number }>;
-  topCounterparties: Array<{ name: string; amount: number; share: number }>;
-  largestRecipients: Array<{ name: string; amount: number; share: number }>;
-  warnings: string[];
+  operations: WorkspaceOperationalStateV1;
 };
-
-export type WorkspaceFullV1 =
-  | { status: "LOCKED" }
-  | { status: "READY"; model: ClientReportModelV1 }
-  | { status: "UNAVAILABLE"; diagnostic: { id: string; version: string; stage: string; reason: string; category: string } };
 
 export type WorkspaceModelV1 = {
-  version: typeof WORKSPACE_MODEL_VERSION;
+  version: typeof WORKSPACE_MODEL_V1;
+  state: WorkspaceModelStateV1;
   analysisId: string;
-  tier: WorkspaceTier;
-  accessRole: WorkspaceAccessRole;
-  readOnly: boolean;
+  access: { role: WorkspaceAccessRoleV1; readOnly: boolean };
+  entitlement: "BASIC" | "FULL";
   basic: WorkspaceBasicV1;
-  full: WorkspaceFullV1;
+  fullAvailability: WorkspaceAvailabilityV1;
+  full?: {
+    report: import("../credit-engine/contracts/client-report.ts").ClientReportModelV1;
+    canonical: {
+      prescoreIndex: import("../credit-engine/production/orchestrator.ts").CanonicalCreditAnalysisV1["prescoreIndex"];
+      financingReadiness: import("../credit-engine/production/orchestrator.ts").CanonicalCreditAnalysisV1["financingReadiness"];
+      creditAssessment: import("../credit-engine/production/orchestrator.ts").CanonicalCreditAnalysisV1["creditAssessment"];
+      debtCapacity: import("../credit-engine/production/orchestrator.ts").CanonicalCreditAnalysisV1["debtCapacity"];
+      productSelection: import("../credit-engine/production/orchestrator.ts").CanonicalCreditAnalysisV1["productSelection"];
+      recommendations: import("../credit-engine/production/orchestrator.ts").CanonicalCreditAnalysisV1["recommendationSet"];
+      actionPlan: import("../credit-engine/production/orchestrator.ts").CanonicalCreditAnalysisV1["actionPlan"];
+      explainability: import("../credit-engine/production/orchestrator.ts").CanonicalCreditAnalysisV1["explainability"];
+      expertise: NonNullable<import("../credit-engine/contracts/client-report.ts").ClientReportModelV1["expertise"]> | null;
+    };
+  };
+  limitations?: { code: "CANONICAL_REPORT_UNAVAILABLE" };
 };
 
-type FreeAnalysisProjection = {
-  id: string;
-  companyName: string;
-  companyInn: string;
-  periodFrom: string;
-  periodTo: string;
-  createdAt: string;
-  bankNames: string[];
-  transactionsTruncated?: boolean;
-  storedTransactionCount?: number;
-  originalTransactionCount?: number;
-  metrics: {
-    statements: number;
-    accounts: number;
-    transactions: number;
-    grossInflow: number;
-    operatingInflow: number;
-    nonOperatingInflow: number;
-    unknownInflow: number;
-    inflow: number;
-    outflow: number;
-    avgMonthlyInflow: number;
-    monthlyTrend: number;
-    topOneConcentration: number;
-    topThreeConcentration: number;
-    topFiveConcentration: number;
-    endingBalance: number | null;
-    averageDailyBalance: number | null;
-    minimumDailyBalance: number | null;
-    cashGapDays: number | null;
-    negativeBalanceDays: number | null;
-    liquidityDays: number | null;
-  };
-  monthly: Array<{ month: string; inflow: number; outflow: number }>;
-  topCounterparties: Array<{ name: string; amount: number; share: number }>;
-  freeFacts: {
-    netCashFlow: number;
-    taxPayments: number;
-    creditPayments: number;
-    leasingPayments: number;
-    personalTransfers: number;
-    largestRecipients: Array<{ name: string; amount: number; share: number }>;
-  };
-  warnings: string[];
-};
+export type WorkspaceOperationalInput = WorkspaceOperationalStateV1;
 
-export function buildWorkspaceBasicV1(analysis: AnalysisResult): WorkspaceBasicV1 {
-  // Reuse the already-established FREE entitlement projection, then allowlist only
-  // product facts needed by the workspace. No legacy score/grade/readiness/limits
-  // can cross this boundary.
-  const free = analysisView(analysis, "FREE") as FreeAnalysisProjection;
+function fact(metric: MetricResult | undefined, unit: MetricResult["unit"] = "RUB"): WorkspaceFactV1 {
+  if (!metric) return { value: null, unit, status: "UNKNOWN", confidence: "UNKNOWN", periodFrom: null, periodTo: null };
   return {
-    company: { name: free.companyName, inn: free.companyInn },
+    value: metric.status === "UNKNOWN" ? null : metric.value,
+    unit: metric.unit,
+    status: metric.status,
+    confidence: metric.confidence,
+    periodFrom: metric.periodFrom,
+    periodTo: metric.periodTo,
+  };
+}
+
+function sourceAvailability(analysis: AnalysisResult): WorkspaceBasicV1["sources"]["availability"] {
+  const manifest = analysis.sourceManifest;
+  const sources = [
+    ...(Array.isArray(manifest?.bankStatements) ? manifest.bankStatements.map((item) => ({ source: "BANK_STATEMENTS", item })) : []),
+    ...(manifest?.bfo ? [{ source: "FINANCIAL_STATEMENTS", item: manifest.bfo }] : []),
+    ...(manifest?.quarterly ? [{ source: "QUARTERLY_REPORT", item: manifest.quarterly }] : []),
+    ...(manifest?.bki ? [{ source: "CREDIT_HISTORY", item: manifest.bki }] : []),
+    ...(Array.isArray(manifest?.external) ? manifest.external.map((item) => ({ source: "EXTERNAL_SOURCE", item })) : []),
+  ];
+  return sources.map(({ source, item }) => ({
+    source,
+    status: item.status,
+    periodFrom: item.periodFrom ?? null,
+    periodTo: item.periodTo ?? null,
+  }));
+}
+
+export function projectWorkspaceBasic(
+  analysis: AnalysisResult,
+  operations: WorkspaceOperationalInput = {
+    documents: { status: "UNKNOWN", count: null, analysisCount: null },
+    applications: { status: "UNKNOWN", count: null, activeCount: null, statuses: null },
+  },
+): WorkspaceBasicV1 {
+  const metrics: BankStatementMetricsV2 | undefined = analysis.metricsV2;
+  const statements = analysis.sourceManifest?.bankStatements;
+  const statementPeriodFrom = metrics?.period.from ?? (statements?.length ? statements.map((item) => item.periodFrom).filter((value): value is string => !!value).sort()[0] ?? null : null);
+  const statementPeriodTo = metrics?.period.to ?? (statements?.length ? statements.map((item) => item.periodTo).filter((value): value is string => !!value).sort().at(-1) ?? null : null);
+  return {
     analysis: {
-      id: free.id,
-      createdAt: free.createdAt,
-      periodFrom: free.periodFrom,
-      periodTo: free.periodTo,
+      id: analysis.id,
+      company: { name: analysis.companyName, inn: analysis.companyInn },
+      createdAt: analysis.createdAt,
+      period: { from: statementPeriodFrom ?? analysis.periodFrom, to: statementPeriodTo ?? analysis.periodTo },
     },
     sources: {
-      statements: free.metrics.statements,
-      accounts: free.metrics.accounts,
-      transactions: free.metrics.transactions,
-      banks: [...free.bankNames],
-      transactionsTruncated: free.transactionsTruncated === true,
-      storedTransactionCount: free.storedTransactionCount ?? null,
-      originalTransactionCount: free.originalTransactionCount ?? null,
+      statements: {
+        status: statements?.some((item) => item.status === "READY") ? "READY" : statements?.length ? statements[0].status : "UNKNOWN",
+        count: Array.isArray(statements) ? statements.length : null,
+        bankNames: Array.isArray(analysis.bankNames) ? [...analysis.bankNames] : null,
+        accountCount: Number.isSafeInteger(analysis.metrics?.accounts) ? analysis.metrics.accounts : null,
+        periodFrom: statementPeriodFrom,
+        periodTo: statementPeriodTo,
+      },
+      completeness: analysis.integrity?.completeness ?? null,
+      missingSources: analysis.integrity ? [...analysis.integrity.missingSources] : null,
+      availability: sourceAvailability(analysis),
     },
-    cashFlow: {
-      grossInflow: free.metrics.grossInflow,
-      operatingInflow: free.metrics.operatingInflow,
-      nonOperatingInflow: free.metrics.nonOperatingInflow,
-      unknownInflow: free.metrics.unknownInflow,
-      totalInflow: free.metrics.inflow,
-      totalOutflow: free.metrics.outflow,
-      netCashFlow: free.freeFacts.netCashFlow,
-      averageMonthlyInflow: free.metrics.avgMonthlyInflow,
-      monthlyTrend: free.metrics.monthlyTrend,
+    bankingFacts: {
+      grossInflow: fact(metrics?.cashFlow.grossExternalCashInflow),
+      grossOutflow: fact(metrics?.cashFlow.grossExternalCashOutflow),
+      netCashFlow: fact(metrics?.cashFlow.netExternalCashFlow),
+      operatingInflow: fact(metrics?.operating.operatingCashReceipts),
+      observedMonthlyOperatingAverage: fact(metrics?.operating.observedMonthlyOperatingAverage),
+      fullMonthOperatingAverage: fact(metrics?.operating.fullMonthOperatingAverage),
+      loanPrincipalPayments: fact(metrics?.debtService.loanPrincipalPaid),
+      interestPayments: fact(metrics?.debtService.interestPaid),
+      unsplitDebtPayments: fact(metrics?.debtService.unsplitDebtService),
+      leasingPayments: fact(metrics?.debtService.leasingPaid),
+      taxPayments: fact(metrics?.tax.taxPaymentsAmount),
+      socialContributions: fact(metrics?.tax.socialContributionsAmount),
+      transfersToIndividuals: fact(metrics?.individualAndCash.individualBusinessAmount),
+      endingBalance: fact(metrics?.liquidity.endingBalance),
+      averageDailyBalance: fact(metrics?.liquidity.averageDailyBalance),
+      minimumDailyBalance: fact(metrics?.liquidity.minimumDailyBalance),
+      lowLiquidityDays: fact(metrics?.liquidity.lowLiquidityDays),
+      directCustomerTop1: fact(metrics?.customers.directCustomerTop1),
+      directCustomerTop3: fact(metrics?.customers.directCustomerTop3),
+      topCounterparties: Array.isArray(analysis.topCounterparties)
+        ? analysis.topCounterparties.map(({ name, amount, share }) => ({ name, amount, share }))
+        : null,
+      monthly: metrics ? metrics.monthly.map((item) => ({
+        month: item.month,
+        coverage: item.coverage,
+        operatingReceipts: item.operatingReceipts,
+        externalInflows: item.externalInflows,
+        externalOutflows: item.externalOutflows,
+        taxPayments: item.taxPayments,
+        debtService: item.debtService,
+      })) : null,
     },
-    concentration: {
-      topOne: free.metrics.topOneConcentration,
-      topThree: free.metrics.topThreeConcentration,
-      topFive: free.metrics.topFiveConcentration,
-    },
-    liquidity: {
-      endingBalance: free.metrics.endingBalance,
-      averageDailyBalance: free.metrics.averageDailyBalance,
-      minimumDailyBalance: free.metrics.minimumDailyBalance,
-      cashGapDays: free.metrics.cashGapDays,
-      negativeBalanceDays: free.metrics.negativeBalanceDays,
-      liquidityDays: free.metrics.liquidityDays,
-    },
-    observedOutflows: {
-      taxPayments: free.freeFacts.taxPayments,
-      creditPayments: free.freeFacts.creditPayments,
-      leasingPayments: free.freeFacts.leasingPayments,
-      personalTransfers: free.freeFacts.personalTransfers,
-    },
-    monthly: free.monthly.map(item => ({ ...item })),
-    topCounterparties: free.topCounterparties.map(item => ({ ...item })),
-    largestRecipients: free.freeFacts.largestRecipients.map(item => ({ ...item })),
-    warnings: [...free.warnings],
+    operations: structuredClone(operations),
   };
 }
