@@ -8,6 +8,7 @@ import ClientHomeV4 from "../../components/workspace-v4/client-home.tsx";
 export const dynamic="force-dynamic";
 
 export default async function WorkspaceV4Page({searchParams}:{searchParams:Promise<{case?:string;mode?:string}>}){
+  if(process.env.PRESCORE_BASE_URL?.replace(/\/$/, "")!=="https://prescore-staging-dorogovab.amvera.io") notFound();
   const q=await searchParams;
   const caseId=q.case??"CL-RU-BUS-001";
   if(!businessCatalog().some(c=>c.caseId===caseId)) notFound();

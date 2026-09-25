@@ -16,7 +16,7 @@ function SignalBar({label,value,note}:{label:string;value:string;note?:string}){
 function SourceFlow({full,basic}:{full?:ClientReportModelV1;basic:WorkspaceModelV1["basic"]}){
   const sourceNames=full?.sources?.length?full.sources.slice(0,4).map(s=>s.label):basic.sources.banks.map(b=>"Выписка · "+b).slice(0,4);
   const sources=sourceNames.length?sourceNames:["Банковская выписка"];
-  return <section className="w4-sources">
+  return <section className="w4-sources" id="sources">
     <div className="w4-section-copy"><span className="w4-label">ИСТОЧНИКИ</span><h2>От данных — к выводу.</h2><p>Показываем, из чего собрана текущая финансовая картина. Отсутствующий источник остаётся отсутствующим.</p></div>
     <div className="w4-flow" aria-label="Источники анализа">
       {sources.map((name,i)=><div className="w4-flow-node" key={name+i}><span>{"0"+(i+1)}</span><b>{name}</b><small>{i===0?"учтено в денежном потоке":"учтено в текущем анализе"}</small></div>)}
@@ -25,12 +25,12 @@ function SourceFlow({full,basic}:{full?:ClientReportModelV1;basic:WorkspaceModel
   </section>;
 }
 
-function BasicHome({model}:{model:WorkspaceModelV1}){
+function BasicHome({model,fullPreviewHref}:{model:WorkspaceModelV1;fullPreviewHref:string}){
   const b=model.basic;
   const width=String(Math.max(8,Math.min(100,(b.cashFlow.operatingInflow/Math.max(1,b.cashFlow.grossInflow))*100)))+"%";
   return <>
     <section className="w4-hero">
-      <div className="w4-hero-copy"><span className="w4-label">ФИНАНСОВАЯ КАРТИНА</span><h1>Денежный поток компании — уже в одном контексте.</h1><p>Банковские выписки рассчитаны и сохранены. Ниже — факты, доступные без кредитной интерпретации.</p><Link href="/dashboard?view=analyze" className="w4-primary">Обновить данные <span>↗</span></Link></div>
+      <div className="w4-hero-copy"><span className="w4-label">ФИНАНСОВАЯ КАРТИНА</span><h1>Денежный поток компании — уже в одном контексте.</h1><p>Банковские выписки рассчитаны и сохранены. Ниже — факты, доступные без кредитной интерпретации.</p><a href="#sources" className="w4-primary">Посмотреть источники <span>↗</span></a></div>
       <div className="w4-primary-number"><small>ОПЕРАЦИОННЫЕ ПОСТУПЛЕНИЯ</small><strong>{money(b.cashFlow.operatingInflow)}</strong><span>за загруженный период</span><div className="w4-meter"><i style={{width}}/></div></div>
     </section>
     <div className="w4-signal-grid">
@@ -40,7 +40,7 @@ function BasicHome({model}:{model:WorkspaceModelV1}){
     </div>
     <section className="w4-dark">
       <div><span className="w4-label">СЛЕДУЮЩИЙ УРОВЕНЬ АНАЛИЗА</span><h2>Понять не только обороты, но и способность обслуживать финансирование.</h2><p>Индекс, готовность, долговая ёмкость и рекомендации строятся отдельно от базовой картины и не подменяются старыми оценками.</p></div>
-      <div className="w4-dark-action"><span>01</span><b>Добавить недостающие источники</b><small>БФО · обязательства · правовой контур</small><Link href="/checkout">Открыть полный анализ ↗</Link></div>
+      <div className="w4-dark-action"><span>01</span><b>Добавить недостающие источники</b><small>БФО · обязательства · правовой контур</small><Link href={fullPreviewHref}>Посмотреть полный вид ↗</Link></div>
     </section>
     <section className="w4-editorial-pair">
       <article><span className="w4-label">ЧТО ВИДНО СЕЙЧАС</span><h3>{money(b.cashFlow.totalInflow)} поступлений</h3><p>Из них {money(b.cashFlow.operatingInflow)} классифицировано как операционный денежный поток.</p></article>
@@ -50,14 +50,15 @@ function BasicHome({model}:{model:WorkspaceModelV1}){
   </>;
 }
 
-function FullHome({model}:{model:WorkspaceModelV1}){
-  if(model.full.status!=="READY") return <BasicHome model={model}/>;
+function FullHome({model,caseId}:{model:WorkspaceModelV1;caseId:string}){
+  const fullPreviewHref="/dashboard/workspace-v4?case="+encodeURIComponent(caseId)+"&mode=full";
+  if(model.full.status!=="READY") return <BasicHome model={model} fullPreviewHref={fullPreviewHref}/>;
   const r=model.full.model;
   const b=model.basic;
   const constraint=r.readiness.constraints[0]??r.limitations[0];
   const next=r.recommendations.primary[0]??r.actionPlan.horizons.flatMap(h=>h.items)[0];
   const indexWidth=r.index.value?.value==null?"0%":String(Math.max(0,Math.min(100,r.index.value.value/10)))+"%";
-  const reportHref="/dashboard/report-v2?analysisId="+encodeURIComponent(model.analysisId);
+  const reportHref="/dashboard/report-v2?lab="+encodeURIComponent(caseId);
   return <>
     <section className="w4-hero">
       <div className="w4-hero-copy"><span className="w4-label">ФИНАНСОВЫЙ ПРОФИЛЬ</span><h1>{r.hero.headline}</h1><p>{r.hero.summary}</p><Link href={reportHref} className="w4-primary">Открыть полный анализ <span>↗</span></Link></div>
@@ -97,7 +98,7 @@ export default function ClientHomeV4({model,caseId,mode}:{model:WorkspaceModelV1
         <div className="w4-top-actions"><span>Демонстрационный профиль · условные данные</span><Link href={toggle}>{mode==="full"?"Посмотреть базовый вид":"Посмотреть полный вид"}</Link></div>
       </header>
       <div className="w4-content" id="preview">
-        {mode==="full"?<FullHome model={model}/>:<BasicHome model={model}/>}
+        {mode==="full"?<FullHome model={model} caseId={caseId}/>:<BasicHome model={model} fullPreviewHref={toggle.replace("mode=basic","mode=full")}/>}
       </div>
       <footer className="w4-footer"><span>Прескор · финансовая аналитика</span><span>Аналитическая оценка не является решением банка.</span></footer>
     </section>
