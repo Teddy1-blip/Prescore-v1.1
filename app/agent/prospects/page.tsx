@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import {WorkspaceShell,brokerNav} from "../../workspace-v3/shell";
 import { ArrowLeft, BriefcaseBusiness, Check, FileSpreadsheet, Filter, LoaderCircle, Phone, Search, ShieldCheck, Upload, X } from "lucide-react";
 import { ChangeEvent, useCallback, useEffect, useState } from "react";
 import { parseGold44Workbook, type Gold44Record } from "../../../lib/gold44";
@@ -65,7 +64,7 @@ export default function AgentProspectsPage() {
   }
 
   const total = Object.values(data.summary).reduce((sum, value) => sum + Number(value || 0), 0);
-  return <WorkspaceShell role="BROKER" active="prospects" nav={[...brokerNav.map(n=>({...n,href:"/agent#"+n.id})),{id:"prospects",label:"База для прозвона",href:"/agent/prospects"}]} company="База для прозвона"><div className="gp-shell wv-prospects">
+  return <main className="gp-shell">
     <header><Link href="/agent"><ArrowLeft /> Кабинет агента</Link><div><small>БАЗА ЗАКУПОК · ЭТАП ДО CRM</small><h1>Gold44 / фильтр для прозвона</h1><p>Импортируйте Excel, выберите перспективные контракты и добавьте компанию в CRM. Точное совпадение ИНН с текущим клиентом автоматически создаёт черновик заявки на банковскую гарантию.</p></div><label className={importing ? "disabled" : ""}><Upload /> {importing ? "Импорт…" : "Загрузить Gold44"}<input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={upload} disabled={importing} /></label></header>
 
     {(message || error) && <section className={error ? "gp-notice error" : "gp-notice"}>{importing ? <LoaderCircle /> : error ? <X /> : <Check />}<div><b>{error || message}</b>{importing && <span><i style={{ width: `${progress}%` }} /></span>}</div></section>}
@@ -80,5 +79,5 @@ export default function AgentProspectsPage() {
       <footer><div>{record.mobilePhone || record.phones?.[0] ? <a href={`tel:${record.mobilePhone || record.phones[0]}`}><Phone /> {record.mobilePhone || record.phones[0]}</a> : <span>Телефон не найден</span>}{record.emails?.[0] && <a href={`mailto:${record.emails[0]}`}>{record.emails[0]}</a>}<small>{record.director}</small></div>{record.status === "new" ? <div><button className="reject" onClick={() => decide(record, "reject")}><X /> Отклонить</button><button onClick={() => decide(record, "crm")}><BriefcaseBusiness /> В CRM + БГ</button></div> : record.applicationId ? <Link className="application" href="/agent#applications">Открыть заявку БГ</Link> : null}</footer>
     </article>) : <div className="gp-empty"><FileSpreadsheet /><b>По фильтрам ничего не найдено</b><p>Загрузите Gold44 или измените параметры выборки.</p></div>}</section>
     <aside className="gp-legal"><ShieldCheck /><p><b>Контроль согласия.</b> Публичные деловые контакты сохраняются для подготовки прозвона. Добавление в CRM не означает согласие на передачу документов банку: перед отправкой заявки агент обязан получить отдельное согласие клиента и подтвердить актуальность сведений.</p></aside>
-  </div></WorkspaceShell>;
+  </main>;
 }

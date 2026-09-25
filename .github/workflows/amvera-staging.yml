@@ -62,7 +62,7 @@ jobs:
   presentation:
     needs: access
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -81,21 +81,6 @@ jobs:
         run: node --experimental-strip-types scripts/qa/client-analysis-v3-harness.mjs "$RUNNER_TEMP/client-v3-browser/harness"
       - name: Viewports, keyboard, reduced motion, native zoom and print media
         run: xvfb-run -a -s "-screen 0 1600x1200x24" node scripts/qa/client-analysis-v3-browser.mjs "$RUNNER_TEMP/client-v3-browser"
-      - name: Build source-computed Workspace V3 harness
-        run: node --experimental-strip-types scripts/qa/workspace-v3-harness.mjs "$RUNNER_TEMP/workspace-v3-browser/harness"
-      - name: Workspace client and broker browser acceptance
-        run: xvfb-run -a -s "-screen 0 1600x1200x24" node scripts/qa/workspace-v3-browser.mjs "$RUNNER_TEMP/workspace-v3-browser"
-      - name: Preserve Workspace V3 evidence
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: workspace-v3-browser-${{ github.sha }}
-          path: |
-            ${{ runner.temp }}/workspace-v3-browser/*.json
-            ${{ runner.temp }}/workspace-v3-browser/*.png
-            ${{ runner.temp }}/workspace-v3-browser/*.pdf
-          if-no-files-found: error
-          retention-days: 90
       - name: Preserve isolated presentation evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
