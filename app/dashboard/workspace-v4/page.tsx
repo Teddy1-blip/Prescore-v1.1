@@ -11,7 +11,8 @@ export default async function WorkspaceV4Page({searchParams}:{searchParams:Promi
   if(process.env.PRESCORE_BASE_URL?.replace(/\/$/, "")!=="https://prescore-staging-dorogovab.amvera.io") notFound();
   const q=await searchParams;
   const caseId=q.case??"CL-RU-BUS-001";
-  if(!businessCatalog().some(c=>c.caseId===caseId)) notFound();
+  const catalog=businessCatalog() as Array<{caseId:string}>;
+  if(!catalog.some(c=>c.caseId===caseId)) notFound();
   const bundle=loadBusiness(caseId);
   const result=buildCanonicalCreditAnalysis(bundle.input);
   const full=publicCanonicalModel(result.model,result);
