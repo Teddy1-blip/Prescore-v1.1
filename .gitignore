@@ -47,3 +47,6 @@ next-env.d.ts
 # GitHub staging builds from source, never transport archives.
 source.tar.gz
 amvera-staging-upload/
+/.vinext/
+/output/
+/drizzle-postgres-review/
