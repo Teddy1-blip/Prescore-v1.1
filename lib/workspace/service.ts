@@ -55,7 +55,7 @@ export async function loadWorkspaceModelV1(analysisId: string, dependencies: Wor
   const base = {
     version: WORKSPACE_MODEL_V1 as typeof WORKSPACE_MODEL_V1,
     analysisId,
-    access: { role: accessRole(access.access), readOnly: true as const },
+    access: { role: accessRole(access.access), readOnly: access.access === "agent" },
     entitlement: tier === "FULL" ? "FULL" as const : "BASIC" as const,
     basic,
   };
@@ -132,17 +132,23 @@ export async function readWorkspaceOperations(
 
   let applications = unknown.applications;
   try {
-    const rows = await db.prepare(`SELECT status FROM deals WHERE analysis_id = ?
-      UNION ALL SELECT status FROM agent_applications WHERE analysis_id = ?`)
-      .bind(analysisId, analysisId).all<{ status: string }>();
-    if (rows) {
+    const rows = await db.prepare(`SELECT id, status, 'deal' AS source FROM deals WHERE analysis_id = ?
+      UNION ALL SELECT id, status, 'agent' AS source FROM agent_applications WHERE analysis_id = ?`)
+      .bind(analysisId, analysisId).all<{ id: string; status: string; source: "deal" | "agent" }>();
+    if (rows.results) {
+      // One logical application per ID; the client-facing deal status wins,
+      // regardless of database row order. Agent-only applications are retained.
+      const logical = new Map<string, { status: string; source: "deal" | "agent" }>();
+      for (const row of rows.results) {
+        if (!logical.has(row.id) || row.source === "deal") logical.set(row.id, row);
+      }
       const counts = new Map<string, number>();
-      for (const row of rows.results ?? []) {
+      for (const row of logical.values()) {
         const status = String(row.status ?? "");
         if (status) counts.set(status, (counts.get(status) ?? 0) + 1);
       }
       const statuses = [...counts].map(([status, count]) => ({ status, count })).sort((a, b) => a.status.localeCompare(b.status, "ru"));
-      const count = statuses.reduce((sum, item) => sum + item.count, 0);
+      const count = logical.size;
       applications = { status: count ? "AVAILABLE" : "NONE", count, activeCount: null, statuses };
     }
   } catch { /* Missing operational schema stays UNKNOWN and never becomes zero. */ }

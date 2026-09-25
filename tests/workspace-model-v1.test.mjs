@@ -10,6 +10,7 @@ import * as controls from "../lib/admin-controls.ts";
 import * as entitlements from "../lib/entitlements.ts";
 import * as workspaceService from "../lib/workspace/service.ts";
 import { buildCanonicalCreditAnalysis } from "../lib/credit-engine/production/orchestrator.ts";
+import { publicCanonicalModel } from "../lib/credit-engine/production/public-model.ts";
 import { statementFixture } from "./fixtures/block1-statements.mjs";
 
 function load(file, imports) {
@@ -34,7 +35,9 @@ function forbiddenKeys(value, forbidden, path = "basic") {
   return leaks;
 }
 
-test("real 1C upload → persisted analysis → Workspace BASIC/FULL and assigned broker read-only", async () => {
+for (const ownerFull of [false, true]) test(ownerFull
+  ? "real 1C upload → saved FULL owner → canonical equality and read-only broker"
+  : "real 1C upload → saved FREE owner without FULL grant → privileged FULL assigned broker", async () => {
   const pg = new PGlite();
   const catalog = JSON.parse(fs.readFileSync("lib/db/catalog.json", "utf8"));
   const query = async (sql, values) => {
@@ -89,6 +92,9 @@ test("real 1C upload → persisted analysis → Workspace BASIC/FULL and assigne
       "VALUES (?, ?, ?, ?, ?, ?)")
       .bind("deal-1", analysisId, saved.companyName, "Оборотный кредит", "Ожидает ответа", current.email).run();
 
+    await db.prepare("INSERT INTO agent_applications (id, agent_code, company_name, product, analysis_id, status, lead_id, bank) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+      .bind("deal-1", "ws-agent", saved.companyName, "Оборотный кредит", analysisId, "Черновик", "lead-1", "Тестовый банк").run();
+
     const getModel = () => workspaceRoute.GET(new Request("https://prescore.test/api/workspace-model?analysisId=" + encodeURIComponent(analysisId)));
     const beforeRead = await apiAuth.readableAnalysis(db, analysisId, current);
     const basicResponse = await getModel();
@@ -97,6 +103,8 @@ test("real 1C upload → persisted analysis → Workspace BASIC/FULL and assigne
     const basic = await basicResponse.json();
     assert.equal(basic.version, "PRESCORE-WORKSPACE-MODEL-1.0.0");
     assert.equal(basic.state, "READY_BASIC");
+    assert.equal(basic.access.role, "OWNER");
+    assert.equal(basic.access.readOnly, false);
     assert.equal(basic.fullAvailability, "LOCKED");
     assert.equal(basic.basic.analysis.company.name, "ООО СИТИМЭЙТС");
     assert.equal(basic.basic.analysis.company.inn, "5032333146");
@@ -125,27 +133,32 @@ test("real 1C upload → persisted analysis → Workspace BASIC/FULL and assigne
     assert.deepEqual(await apiAuth.readableAnalysis(db, analysisId, current), beforeRead);
     assert.equal((await db.prepare("SELECT tier FROM analysis_entitlements WHERE analysis_id = ?").bind(analysisId).first()).tier, "FREE");
 
-    await entitlements.grantFullEntitlement(db, {
-      analysisId, userEmail: current.email, companyInn: saved.companyInn, grantedBy: "SYNTHETIC_TEST",
-    });
-    const fullResponse = await getModel();
-    assert.equal(fullResponse.status, 200);
-    const full = await fullResponse.json();
-    assert.equal(full.state, "READY_FULL");
-    assert.equal(full.fullAvailability, "READY");
-    assert.equal(full.entitlement, "FULL");
-    assert.equal(full.full.report.meta.entitlement, "FULL");
-    assert.ok(full.full.report.analysisV3);
-    assert.ok(full.full.report.expertise);
-    assert.ok(full.full.canonical.prescoreIndex);
-    assert.ok(full.full.canonical.financingReadiness);
-    assert.ok(full.full.canonical.creditAssessment);
-    assert.ok(full.full.canonical.debtCapacity);
-    assert.ok(full.full.canonical.productSelection);
-    assert.ok(full.full.canonical.recommendations);
-    assert.ok(full.full.canonical.actionPlan);
-    assert.ok(full.full.canonical.explainability);
-    assert.deepEqual(full.full.canonical.prescoreIndex, buildCanonicalCreditAnalysis({ analysis: saved }).prescoreIndex);
+    const canonical = buildCanonicalCreditAnalysis({ analysis: saved });
+    const expectedReport = publicCanonicalModel(canonical.model, canonical);
+    const assertCanonical = (model) => {
+      assert.equal(model.state, "READY_FULL");
+      assert.equal(model.entitlement, "FULL");
+      assert.equal(model.fullAvailability, "READY");
+      for (const key of ["prescoreIndex", "financingReadiness", "creditAssessment", "debtCapacity",
+        "productSelection", "actionPlan", "explainability"]) {
+        assert.deepEqual(model.full.canonical[key], canonical[key], key);
+      }
+      assert.deepEqual(model.full.canonical.recommendations, canonical.recommendationSet);
+      assert.deepEqual(model.full.report, expectedReport);
+      assert.ok(model.full.report.analysisV3);
+      assert.ok(model.full.report.expertise);
+      assert.deepEqual(model.full.canonical.expertise, expectedReport.expertise);
+    };
+    if (ownerFull) {
+      await entitlements.grantFullEntitlement(db, {
+        analysisId, userEmail: current.email, companyInn: saved.companyInn, grantedBy: "SYNTHETIC_TEST",
+      });
+      const fullResponse = await getModel();
+      assert.equal(fullResponse.status, 200);
+      const full = await fullResponse.json();
+      assert.equal(full.access.readOnly, false);
+      assertCanonical(full);
+    }
 
     await db.prepare("INSERT INTO agent_accounts (user_email, agent_code, name) VALUES (?, ?, ?)")
       .bind("workspace-broker@test.invalid", "ws-agent", "Синтетический брокер").run();
@@ -160,8 +173,9 @@ test("real 1C upload → persisted analysis → Workspace BASIC/FULL and assigne
     const broker = await brokerResponse.json();
     assert.equal(broker.access.role, "ASSIGNED_BROKER");
     assert.equal(broker.access.readOnly, true);
-    assert.equal(broker.state, "READY_FULL");
-    assert.deepEqual(broker.full.report, full.full.report);
+    assertCanonical(broker);
+    assert.equal((await db.prepare("SELECT tier FROM analysis_entitlements WHERE analysis_id = ?")
+      .bind(analysisId).first()).tier, ownerFull ? "FULL" : "FREE");
     assert.deepEqual(await apiAuth.readableAnalysis(db, analysisId, current), brokerBefore);
 
     current = { email: "unrelated-broker@test.invalid", isAdmin: false };
@@ -170,6 +184,14 @@ test("real 1C upload → persisted analysis → Workspace BASIC/FULL and assigne
     assert.deepEqual(await deniedBroker.json(), { version: "PRESCORE-WORKSPACE-MODEL-1.0.0", state: "NOT_FOUND", analysisId });
     current = { email: "unrelated-client@test.invalid", isAdmin: false };
     assert.equal((await getModel()).status, 404);
+    current = { email: "workspace-admin@test.invalid", isAdmin: true };
+    const adminResponse = await getModel();
+    assert.equal(adminResponse.status, 200);
+    const admin = await adminResponse.json();
+    assert.equal(admin.access.role, "ADMIN");
+    assert.equal(admin.access.readOnly, false);
+    current = { email: "workspace-owner@test.invalid", isAdmin: false };
+    assert.equal((await (await getModel()).json()).state, ownerFull ? "READY_FULL" : "READY_BASIC");
     current = null;
     assert.equal((await getModel()).status, 401);
   } finally {

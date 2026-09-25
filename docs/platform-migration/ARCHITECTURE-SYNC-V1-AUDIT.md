@@ -55,3 +55,11 @@ After production and staging migration state is verified for every supported dep
 - BASIC returns no score, grade, legacy readiness, estimated limit, BKI conclusion, legal conclusion, canonical FULL field, raw statement, source hash, or source reference.
 - FULL values are reused from the canonical production result and its public Client Report projection. The service contains no formula, engine fork, or frontend calculation.
 - The service does not use Credit Lab fixtures in runtime.
+
+## Architecture review corrections
+
+`access.readOnly` describes user permissions: OWNER and ADMIN are false; ASSIGNED_BROKER is true. The endpoint itself remains GET-only for every role. Existing authentication and write authorization rules are unchanged.
+
+The operational application projection reads IDs and statuses from both tables and counts each distinct ID once. For a mirrored ID, the `deals` status takes precedence because it is the client-facing application view; this priority is independent of SQL row order and also applies to broker reads of the same projection. An ID present only in `agent_applications` uses that row's status. Counts include IDs with missing/empty status, while status buckets include only nonempty known statuses. Distinct IDs are not heuristically merged, even if their other fields match. `activeCount` remains null; no lifecycle classification is introduced.
+
+Separate upload-to-Workspace integration cases cover an owner who remains FREE (no FULL grant) and an owner with a saved FULL grant. In both cases the assigned broker receives READY_FULL / FULL / ASSIGNED_BROKER / readOnly=true through the existing privileged entitlement rule. Broker reads do not upgrade the owner's saved tier. The FULL test compares all eight canonical projections, the complete public ClientReportModelV1, and Expertise to the existing orchestrator/public projection.
