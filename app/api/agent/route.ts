@@ -156,7 +156,7 @@ export async function GET(request: Request) {
         FROM agent_partners p LEFT JOIN agent_leads l ON l.agent_code = p.agent_code
         WHERE p.curator_code = ?
         GROUP BY p.agent_code, p.name, p.agency, p.city, p.status, p.created_at
-        ORDER BY activeSubscriptions DESC, p.created_at DESC LIMIT 100`).bind(code),
+        ORDER BY "activeSubscriptions" DESC, p.created_at DESC LIMIT 100`).bind(code),
     ]);
     const partners = (partnerResult.results as Array<Record<string, unknown>>).map((item) => ({
       ...item,

@@ -28,3 +28,13 @@ test('new analytical presentation has one API source and no legacy analytical fa
  assert.match(fs.readFileSync('app/components/workspace/use-model.ts','utf8'),/\/api\/workspace-model\?analysisId=/);
  for(const route of ['app/dashboard/workspace-v4','app/dashboard/workspace-new','app/dashboard/new'])assert.equal(fs.existsSync(route),false);
 });
+
+test('production broker GET executes PostgreSQL curator ordering without alias errors',async()=>{
+ const rt=await createWorkspaceRuntime();try{
+  const response=await rt.request('/api/agent',{},rt.broker);
+  assert.equal(response.status,200);
+  const body=await response.json();
+  assert.ok(body.agent.code);assert.deepEqual(body.leads,[]);
+  assert.deepEqual(body.applications,[]);assert.deepEqual(body.curator.agents,[]);
+ }finally{await rt.close();}
+});

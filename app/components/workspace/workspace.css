@@ -13,3 +13,5 @@
 .ws-index>strong.ws-value-unknown{font-size:clamp(28px,3vw,40px);letter-spacing:-.04em;overflow-wrap:normal}.ws-rail nav button{gap:6px}.ws-rail nav button small{flex-shrink:0;white-space:nowrap}.ws-rail nav button>span{display:none}@media(min-width:801px) and (max-width:1100px){.ws-rail nav button small{display:none}}
 /* Native select intrinsic width must not expand its grid/flex container. */
 .ws label{min-width:0}.ws select{min-width:0;width:100%}.ws-context>div{min-width:0;max-width:100%}
+/* Isolate existing CRM markup from global table and form selectors. */
+.ws .ps-crm-toolbar label{display:flex;height:auto;min-height:44px;max-width:100%;flex-shrink:0}.ws .ps-crm-toolbar input{border:0;background:transparent;min-width:0;padding:8px}.ws .ps-crm-kpis>span{padding-right:24px}.ws .ps-crm-table td:first-child{display:table-cell}@media(max-width:540px){.ws .ps-crm-table td:first-child{display:block}}
