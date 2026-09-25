@@ -11,3 +11,5 @@
 
 /* Keep UNKNOWN labels readable and long navigation labels intact. */
 .ws-index>strong.ws-value-unknown{font-size:clamp(28px,3vw,40px);letter-spacing:-.04em;overflow-wrap:normal}.ws-rail nav button{gap:6px}.ws-rail nav button small{flex-shrink:0;white-space:nowrap}.ws-rail nav button>span{display:none}@media(min-width:801px) and (max-width:1100px){.ws-rail nav button small{display:none}}
+/* Native select intrinsic width must not expand its grid/flex container. */
+.ws label{min-width:0}.ws select{min-width:0;width:100%}.ws-context>div{min-width:0;max-width:100%}
