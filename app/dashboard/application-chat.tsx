@@ -29,6 +29,22 @@ export default function ApplicationChat({ applicationId, title, companyInn, anal
     return () => { previous?.focus(); };
   }, []);
 
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') { event.preventDefault(); close(); }
+      if (event.key === 'Tab') {
+        const controls = Array.from(dialog.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not([hidden]):not(:disabled), a[href]') ?? []).filter(node => node.getClientRects().length);
+        const first = controls[0], last = controls.at(-1);
+        if (!dialog.current?.contains(document.activeElement)) { event.preventDefault(); first?.focus(); }
+        else if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+      }
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [close]);
+
   async function load() {
     const [messagesResponse, documentsResponse] = await Promise.all([
       fetch(`/api/communications?applicationId=${encodeURIComponent(applicationId)}`),
@@ -66,7 +82,7 @@ export default function ApplicationChat({ applicationId, title, companyInn, anal
       if (!response.ok) throw new Error("Сообщение не отправлено");
       setValue(""); await load();
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Сообщение не отправлено"); }
-    finally { setSending(false); }
+    finally { setSending(false); dialog.current?.querySelector<HTMLInputElement>('input[aria-label="Сообщение"]')?.focus(); }
   }
 
   async function attachFile(event: ChangeEvent<HTMLInputElement>) {
@@ -85,15 +101,7 @@ export default function ApplicationChat({ applicationId, title, companyInn, anal
   }
 
   const documentById = new Map(documents.map((item) => [item.id, item]));
-  return <div ref={dialog} className="ps-chat-overlay" role="dialog" aria-label={title} aria-modal="true" onKeyDown={event => {
-    if (event.key === 'Escape') { event.preventDefault(); close(); }
-    if (event.key === 'Tab') {
-      const controls = Array.from(dialog.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not([hidden]):not(:disabled), a[href]') ?? []).filter(node => node.getClientRects().length);
-      const first = controls[0], last = controls.at(-1);
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
-    }
-  }}><section className="ps-chat-panel">
+  return <div ref={dialog} className="ps-chat-overlay" role="dialog" aria-label={title} aria-modal="true"><section className="ps-chat-panel">
     <header><span><small>ЧАТ ПО ЗАЯВКЕ</small><h2>{title}</h2><p>Клиент и брокер видят одну историю и одни вложения.</p></span><button onClick={close} aria-label="Закрыть чат"><X /></button></header>
     <div className="ps-chat-body">{loading ? <div className="ps-chat-loading"><LoaderCircle className="spin" /> Загружаем сообщения…</div> : messages.length ? messages.map((item) => { const document = documentById.get(item.documentId); return <article key={item.id} className={item.authorRole === role ? "mine" : "theirs"}><span><b>{item.authorName}</b><time>{new Intl.DateTimeFormat("ru-RU", { dateStyle: "short", timeStyle: "short" }).format(new Date(item.createdAt))}</time></span>{item.message && <p>{item.message}</p>}{document && <a href={`/api/documents?download=${encodeURIComponent(document.id)}`}><Download /> {document.fileName}</a>}</article>; }) : <div className="ps-chat-empty"><MessageSquareText /><b>Начните обсуждение заявки</b><span>Здесь удобно запросить документ, уточнить сумму или зафиксировать решение банка.</span></div>}</div>
     {error && <p className="ps-chat-error">{error}</p>}

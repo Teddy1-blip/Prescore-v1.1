@@ -37,3 +37,5 @@ Reproduce with `node --experimental-strip-types scripts/qa/workspace-field-audit
 - Browser output records action outcomes; first-viewport and full-page PNGs are separate. The print output is the existing PrintReport component. Native zoom is headed Chromium controlled via X11, with DPR and CSS zoom assertions.
 - Live staging acceptance: NOT_RUN. Paid external providers: NOT_RUN. Human visual acceptance remains pending.
 - Golden/DRAFT expectations, canonical formulas, ownership/entitlement policy, database schema and migrations are unchanged.
+
+Historical broker dossier: the client list points to the latest analysis for each company. Document context now also resolves the assigned lead by the company INN from the authorized selected WorkspaceModel, preserving the explicitly selected earlier version. Browser QA creates a later same-company unavailable version before opening documents for the earlier FULL version.

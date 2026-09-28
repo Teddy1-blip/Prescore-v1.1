@@ -23,7 +23,7 @@ export default function BrokerWorkspace(){
  const leads=data?.leads.filter(l=>`${l.companyName} ${l.companyInn} ${l.contactName}`.toLowerCase().includes(query.toLowerCase()))??[];
  const active=data?.applications.filter(a=>!closed.has(a.status))??[];
  const queue=[...active.filter(a=>!!a.nextAction).map(a=>({key:a.id,title:a.companyName,detail:a.nextAction,status:a.status,analysisId:a.analysisId,application:a})),...(data?.leads.filter(l=>!l.analysisId).map(l=>({key:l.id,title:l.companyName,detail:'Запросить банковские выписки и согласовать следующий шаг',status:l.status,analysisId:l.analysisId,application:null}))??[])];
- const lead=data?.leads.find(l=>l.analysisId===selectedId);
+ const lead=data?.leads.find(l=>l.analysisId===selectedId)??data?.leads.find(l=>l.companyInn===model?.basic.analysis.company.inn);
  return <Shell broker view={view} choose={choose} secondary={<>{data?.modules?.prospects!==false&&<a href="/agent/prospects">База закупок ↗</a>}<button onClick={()=>choose('partners')}>Партнёрская программа</button></>}>
  {error&&<p role="alert">{error}<button onClick={()=>window.location.reload()}>Повторить</button></p>}{notice&&<p role="status" className="ws-notice">{notice}</p>}{!data&&!error&&<p role="status">Загружаем рабочую очередь…</p>}
  {data&&<>{leadOpen&&<LeadForm close={()=>setLeadOpen(false)} saved={async()=>{await load();setLeadOpen(false);setNotice('Клиент добавлен');}}/>}{appOpen&&<ApplicationForm leads={data.leads} offers={data.offerOptions} close={()=>setAppOpen(false)} saved={async()=>{await load();setAppOpen(false);setNotice('Заявка добавлена');}}/>}
