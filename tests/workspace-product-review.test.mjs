@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import React from 'react';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {createWorkspaceRuntime} from './fixtures/workspace-runtime.mjs';
 import {loadBusiness} from '../lib/credit-engine/credit-lab/business-corpus.mjs';
@@ -48,7 +51,9 @@ test('FULL calculation unavailable retains known banking facts without checkout 
  assert.match(renderToStaticMarkup(React.createElement(EmptyHome,{start(){}})),/Загрузить выписку/);
  }finally{await rt.close();}
 });
-test('real operational handlers: assigned broker status and shared chat, owner document and cancellation',async()=>{
+test('real operational handlers: assigned broker status and shared chat, owner document and cancellation',async(t)=>{
+ const previous=process.env.PRESCORE_STORAGE_ROOT,storage=fs.mkdtempSync(path.join(os.tmpdir(),'workspace-review-'));process.env.PRESCORE_STORAGE_ROOT=storage;
+ t.after(()=>{if(previous===undefined)delete process.env.PRESCORE_STORAGE_ROOT;else process.env.PRESCORE_STORAGE_ROOT=previous;fs.rmSync(storage,{recursive:true,force:true});});
  const rt=await createWorkspaceRuntime();try{
  const b=loadBusiness('CL-RU-BUS-001');const uploaded=await(await rt.request('/api/analysis',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({statements:b.statements})})).json();const a=uploaded.analysis;await rt.assign(a);
  const post=async(url,data,user=rt.owner,method='POST')=>rt.request(url,{method,headers:{'content-type':'application/json'},body:JSON.stringify(data)},user);
