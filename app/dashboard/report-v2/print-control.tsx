@@ -1,0 +1,3 @@
+'use client';
+import {useEffect} from 'react';
+export function PrintControl(){useEffect(()=>{const opened:HTMLDetailsElement[]=[];const prepare=()=>{document.querySelectorAll<HTMLDetailsElement>('.cr-report details:not(.cr-technical)').forEach(d=>{if(!d.open){d.open=true;opened.push(d);}});};const restore=()=>{opened.splice(0).forEach(d=>{d.open=false;});};window.addEventListener('beforeprint',prepare);window.addEventListener('afterprint',restore);return()=>{window.removeEventListener('beforeprint',prepare);window.removeEventListener('afterprint',restore);};},[]);return <button type="button" className="cr-print-button cr-screen-only" onClick={()=>window.print()}>Печать / сохранить PDF</button>;}

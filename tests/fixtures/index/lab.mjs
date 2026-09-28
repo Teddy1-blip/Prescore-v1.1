@@ -1,0 +1,19 @@
+import {buildPrescoreIndex} from '../../../lib/credit-engine/index/engine.ts';
+import {id,stable} from '../../../lib/credit-engine/index/common.ts';
+export const fingerprint=e=>id('index-golden',e);
+export function expectations(e,actual,error=null){const mismatches=[];const check=(ok,code,expected,got,level='HARD')=>{if(!ok)mismatches.push({id:id('index-lab-mismatch',e.caseId,code,expected,got),code,level,expected,actual:got});};const ex=e.expected;
+ if(ex.invalid){check(!!error&&error.includes(ex.invalid),'EXPECTED_REJECTION',ex.invalid,error);return mismatches;}check(!error&&!!actual,'INDEX_EXECUTION',true,error);if(!actual)return mismatches;
+ for(const k of ['status','value','confidence'])if(Object.hasOwn(ex,k))check(actual[k]===ex[k],'INDEX_'+k.toUpperCase()+'_MISMATCH',ex[k],actual[k]);
+ if(ex.range)check(actual.value!==null&&actual.value>=ex.range[0]&&actual.value<=ex.range[1],'INDEX_RANGE',ex.range,actual.value);
+ if(ex.ceiling!==undefined)check(actual.riskCeiling===ex.ceiling,'CEILING_MISMATCH',ex.ceiling,actual.riskCeiling);
+ for(const x of ex.components??[]){const c=actual.components.find(c=>c.component===x.component);check(!!c,'COMPONENT_MISSING',x.component,null);if(c&&x.scorePoints!==undefined)check(c.scorePoints===x.scorePoints,'COMPONENT_POINTS',x,c.scorePoints);if(c&&x.range)check(c.scorePoints>=x.range[0]&&c.scorePoints<=x.range[1],'COMPONENT_RANGE',x,c.scorePoints);}
+ for(const code of ex.requiredContributions??[])check(actual.contributions.some(c=>c.riskCode===code),'CONTRIBUTION_MISSING',code,null);
+ for(const code of ex.forbiddenContributions??[])check(!actual.contributions.some(c=>c.riskCode===code),'FORBIDDEN_CONTRIBUTION',code,actual.contributions);
+ for(const x of ex.modifiers??[]){const cs=actual.contributions.filter(c=>c.riskCode===x.riskCode);check(cs.length>0&&cs.every(c=>c.contextModifierPercent>=x.min&&c.contextModifierPercent<=x.max),'MODIFIER_RANGE',x,cs.map(c=>c.contextModifierPercent),x.level);}
+ for(const x of ex.coverage??[])check(actual.coverage.components.find(c=>c.component===x.component)?.state===x.state,'COVERAGE_MISMATCH',x,actual.coverage);
+ if(ex.invariants){check(actual.value===null||Number.isInteger(actual.value)&&actual.value>=0&&actual.value<=1000,'INDEX_RANGE_0_1000',true,actual.value);check(actual.components.every(c=>c.finalPenalty>=0&&c.finalPenalty<=c.maxPoints),'COMPONENT_PENALTY_CAPPED',true,actual.components);check(actual.contributions.every(c=>c.scope==='CREDIT_RISK'&&Math.abs(c.contextModifierPercent)<=15),'ONLY_CREDIT_RISK_AND_BOUNDED_CONTEXT',true,actual.contributions);}
+ if(ex.defect)check(actual.contributions.every(c=>!c.reasonCodes.some(r=>r.startsWith('DELINQUENCY_'))),'IDX_RU_DEFECT_001',true,actual.contributions);
+ return mismatches;
+}
+export function comparePair(a,b,operator,field='value'){if(a[field]===null||b[field]===null)return false;return operator==='EQ'?a[field]===b[field]:operator==='GT'?a[field]>b[field]:a[field]<b[field];}
+export function runIndexPack(pack){for(const e of pack.entries)if(pack.fingerprints[e.caseId]!==fingerprint(e))throw Error('INDEX_GOLDEN_FINGERPRINT_MISMATCH');const results=pack.entries.map(e=>{const before=stable(e.input);let actual=null,error=null;try{actual=buildPrescoreIndex(e.input);}catch(ex){error=ex.message;}const mismatches=expectations(e,actual,error);if(stable(e.input)!==before)mismatches.push({code:'INPUT_MUTATED',level:'HARD'});return {caseId:e.caseId,actual,error,mismatches};});for(const e of pack.entries){const r=results.find(r=>r.caseId===e.caseId);for(const pair of e.expected.relative??[]){const other=results.find(r=>r.caseId===pair.other);if(!r.actual||!other?.actual||!comparePair(r.actual,other.actual,pair.operator,pair.field))r.mismatches.push({code:'PAIRWISE_EXPECTATION',level:'HARD',expected:pair});}}return results.map(r=>({...r,result:r.mismatches.some(m=>m.level==='HARD')?'FAIL':r.mismatches.length?'REVIEW':'PASS'}));}

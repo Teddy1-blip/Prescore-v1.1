@@ -1,0 +1,68 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';
+import {smtpConfiguration} from '../lib/platform/environment.ts';
+import ts from 'typescript';import {betterAuth}from'better-auth';import {PGlite}from'@electric-sql/pglite';import{randomUUID,createHmac}from'node:crypto';
+
+test('actual standalone auth: verification, secure sessions, roles, spoofed headers, logout and expiry',async()=>{
+ const pg=new PGlite();const mail=[];
+ for(const file of ['0001_product.sql','0002_platform_auth.sql'])await pg.exec(fs.readFileSync(new URL('../lib/db/migrations/'+file,import.meta.url),'utf8'));
+ const query=async(sql,values)=>{const r=await pg.query(sql,values);return{rows:r.rows,rowCount:r.affectedRows,command:sql.trim().split(' ')[0].toUpperCase()};};
+ const pool={query,connect:async()=>({query,release(){}}),end:async()=>{}};
+ const original={...process.env};Object.assign(process.env,{AUTH_SECRET:'synthetic-test-secret-at-least-32-characters-long',PRESCORE_BASE_URL:'https://prescore.test',NODE_ENV:'production',SMTP_HOST:'synthetic',SMTP_FROM:'test@prescore.test'});
+ const source=fs.readFileSync(new URL('../lib/auth/server.ts',import.meta.url),'utf8');
+ const code=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;
+ const exports={};new Function('exports','require',code)(exports,name=>{
+  if(name.includes('platform/environment'))return{smtpConfiguration};if(name==='better-auth')return{betterAuth};if(name.includes('db/client'))return{getPool:()=>pool};if(name==='node:crypto')return{randomUUID};
+  if(name==='nodemailer')return{createTransport:()=>({sendMail:async m=>{mail.push(m);}})};throw Error('UNEXPECTED_IMPORT');
+ });
+ const auth=exports.getAuth();const headers={'content-type':'application/json',origin:'https://prescore.test'};
+ const post=(path,body,extra={})=>auth.handler(new Request('https://prescore.test/api/auth/'+path,{method:'POST',headers:{...headers,...extra},body:JSON.stringify(body)}));
+ try{
+  assert.equal(await exports.getAuthSession(new Headers({'oai-authenticated-user-email':'admin@prescore.test'})),null);
+  const shortSignup=await post('sign-up/email',{name:'Synthetic',email:'client@prescore.test',password:'Short7!',callbackURL:'/login'});assert.equal(shortSignup.status,400);assert.equal(mail.length,0);
+  const signup=await post('sign-up/email',{name:'Synthetic',email:'client@prescore.test',password:'Test123!',callbackURL:'/login?verified=1&returnTo=%2Fdashboard'});assert.equal(signup.status,200);
+  assert.equal(mail.length,1);
+  assert.equal(mail[0].subject,'Подтверждение почты Prescore');assert.match(mail[0].html,/Prescore/);assert.match(mail[0].html,/Подтвердить почту/);assert.doesNotMatch(mail[0].html,/<img|<script|<link/i);
+  assert.equal(await exports.getAuthSession(new Headers()),null);assert.equal((await query('SELECT * FROM session')).rows.length,0);
+  const unknown=await post('send-verification-email',{email:'unknown@prescore.test',callbackURL:'/dashboard'});
+  const resend=await post('send-verification-email',{email:'client@prescore.test',callbackURL:'/login?verified=1&returnTo=%2Fdashboard'});
+  assert.equal(resend.status,200);assert.deepEqual(await resend.json(),await unknown.json());assert.equal(mail.length,2);
+  const b64=x=>Buffer.from(JSON.stringify(x)).toString('base64url');const payload=b64({alg:'HS256'})+'.'+b64({email:'client@prescore.test',exp:1});const expiredToken=payload+'.'+createHmac('sha256',process.env.AUTH_SECRET).update(payload).digest('base64url');
+  const expired=await auth.handler(new Request('https://prescore.test/api/auth/verify-email?token='+expiredToken+'&callbackURL='+encodeURIComponent('/login?verified=1')));
+  assert.equal(expired.status,302);assert.match(expired.headers.get('location'),/error=TOKEN_EXPIRED/);assert.equal((await query('SELECT "emailVerified" FROM "user"')).rows[0].emailVerified,false);
+  const badOrigin=await post('send-verification-email',{email:'client@prescore.test',callbackURL:'https://attacker.invalid'});assert.equal(badOrigin.status,403);
+  await query('DELETE FROM "rateLimit"');
+  const unverified=await post('sign-in/email',{email:'client@prescore.test',password:'Test123!'});assert.equal(unverified.status,403);
+  const url=mail[0].text.split('\n').find(x=>x.startsWith('https://'));
+  const verified=await auth.handler(new Request(url));assert.equal(verified.status,302);assert.equal(verified.headers.get('location'),'/login?verified=1&returnTo=%2Fdashboard');assert.equal(verified.headers.get('set-cookie'),null);
+  const noMoreMail=mail.length;const already=await post('send-verification-email',{email:'client@prescore.test'});assert.equal(already.status,200);assert.equal(mail.length,noMoreMail);
+  const login=await post('sign-in/email',{email:'client@prescore.test',password:'Test123!'});assert.equal(login.status,200);
+  const cookieHeader=login.headers.get('set-cookie');assert.match(cookieHeader,/HttpOnly/i);assert.match(cookieHeader,/Secure/i);assert.match(cookieHeader,/SameSite=Lax/i);
+  const cookie=cookieHeader.split(';')[0];const session=await exports.getAuthSession(new Headers({cookie}));assert.ok(session);assert.deepEqual(session.user.roles,['CLIENT']);
+  await query('INSERT INTO platform_roles(user_id,role) VALUES($1,$2)',[session.user.id,'AGENT']);assert.deepEqual((await exports.getAuthSession(new Headers({cookie}))).user.roles,['CLIENT']);
+  await query("INSERT INTO agent_accounts(user_email,agent_code,name) VALUES('client@prescore.test','test-agent','Synthetic')");assert.ok((await exports.getAuthSession(new Headers({cookie}))).user.roles.includes('AGENT'));
+  await query('INSERT INTO platform_roles(user_id,role) VALUES($1,$2)',[session.user.id,'ADMIN']);
+  assert.ok((await exports.getAuthSession(new Headers({cookie}))).user.roles.includes('ADMIN'));
+  const csrf=await post('sign-out',{}, {cookie,origin:'https://attacker.invalid'});assert.equal(csrf.status,403);
+  assert.ok(await exports.getAuthSession(new Headers({cookie})));
+  const logout=await post('sign-out',{}, {cookie});assert.equal(logout.status,200);assert.equal(await exports.getAuthSession(new Headers({cookie})),null);
+  const again=await post('sign-in/email',{email:'client@prescore.test',password:'Test123!'});assert.equal(again.status,200);
+  const expiredCookie=again.headers.get('set-cookie').split(';')[0];await query('UPDATE session SET "expiresAt"=now()-interval \'1 day\'');
+  assert.equal(await exports.getAuthSession(new Headers({cookie:expiredCookie})),null);
+  let limited=false;for(let i=0;i<7;i++){const denied=await post('sign-in/email',{email:'client@prescore.test',password:'incorrect-password'});if(denied.status===429)limited=true;}assert.equal(limited,true);
+  await query('DELETE FROM "rateLimit"');
+  const resetUnknown=await post('request-password-reset',{email:'unknown@prescore.test',redirectTo:'/reset-password'});
+  const reset=await post('request-password-reset',{email:'client@prescore.test',redirectTo:'/reset-password'});assert.equal(reset.status,200);assert.deepEqual(await reset.json(),await resetUnknown.json());
+  const resetMail=mail.at(-1);assert.equal(resetMail.subject,'Восстановление доступа к Prescore');assert.match(resetMail.html,/Задать новый пароль/);
+  const resetURL=resetMail.text.split('\n').find(x=>x.startsWith('https://'));
+  const resetRedirect=await auth.handler(new Request(resetURL));assert.equal(resetRedirect.status,302);
+  const resetToken=new URL(resetRedirect.headers.get('location'),'https://prescore.test').searchParams.get('token');assert.ok(resetToken);
+  const beforeResetLogin=await post('sign-in/email',{email:'client@prescore.test',password:'Test123!'});const beforeResetCookie=beforeResetLogin.headers.get('set-cookie').split(';')[0];
+  const shortReset=await post('reset-password',{token:resetToken,newPassword:'Short7!'});assert.equal(shortReset.status,400);
+  const changed=await post('reset-password',{token:resetToken,newPassword:'Reset12!'});assert.equal(changed.status,200);assert.equal(await exports.getAuthSession(new Headers({cookie:beforeResetCookie})),null);
+  assert.equal((await post('reset-password',{token:resetToken,newPassword:'another-strong-password'})).status,400);
+  assert.equal((await post('sign-in/email',{email:'client@prescore.test',password:'Test123!'})).status,401);
+  assert.equal((await post('sign-in/email',{email:'client@prescore.test',password:'Reset12!'})).status,200);
+  let resendLimited=false;for(let i=0;i<4;i++){const r=await post('send-verification-email',{email:'unknown@prescore.test'});if(r.status===429)resendLimited=true;}assert.ok(resendLimited);
+  const events=await query('SELECT event FROM platform_security_events');assert.ok(events.rows.some(x=>x.event==='SESSION_CREATED'));assert.ok(events.rows.some(x=>x.event==='SESSION_DELETED'));
+ }finally{for(const key of Object.keys(process.env))if(!(key in original))delete process.env[key];Object.assign(process.env,original);await pg.close();}
+});

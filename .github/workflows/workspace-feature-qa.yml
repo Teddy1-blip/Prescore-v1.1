@@ -1,0 +1,86 @@
+name: Workspace feature browser QA
+
+on:
+  push:
+    branches: [workspace-client-broker-v1]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: workspace-feature-qa
+  cancel-in-progress: false
+
+jobs:
+  browser:
+    if: github.repository == 'Teddy1-blip/Prescore-v1.1' && github.ref == 'refs/heads/workspace-client-broker-v1'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: npm ci
+      - name: Install browser and native controls
+        run: |
+          npx --no-install playwright install --with-deps chromium
+          sudo apt-get update
+          sudo apt-get install -y xvfb xdotool imagemagick
+      - name: Prepare reviewed presentation for before screenshots
+        run: |
+          mkdir -p "$RUNNER_TEMP/workspace-reviewed"
+          git archive debb9abe08414da29d3b9269c51931322d4c1337 | tar -x -C "$RUNNER_TEMP/workspace-reviewed"
+          ln -s "$GITHUB_WORKSPACE/node_modules" "$RUNNER_TEMP/workspace-reviewed/node_modules"
+      - name: Production workspace components with synthetic data
+        env:
+          WORKSPACE_QA_BASELINE_ROOT: ${{ runner.temp }}/workspace-reviewed
+          PRESCORE_STORAGE_ROOT: ${{ runner.temp }}/workspace-qa-storage
+        run: xvfb-run -a -s "-screen 0 1600x1200x24" node scripts/qa/workspace-browser.mjs "$RUNNER_TEMP/workspace-browser"
+      - name: Audit synthetic field semantics
+        run: node --experimental-strip-types scripts/qa/workspace-field-audit.mjs "$RUNNER_TEMP/workspace-browser/field-audit.json"
+      - name: Preserve screenshots and checks
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: workspace-browser-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/workspace-browser/*.png
+            ${{ runner.temp }}/workspace-browser/*.pdf
+            ${{ runner.temp }}/workspace-browser/*.json
+            ${{ runner.temp }}/workspace-browser/*.log
+          if-no-files-found: error
+          retention-days: 90
+
+  validate:
+    needs: browser
+    if: github.repository == 'Teddy1-blip/Prescore-v1.1' && github.ref == 'refs/heads/workspace-client-broker-v1'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: node --experimental-strip-types --test tests/workspace-frontend.test.mjs tests/workspace-product-review.test.mjs tests/workspace-density.test.mjs tests/platform-ui.test.mjs
+      - run: npm run build
+      - run: npm test
+      - run: npm run credit-lab:business -- "$RUNNER_TEMP/credit-lab-workspace-${{ github.run_id }}-${{ github.run_attempt }}"
+      - run: npm run lint
+      - run: npm run validate:artifact
+      - name: Preserve business acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: workspace-credit-lab-${{ github.sha }}
+          path: ${{ runner.temp }}/credit-lab-workspace-${{ github.run_id }}-${{ github.run_attempt }}/
+          if-no-files-found: error
+          retention-days: 90

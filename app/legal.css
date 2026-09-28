@@ -1,0 +1,483 @@
+.legal-shell {
+  min-height: 100vh;
+  background: #f4f7f9;
+  color: #142b3d;
+  padding: 28px 20px 70px;
+}
+.legal-nav {
+  max-width: 980px;
+  margin: 0 auto 26px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+.legal-brand {
+  font-size: 25px;
+  font-weight: 850;
+  color: #0b2238;
+}
+.legal-nav div {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.legal-nav a {
+  font-size: 16px;
+  color: #466578;
+  font-weight: 700;
+}
+.legal-card {
+  max-width: 980px;
+  margin: auto;
+  background: #fff;
+  border: 1px solid #dce6ed;
+  border-radius: 16px;
+  padding: clamp(28px, 5vw, 58px);
+  box-shadow: 0 22px 55px rgba(18, 55, 79, 0.08);
+}
+.legal-card > span {
+  font-size: 14px;
+  color: #0c4f86;
+  font-weight: 850;
+  letter-spacing: 1px;
+}
+.legal-card h1 {
+  font-size: clamp(34px, 5vw, 54px);
+  line-height: 1.05;
+  letter-spacing: -2px;
+  margin: 16px 0;
+}
+.legal-lead {
+  font-size: 19px;
+  line-height: 1.7;
+  color: #5c7483;
+  max-width: 820px;
+}
+.legal-notice {
+  margin: 24px 0;
+  background: #fff5e9;
+  border: 1px solid #efd6b9;
+  border-radius: 10px;
+  padding: 16px;
+  color: #835525;
+  font-size: 16px;
+  line-height: 1.55;
+}
+.legal-card section {
+  border-top: 1px solid #e2eaef;
+  padding-top: 24px;
+  margin-top: 28px;
+}
+.legal-card h2 {
+  font-size: 25px;
+  margin: 0 0 14px;
+  color: #0b2238;
+}
+.legal-card h3 {
+  font-size: 19px;
+  margin: 20px 0 9px;
+}
+.legal-card p,
+.legal-card li {
+  font-size: 17px;
+  line-height: 1.72;
+  color: #4e6979;
+}
+.legal-card ul,
+.legal-card ol {
+  padding-left: 22px;
+}
+.legal-card a {
+  color: #0c5d99;
+  text-decoration: underline;
+}
+.legal-details {
+  background: #eef4f7;
+  border-radius: 10px;
+  padding: 18px;
+}
+.legal-footer {
+  max-width: 980px;
+  margin: 24px auto 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  color: #768b98;
+  font-size: 15px;
+}
+.legal-footer div {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.legal-footer a {
+  color: #526e7e;
+}
+.checkout-shell {
+  min-height: 100vh;
+  background: linear-gradient(145deg, #eef5f8, #fff);
+  padding: 26px 20px 70px;
+  color: #142b3d;
+}
+.checkout-grid {
+  max-width: 1100px;
+  margin: 30px auto 0;
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 22px;
+  align-items: start;
+}
+.checkout-tiers {
+  max-width: 1100px;
+  margin: 30px auto 0;
+  display: grid;
+  grid-template-columns: 1fr 1.15fr;
+  gap: 22px;
+  align-items: stretch;
+}
+.checkout-full-card { border-color: #9fc8df; }
+.checkout-free-button {
+  display: inline-flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 20px;
+  border-radius: 9px;
+  background: #e8f2f7;
+  color: #0c4f86;
+  font-weight: 800;
+}
+.checkout-order-grid { margin-top: 22px; }
+.checkout-card {
+  background: #fff;
+  border: 1px solid #d9e5eb;
+  border-radius: 15px;
+  padding: clamp(24px, 4vw, 38px);
+  box-shadow: 0 18px 50px rgba(14, 50, 74, 0.08);
+}
+.checkout-card > span {
+  font-size: 13px;
+  color: #0c4f86;
+  font-weight: 850;
+  letter-spacing: 1px;
+}
+.checkout-card h1 {
+  font-size: clamp(33px, 5vw, 48px);
+  line-height: 1.05;
+  letter-spacing: -2px;
+  margin: 12px 0;
+}
+.checkout-card > p {
+  font-size: 18px;
+  line-height: 1.65;
+  color: #607886;
+}
+.checkout-price {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 25px 0;
+}
+.checkout-price strong {
+  font-size: 46px;
+  white-space: nowrap;
+}
+.checkout-price span {
+  color: #738894;
+  font-size: 16px;
+}
+.checkout-includes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 25px 0;
+}
+.checkout-includes span {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 15px;
+  line-height: 1.45;
+  color: #476373;
+}
+.checkout-includes svg {
+  width: 17px;
+  color: #15947a;
+  flex: none;
+}
+.checkout-note {
+  background: #eef6f8;
+  border-radius: 9px;
+  padding: 14px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: #55717f;
+}
+.checkout-form h2 {
+  font-size: 26px;
+  margin: 0 0 18px;
+}
+.payer-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: #edf3f6;
+  border-radius: 8px;
+  padding: 4px;
+  margin-bottom: 20px;
+}
+.payer-tabs button {
+  border: 0;
+  background: transparent;
+  border-radius: 6px;
+  height: 42px;
+  color: #607985;
+  font-weight: 750;
+}
+.payer-tabs button.active {
+  background: #fff;
+  color: #0c4f86;
+  box-shadow: 0 2px 9px rgba(15, 51, 74, 0.1);
+}
+.checkout-form > label {
+  display: block;
+  font-size: 15px;
+  font-weight: 750;
+  margin: 16px 0;
+  color: #3d5968;
+}
+.checkout-form input[type="text"],
+.checkout-form input[type="email"] {
+  display: block;
+  width: 100%;
+  height: 50px;
+  border: 1px solid #cddbe2;
+  border-radius: 8px;
+  padding: 0 13px;
+  margin-top: 7px;
+  outline: none;
+}
+.checkout-form input:focus {
+  border-color: #1769aa;
+  box-shadow: 0 0 0 3px rgba(23, 105, 170, 0.1);
+}
+.checkout-checks {
+  border-top: 1px solid #e0e9ee;
+  margin-top: 22px;
+  padding-top: 16px;
+}
+.checkout-checks label {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 9px;
+  align-items: start;
+  margin: 13px 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #59717e;
+}
+.checkout-checks input {
+  margin-top: 3px;
+  accent-color: #0c4f86;
+}
+.checkout-checks a {
+  color: #0c5d99;
+  text-decoration: underline;
+}
+.checkout-submit {
+  width: 100%;
+  height: 52px;
+  border: 0;
+  border-radius: 8px;
+  background: #0c4f86;
+  color: #fff;
+  font-weight: 850;
+  margin-top: 17px;
+}
+.checkout-submit:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.checkout-security {
+  font-size: 13px !important;
+  text-align: center;
+  color: #8396a1 !important;
+}
+.checkout-legal-note {
+  margin-top: 18px;
+  border-left: 3px solid #d48b51;
+  padding: 10px 12px;
+  background: #fff7ef;
+  color: #785438;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.checkout-back {
+  max-width: 1100px;
+  margin: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.checkout-back a {
+  font-weight: 800;
+  color: #0b2238;
+}
+.checkout-back nav {
+  display: flex;
+  gap: 15px;
+}
+.checkout-back nav a {
+  font-size: 14px;
+  color: #5a7482;
+}
+.checkout-success {
+  margin-top: 15px;
+  border: 1px solid #bfe1d7;
+  background: #edf9f6;
+  color: #176b5e;
+  border-radius: 8px;
+  padding: 13px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+@media (max-width: 760px) {
+  .legal-shell,
+  .checkout-shell {
+    padding-left: 13px;
+    padding-right: 13px;
+  }
+  .legal-nav {
+    align-items: flex-start;
+  }
+  .legal-nav div {
+    gap: 10px;
+  }
+  .legal-nav a {
+    font-size: 14px;
+  }
+  .legal-card {
+    padding: 25px 20px;
+    border-radius: 12px;
+  }
+  .legal-card h1 {
+    letter-spacing: -1.3px;
+  }
+  .legal-card p,
+  .legal-card li {
+    font-size: 16px;
+  }
+  .legal-footer {
+    flex-direction: column;
+  }
+  .checkout-grid {
+    grid-template-columns: 1fr;
+  }
+  .checkout-tiers { grid-template-columns: 1fr; }
+  .checkout-includes {
+    grid-template-columns: 1fr;
+  }
+  .checkout-back nav {
+    display: none;
+  }
+  .checkout-price strong {
+    font-size: 40px;
+  }
+  .payer-tabs button {
+    font-size: 14px;
+  }
+}
+
+/* Legal and checkout pages — same typography and control hierarchy. */
+.legal-shell,
+.checkout-shell {
+  background: var(--ps-canvas);
+  color: var(--ps-text);
+  font-family: var(--font-sans);
+}
+.legal-brand { color: var(--ps-deep); font-size: 23px; }
+.legal-nav a,
+.checkout-back nav a { color: var(--ps-text-secondary); font-size: 14px; }
+.legal-card,
+.checkout-card,
+.checkout-full-card {
+  border-color: var(--ps-border);
+  border-radius: var(--ps-radius-lg);
+  box-shadow: var(--ps-shadow-sm);
+}
+.legal-card > span { color: var(--ps-primary); font-size: 11px; }
+.legal-card h1 { color: var(--ps-text); letter-spacing: -.035em; }
+.legal-lead { color: var(--ps-text-secondary); font-size: 18px; }
+.legal-notice,
+.checkout-legal-note {
+  border-color: #ead1aa;
+  border-radius: var(--ps-radius-md);
+  background: var(--ps-warning-soft);
+  color: #7d5728;
+}
+.legal-card h2 { color: var(--ps-deep); }
+.legal-card p,
+.legal-card li { color: #496472; }
+.checkout-back a { color: var(--ps-deep); }
+.checkout-tiers { gap: 12px; }
+.checkout-tier {
+  border-color: var(--ps-border);
+  border-radius: var(--ps-radius-md);
+  box-shadow: none;
+}
+.checkout-tier.active { border-color: #8eafb9; background: #eef4f7; box-shadow: inset 3px 0 0 var(--ps-primary); }
+.checkout-price strong { color: var(--ps-text); font-variant-numeric: tabular-nums; }
+.checkout-includes > div { border-color: var(--ps-border); border-radius: var(--ps-radius-sm); }
+.payer-tabs { border-radius: var(--ps-radius-sm); }
+.payer-tabs button { border-radius: 4px; }
+.payer-tabs button.active { color: var(--ps-primary); }
+.checkout-form label { color: #405a68; font-size: 13px; }
+.checkout-form input,
+.checkout-form select,
+.checkout-form input[type="email"] {
+  border-color: var(--ps-border-strong);
+  border-radius: var(--ps-radius-sm);
+}
+.checkout-form input:focus,
+.checkout-form select:focus { border-color: var(--ps-primary); box-shadow: 0 0 0 3px rgba(29,85,119,.1); }
+.checkout-checks label { color: var(--ps-text-secondary); font-size: 13px; }
+.checkout-checks input { accent-color: var(--ps-primary); }
+.checkout-submit,
+.checkout-free-button {
+  border-radius: var(--ps-radius-sm);
+  background: var(--ps-primary);
+  box-shadow: none;
+}
+.checkout-submit:hover,
+.checkout-free-button:hover { background: var(--ps-primary-hover); }
+.checkout-security { color: var(--ps-text-tertiary) !important; }
+.checkout-success {
+  border-color: #bfddca;
+  border-radius: var(--ps-radius-md);
+  background: var(--ps-success-soft);
+  color: var(--ps-success);
+}
+
+@media(max-width:760px){
+  .legal-card,
+  .checkout-card,
+  .checkout-full-card { border-radius: var(--ps-radius-md); }
+  .legal-lead { font-size: 16px; }
+}
+
+/* Fintech refinement: compact checkout and document-like legal pages. */
+.legal-card,
+.checkout-card,
+.checkout-full-card { box-shadow: none; }
+.legal-card h1 { color: #172832; font-weight: 680; }
+.legal-card h2 { color: #263a45; font-weight: 720; }
+.checkout-tier { box-shadow: none; }
+.checkout-tier.active { box-shadow: inset 3px 0 0 var(--ps-primary); }
+.checkout-form input,
+.checkout-form select,
+.checkout-form input[type="email"] { min-height: var(--ps-control-height-md); }
+.checkout-submit,
+.checkout-free-button { min-height: 48px; font-weight: 720; }
+.checkout-includes > div { background: #f8f9fa; }

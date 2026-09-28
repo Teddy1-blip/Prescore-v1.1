@@ -1,0 +1,126 @@
+name: Deliver staging to Amvera
+
+on:
+  push:
+    branches: [staging]
+
+permissions:
+  contents: read
+
+# GitHub may reorder pending runs. The delivery script also checks the live
+# staging SHA immediately before push; old runs cannot replace a newer tree.
+concurrency:
+  group: prescore-amvera-staging
+  cancel-in-progress: false
+
+jobs:
+  access:
+    if: github.repository == 'Teddy1-blip/Prescore-v1.1' && github.ref == 'refs/heads/staging'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Authenticated read-only Amvera access check
+        env:
+          AMVERA_USERNAME: ${{ secrets.AMVERA_USERNAME }}
+          AMVERA_PASSWORD: ${{ secrets.AMVERA_PASSWORD }}
+          AMVERA_GIT_URL: ${{ secrets.AMVERA_GIT_URL }}
+        run: python3 scripts/deploy/amvera.py access
+
+  validate:
+    needs: access
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - run: python3 -m unittest discover -s tests/deploy -p 'test_*.py'
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+      - name: Strict synthetic business acceptance (24 source bundles)
+        run: npm run credit-lab:business -- "$RUNNER_TEMP/credit-lab-business-${{ github.run_id }}-${{ github.run_attempt }}"
+      - name: Preserve synthetic business acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: credit-lab-business-${{ github.sha }}
+          path: ${{ runner.temp }}/credit-lab-business-${{ github.run_id }}-${{ github.run_attempt }}/
+          if-no-files-found: error
+          retention-days: 90
+      - run: npm run lint
+      - run: npm run validate:artifact
+
+  presentation:
+    needs: access
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: npm ci
+      - name: Install isolated browser and native zoom controls
+        run: |
+          npx --no-install playwright install --with-deps chromium
+          sudo apt-get update
+          sudo apt-get install -y xvfb xdotool imagemagick
+      - name: Build synthetic source-computed presentation harness
+        run: node --experimental-strip-types scripts/qa/client-analysis-v3-harness.mjs "$RUNNER_TEMP/client-v3-browser/harness"
+      - name: Viewports, keyboard, reduced motion, native zoom and print media
+        run: xvfb-run -a -s "-screen 0 1600x1200x24" node scripts/qa/client-analysis-v3-browser.mjs "$RUNNER_TEMP/client-v3-browser"
+      - name: Preserve isolated presentation evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: client-v3-browser-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/client-v3-browser/*.json
+            ${{ runner.temp }}/client-v3-browser/*.png
+            ${{ runner.temp }}/client-v3-browser/*.pdf
+          if-no-files-found: error
+          retention-days: 90
+
+  deliver:
+    needs: [validate, presentation]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Read Amvera history and prepare exact source tree
+        env:
+          AMVERA_USERNAME: ${{ secrets.AMVERA_USERNAME }}
+          AMVERA_PASSWORD: ${{ secrets.AMVERA_PASSWORD }}
+          AMVERA_GIT_URL: ${{ secrets.AMVERA_GIT_URL }}
+          GH_READ_TOKEN: ${{ github.token }}
+        run: python3 scripts/deploy/amvera.py prepare
+      - name: Preserve Amvera history before any push
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: amvera-history-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/prescore-delivery/backup/
+          if-no-files-found: error
+          retention-days: 90
+      - name: Fast-forward Amvera master only
+        env:
+          AMVERA_USERNAME: ${{ secrets.AMVERA_USERNAME }}
+          AMVERA_PASSWORD: ${{ secrets.AMVERA_PASSWORD }}
+          AMVERA_GIT_URL: ${{ secrets.AMVERA_GIT_URL }}
+          GH_READ_TOKEN: ${{ github.token }}
+        run: python3 scripts/deploy/amvera.py push

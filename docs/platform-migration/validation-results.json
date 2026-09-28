@@ -1,0 +1,50 @@
+{
+  "status": "LOCAL_GATES_PASSED_STAGING_PENDING",
+  "fullRegression": {
+    "passed": 5653,
+    "failed": 0
+  },
+  "platformTests": {
+    "passed": 39,
+    "failed": 0
+  },
+  "build": "PASS",
+  "lint": "PASS",
+  "artifact": "PASS",
+  "strict": {
+    "modules": 12,
+    "diagnostics": 0
+  },
+  "typescript": {
+    "baseline": 30,
+    "current": 15,
+    "new": 0
+  },
+  "golden": {
+    "8": 31,
+    "9": 31,
+    "10": 41,
+    "11": 41,
+    "12": 46,
+    "13": 55,
+    "14": 61,
+    "15": 81,
+    "16": 71,
+    "17": 91,
+    "18": 61
+  },
+  "parity": [
+    872,
+    "A",
+    "Высокая готовность",
+    1283000,
+    2636000
+  ],
+  "liveAI": "AI_CONFIGURATION_MISSING",
+  "staging": "RESOURCES_CREATED_POSTGRES_0_OF_1_EXTERNAL_BLOCKER",
+  "browserQA": "PENDING",
+  "printQA": "PENDING",
+  "main": "2ea25f26532396f3a90f2ccf6eb4f8dc534ca36c",
+  "offlineEnvironment": "VALIDATED_WITH_SYNTHETIC_CONFIG_REAL_SETTINGS_MISSING",
+  "smtp": "OFFLINE_CONFIG_ONLY_NO_SEND"
+}
