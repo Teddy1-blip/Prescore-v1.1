@@ -22,6 +22,12 @@ export default function ApplicationChat({ applicationId, title, companyInn, anal
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const attachment = useRef<HTMLInputElement>(null);
+  const dialog = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    dialog.current?.querySelector<HTMLElement>('button')?.focus();
+    return () => { previous?.focus(); };
+  }, []);
 
   async function load() {
     const [messagesResponse, documentsResponse] = await Promise.all([
@@ -79,11 +85,19 @@ export default function ApplicationChat({ applicationId, title, companyInn, anal
   }
 
   const documentById = new Map(documents.map((item) => [item.id, item]));
-  return <div className="ps-chat-overlay" role="dialog" aria-modal="true"><section className="ps-chat-panel">
+  return <div ref={dialog} className="ps-chat-overlay" role="dialog" aria-label={title} aria-modal="true" onKeyDown={event => {
+    if (event.key === 'Escape') { event.preventDefault(); close(); }
+    if (event.key === 'Tab') {
+      const controls = Array.from(dialog.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not([hidden]):not(:disabled), a[href]') ?? []).filter(node => node.getClientRects().length);
+      const first = controls[0], last = controls.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    }
+  }}><section className="ps-chat-panel">
     <header><span><small>ЧАТ ПО ЗАЯВКЕ</small><h2>{title}</h2><p>Клиент и брокер видят одну историю и одни вложения.</p></span><button onClick={close} aria-label="Закрыть чат"><X /></button></header>
     <div className="ps-chat-body">{loading ? <div className="ps-chat-loading"><LoaderCircle className="spin" /> Загружаем сообщения…</div> : messages.length ? messages.map((item) => { const document = documentById.get(item.documentId); return <article key={item.id} className={item.authorRole === role ? "mine" : "theirs"}><span><b>{item.authorName}</b><time>{new Intl.DateTimeFormat("ru-RU", { dateStyle: "short", timeStyle: "short" }).format(new Date(item.createdAt))}</time></span>{item.message && <p>{item.message}</p>}{document && <a href={`/api/documents?download=${encodeURIComponent(document.id)}`}><Download /> {document.fileName}</a>}</article>; }) : <div className="ps-chat-empty"><MessageSquareText /><b>Начните обсуждение заявки</b><span>Здесь удобно запросить документ, уточнить сумму или зафиксировать решение банка.</span></div>}</div>
     {error && <p className="ps-chat-error">{error}</p>}
-    <form onSubmit={send}><input ref={attachment} hidden type="file" accept=".pdf,.xlsx,.xls,.csv,.txt,.doc,.docx" onChange={(event) => void attachFile(event)} /><button type="button" title="Прикрепить документ" onClick={() => attachment.current?.click()} disabled={sending}><Paperclip /></button><input value={value} onChange={(event) => setValue(event.target.value)} placeholder="Сообщение брокеру…" /><button disabled={sending || !value.trim()}>{sending ? <LoaderCircle className="spin" /> : <Send />}</button></form>
+    <form onSubmit={send}><input ref={attachment} hidden type="file" accept=".pdf,.xlsx,.xls,.csv,.txt,.doc,.docx" onChange={(event) => void attachFile(event)} /><button type="button" title="Прикрепить документ" onClick={() => attachment.current?.click()} disabled={sending}><Paperclip /></button><input aria-label="Сообщение" value={value} onChange={(event) => setValue(event.target.value)} placeholder="Сообщение брокеру…" /><button aria-label="Отправить сообщение" disabled={sending || !value.trim()}>{sending ? <LoaderCircle className="spin" /> : <Send />}</button></form>
     <footer><FileUp /> Вложения сохраняются в досье и привязываются к этой заявке.</footer>
   </section></div>;
 }

@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Analyze, Crm, type StoredAnalysis, type Deal } from "./client-operations";
-import { Shell, EmptyHome, Home, Heading, Financing, Obligations, Upgrade, date, reportUrl } from "./presentation";
+import { Shell, EmptyHome, Home, Heading, Financing, Obligations, FullAccessNotice, date, reportUrl } from "./presentation";
 import { useWorkspaceModel, selectAnalysis } from "./use-model";
 import { CompanyData, SourceUpload, RecipientApplications } from "./source-operations";
 import DocumentsHub from "../../dashboard/documents-hub";
@@ -25,14 +25,14 @@ export default function ClientWorkspace(){
  return <Shell view={view} choose={choose} secondary={<><button onClick={()=>choose('company')}>Компания и отчётность</button><button onClick={()=>choose('analyst')}>Помощник</button></>} context={selected&&<section className="ws-context"><div><span className="ws-eyebrow">{locked?'ДОСЬЕ · ТОЛЬКО ЧТЕНИЕ':'КОМПАНИЯ'}</span><h2>{model?.basic.analysis.company.name??selected.companyName}</h2><p>ИНН {model?.basic.analysis.company.inn??selected.companyInn}</p></div><label>Сохранённый анализ<select aria-label="Сохранённый анализ" value={selectedId} onChange={e=>{setSelectedId(e.target.value);selectAnalysis(e.target.value);}}>{analyses.map(a=><option key={a.id} value={a.id}>{a.companyName} · {date(a.createdAt??a.periodTo)}</option>)}</select><small>{model?`${date(model.basic.analysis.period.from)} — ${date(model.basic.analysis.period.to)}`:'Получаем данные'}</small></label>{!locked&&modules.analysis!==false&&<button onClick={()=>choose('upload')}>Добавить выписки ↗</button>}</section>}>
  {notice&&<p role="status" className="ws-notice">{notice}</p>}{error&&<p role="alert">{error} <button onClick={()=>window.location.reload()}>Повторить</button></p>}
  {loading?<p role="status">Загружаем кабинет…</p>:disabled?<p>Раздел временно недоступен.</p>:view==='upload'&&!locked?<Analyze onResult={accept}/>:!selected?(!error&&<EmptyHome start={()=>choose('upload')}/>):state.loading?<p role="status">Загружаем финансовую картину…</p>:state.error?<p role="alert">{state.error} <button onClick={refresh}>Повторить</button></p>:model&&<>
- {view==='home'&&<Home model={model}/>}
- {view==='analysis'&&<><Heading eyebrow="АНАЛИЗ КОМПАНИИ" title="От фактов к обоснованным решениям"><p>Подробный анализ, экспертное заключение и план действий по выбранной версии.</p></Heading>{model.full?<a className="ws-primary" href={reportUrl(selectedId)}>Открыть подробный анализ ↗</a>:<Upgrade id={selectedId}/>}</>}
+ {view==='home'&&<Home key={selectedId} model={model} retry={refresh}/>}
+ {view==='analysis'&&<><Heading eyebrow="АНАЛИЗ КОМПАНИИ" title="От фактов к обоснованным решениям"><p>Подробный анализ, экспертное заключение и план действий по выбранной версии.</p></Heading>{model.full?<a className="ws-primary" href={reportUrl(selectedId)}>Открыть подробный анализ ↗</a>:<FullAccessNotice model={model} retry={refresh}/>}</>}
  {view==='financing'&&<><Financing model={model}/>{!locked&&<section className="ws-section"><h2>Подготовить обычную заявку</h2><p>Вы можете указать цель и запрошенную сумму самостоятельно.</p><button onClick={()=>choose('applications')}>Перейти к заявкам ↗</button></section>}</>}
  {view==='obligations'&&<><Obligations model={model}/>{!locked&&<SourceUpload analysisId={selectedId} kind="BKI" saved={refresh}/>}</>}
  {view==='documents'&&<DocumentsHub key={selectedId} companyInn={selected.companyInn} companyName={selected.companyName} analysisId={selectedId} readOnly={locked}/>}
- {view==='applications'&&(locked?<p>Управление заявками доступно в кабинете брокера.</p>:<><Crm deals={deals} analyses={analyses} selected={selected} addDeal={addDeal} updateDeal={updateDeal}/><RecipientApplications analysis={selected} saved={items=>{setDeals(current=>[...items,...current]);refresh();}}/></>)}
+ {view==='applications'&&(locked?<p>Управление заявками доступно в кабинете брокера.</p>:<><Crm key={selectedId} deals={deals.filter(d=>d.analysisId===selectedId)} analyses={analyses} selected={selected} addDeal={addDeal} updateDeal={updateDeal}/><RecipientApplications analysis={selected} saved={items=>{setDeals(current=>[...items,...current]);refresh();}}/></>)}
  {view==='company'&&<><CompanyData key={selectedId} id={selectedId} inn={selected.companyInn} updated={refresh}/>{!locked&&<SourceUpload analysisId={selectedId} kind="QUARTERLY" saved={refresh}/>}</>}
- {view==='analyst'&&(model.full?<AiAnalyst key={selectedId} analysisId={selectedId}/>:<Upgrade id={selectedId}/>)}
+ {view==='analyst'&&(model.full?<AiAnalyst key={selectedId} analysisId={selectedId}/>:<FullAccessNotice model={model} retry={refresh}/>)}
  </>}
  </Shell>;
 }
