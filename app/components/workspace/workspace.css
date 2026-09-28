@@ -34,3 +34,4 @@
 /* Keep the working navigation available alongside the data panel. */
 .ws .ws-rail-note{color:#adc8d2}.ws .ws-footer{background:white;color:var(--navy)}
 @media(min-width:801px){.ws-rail{position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto}}
+@media(max-width:800px){.ws-rail nav{flex-wrap:nowrap}.ws-rail nav button{width:auto;min-width:max-content;max-width:none;white-space:nowrap;overflow-wrap:normal;word-break:normal}}
