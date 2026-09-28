@@ -31,6 +31,6 @@ test('broker distribution counts every actual status without fictional pipeline 
   assert.deepEqual(applicationDistribution(applications),[{label:'Требуются документы',value:2},{label:'Отменена клиентом',value:1},{label:'Новый фактический статус',value:1}]);
   const html=renderToStaticMarkup(React.createElement(BrokerOverview,{data:{leads:[{analysisId:'a'},{analysisId:null}],applications},attentionCount:3}));
   assert.match(html,/С анализом: 1; без анализа: 1/);assert.match(html,/отдельный счётчик задач/);assert.match(html,/не конверсия/);assert.match(html,/Отменена клиентом/);
-  const empty=renderToStaticMarkup(React.createElement(BrokerOverview,{data:{leads:[],applications:[]},attentionCount:0}));assert.match(empty,/Заявок пока нет/);assert.doesNotMatch(empty,/NaN|Infinity/);
+  const empty=renderToStaticMarkup(React.createElement(BrokerOverview,{data:{leads:[],applications:[]},attentionCount:0}));assert.match(empty,/Заявок пока нет/);assert.match(empty,/Клиентов пока нет/);assert.doesNotMatch(empty,/ws-portfolio-bar/);assert.doesNotMatch(empty,/NaN|Infinity/);
  }finally{await rt.close();}
 });

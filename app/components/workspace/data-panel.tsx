@@ -80,7 +80,7 @@ export function BrokerOverview({ data, attentionCount }: { data: AgentData; atte
  const withAnalysis = data.leads.filter(l => !!l.analysisId).length, statuses = applicationDistribution(data.applications);
  return <section className="ws-broker-overview" aria-label="Обзор портфеля и заявок">
   <div><span className="ws-eyebrow">КЛИЕНТСКАЯ БАЗА</span><h2>Портфель клиентов <small>{data.leads.length}</small></h2>
-   <div className="ws-portfolio-bar" role="img" aria-label={`С анализом: ${withAnalysis}; без анализа: ${data.leads.length - withAnalysis}`}><i style={{width: (data.leads.length ? withAnalysis / data.leads.length * 100 : 0) + "%"}}/></div>
+   {data.leads.length > 0 ? <div className="ws-portfolio-bar" role="img" aria-label={`С анализом: ${withAnalysis}; без анализа: ${data.leads.length - withAnalysis}`}><i style={{width: (data.leads.length ? withAnalysis / data.leads.length * 100 : 0) + "%"}}/></div> : <p>Клиентов пока нет. Распределение появится после добавления клиента.</p>}
    <dl className="ws-portfolio-legend"><div><dt>С анализом</dt><dd>{withAnalysis}</dd></div><div><dt>Без анализа</dt><dd>{data.leads.length - withAnalysis}</dd></div></dl>
    <p>В очереди внимания: <b>{attentionCount}</b> задач. Это отдельный счётчик задач, а не доля клиентов.</p>
   </div>
