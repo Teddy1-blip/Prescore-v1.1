@@ -1,5 +1,0 @@
-import {CREDIT_ASSESSMENT_POLICY_VERSION,type CreditAssessmentPolicyV1} from '../contracts/credit-assessment.ts';
-import {READINESS_POLICY} from '../readiness/policy.ts';
-import {freeze,id} from './common.ts';
-export const CREDIT_ASSESSMENT_POLICY:CreditAssessmentPolicyV1=freeze({version:CREDIT_ASSESSMENT_POLICY_VERSION,dimensionOrder:['FINANCIAL_STRENGTH','OPERATING_BEHAVIOR','DEBT_CREDIT','LEGAL_CORPORATE','DATA_QUALITY','FINANCING_CASE'],materialRiskSeverities:[...READINESS_POLICY.materialRiskSeverities],primaryDriverLimit:5,statusMapping:{ASSESSED:'COMPLETE',PARTIAL:'PARTIAL',INSUFFICIENT_DATA:'INSUFFICIENT_DATA',NOT_RATABLE_GLOBAL_STOP:'NOT_RATABLE_GLOBAL_STOP'},contextEffectPresentationOrder:['MITIGATES','CORROBORATES','EXPLAINS','NEUTRAL','REQUIRES_REVIEW'],limitationOrder:['DATA_REVIEW','CONTEXT_REVIEW','COVERAGE_LIMITATION','SOURCE_LIMITATION'],severityOrder:['CRITICAL','HIGH','MEDIUM','LOW','INFO']});
-export const CREDIT_ASSESSMENT_POLICY_FINGERPRINT=id('credit-assessment-policy',CREDIT_ASSESSMENT_POLICY);

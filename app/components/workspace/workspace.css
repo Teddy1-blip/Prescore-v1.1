@@ -35,3 +35,11 @@
 .ws .ws-rail-note{color:#adc8d2}.ws .ws-footer{background:white;color:var(--navy)}
 @media(min-width:801px){.ws-rail{position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto}}
 @media(max-width:800px){.ws-rail nav{flex-wrap:nowrap}.ws-rail nav button{width:auto;min-width:max-content;max-width:none;white-space:nowrap;overflow-wrap:normal;word-break:normal}}
+
+
+/* Bank-first repair: statement results remain primary even when the canonical credit layer is partial. */
+.ws-credit-overview{display:grid;grid-template-columns:1.3fr 1fr;gap:36px;padding:28px 30px;margin:0 0 30px;background:var(--paper);border:1px solid var(--line);border-radius:4px}
+.ws-credit-overview>div{min-width:0}.ws-credit-overview>div:first-child>h2{font-size:30px;max-width:680px}.ws-credit-overview>div:first-child>p{font-size:13px}
+.ws-credit-overview .ws-index{padding-top:0}
+@media(max-width:800px){.ws-credit-overview{gap:24px;padding:24px}}
+@media(max-width:540px){.ws-credit-overview{grid-template-columns:1fr;padding:22px 18px}.ws-credit-overview .ws-index{border-left:0;border-top:1px solid var(--line);padding:24px 0 0}}

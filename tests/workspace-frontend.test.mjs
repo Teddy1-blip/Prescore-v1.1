@@ -16,7 +16,7 @@ test('actual upload, saved selection/reload, BASIC/FULL render and assigned brok
  const {Home,Financing,Obligations,EmptyHome}=rt.load('app/components/workspace/presentation.tsx');
  const html=renderToStaticMarkup(React.createElement(Home,{model:basic}));assert.match(html,/Недостаточно данных/);assert.ok(html.includes(new Intl.NumberFormat('ru-RU',{maximumFractionDigits:0}).format(basic.basic.bankingFacts.operatingInflow.value)));assert.doesNotMatch(visible(html),forbidden);assert.equal(basic.basic.bankingFacts.endingBalance.value,null);
  const reload=await(await rt.request('/api/workspace')).json();assert.ok(reload.analyses.some(a=>a.id===analysis.id));assert.deepEqual(await(await rt.request(url)).json(),basic);
- await rt.full(analysis.id);const full=await(await rt.request(url)).json();assert.equal(full.state,'READY_FULL');const fullHtml=renderToStaticMarkup(React.createElement(Home,{model:full}));assert.match(fullHtml,/PRESCORE INDEX/);assert.match(fullHtml,/Готовность к финансированию/);assert.match(fullHtml,/Расчётный запас/);assert.ok(fullHtml.includes('/dashboard/report-v2?analysisId='+analysis.id));
+ await rt.full(analysis.id);const full=await(await rt.request(url)).json();assert.equal(full.state,'READY_FULL');const fullHtml=renderToStaticMarkup(React.createElement(Home,{model:full}));assert.match(fullHtml,/PRESCORE INDEX/);assert.match(fullHtml,/Готовность к финансированию/);assert.match(fullHtml,/Расчётный запас/);assert.match(fullHtml,/ФИНАНСОВАЯ КАРТИНА ПО ВЫПИСКАМ/);assert.ok(fullHtml.includes(new Intl.NumberFormat('ru-RU',{maximumFractionDigits:0}).format(full.basic.bankingFacts.operatingInflow.value)));assert.ok(fullHtml.includes('/dashboard/report-v2?analysisId='+analysis.id));
  for(const Component of [Home,Financing,Obligations])assert.doesNotMatch(visible(renderToStaticMarkup(React.createElement(Component,{model:full}))),forbidden);
  assert.doesNotMatch(visible(renderToStaticMarkup(React.createElement(EmptyHome,{start(){}}))),forbidden);
  await rt.assign(analysis);const broker=await(await rt.request(url,{},rt.broker)).json();assert.equal(broker.access.readOnly,true);assert.deepEqual(broker.full,full.full);
@@ -37,4 +37,11 @@ test('production broker GET executes PostgreSQL curator ordering without alias e
   assert.ok(body.agent.code);assert.deepEqual(body.leads,[]);
   assert.deepEqual(body.applications,[]);assert.deepEqual(body.curator.agents,[]);
  }finally{await rt.close();}
+});
+
+
+test('BASIC Analysis tab keeps statement analysis visible instead of reducing the page to an upgrade notice',()=>{
+ const client=fs.readFileSync('app/components/workspace/client.tsx','utf8');
+ assert.match(client,/view==='analysis'[\s\S]*<BankingAnalysis model=\{model\}/);
+ assert.match(client,/Полный кредитный анализ добавляется только при наличии достаточных источников/);
 });

@@ -1,4 +1,0 @@
-import type {ExplainabilityPolicyV1} from '../contracts/explainability.ts';
-import {EXPLAINABILITY_POLICY} from './policy.ts';
-import {fail,validDate} from './common.ts';
-export function formatValueRu(v:string|number|boolean|null,unit:string,p:ExplainabilityPolicyV1=EXPLAINABILITY_POLICY):string{if(v===null)return 'Недостаточно данных';if(typeof v==='boolean')return v?'Да':'Нет';if(typeof v==='string'){if(unit==='DATE'){if(!validDate(v))fail('DATE_FORMAT');return v.slice(8,10)+'.'+v.slice(5,7)+'.'+v.slice(0,4);}return v;}if(!Number.isFinite(v))fail('NON_FINITE');const decimals=unit==='RUB'?p.currencyDisplayDecimals:unit==='PERCENT'?p.percentDisplayDecimals:unit==='RATIO'?p.ratioDisplayDecimals:3;const [a,b]=v.toFixed(decimals).split('.');const tail=b?.replace(/0+$/,'');return a.replace(/\B(?=(\d{3})+(?!\d))/g,' ')+(tail?','+tail:'')+(unit==='RUB'?' ₽':unit==='PERCENT'?' %':'');}

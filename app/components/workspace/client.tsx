@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Analyze, Crm, type StoredAnalysis, type Deal } from "./client-operations";
-import { Shell, EmptyHome, Home, Heading, Financing, Obligations, FullAccessNotice, date, reportUrl } from "./presentation";
+import { Shell, EmptyHome, Home, Heading, Financing, Obligations, BankingAnalysis, FullAccessNotice, date, reportUrl } from "./presentation";
 import { useWorkspaceModel, selectAnalysis } from "./use-model";
 import { CompanyData, SourceUpload, RecipientApplications } from "./source-operations";
 import DocumentsHub from "../../dashboard/documents-hub";
@@ -26,7 +26,7 @@ export default function ClientWorkspace(){
  {notice&&<p role="status" className="ws-notice">{notice}</p>}{error&&<p role="alert">{error} <button onClick={()=>window.location.reload()}>Повторить</button></p>}
  {loading?<p role="status">Загружаем кабинет…</p>:disabled?<p>Раздел временно недоступен.</p>:view==='upload'&&!locked?<Analyze onResult={accept}/>:!selected?(!error&&<EmptyHome start={()=>choose('upload')}/>):state.loading?<p role="status">Загружаем финансовую картину…</p>:state.error?<p role="alert">{state.error} <button onClick={refresh}>Повторить</button></p>:model&&<>
  {view==='home'&&<Home key={selectedId} model={model} retry={refresh}/>}
- {view==='analysis'&&<><Heading eyebrow="АНАЛИЗ КОМПАНИИ" title="От фактов к обоснованным решениям"><p>Подробный анализ, экспертное заключение и план действий по выбранной версии.</p></Heading>{model.full?<a className="ws-primary" href={reportUrl(selectedId)}>Открыть подробный анализ ↗</a>:<FullAccessNotice model={model} retry={refresh}/>}</>}
+ {view==='analysis'&&<><Heading eyebrow="АНАЛИЗ КОМПАНИИ" title="Банковские факты и кредитная оценка"><p>Сначала — рассчитанные данные по выпискам. Полный кредитный анализ добавляется только при наличии достаточных источников.</p></Heading><BankingAnalysis model={model}/>{model.full?<a className="ws-primary" href={reportUrl(selectedId)}>Открыть подробный кредитный анализ ↗</a>:<FullAccessNotice model={model} retry={refresh}/>}</>}
  {view==='financing'&&<><Financing model={model}/>{!locked&&<section className="ws-section"><h2>Подготовить обычную заявку</h2><p>Вы можете указать цель и запрошенную сумму самостоятельно.</p><button onClick={()=>choose('applications')}>Перейти к заявкам ↗</button></section>}</>}
  {view==='obligations'&&<><Obligations model={model}/>{!locked&&<SourceUpload analysisId={selectedId} kind="BKI" saved={refresh}/>}</>}
  {view==='documents'&&<DocumentsHub key={selectedId} companyInn={selected.companyInn} companyName={selected.companyName} analysisId={selectedId} readOnly={locked}/>}

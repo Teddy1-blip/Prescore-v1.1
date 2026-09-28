@@ -1,6 +1,0 @@
-import type {ProductSelectionInputV1,ProductPurpose,RequestedProduct,ProductSelectionPolicyV1} from '../contracts/product-selection.ts';
-import type {ContextFactV1} from '../contracts/context.ts';
-import {rank,weakest} from './common.ts';
-export const factConfidence=(f:ContextFactV1)=>weakest(f.confidence,...f.evidence.map(e=>e.confidence));
-export function extractProductCase(x:ProductSelectionInputV1){const c=x.creditAssessment.financingCase;return {purpose:(c.financingPurpose?.status==='KNOWN'?c.financingPurpose.value:'UNKNOWN') as ProductPurpose,requested:(c.requestedProduct?.status==='KNOWN'?c.requestedProduct.value:'UNKNOWN') as RequestedProduct,confidence:c.financingPurpose?.status==='KNOWN'?factConfidence(c.financingPurpose):'UNKNOWN' as const};}
-export function contractSupport(x:ProductSelectionInputV1,p:ProductSelectionPolicyV1){const fs=x.contextAssessment.facts.filter(f=>f.status==='KNOWN'&&((f.semanticCode==='CASE_CONTRACT_MATCH'&&f.value===true)||(f.semanticCode==='CASE_contractReference'&&typeof f.value==='string'&&!!f.value.trim()))&&f.sourceClass!=='CLIENT_DECLARED'&&rank(factConfidence(f))>=rank(p.minimumDocumentConfidence)&&f.evidence.some(e=>e.sourceClass==='DOCUMENT_REPORTED'&&rank(e.confidence)>=rank(p.minimumDocumentConfidence)));return fs;}

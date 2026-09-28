@@ -1,4 +1,0 @@
-import type {ActionPlanItemV1 as Item,ActionPlanHorizon as Horizon,ActionPlanRecheckPackV1 as Pack,ActionPlanPolicyV1 as Policy} from '../contracts/action-plan.ts';
-import {mergeActionPlanTriggers} from './rerun.ts';
-import {stable,unique} from './common.ts';
-export function buildActionPlanRecheckPack(horizon:Horizon,items:Item[],p:Policy):Pack{const xs=items.filter(i=>i.horizon===horizon),criteria=[...new Map(xs.flatMap(i=>i.verificationCriteria).map(c=>[stable(c),structuredClone(c)])).entries()].sort(([a],[b])=>a.localeCompare(b)).map(([,v])=>v);return {horizon,recommendationIds:xs.map(i=>i.recommendationId),verificationCriteria:criteria,sourceCodes:unique(criteria.map(c=>c.sourceCode)),expectedAnalyticalEffects:[...new Set(xs.flatMap(i=>i.expectedAnalyticalEffects))].sort(),rerunTriggers:mergeActionPlanTriggers(xs.flatMap(i=>i.rerunTriggers),p)};}

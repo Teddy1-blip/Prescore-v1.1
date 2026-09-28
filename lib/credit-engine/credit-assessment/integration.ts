@@ -1,3 +1,0 @@
-import type {CreditAssessmentInputV1,CreditAssessmentV1,CreditAssessmentShadowFields} from '../contracts/credit-assessment.ts';
-import {buildCreditAssessment} from './engine.ts';
-export function buildCreditAssessmentShadow(x:CreditAssessmentInputV1,builder:(x:CreditAssessmentInputV1)=>CreditAssessmentV1=buildCreditAssessment):CreditAssessmentShadowFields{try{return {creditAssessmentV1:builder(x),creditAssessmentWarnings:[]};}catch(e){return {creditAssessmentWarnings:['CREDIT_ASSESSMENT_SHADOW_UNAVAILABLE',...(e instanceof Error&&e.message.startsWith('CREDIT_ASSESSMENT_INPUT_INVALID:')?[e.message]:[])]};}}
