@@ -34,7 +34,7 @@ jobs:
       - name: Prepare reviewed presentation for before screenshots
         run: |
           mkdir -p "$RUNNER_TEMP/workspace-reviewed"
-          git archive e2c02e8409269f8c83768f05e3a430a414d793a0 | tar -x -C "$RUNNER_TEMP/workspace-reviewed"
+          git archive debb9abe08414da29d3b9269c51931322d4c1337 | tar -x -C "$RUNNER_TEMP/workspace-reviewed"
           ln -s "$GITHUB_WORKSPACE/node_modules" "$RUNNER_TEMP/workspace-reviewed/node_modules"
       - name: Production workspace components with synthetic data
         env:
@@ -70,7 +70,7 @@ jobs:
         with:
           node-version: '22'
       - run: npm ci
-      - run: node --experimental-strip-types --test tests/workspace-frontend.test.mjs tests/workspace-product-review.test.mjs tests/platform-ui.test.mjs
+      - run: node --experimental-strip-types --test tests/workspace-frontend.test.mjs tests/workspace-product-review.test.mjs tests/workspace-density.test.mjs tests/platform-ui.test.mjs
       - run: npm run build
       - run: npm test
       - run: npm run credit-lab:business -- "$RUNNER_TEMP/credit-lab-workspace-${{ github.run_id }}-${{ github.run_attempt }}"
