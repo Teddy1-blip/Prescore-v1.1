@@ -3,7 +3,7 @@ import { getChatGPTUser } from "../../chatgpt-auth";
 import { controlDefinitions, ensureControlSettings, isKnownControlKey, readControlSettings, type ControlCategory } from "../../../lib/admin-controls";
 import { ensureEntitlementSchema, grantFullEntitlement, setAnalysisTier } from "../../../lib/entitlements";
 
-type PreparedStatement = { bind: (...values: unknown[]) => PreparedStatement; run: () => Promise<unknown>; first: <T = unknown>() => Promise<T | null> };
+type PreparedStatement = { bind: (...values: unknown[]) => PreparedStatement; run: () => Promise<unknown>; first: <T = unknown>() => Promise<T | null>; all: <T = unknown>() => Promise<{ results: T[] }> };
 type RuntimeDatabase = { prepare: (query: string) => PreparedStatement; batch: (statements: PreparedStatement[]) => Promise<Array<{ results: unknown[] }>> };
 
 
@@ -72,9 +72,10 @@ export async function GET() {
   try {
     const database = await db();
     await ensureSchema(database);
-    const safe = async (query: string) => { try { return (await database.batch([database.prepare(query)]))[0]?.results ?? []; } catch { return []; } };
-    const [modules, entitlements, orders, summary, daily, statuses, products, storage, analysisPayloads, controls] = await Promise.all([
-      safe("SELECT module_key AS moduleKey, label, enabled, updated_at AS updatedAt FROM module_settings ORDER BY rowid"),
+    const safe = async (query: string) => { try { return (await database.prepare(query).all()).results; } catch { return []; } };
+    const controls = await readControlSettings(database);
+    const [modules, entitlements, orders, summary, daily, statuses, products, storage, analysisPayloads] = await Promise.all([
+      safe("SELECT module_key AS moduleKey, label, enabled, updated_at AS updatedAt FROM module_settings ORDER BY module_key"),
       safe(`SELECT e.analysis_id AS id, e.analysis_id AS analysisId, e.company_inn AS companyInn,
         COALESCE(a.company_name, '') AS companyName, e.user_email AS userEmail, e.tier,
         e.payment_order_id AS paymentOrderId, e.granted_by AS grantedBy, e.granted_at AS grantedAt,
@@ -101,7 +102,6 @@ export async function GET() {
       safe("SELECT product, COUNT(*) AS count, COALESCE(SUM(amount), 0) AS amount FROM deals GROUP BY product ORDER BY count DESC LIMIT 12"),
       safe("SELECT COUNT(*) AS files, COALESCE(SUM(size_bytes), 0) AS bytes, COUNT(DISTINCT company_inn) AS companies FROM client_documents"),
       safe("SELECT payload FROM analyses ORDER BY created_at DESC LIMIT 500"),
-      readControlSettings(database),
     ]);
     const parsedAnalyses = (analysisPayloads as Array<{ payload?: string }>).map((row) => { try { return JSON.parse(row.payload || ""); } catch { return null; } }).filter(Boolean) as Array<Record<string, unknown>>;
     const recommendationCounts = new Map<string, number>();
