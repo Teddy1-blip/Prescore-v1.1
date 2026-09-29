@@ -34,10 +34,19 @@ function createAuth() {
 }
 let instance:ReturnType<typeof createAuth>|undefined;
 export function getAuth(){return instance??=createAuth();}
+async function ensureBootstrapAccess(user:{id:string;email:string;name?:string|null}) {
+ const bootstrap=process.env.PRESCORE_BOOTSTRAP_ADMIN_EMAIL?.trim().toLowerCase();
+ const email=user.email.trim().toLowerCase();
+ if(!bootstrap||email!==bootstrap)return;
+ const suffix=user.id.replace(/[^a-zA-Z0-9]/g,'').slice(0,24).toUpperCase()||'OWNER';
+ await getPool().query("INSERT INTO platform_roles(user_id,role) VALUES($1,'ADMIN') ON CONFLICT (user_id,role) DO NOTHING",[user.id]);
+ await getPool().query("INSERT INTO agent_accounts(user_email,agent_code,name) VALUES($1,$2,$3) ON CONFLICT (user_email) DO NOTHING",[email,`AGENT-${suffix}`,user.name||user.email]);
+}
 export async function getAuthSession(headers:Headers):Promise<AuthSession|null> {
  const session=await getAuth().api.getSession({headers});
  if(!session||!session.user.emailVerified)return null;
- const r=await getPool().query("SELECT role FROM platform_roles WHERE user_id=$1 AND role IN ('AGENT','ADMIN') UNION SELECT 'AGENT' AS role FROM agent_accounts WHERE lower(user_email)=$2",[session.user.id,session.user.email.toLowerCase()]);
+ await ensureBootstrapAccess(session.user);
+ const r=await getPool().query("SELECT role FROM platform_roles WHERE user_id=$1 AND role='ADMIN' UNION SELECT 'AGENT' AS role FROM agent_accounts WHERE lower(user_email)=$2",[session.user.id,session.user.email.toLowerCase()]);
  const roles:AuthRole[]=['CLIENT',...r.rows.map(x=>x.role).filter((x):x is AuthRole=>['AGENT','ADMIN'].includes(x))];
  return{id:session.session.id,expiresAt:session.session.expiresAt,user:{id:session.user.id,email:session.user.email.toLowerCase(),fullName:session.user.name,displayName:session.user.name||session.user.email,roles}};
 }
