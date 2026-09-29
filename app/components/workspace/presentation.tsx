@@ -1,7 +1,8 @@
 "use client";
 import Link from "next/link";
 import { DataPanel } from "./data-panel";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { LayoutDashboard, FileSearch, Gauge, WalletCards, Building2, Landmark, Sparkles, BriefcaseBusiness, Files, Menu, X, ShieldCheck, UserRound, Plus, CircleHelp } from "lucide-react";
 import type { WorkspaceModelV1, WorkspaceFactV1 } from "../../../lib/workspace/model";
 export const money = (value: number | null | undefined) => value == null || !Number.isFinite(value) ? "Недостаточно данных" : new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(value) + " ₽";
 export const date = (value: string | null | undefined) => value ? value.slice(0,10).split("-").reverse().join(".") : "Период не указан";
@@ -60,4 +61,47 @@ export function Home({model,retry}:{model:WorkspaceModelV1;retry?:()=>void}) {
 }
 export function Financing({model}:{model:WorkspaceModelV1}){const r=model.full?.report;return <><Heading eyebrow="ФИНАНСИРОВАНИЕ" title="Выберите подходящий маршрут"><p>Соответствие продукта ситуации компании. Окончательные условия определяет кредитор.</p></Heading>{r?<>{[...r.productFit.primary,...r.productFit.other].map(p=><details className="ws-product" key={p.id}><summary><span><small>{p.fit}</small><strong>{p.title}</strong></span><span aria-hidden="true">+</span></summary><p>{p.purpose}</p><p>{p.capacity}</p>{p.missing.length>0&&<><h3>Что подтвердить</h3><ul>{p.missing.map((x,i)=><li key={i}>{x}</li>)}</ul></>}<a href={reportUrl(model.analysisId)+'#products'}>Основания и следующий шаг ↗</a></details>)}{!r.productFit.primary.length&&!r.productFit.other.length&&<p>Продукты пока не определены. Дополните источники анализа.</p>}<p>{r.productFit.bankSeparation}</p></>:<FullAccessNotice model={model}/>}</>;}
 export function Obligations({model}:{model:WorkspaceModelV1}){const portfolio=model.full?.report.analysisV3?.portfolio;const b=model.basic.bankingFacts;return <><Heading eyebrow="ОБЯЗАТЕЛЬСТВА" title="Долг и наблюдаемые платежи"><p>Данные портфеля и платежи по выписке — разные основания. Отсутствие отчёта не означает отсутствие долга.</p></Heading><section className="ws-facts"><h2>Платежи по банковским операциям</h2><dl>{[["Основной долг",b.loanPrincipalPayments],["Проценты",b.interestPayments],["Лизинг",b.leasingPayments],["Неразделённые долговые платежи",b.unsplitDebtPayments]].map(([l,f])=><div key={String(l)}><dt>{String(l)}</dt><dd>{factMoney(f as WorkspaceFactV1)}</dd></div>)}</dl></section><section className="ws-section"><h2>Обязательства из доступных источников</h2>{portfolio?.length?portfolio.map(o=><details className="ws-product" key={o.id}><summary><strong>{String(o.creditor.value??'Кредитор не определён')}</strong><span>Подробнее +</span></summary><dl className="ws-detail-list">{[['Основной долг',o.principal],['Лимит по договору',o.limit],['Платёж',o.payment],['Просрочка',o.overdue]].map(([l,v])=>{const f=v as typeof o.principal;return <div key={String(l)}><dt>{String(l)}</dt><dd>{money(typeof f.value==='number'?f.value:null)}</dd></div>;})}</dl></details>):<p>Обязательства пока не раскрыты. Добавьте кредитную историю и договоры для уточнения портфеля.</p>}</section></>;}
-export function Shell({broker=false,view,choose,children,secondary,context}:{broker?:boolean;view:string;choose:(v:string)=>void;children:ReactNode;secondary?:ReactNode;context?:ReactNode}){const nav=broker?[['home','Главная'],['clients','Клиенты'],['applications','Заявки'],['documents','Документы']]:[['home','Главная'],['analysis','Анализ'],['financing','Финансирование'],['obligations','Обязательства'],['documents','Документы'],['applications','Заявки']];return <div className="ws"><a className="ws-skip" href="#ws-main">К содержимому</a><header className="ws-header"><Link className="ws-brand" href="/">Прескор<span>.</span></Link><span>{broker?'РАБОТА С КЛИЕНТАМИ':'КАБИНЕТ КОМПАНИИ'}</span><a href="/logout">Выйти ↗</a></header><div className="ws-layout"><aside className="ws-rail"><span className="ws-eyebrow">{broker?'БРОКЕР':'МОЙ БИЗНЕС'}</span><nav aria-label="Основные разделы">{nav.map(([id,label],i)=><button key={id} aria-current={view===id?'page':undefined} onClick={()=>choose(id)}><small aria-hidden="true">0{i+1}</small>{label}<span aria-hidden="true">↗</span></button>)}</nav><div className="ws-secondary">{secondary}<a href={broker?'/dashboard':'/agent'}>{broker?'Кабинет компании':'Кабинет брокера'} ↗</a></div><p className="ws-rail-note">От фактов<br/>к решениям.</p></aside><main id="ws-main" className="ws-main" tabIndex={-1}>{context}{children}</main></div><footer className="ws-footer">Прескор · Финансовая ясность для бизнеса <span>Окончательное решение принимает кредитор.</span></footer></div>;}
+export function Shell({broker=false,view,choose,children,secondary,context}:{broker?:boolean;view:string;choose:(v:string)=>void;children:ReactNode;secondary?:ReactNode;context?:ReactNode}){
+ if(broker){const nav=[['home','Главная'],['clients','Клиенты'],['applications','Заявки'],['documents','Документы']];return <div className="ws"><a className="ws-skip" href="#ws-main">К содержимому</a><header className="ws-header"><Link className="ws-brand" href="/">Прескор<span>.</span></Link><span>РАБОТА С КЛИЕНТАМИ</span><a href="/logout">Выйти ↗</a></header><div className="ws-layout"><aside className="ws-rail"><span className="ws-eyebrow">БРОКЕР</span><nav aria-label="Основные разделы">{nav.map(([id,label],i)=><button key={id} aria-current={view===id?'page':undefined} onClick={()=>choose(id)}><small aria-hidden="true">0{i+1}</small>{label}<span aria-hidden="true">↗</span></button>)}</nav><div className="ws-secondary">{secondary}<a href="/dashboard">Кабинет компании ↗</a></div><p className="ws-rail-note">От фактов<br/>к решениям.</p></aside><main id="ws-main" className="ws-main" tabIndex={-1}>{context}{children}</main></div><footer className="ws-footer">Прескор · Финансовая ясность для бизнеса <span>Окончательное решение принимает кредитор.</span></footer></div>;}
+ return <ClientRecoveryShell view={view} choose={choose} context={context}>{children}</ClientRecoveryShell>;
+}
+
+function ClientRecoveryShell({view,choose,children,context}:{view:string;choose:(v:string)=>void;children:ReactNode;context?:ReactNode}){
+ const [menu,setMenu]=useState(false);
+ const items=[
+  {id:'home',label:'Обзор',icon:<LayoutDashboard/>},
+  {id:'upload',label:'Новый анализ',icon:<FileSearch/>},
+  {id:'analysis',label:'Полный анализ',icon:<Gauge/>},
+  {id:'obligations',label:'БКИ и портфель',icon:<WalletCards/>},
+  {id:'company',label:'Компания и отчётность',icon:<Building2/>},
+  {id:'financing',label:'Предложения банков',icon:<Landmark/>},
+  {id:'analyst',label:'Кредитный аналитик',icon:<Sparkles/>},
+  {id:'applications',label:'Заявки в банки',icon:<BriefcaseBusiness/>},
+  {id:'documents',label:'Документы',icon:<Files/>},
+ ];
+ const groups=[
+  {title:'АНАЛИЗ',ids:['home','upload','analysis']},
+  {title:'ФИНАНСИРОВАНИЕ',ids:['financing','applications']},
+  {title:'ДАННЫЕ',ids:['documents','obligations','company']},
+  {title:'ПОМОЩЬ',ids:['analyst']},
+ ];
+ const go=(id:string)=>{choose(id);setMenu(false);};
+ return <main className="ps-shell">
+  <aside className={menu?'ps-sidebar open':'ps-sidebar'}>
+   <div className="ps-sidebar-head"><Link href="/" className="brand brand-light"><strong>Прескор</strong></Link><button onClick={()=>setMenu(false)} aria-label="Закрыть меню"><X/></button></div>
+   <div className="ps-workspace-label">РАБОЧИЙ КАБИНЕТ</div>
+   <nav aria-label="Разделы кабинета">{groups.map(group=><div key={group.title}><small>{group.title}</small>{items.filter(item=>group.ids.includes(item.id)).map(item=><button key={item.id} aria-current={view===item.id?'page':undefined} className={view===item.id?'active':''} onClick={()=>go(item.id)}>{item.icon}<span>{item.label}</span></button>)}</div>)}</nav>
+   <div className="ps-source-card"><ShieldCheck/><span><small>КАНОНИЧЕСКИЙ РАСЧЁТ</small><b>Одна финансовая модель</b><p>Банковские факты, кредитная оценка и действия читаются из WorkspaceModelV1. Старые presentation-формулы не используются.</p></span></div>
+   <div className="ps-sidebar-user"><i><UserRound/></i><span><b>Владелец кабинета</b><small>Prescore · рабочее пространство</small></span></div>
+   <Link className="pv-logout" href="/logout">Выйти из кабинета</Link>
+  </aside>
+  <section className="ps-main">
+   <header className="ps-topbar">
+    <button className="ps-menu-button" onClick={()=>setMenu(true)} aria-label="Открыть меню"><Menu/></button>
+    <div className="ps-company"><i>RU</i><span><b>Кабинет компании</b><small>Банковский и кредитный анализ</small></span></div>
+    <div className="ps-top-actions"><span className="ps-system-status"><i/> Расчётный модуль работает</span><Link className="ps-cabinet-switch" href="/login">Сменить кабинет</Link><button title="Кредитный аналитик" aria-label="Открыть кредитный аналитик" onClick={()=>go('analyst')}><CircleHelp/></button><button className="ps-new-button" onClick={()=>go('upload')}><Plus/> Новый анализ</button></div>
+   </header>
+   <div id="ws-main" className="ps-content" tabIndex={-1}>{context}{children}</div>
+  </section>
+ </main>;
+}
