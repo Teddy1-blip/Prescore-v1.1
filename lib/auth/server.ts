@@ -37,7 +37,7 @@ export function getAuth(){return instance??=createAuth();}
 export async function getAuthSession(headers:Headers):Promise<AuthSession|null> {
  const session=await getAuth().api.getSession({headers});
  if(!session||!session.user.emailVerified)return null;
- const r=await getPool().query("SELECT role FROM platform_roles WHERE user_id=$1 AND role='ADMIN' UNION SELECT 'AGENT' AS role FROM agent_accounts WHERE lower(user_email)=$2",[session.user.id,session.user.email.toLowerCase()]);
+ const r=await getPool().query("SELECT role FROM platform_roles WHERE user_id=$1 AND role IN ('AGENT','ADMIN') UNION SELECT 'AGENT' AS role FROM agent_accounts WHERE lower(user_email)=$2",[session.user.id,session.user.email.toLowerCase()]);
  const roles:AuthRole[]=['CLIENT',...r.rows.map(x=>x.role).filter((x):x is AuthRole=>['AGENT','ADMIN'].includes(x))];
  return{id:session.session.id,expiresAt:session.session.expiresAt,user:{id:session.user.id,email:session.user.email.toLowerCase(),fullName:session.user.name,displayName:session.user.name||session.user.email,roles}};
 }
