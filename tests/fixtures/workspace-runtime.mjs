@@ -27,9 +27,9 @@ export async function createWorkspaceRuntime(){
  return load(target);
  });return exports;
  }
- const owner={email:'owner@workspace.test',roles:['CLIENT']},broker={email:'broker@workspace.test',roles:['AGENT']},stranger={email:'other@workspace.test',roles:['CLIENT']};
+ const owner={email:'owner@workspace.test',roles:['CLIENT']},broker={email:'broker@workspace.test',roles:['AGENT']},admin={email:'admin@workspace.test',displayName:'QA Admin',roles:['CLIENT','ADMIN']},stranger={email:'other@workspace.test',roles:['CLIENT']};
  async function request(url,init={},user=owner){const route=path.resolve('app'+new URL(url,'http://workspace.test').pathname+'/route.ts');if(!fs.existsSync(route))return Response.json({error:'Route missing'},{status:404});return scope.run(user,()=>load(route)[init.method??'GET'](new Request(new URL(url,'http://workspace.test'),init)));}
  async function assign(analysis){await db.prepare('INSERT INTO agent_accounts (user_email,agent_code,name) VALUES (?,?,?) ON CONFLICT(user_email) DO NOTHING').bind(broker.email,'qa-broker','Алексей · брокер').run();await db.prepare('INSERT INTO agent_leads (id,agent_code,company_name,company_inn,email,contact_name,phone,consent_at,status) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING').bind('lead-'+analysis.id,'qa-broker',analysis.companyName,analysis.companyInn,owner.email,'Анна','+7 900 000-00-00','2026-09-25','Анализ готов').run();}
  async function full(id){const access=await db.prepare('SELECT company_inn AS inn FROM analyses WHERE id = ?').bind(id).first();await load('lib/entitlements.ts').grantFullEntitlement(db,{analysisId:id,userEmail:owner.email,companyInn:access.inn,grantedBy:'TEST_ONLY'});}
- return {pg,db,load,request,assign,full,owner,broker,stranger,close:()=>pg.close()};
+ return {pg,db,load,request,assign,full,owner,broker,admin,stranger,close:()=>pg.close()};
 }

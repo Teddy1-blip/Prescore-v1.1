@@ -62,3 +62,34 @@ test('recovery keeps classic CLIENT and BROKER UX on current analytical contract
  assert.match(presentation,/Предложения банков/);
  assert.doesNotMatch(presentation,legacy);
 });
+
+
+test('Recovery Release 1: one analysis is shared consistently across CLIENT, BROKER and ADMIN',async()=>{
+ const rt=await createWorkspaceRuntime();try{
+  const upload=await rt.request('/api/analysis',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({statements:[{fileName:'recovery.txt',text:statementFixture({openingBalance:null,endingBalance:null})}]})});
+  assert.equal(upload.status,200);const {analysis}=await upload.json();
+  const ownerFirst=await(await rt.request('/api/workspace')).json();
+  assert.equal(ownerFirst.analyses[0].id,analysis.id);
+  const ownerModel=await(await rt.request('/api/workspace-model?analysisId='+analysis.id)).json();
+  assert.equal(ownerModel.basic.analysis.company.inn,analysis.companyInn);
+  const ownerReload=await(await rt.request('/api/workspace')).json();
+  assert.ok(ownerReload.analyses.some(item=>item.id===analysis.id));
+
+  await rt.assign(analysis);
+  const brokerModel=await(await rt.request('/api/workspace-model?analysisId='+analysis.id,{},rt.broker)).json();
+  assert.equal(brokerModel.analysisId,ownerModel.analysisId);
+  assert.equal(brokerModel.basic.analysis.company.inn,ownerModel.basic.analysis.company.inn);
+  assert.equal(brokerModel.access.readOnly,true);
+
+  const adminResponse=await rt.request('/api/admin',{},rt.admin);
+  assert.equal(adminResponse.status,200,await adminResponse.clone().text());
+  const admin=await adminResponse.json();
+  const catalogItem=admin.analyses.find(item=>item.id===analysis.id);
+  assert.ok(catalogItem);
+  assert.equal(catalogItem.companyInn,analysis.companyInn);
+  const dossierResponse=await rt.request('/api/workspace?client='+analysis.id,{},rt.admin);
+  assert.equal(dossierResponse.status,200,await dossierResponse.clone().text());
+  const dossier=await dossierResponse.json();
+  assert.equal(dossier.analyses[0].id,analysis.id);
+ }finally{await rt.close();}
+});
