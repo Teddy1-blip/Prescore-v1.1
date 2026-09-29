@@ -45,3 +45,20 @@ test('BASIC Analysis tab keeps statement analysis visible instead of reducing th
  assert.match(client,/view==='analysis'[\s\S]*<BankingAnalysis model=\{model\}/);
  assert.match(client,/Полный кредитный анализ добавляется только при наличии достаточных источников/);
 });
+
+
+test('recovery keeps classic CLIENT and BROKER UX on current analytical contracts',()=>{
+ const agent=fs.readFileSync('app/agent/page.tsx','utf8');
+ const presentation=fs.readFileSync('app/components/workspace/presentation.tsx','utf8');
+ const legacy=/analysis\.(?:score|grade|readiness)|estimatedLimit|baseMonthlyPaymentCapacity|stressLimit|analysisView\(/;
+ assert.match(agent,/CRM клиентов/);
+ assert.match(agent,/Воронка продаж/);
+ assert.match(agent,/Куратор/);
+ assert.match(agent,/\/dashboard\?client=\$\{lead\.analysisId\}/);
+ assert.doesNotMatch(agent,legacy);
+ assert.match(presentation,/function ClientRecoveryShell/);
+ assert.match(presentation,/Новый анализ/);
+ assert.match(presentation,/БКИ и портфель/);
+ assert.match(presentation,/Предложения банков/);
+ assert.doesNotMatch(presentation,legacy);
+});
