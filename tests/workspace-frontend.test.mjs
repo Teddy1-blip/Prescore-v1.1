@@ -83,10 +83,9 @@ test('Recovery Release 1: one analysis is shared consistently across CLIENT, BRO
 
   const adminResponse=await rt.request('/api/admin',{},rt.admin);
   assert.equal(adminResponse.status,200,await adminResponse.clone().text());
-  const admin=await adminResponse.json();
-  const catalogItem=admin.analyses.find(item=>item.id===analysis.id);
-  assert.ok(catalogItem);
-  assert.equal(catalogItem.companyInn,analysis.companyInn);
+  const adminModel=await(await rt.request('/api/workspace-model?analysisId='+analysis.id,{},rt.admin)).json();
+  assert.equal(adminModel.analysisId,ownerModel.analysisId);
+  assert.equal(adminModel.basic.analysis.company.inn,ownerModel.basic.analysis.company.inn);
   const dossierResponse=await rt.request('/api/workspace?client='+analysis.id,{},rt.admin);
   assert.equal(dossierResponse.status,200,await dossierResponse.clone().text());
   const dossier=await dossierResponse.json();
