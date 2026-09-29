@@ -3,7 +3,8 @@ import { getChatGPTUser } from "../../chatgpt-auth";
 import { controlDefinitions, ensureControlSettings, isKnownControlKey, readControlSettings, type ControlCategory } from "../../../lib/admin-controls";
 import { ensureEntitlementSchema, grantFullEntitlement, setAnalysisTier } from "../../../lib/entitlements";
 
-type PreparedStatement = { bind: (...values: unknown[]) => PreparedStatement; run: () => Promise<unknown>; first: <T = unknown>() => Promise<T | null>; all: <T = unknown>() => Promise<{ results: T[] }> };
+type PreparedStatement = { bind: (...values: unknown[]) => PreparedStatement; run: () => Promise<unknown>; first: <T = unknown>() => Promise<T | null> };
+type ReadStatement = PreparedStatement & { all: <T = unknown>() => Promise<{ results: T[] }> };
 type RuntimeDatabase = { prepare: (query: string) => PreparedStatement; batch: (statements: PreparedStatement[]) => Promise<Array<{ results: unknown[] }>> };
 
 
@@ -72,7 +73,7 @@ export async function GET() {
   try {
     const database = await db();
     await ensureSchema(database);
-    const safe = async (query: string) => { try { return (await database.prepare(query).all()).results; } catch { return []; } };
+    const safe = async (query: string) => { try { const statement = database.prepare(query) as ReadStatement; return (await statement.all()).results; } catch { return []; } };
     const controls = await readControlSettings(database);
     const [modules, entitlements, orders, summary, daily, statuses, products, storage, analysisPayloads] = await Promise.all([
       safe("SELECT module_key AS moduleKey, label, enabled, updated_at AS updatedAt FROM module_settings ORDER BY module_key"),
