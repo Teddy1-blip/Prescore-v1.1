@@ -73,13 +73,18 @@ export async function GET() {
     const database = await db();
     await ensureSchema(database);
     const safe = async (query: string) => { try { return (await database.batch([database.prepare(query)]))[0]?.results ?? []; } catch { return []; } };
-    const [modules, entitlements, orders, summary, daily, statuses, products, storage, analysisPayloads, controls] = await Promise.all([
+    const [modules, entitlements, analyses, orders, summary, daily, statuses, products, storage, analysisPayloads, controls] = await Promise.all([
       safe("SELECT module_key AS moduleKey, label, enabled, updated_at AS updatedAt FROM module_settings ORDER BY rowid"),
       safe(`SELECT e.analysis_id AS id, e.analysis_id AS analysisId, e.company_inn AS companyInn,
         COALESCE(a.company_name, '') AS companyName, e.user_email AS userEmail, e.tier,
         e.payment_order_id AS paymentOrderId, e.granted_by AS grantedBy, e.granted_at AS grantedAt,
         e.revoked_at AS revokedAt, e.updated_at AS updatedAt
         FROM analysis_entitlements e LEFT JOIN analyses a ON a.id = e.analysis_id ORDER BY e.updated_at DESC LIMIT 500`),
+      safe(`SELECT a.id, a.company_name AS companyName, a.company_inn AS companyInn,
+        a.owner_email AS ownerEmail, a.period_from AS periodFrom, a.period_to AS periodTo,
+        a.created_at AS createdAt, COALESCE(e.tier, 'FREE') AS tier
+        FROM analyses a LEFT JOIN analysis_entitlements e ON e.analysis_id = a.id
+        ORDER BY a.created_at DESC LIMIT 500`),
       safe("SELECT id, order_number AS orderNumber, payer_type AS payerType, payer_inn AS payerInn, payer_name AS payerName, company_inn AS companyInn, company_name AS companyName, user_email AS userEmail, amount, analysis_id AS analysisId, product_type AS productType, status, created_at AS createdAt FROM payment_orders ORDER BY created_at DESC LIMIT 200"),
       safe(`SELECT
         (SELECT COUNT(DISTINCT company_inn) FROM analyses) AS clients,
@@ -126,7 +131,7 @@ export async function GET() {
       result[item.category].enabled += Number(Boolean(item.enabled));
       return result;
     }, {});
-    return Response.json({ admin: user, modules, controls, controlSummary, entitlements, subscriptions: entitlements, orders, summary: summary[0] ?? {}, expert: { averageScore: scoreCount ? Math.round(scoreTotal / scoreCount) : 0, criticalSignals, recommendationsCount, limitPotential }, recommendationThemes, daily: daily.reverse(), applicationStatuses: statuses, products, storage: storage[0] ?? {} });
+    return Response.json({ admin: user, modules, controls, controlSummary, entitlements, subscriptions: entitlements, analyses, orders, summary: summary[0] ?? {}, expert: { averageScore: scoreCount ? Math.round(scoreTotal / scoreCount) : 0, criticalSignals, recommendationsCount, limitPotential }, recommendationThemes, daily: daily.reverse(), applicationStatuses: statuses, products, storage: storage[0] ?? {} });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Не удалось загрузить панель" }, { status: 500 });
   }
