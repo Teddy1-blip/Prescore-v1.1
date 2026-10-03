@@ -38,6 +38,34 @@
 
 
 /* Bank-first repair: statement results remain primary even when the canonical credit layer is partial. */
+.ps-client-recovery .ps-content.ws{min-height:0;background:transparent}
+.ps-client-recovery .ps-content>*{min-width:0}
+.ps-client-recovery .ps-sidebar{overflow-y:auto}
+.ps-client-recovery .ps-sidebar nav small{display:block;padding:18px 11px 6px;color:#adc8d2;font-size:10px;letter-spacing:.1em}
+.ps-client-recovery .ps-source-card{margin-top:24px;flex-shrink:0}
+.ps-client-recovery .ps-topbar{gap:12px;height:auto;min-height:70px;padding-top:10px;padding-bottom:10px}
+.ps-client-recovery .ps-company,.ps-client-recovery .ps-company span{min-width:0}
+.ps-client-recovery .ps-company b{overflow-wrap:anywhere;line-height:1.35}
+.ps-client-recovery .ps-company>i,.ps-client-recovery .ps-top-actions{flex-shrink:0}
+.ps-client-recovery .ps-top-actions button,.ps-client-recovery .ps-menu-button,.ps-client-recovery .ps-sidebar-head>button{min-height:44px;min-width:44px;cursor:pointer}
+.ps-client-recovery button:focus-visible,.ps-client-recovery a:focus-visible{outline:3px solid #72c9d5;outline-offset:2px}
+.ws-banking-kpis h1{font-size:30px}
+.ws-banking-kpis dl{grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.ws-banking-kpis dl>div{background:white;border:1px solid var(--line);border-radius:4px;padding:18px}
+.ws-banking-kpis dd{font-variant-numeric:tabular-nums;font-size:clamp(20px,2vw,28px)}
+.ws-banking-kpis .ws-kpi-note{font-size:12px}
+.ws-banking-details{padding:30px 0;border-bottom:1px solid var(--line);margin-bottom:30px}
+.ws-payment-facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin-top:22px!important}
+.ws-payment-facts dt{font-size:12px;color:var(--muted)}
+.ws-payment-facts dd{font-size:19px;margin-top:6px}
+.ws-counterparty-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px;margin-top:30px}
+.ws-counterparty-grid p{font-size:12px}
+.ws-counterparty-grid .ws-detail-list>div{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.ws-counterparty-grid dd{text-align:right}
+@media(max-width:1100px){.ws-banking-kpis dl,.ws-payment-facts{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:850px){.ps-client-recovery .ps-sidebar{visibility:hidden}.ps-client-recovery .ps-sidebar.open{visibility:visible}.ps-client-recovery .ps-top-actions .ps-new-button{display:none}}
+@media(max-width:560px){.ps-client-recovery .ps-company span{display:flex}.ps-client-recovery .ps-company>i,.ps-client-recovery .ps-company small{display:none}.ps-client-recovery .ps-company b{font-size:12px}.ps-client-recovery .ps-content.ws{padding:20px 16px 48px}.ws-banking-kpis dl,.ws-payment-facts,.ws-counterparty-grid{grid-template-columns:1fr}.ws-banking-kpis dl>div{padding:16px}.ws-banking-kpis dd{font-size:25px}.ws-counterparty-grid{gap:24px}}
+@media(max-width:560px){body.prescore-v2 .ps-client-recovery .ps-topbar{flex-wrap:nowrap;padding:10px 16px;gap:12px}body.prescore-v2 .ps-client-recovery .ps-company{flex:1}body.prescore-v2 .ps-client-recovery .ps-cabinet-switch{font-size:0;width:44px;height:44px;min-width:44px;padding:0}body.prescore-v2 .ps-client-recovery .ps-cabinet-switch:after{font-size:11px}}
 .ws-credit-overview{display:grid;grid-template-columns:1.3fr 1fr;gap:36px;padding:28px 30px;margin:0 0 30px;background:var(--paper);border:1px solid var(--line);border-radius:4px}
 .ws-credit-overview>div{min-width:0}.ws-credit-overview>div:first-child>h2{font-size:30px;max-width:680px}.ws-credit-overview>div:first-child>p{font-size:13px}
 .ws-credit-overview .ws-index{padding-top:0}

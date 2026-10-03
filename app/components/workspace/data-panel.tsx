@@ -16,10 +16,10 @@ export const concentrationPercent = (f: WorkspaceFactV1) => {
 };
 
 export function FactBars({ rows, percent = false }: { rows: { label: string; value: number | null }[]; percent?: boolean }) {
- const max = percent ? 100 : Math.max(1, ...rows.map(r => Math.abs(r.value ?? 0)));
+ const max = percent ? 100 : Math.max(1, ...rows.filter(r => r.value !== null).map(r => Math.abs(r.value!)));
  const known = rows.filter(r => r.value !== null);
  return <div className="ws-chart" data-chart="bars">
-  {!known.length ? <p className="ws-chart-empty">Недостаточно данных для графика. UNKNOWN — значение не определено.</p> : known.every(r => r.value === 0) && <p className="ws-chart-empty">Известные значения равны нулю.{known.length < rows.length ? " Остальные значения не определены." : ""}</p>}
+  {!known.length ? <p className="ws-chart-empty">Недостаточно данных для графика. Значения не определены.</p> : known.every(r => r.value === 0) && <p className="ws-chart-empty">Известные значения равны нулю.{known.length < rows.length ? " Остальные значения не определены." : ""}</p>}
   <p className="ws-chart-legend">Длина полосы — {percent ? "доля, шкала 0–100%" : "сумма в рублях; общая шкала"}. Точные значения указаны справа.</p>
   <dl className="ws-chart-bars">{rows.map(r => <div key={r.label}><dt>{r.label}</dt><dd>{r.value === null ? "Недостаточно данных" : percent ? number.format(r.value) + "%" : rub(r.value)}</dd><span className="ws-chart-track" aria-hidden="true">{r.value !== null && r.value !== 0 && <i style={{ width: Math.min(100, Math.abs(r.value) / max * 100) + "%" }}/>}</span></div>)}</dl>
  </div>;
@@ -28,13 +28,13 @@ export function FactBars({ rows, percent = false }: { rows: { label: string; val
 export function MonthlyChart({ rows, net = false }: { rows: Monthly; net?: boolean }) {
  const plotted = rows.slice(-12);
  const values = plotted.flatMap(r => net ? [monthlyNet(r)] : [finite(r.externalInflows), finite(r.externalOutflows)]);
- const max = Math.max(1, ...values.map(v => Math.abs(v ?? 0)));
+ const max = Math.max(1, ...values.filter((v): v is number => v !== null).map(v => Math.abs(v)));
  const hasValue = values.some(v => v !== null), nonzero = values.some(v => v !== null && v !== 0);
  const step = 720 / Math.max(1, plotted.length), baseline = net ? 100 : 192;
  return <div className="ws-chart" data-chart={net ? "cash-flow" : "turnover"}>
   {rows.length > 12 && <p>График: последние 12 месяцев. Полная раскладка — ниже.</p>}
   <p className="ws-chart-legend">{net ? "Чистый внешний поток: поступления минус списания. Выше нуля — плюс, ниже — минус." : "Поступления — сплошные столбцы. Списания — контурные столбцы."} Рубли, единая шкала.</p>
-  {!hasValue ? <p className="ws-chart-empty">Недостаточно данных для графика. UNKNOWN — значение не определено.</p> : !nonzero ? <p className="ws-chart-empty">Известные значения равны нулю.</p> : <>
+  {!hasValue ? <p className="ws-chart-empty">Недостаточно данных для графика. Значения не определены.</p> : !nonzero ? <p className="ws-chart-empty">Известные значения равны нулю.</p> : <>
    <div className="ws-chart-scale"><span>{rub(max)}</span><span>{net ? "± от нулевой линии" : "от нулевой линии"}</span></div>
    <svg className="ws-financial-svg" viewBox="0 0 720 200" preserveAspectRatio="none" role="img" aria-label={net ? "Помесячный чистый внешний денежный поток; точные суммы в раскладке под графиком" : "Помесячные поступления и списания; точные суммы в раскладке под графиком"}>
     {[net ? 10 : 12, net ? 55 : 72, net ? 145 : 132].map(y => <line key={y} x1="0" x2="720" y1={y} y2={y} stroke="#365361" strokeDasharray="3 5"/>)}
@@ -55,7 +55,7 @@ export function MonthlyChart({ rows, net = false }: { rows: Monthly; net?: boole
 const tabs = ["Обороты", "Денежный поток", "Платежи", "Концентрация"];
 export function DataPanel({ model, children }: { model: WorkspaceModelV1; children: ReactNode }) {
  const [tab, setTab] = useState(0), id = useId(), b = model.basic.bankingFacts;
- const payments = [["Налоги", b.taxPayments], ["Основной долг", b.loanPrincipalPayments], ["Проценты", b.interestPayments], ["Неразделённые долговые платежи", b.unsplitDebtPayments], ["Лизинг", b.leasingPayments], ["Переводы физическим лицам", b.transfersToIndividuals]] as const;
+ const payments = [["Налоги", b.taxPayments], ["Социальные взносы", b.socialContributions], ["Основной долг", b.loanPrincipalPayments], ["Проценты", b.interestPayments], ["Неразделённые долговые платежи", b.unsplitDebtPayments], ["Лизинг", b.leasingPayments], ["Переводы физическим лицам", b.transfersToIndividuals]] as const;
  return <section className="ws-data-panel" aria-label="Банковская динамика">
   <header><div><span className="ws-eyebrow">ДАННЫЕ ВЫПИСОК</span><h2>Банковская динамика</h2></div><span>{model.basic.analysis.period.from} — {model.basic.analysis.period.to}</span></header>
   <div className="ws-data-tabs" role="tablist" aria-label="Банковские визуализации">{tabs.map((label, i) => <button type="button" key={label} id={`${id}-tab-${i}`} role="tab" aria-selected={tab === i} aria-controls={`${id}-panel`} tabIndex={tab === i ? 0 : -1} onClick={() => setTab(i)} onKeyDown={e => {
