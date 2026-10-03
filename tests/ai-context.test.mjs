@@ -1,24 +1,49 @@
-import assert from "node:assert/strict";
-import test from "node:test";
-import { AI_ANALYST_SYSTEM_PROMPT, buildSanitizedCreditContext } from "../lib/ai-credit-analyst.ts";
-
-test("builds a question-specific AI context without company identifiers or internal weights", () => {
-  const analysis = {
-    id: "analysis-safe-id", companyInn: "7701234567", companyName: "ООО СЕКРЕТ", methodologyVersion: "CORE-1",
-    periodFrom: "2026-01-01", periodTo: "2026-06-30", score: 650, grade: "B", factors: [], strengths: [],
-    metrics: { avgMonthlyInflow: 2_000_000, grossInflow: 13_000_000, nonOperatingInflow: 1_000_000, monthlyTrend: 4, volatility: .15, topOneConcentration: .43, topThreeConcentration: .72, debtServiceShare: .11, liquidityDays: 18, cashGapDays: 2 },
-  };
-  const profile = { company: { registrationDate: "2020-01-01", okved: "Оптовая торговля" }, finances: { latestYear: "2025", revenue: 24_000_000, revenueGrowth: 3, profit: 1_200_000, currentLiquidity: 1.4, equity: 5_000_000, debtToEquity: .5, interestCoverage: 3 } };
-  const risk = {
-    version: "RISK-1", readiness: { code: "PREPARE" }, finalConclusion: { verdict: "Нужна подготовка", confidence: 82, hardStop: false, limitMin: 2_000_000, limitMax: 4_000_000, product: null },
-    globalStops: [], manualReview: [{ title: "Концентрация покупателей", evidence: "TOP-1 43%", source: "Выписки", action: "Подтвердить договоры" }], strengths: [],
-    actionPlan: [{ horizon: 7, items: [{ title: "Проверить дебиторку", reason: "Высокая концентрация", action: "Добавить реестр", result: "Сверено" }] }],
-  };
-  const context = buildSanitizedCreditContext("Почему высокая концентрация покупателей?", analysis, profile, risk);
-  const serialized = JSON.stringify(context);
-  assert.doesNotMatch(serialized, /7701234567|ООО СЕКРЕТ/);
-  assert.doesNotMatch(serialized, /weight|вес|threshold|порог/i);
-  assert.match(serialized, /TOP-1 43%/);
-  assert.doesNotMatch(serialized, /credit_history/);
-  assert.match(AI_ANALYST_SYSTEM_PROMPT, /не раскрывай.*формул/i);
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import fs from 'node:fs';
+import {AI_ANALYST_PROMPT_VERSION, AI_ANALYST_SYSTEM_PROMPT, buildSanitizedCreditContext, buildLocalAnalystAnswer} from '../lib/ai-credit-analyst.ts';
+import {loadWorkspaceModelV1} from '../lib/workspace/service.ts';
+import {loadBusiness} from '../lib/credit-engine/credit-lab/business-corpus.mjs';
+import {createWorkspaceRuntime} from './fixtures/workspace-runtime.mjs';
+import {statementFixture} from './fixtures/block1-statements.mjs';
+async function model(){const b=loadBusiness('CL-RU-BUS-001');return loadWorkspaceModelV1(b.input.analysis.id,{readAccess:async()=>({access:'owner',row:{payload:JSON.stringify(b.input.analysis),companyInn:b.input.analysis.companyInn,ownerEmail:'secret@owner.test'}}),readTier:async()=> 'FULL',readProfile:async()=>b.input.companyProfile,readOperations:async()=>({documents:{status:'NONE',count:0,analysisCount:0},applications:{status:'NONE',count:0,activeCount:0,statuses:[]}})});}
+test('Canonical AI projection and deterministic explanation',async t=>{
+ const m=await model();assert.equal(m.state,'READY_FULL');
+ await t.test('AI path does not depend on legacy analytical fields',()=>{for(const f of ['lib/ai-credit-analyst.ts','app/api/ai-analyst/route.ts'])assert.doesNotMatch(fs.readFileSync(f,'utf8'),/UnifiedRiskContext|AnalysisResult|analysis\.(score|grade|readiness)|estimatedLimit|stressLimit|baseMonthlyPaymentCapacity|risk\.(finalConclusion|globalStops|manualReview|actionPlan)/);});
+ await t.test('canonical index preserved exactly',()=>assert.equal(buildSanitizedCreditContext('Почему такой индекс?',m).index.value,m.full.canonical.prescoreIndex.value));
+ await t.test('unknown index is not zero',()=>{const v=structuredClone(m);v.full.canonical.prescoreIndex.value=null;v.full.canonical.prescoreIndex.status='INSUFFICIENT_DATA';assert.equal(buildSanitizedCreditContext('индекс',v).index.value,null);assert.match(buildLocalAnalystAnswer('индекс',v),/Индекс не определён по текущему набору данных/);});
+ await t.test('canonical readiness preserved',()=>{const v=buildSanitizedCreditContext('Стоит ли подаваться сейчас?',m);assert.equal(v.readiness.level,m.full.canonical.financingReadiness.level);assert.equal(v.readiness.status,m.full.canonical.financingReadiness.status);});
+ await t.test('prudential monthly capacity and service categories preserved',()=>{const v=buildSanitizedCreditContext('лимит',m).debt,d=m.full.canonical.debtCapacity;assert.equal(v.prudentialIncrementalMonthly,d.headlineCapacity.monthlyIncrementalDebtServiceCapacity.prudential);assert.equal(v.observed.value,d.observedDebtServiceBasis.value);assert.equal(v.scheduled.value,d.portfolioScheduledDebtService30d.value);assert.equal(v.current.value,d.recurringView.existingDebtServiceAnchor.value);assert.ok(!('maximumPolicy' in v));});
+ await t.test('UNKNOWN overdue remains unconfirmed; actual zero preserved',()=>{const v=structuredClone(m),f={value:null,knowledge:'UNKNOWN',confidence:'UNKNOWN',verification:'UNCONFIRMED',origin:'REPORTED',asOf:null};v.full.report.analysisV3={portfolio:[{id:'secret-loan',type:'TERM_LOAN',creditor:{...f,value:'secret-bank'},principal:f,payment:f,overdue:f}]};assert.equal(buildSanitizedCreditContext('БКИ просрочка',v).portfolio[0].overdue.value,null);assert.match(buildLocalAnalystAnswer('БКИ просрочка',v),/просрочка — по доступным данным значение не подтверждено/);v.full.report.analysisV3.portfolio[0].overdue={...f,value:0,knowledge:'KNOWN'};assert.equal(buildSanitizedCreditContext('БКИ',v).portfolio[0].overdue.value,0);});
+ await t.test('projection excludes identities raw sources and policies',()=>{const v=structuredClone(m);v.analysisId='SECRET_ANALYSIS';v.basic.analysis.company={inn:'7701234567',name:'ООО СЕКРЕТ'};v.full.canonical.prescoreIndex.policyFingerprint='SECRET_POLICY';v.full.canonical.prescoreIndex.rawDocument='SECRET_RAW';v.full.report.primaryFactors[0].text='ООО СЕКРЕТ 7701234567 secret@owner.test 40702810900000000001';for(const q of ['индекс','лимит','продукт','план','концентрация','сильные стороны','обзор']){const s=JSON.stringify(buildSanitizedCreditContext(q,v));assert.doesNotMatch(s,/SECRET_|7701234567|ООО СЕКРЕТ|secret@owner|40702810900000000001|policyFingerprint|calculationBasis|maximumPolicy|penaltyPoints|sourceReferenceId|claimId|analysisId/);}});
+ await t.test('question minimization separates concentration from debt/product payload',()=>{const c=buildSanitizedCreditContext('концентрация',m);assert.ok(c.banking.directCustomerTop1);assert.equal(c.portfolio,undefined);assert.equal(c.debt,undefined);assert.equal(c.products,undefined);assert.equal(c.index,undefined);});
+ await t.test('actions copied from current published report',()=>assert.deepEqual(buildSanitizedCreditContext('план',m).actionPlan.map(h=>h.items.length),m.full.report.actionPlan.horizons.map(h=>h.items.length)));
+ await t.test('product candidates and evidence reference links resolved without internal IDs',()=>{const p=buildSanitizedCreditContext('продукт',m);assert.deepEqual(p.products.map(x=>x.fit),m.full.canonical.productSelection.candidates.map(x=>x.fitLevel));const e=buildSanitizedCreditContext('индекс',m);assert.ok(e.explanations.length);assert.ok(e.explanations.some(x=>x.evidence.length));});
+ await t.test('locked/unavailable projection never invokes another analytical fallback',()=>{for(const v of [{...m,entitlement:'BASIC'},{...m,fullAvailability:'UNAVAILABLE'}])assert.throws(()=>buildLocalAnalystAnswer('индекс',v),/CANONICAL_FULL_UNAVAILABLE/);});
+ await t.test('prompt updated and prohibits new calculations and promises',()=>{assert.notEqual(AI_ANALYST_PROMPT_VERSION,'PRESCORE-AI-ANALYST-2026.08');assert.match(AI_ANALYST_SYSTEM_PROMPT,/Не пересчитывай Prescore Index/);assert.match(AI_ANALYST_SYSTEM_PROMPT,/Не раскрывай.*формул/);});
+});
+test('AI route real persistence, access, context migration and mocked provider',async t=>{
+ const rt=await createWorkspaceRuntime(),json=body=>({method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+ try{
+ const a=(await(await rt.request('/api/analysis',json({statements:[{fileName:'synthetic.txt',text:statementFixture()}]}))).json()).analysis;
+ const url='/api/ai-analyst?analysisId='+a.id,post=q=>rt.request('/api/ai-analyst',json({analysisId:a.id,question:q}));
+ await t.test('unauthenticated and unrelated users denied',async()=>{assert.equal((await rt.request(url,{},null)).status,401);assert.equal((await rt.request(url,{},rt.stranger)).status,404);});
+ await t.test('BASIC locked GET and POST',async()=>{assert.equal((await rt.request(url)).status,403);assert.equal((await post('Почему индекс?')).status,403);});
+ await rt.full(a.id);
+ await t.test('FULL ready without Checko profile; no provider request on GET',async()=>{assert.equal(await rt.db.prepare('SELECT payload FROM checko_profiles WHERE inn = ?').bind(a.companyInn).first(),null);const r=await rt.request(url);assert.equal(r.status,200);const b=await r.json();assert.equal(b.available,true);assert.equal(b.mode,'rules');assert.equal(r.headers.get('cache-control'),'private, no-store');});
+ await t.test('assigned broker and ADMIN retain readable access',async()=>{await rt.assign(a);assert.equal((await rt.request(url,{},rt.broker)).status,200);assert.equal((await rt.request(url,{},rt.admin)).status,200);});
+ const conv=a.id+':'+rt.owner.email;
+ await rt.db.prepare('INSERT INTO ai_conversations (id,analysis_id,owner_email,analysis_version,prompt_version,created_at,updated_at) VALUES (?,?,?,?,?,?,?)').bind(conv,a.id,rt.owner.email,'OLD','PRESCORE-AI-ANALYST-2026.08','2026-01-01','2026-01-01').run();
+ await rt.db.prepare('INSERT INTO ai_messages (id,conversation_id,role,content,created_at) VALUES (?,?,?,?,?)').bind('old-message',conv,'assistant','LEGACY_LIMIT_999999999','2026-01-01').run();
+ const providers=rt.load('lib/ai/providers/index.ts');let captured;
+ providers.configuredProvider=()=>({generate:async messages=>{captured=messages;return {text:'Ответ только по текущим данным.',inputTokens:12,outputTokens:7};}});
+ await t.test('exact mocked provider payload uses canonical values and no pasted identifiers/documents/history',async()=>{
+ const r=await post('Почему индекс? '+a.id+' owner@workspace.test 9900000012 40702810900000000001 RAW_DOCUMENT_SECRET');assert.equal(r.status,200);assert.equal((await r.json()).mode,'provider');assert.equal(captured.length,3);const all=JSON.stringify(captured);assert.doesNotMatch(all,/LEGACY_LIMIT|RAW_DOCUMENT|owner@workspace|407028109|9900000012/);assert.ok(!all.includes(a.id));const workspace=await(await rt.request('/api/workspace-model?analysisId='+a.id)).json();const context=JSON.parse(captured[1].content.split('\n').slice(1).join('\n'));assert.deepEqual(context,buildSanitizedCreditContext('индекс',workspace));});
+ await t.test('legacy messages retained in DB but absent in current GET',async()=>{const b=await(await rt.request(url)).json();assert.equal(b.messages.length,2);assert.doesNotMatch(JSON.stringify(b.messages),/LEGACY_LIMIT/);assert.ok(await rt.db.prepare('SELECT id FROM ai_messages WHERE id = ?').bind('old-message').first());const convRow=await rt.db.prepare('SELECT prompt_version FROM ai_conversations WHERE id = ?').bind(conv).first();assert.equal(convRow.prompt_version,AI_ANALYST_PROMPT_VERSION);});
+ await t.test('provider failure uses canonical deterministic fallback',async()=>{providers.configuredProvider=()=>({generate:async()=>{throw Error('MOCK_NETWORK_ERROR');}});const b=await(await post('Почему индекс?')).json();assert.equal(b.mode,'rules');assert.match(b.message.content,/Prescore Index:|Индекс не определён/);assert.doesNotMatch(b.message.content,/LEGACY_LIMIT/);});
+ await t.test('provider absent uses same local fallback and logs usage',async()=>{providers.configuredProvider=()=>null;const b=await(await post('Что известно о БКИ?')).json();assert.equal(b.mode,'rules');assert.match(b.message.content,/не подтверждены|значение не подтверждено/);const usage=await rt.db.prepare('SELECT provider FROM ai_usage WHERE conversation_id = ?').bind(conv).all();assert.equal(usage.results.length,3);assert.ok(usage.results.some(x=>x.provider==='local-rules'));});
+ await t.test('canonical snapshot change isolates saved conversation',async()=>{const row=await rt.db.prepare('SELECT payload FROM analyses WHERE id = ?').bind(a.id).first();const v=JSON.parse(row.payload);v.metricsV2.cashFlow.netExternalCashFlow.value=876543;await rt.db.prepare('UPDATE analyses SET payload = ? WHERE id = ?').bind(JSON.stringify(v),a.id).run();const b=await(await rt.request(url)).json();assert.deepEqual(b.messages,[]);});
+ await t.test('FULL unavailable returns explicit error without provider or legacy fallback',async()=>{const service=rt.load('lib/workspace/service.ts'),original=service.loadWorkspaceModelV1;service.loadWorkspaceModelV1=async()=>({state:'READY_BASIC',entitlement:'FULL',fullAvailability:'UNAVAILABLE'});try{for(const r of [await rt.request(url),await post('Почему индекс?')]){assert.equal(r.status,503);assert.equal((await r.json()).error,'Полный кредитный анализ временно недоступен. Банковские результаты сохранены.');}}finally{service.loadWorkspaceModelV1=original;}});
+ await t.test('rate limit remains enforced',async()=>{for(let i=0;i<5;i++)await rt.db.prepare('INSERT INTO ai_usage (id,conversation_id,owner_email,provider,model,latency_ms,success,created_at) VALUES (?,?,?,?,?,?,?,?)').bind('limit-'+i,conv,rt.owner.email,'mock','mock',0,1,new Date().toISOString()).run();assert.equal((await post('Почему индекс?')).status,429);});
+ }finally{await rt.close();}
 });

@@ -1,10 +1,10 @@
-import {configuredProvider, generateWithFallback, minimizeQuestion} from "../../../lib/ai/providers";
+import {configuredProvider, generateWithFallback} from "../../../lib/ai/providers";
 import {getRuntime} from "../../../lib/platform/runtime";
-import type { AnalysisResult } from "../../../lib/prescore";
+import { createHash } from "node:crypto";
+import { loadWorkspaceModelV1, readWorkspaceOperations } from "../../../lib/workspace/service.ts";
+import type { WorkspaceModelV1 } from "../../../lib/workspace/model.ts";
 import type { CompanyProfileData } from "../../../lib/company-profile";
-import { buildUnifiedRiskContext } from "../../../lib/risk-context";
-import { AI_ANALYST_PROMPT_VERSION, AI_ANALYST_SYSTEM_PROMPT, buildLocalAnalystAnswer, buildSanitizedCreditContext } from "../../../lib/ai-credit-analyst";
-import { applyAnalysisControls, readControlState } from "../../../lib/admin-controls";
+import { AI_ANALYST_PROMPT_VERSION, AI_ANALYST_SYSTEM_PROMPT, ANALYST_QUESTIONS, analystTopic, buildLocalAnalystAnswer, buildSanitizedCreditContext } from "../../../lib/ai-credit-analyst";
 import { readableAnalysis, requireApiUser, unauthorized } from "../api-auth";
 import { resolveAnalysisTier } from "../../../lib/entitlements";
 
@@ -47,19 +47,35 @@ async function ensureSchema(db: Database) {
   )`).run();
 }
 
+// Same service and access/entitlement dependencies as the CLIENT workspace route.
 async function ownedContext(db: Database, analysisId: string, user: { email: string; isAdmin: boolean }) {
-  const access = await readableAnalysis<{ payload: string; companyInn: string; ownerEmail: string }>(db, analysisId, user);
-  if (!access) return null;
-  const row = access.row;
-  const tier = await resolveAnalysisTier(db, { analysisId, userEmail: row.ownerEmail, companyInn: row.companyInn, privileged: user.isAdmin || access.access === "agent" });
-  if (tier !== "FULL") return { locked: true as const };
-  const profile = await db.prepare("SELECT payload FROM checko_profiles WHERE inn = ? LIMIT 1").bind(row.companyInn).first<{ payload: string }>();
-  if (!profile) return null;
-  const controls = await readControlState(db);
-  const analysis = applyAnalysisControls(JSON.parse(row.payload) as AnalysisResult, controls);
-  const company = JSON.parse(profile.payload) as CompanyProfileData;
-  return { locked: false as const, analysis, company, risk: buildUnifiedRiskContext(company, analysis, controls) };
+  return loadWorkspaceModelV1(analysisId, {
+    readAccess: id => readableAnalysis(db, id, user),
+    readTier: (id, access) => resolveAnalysisTier(db, { analysisId:id, userEmail:access.row.ownerEmail ?? user.email, companyInn:access.row.companyInn, privileged:user.isAdmin || access.access === "agent", readOnly:true }),
+    readProfile: async inn => {
+      const row = await db.prepare("SELECT payload FROM checko_profiles WHERE inn = ? LIMIT 1").bind(inn).first<{payload:string}>();
+      if (!row) return undefined;
+      try { return JSON.parse(row.payload) as CompanyProfileData; } catch { return undefined; }
+    },
+    readOperations: (id, access) => readWorkspaceOperations(db, id, access.row.companyInn, user),
+  });
 }
+const fullUnavailable = "Полный кредитный анализ временно недоступен. Банковские результаты сохранены.";
+function accessError(source: Awaited<ReturnType<typeof ownedContext>>) {
+  if(source.state === "NOT_FOUND") return Response.json({error:"Анализ не найден в вашем кабинете"},{status:404});
+  if("entitlement" in source && source.entitlement === "BASIC" && source.fullAvailability === "LOCKED") return Response.json({error:"Кредитный аналитик доступен в Prescore Full",locked:true,tier:"FREE"},{status:403});
+  if(source.state !== "READY_FULL" || !("full" in source) || !source.full || source.fullAvailability !== "READY" || source.entitlement !== "FULL") return Response.json({error:fullUnavailable},{status:503});
+  return null;
+}
+// Existing message IDs carry a context namespace. Old messages are preserved but cannot
+// enter a new context even when requests overlap. No schema change or destructive reset.
+function contextVersion(model: WorkspaceModelV1) {
+  // Fingerprint the complete canonical snapshot locally, not a question-specific subset.
+  // Operational counters are excluded; this digest is never sent to the provider.
+  const snapshot = {period:model.basic.analysis.period,sources:model.basic.sources,bankingFacts:model.basic.bankingFacts,full:model.full};
+  return "canonical-" + createHash("sha256").update(AI_ANALYST_PROMPT_VERSION+JSON.stringify(snapshot)).digest("hex");
+}
+export const dynamic = "force-dynamic";
 
 function publicMessage(row: AiMessage) {
   return { id: row.id, role: row.role, content: row.content, createdAt: row.createdAt };
@@ -73,11 +89,13 @@ export async function GET(request: Request) {
     const { db, apiKey, model } = await runtime();
     await ensureSchema(db);
     const source = await ownedContext(db, analysisId, user);
-    if (!source) return Response.json({ error: "Анализ не найден в вашем кабинете" }, { status: 404 });
-    if (source.locked) return Response.json({ error: "Кредитный аналитик доступен в Prescore Full", locked: true, tier: "FREE" }, { status: 403 });
+    const denied = accessError(source);
+    if (denied) return denied;
+    const workspace = source as WorkspaceModelV1;
+    const version = contextVersion(workspace);
     const conversationId = `${analysisId}:${user.email}`;
-    const rows = await db.prepare("SELECT id, role, content, created_at AS createdAt FROM ai_messages WHERE conversation_id = ? ORDER BY created_at ASC LIMIT 40").bind(conversationId).all<AiMessage>();
-    return Response.json({ available: true, providerConnected: Boolean(apiKey && model), mode: apiKey && model ? "provider" : "rules", messages: (rows.results ?? []).map(publicMessage), promptVersion: AI_ANALYST_PROMPT_VERSION });
+    const rows = await db.prepare("SELECT id, role, content, created_at AS createdAt FROM ai_messages WHERE conversation_id = ? AND id LIKE ? ORDER BY created_at ASC LIMIT 40").bind(conversationId, version+":%").all<AiMessage>();
+    return Response.json({ available: true, providerConnected: Boolean(apiKey && model), mode: apiKey && model ? "provider" : "rules", messages: (rows.results ?? []).map(publicMessage), promptVersion: AI_ANALYST_PROMPT_VERSION }, { headers: { "Cache-Control":"private, no-store", Vary:"Cookie, Authorization" } });
   } catch {
     return Response.json({ error: "Кредитный аналитик временно недоступен. Сам анализ сохранён и доступен." }, { status: 503 });
   }
@@ -98,8 +116,10 @@ export async function POST(request: Request) {
     const { db, model, dailyLimit, minuteLimit } = runtimeValues;
     await ensureSchema(db);
     const source = await ownedContext(db, analysisId, user);
-    if (!source) return Response.json({ error: "Анализ не найден в вашем кабинете" }, { status: 404 });
-    if (source.locked) return Response.json({ error: "Кредитный аналитик доступен в Prescore Full", locked: true, tier: "FREE" }, { status: 403 });
+    const denied = accessError(source);
+    if (denied) return denied;
+    const workspace = source as WorkspaceModelV1;
+    const version = contextVersion(workspace);
     conversationId = `${analysisId}:${user.email}`;
     const now = new Date().toISOString();
     const sinceMinute = new Date(Date.now() - 60_000).toISOString();
@@ -110,19 +130,19 @@ export async function POST(request: Request) {
 
     await db.prepare(`INSERT INTO ai_conversations (id, analysis_id, owner_email, analysis_version, prompt_version, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET analysis_version = excluded.analysis_version, prompt_version = excluded.prompt_version, updated_at = excluded.updated_at`)
-      .bind(conversationId, analysisId, user.email, source.analysis.methodologyVersion || "PRESCORE-CORE-2026.08", AI_ANALYST_PROMPT_VERSION, now, now).run();
-    const history = await db.prepare("SELECT id, role, content, created_at AS createdAt FROM ai_messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 8").bind(conversationId).all<AiMessage>();
-    const providerQuestion = minimizeQuestion(question);
-    const {analysis_id: omittedAnalysisId, ...sanitized} = buildSanitizedCreditContext(providerQuestion, source.analysis, source.company, source.risk);
-    void omittedAnalysisId; // Never transmit internal analysis identity to a provider.
-    const generated = await generateWithFallback(configuredProvider(), [
-      {role: "system", content: AI_ANALYST_SYSTEM_PROMPT},
-      {role: "system", content: `Текущий SanitizedCreditContext:\n${JSON.stringify(sanitized)}`},
-      ...(history.results ?? []).reverse().map(item => ({role: item.role, content: minimizeQuestion(item.content)})),
-      {role: "user", content: providerQuestion},
-    ], () => buildLocalAnalystAnswer(question, source.analysis, source.risk));
+      .bind(conversationId, analysisId, user.email, version, AI_ANALYST_PROMPT_VERSION, now, now).run();
+    const sanitized = buildSanitizedCreditContext(question, workspace);
+    // Classify locally: user-pasted identifiers/documents and past assistant answers
+    // never become provider context. Every answer is grounded afresh in this snapshot.
+    let provider: ReturnType<typeof configuredProvider> = null;
+    try { provider = configuredProvider(); } catch { /* Invalid provider configuration uses the same canonical fallback. */ }
+    const generated = await generateWithFallback(provider, [
+      {role:"system",content:AI_ANALYST_SYSTEM_PROMPT},
+      {role:"system",content:`Текущий CanonicalAnalystContextV1:\n${JSON.stringify(sanitized)}`},
+      {role:"user",content:ANALYST_QUESTIONS[analystTopic(question)]},
+    ], () => buildLocalAnalystAnswer(question, workspace));
     const answer = generated.text;
-    const userId = crypto.randomUUID(); const answerId = crypto.randomUUID();
+    const userId = version+":"+crypto.randomUUID(); const answerId = version+":"+crypto.randomUUID();
     await db.prepare("INSERT INTO ai_messages (id, conversation_id, role, content, created_at) VALUES (?, ?, 'user', ?, ?)").bind(userId, conversationId, question, now).run();
     await db.prepare("INSERT INTO ai_messages (id, conversation_id, role, content, created_at) VALUES (?, ?, 'assistant', ?, ?)").bind(answerId, conversationId, answer, new Date().toISOString()).run();
     await db.prepare("INSERT INTO ai_usage (id, conversation_id, owner_email, provider, model, input_tokens, output_tokens, latency_ms, success, error_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
