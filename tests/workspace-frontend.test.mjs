@@ -43,7 +43,8 @@ test('production broker GET executes PostgreSQL curator ordering without alias e
 test('BASIC Analysis tab keeps statement analysis visible instead of reducing the page to an upgrade notice',()=>{
  const client=fs.readFileSync('app/components/workspace/client.tsx','utf8');
  assert.match(client,/view==='analysis'[\s\S]*<BankingAnalysis model=\{model\}/);
- assert.match(client,/Полный кредитный анализ добавляется только при наличии достаточных источников/);
+ assert.match(client,/Рассчитанные банковские данные сохранены/);
+ assert.match(client,/open=\{!model.full\}/);
 });
 
 

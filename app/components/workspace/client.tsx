@@ -1,9 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Analyze, Crm, type StoredAnalysis, type Deal } from "./client-operations";
-import { Shell, EmptyHome, Home, Heading, Financing, Obligations, BankingAnalysis, FullAccessNotice, date, reportUrl } from "./presentation";
+import { Shell, EmptyHome, Home, Heading, Financing, Obligations, BankingAnalysis, FullAccessNotice, date } from "./presentation";
 import { useWorkspaceModel, selectAnalysis } from "./use-model";
 import { CompanyData, SourceUpload, RecipientApplications } from "./source-operations";
+import {CreditDepth, CompanyReporting} from "./credit-depth";
 import DocumentsHub from "../../dashboard/documents-hub";
 import AiAnalyst from "../../dashboard/ai-analyst";
 import "../../dashboard/dashboard.css";
@@ -35,12 +36,12 @@ export default function ClientWorkspace(){
  {notice&&<p role="status" className="ws-notice">{notice}</p>}{error&&<p role="alert">{error} <button onClick={()=>window.location.reload()}>Повторить</button></p>}
  {loading||modulesLoading?<p role="status">Загружаем кабинет…</p>:disabled?<p>Раздел временно недоступен.</p>:view==='upload'?(locked?<p>Загрузка выписок недоступна в режиме чтения. Выберите доступный раздел в меню.</p>:<Analyze onResult={accept}/>):!selected?(!error&&<EmptyHome start={availableViews.includes('upload')?()=>choose('upload'):undefined}/>):state.loading?<p role="status">Загружаем финансовую картину…</p>:state.error?<p role="alert">{state.error} <button onClick={refresh}>Повторить</button></p>:model&&<>
  {view==='home'&&<Home key={selectedId} model={model} retry={refresh}/>}
- {view==='analysis'&&<><Heading eyebrow="АНАЛИЗ КОМПАНИИ" title="Банковские факты и кредитная оценка"><p>Сначала — рассчитанные данные по выпискам. Полный кредитный анализ добавляется только при наличии достаточных источников.</p></Heading><BankingAnalysis model={model}/>{model.full?<a className="ws-primary" href={reportUrl(selectedId)}>Открыть подробный кредитный анализ ↗</a>:<FullAccessNotice model={model} retry={refresh}/>}</>}
+ {view==='analysis'&&<><Heading eyebrow="АНАЛИЗ КОМПАНИИ" title="Банковские факты и кредитная оценка"><p>Рассчитанные банковские данные сохранены. Ниже — кредитная интерпретация с основаниями и ограничениями текущего отчёта.</p></Heading><details className="ws-credit-card" open={!model.full}><summary>Банковский анализ: показатели и движение денег</summary><BankingAnalysis model={model}/></details><CreditDepth model={model} retry={refresh}/></>}
  {view==='financing'&&<><Financing model={model}/>{!locked&&availableViews.includes('applications')&&<section className="ws-section"><h2>Подготовить обычную заявку</h2><p>Вы можете указать цель и запрошенную сумму самостоятельно.</p><button onClick={()=>choose('applications')}>Перейти к заявкам ↗</button></section>}</>}
  {view==='obligations'&&<><Obligations model={model}/>{!locked&&<SourceUpload analysisId={selectedId} kind="BKI" saved={refresh}/>}</>}
  {view==='documents'&&<DocumentsHub key={selectedId} companyInn={selected.companyInn} companyName={selected.companyName} analysisId={selectedId} readOnly={locked}/>}
  {view==='applications'&&(locked?<p>Управление заявками доступно в кабинете брокера.</p>:<><Crm key={selectedId} deals={deals.filter(d=>d.analysisId===selectedId)} analyses={analyses} selected={selected} addDeal={addDeal} updateDeal={updateDeal}/><RecipientApplications analysis={selected} saved={items=>{setDeals(current=>[...items,...current]);refresh();}}/></>)}
- {view==='company'&&<><CompanyData key={selectedId} id={selectedId} inn={selected.companyInn} updated={refresh}/>{!locked&&<SourceUpload analysisId={selectedId} kind="QUARTERLY" saved={refresh}/>}</>}
+ {view==='company'&&<><CompanyReporting model={model}/><CompanyData key={selectedId} id={selectedId} inn={selected.companyInn} updated={refresh}/>{!locked&&<SourceUpload analysisId={selectedId} kind="QUARTERLY" saved={refresh}/>}</>}
  {view==='analyst'&&(model.full?<AiAnalyst key={selectedId} analysisId={selectedId}/>:<FullAccessNotice model={model} retry={refresh}/>)}
  </>}
  </Shell>;
