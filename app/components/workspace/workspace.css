@@ -98,3 +98,23 @@
  .ws .ws-credit-depth .ws-detail-list > div { display: block; }
  .ws .ws-credit-depth .ws-detail-list dd { margin-top: 8px; text-align: left; }
 }
+
+/* Recovery B Phase 3: operational context and server acknowledgements. */
+.ws .ws-analysis-history article { display:flex; align-items:center; gap:20px; padding:18px 0; border-top:1px solid var(--line); }
+.ws .ws-analysis-history article>div { flex:1; min-width:0; }
+.ws .ws-analysis-history article[aria-current=true] { border-left:3px solid var(--teal); padding-left:14px; }
+.ws .ws-analysis-history p,.ws .ws-screening p { line-height:1.6; }
+.ws .ws-analysis-history summary,.ws .ws-screening summary { cursor:pointer; min-height:44px; padding:12px 0; }
+.ws .ws-screening-groups { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:24px; }
+.ws .ws-screening li { margin-block:14px; overflow-wrap:anywhere; }
+.ws .ws-screening li strong,.ws .ws-screening li span,.ws .ws-screening li small { display:block; }
+.ws .ps-statement-list article span { min-width:0; overflow-wrap:anywhere; }
+.ws .ws-document-warning { line-height:1.6; margin-bottom:24px; }
+.ws .ps-deal-form fieldset { border:0; padding:0; margin:0; min-width:0; }
+.ws .ps-doc-list .ps-card-title { display:flex; gap:20px; flex-wrap:wrap; justify-content:space-between; }
+.ws .ps-doc-list td,.ws .ps-upload-error,.ws .ps-chat-error { overflow-wrap:anywhere; }
+.ws .ws-chat-documents { padding:16px; max-height:200px; overflow:auto; overflow-wrap:anywhere; }
+@media(max-width:700px){.ws .ws-screening-groups { grid-template-columns:1fr; }.ws .ws-analysis-history article { align-items:start; flex-direction:column; }}
+
+.ws .ws-document-context { display:flex; flex-direction:column; gap:6px; line-height:1.6; }
+.ws .ws-document-context > * { position:static; margin:0; line-height:1.6; }
