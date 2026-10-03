@@ -1,0 +1,7 @@
+'use client';
+import {useState} from 'react';
+export default function Panel(){
+ const [output,setOutput]=useState(''),[token,setToken]=useState(''),[confirmation,setConfirmation]=useState(''),[busy,setBusy]=useState(false);
+ async function call(action:string){setBusy(true);try{const r=await fetch('/api/admin/staging-cleanup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,confirmation,previewToken:token})});const data=await r.json();setOutput(JSON.stringify({...data,previewToken:undefined},null,2));setToken(r.ok&&action==='staging-cleanup-preview'?data.previewToken:'');}catch{setOutput('NETWORK ERROR — do not retry execute; inspect preview first.');setToken('');}finally{setBusy(false);}}
+ return <main style={{padding:24,maxWidth:1100,margin:'auto'}}><h1>One-time staging client cleanup</h1><p>Only prescore-stage-db. Preview is read-only. Execute permanently deletes client history. User, roles, agent account and product settings are preserved. Physical storage: DEFER.</p><button disabled={busy} onClick={()=>call('staging-cleanup-preview')}>Read-only preview</button><p><label>Confirmation phrase<input aria-label="Confirmation phrase" value={confirmation} onChange={e=>setConfirmation(e.target.value)}/></label></p><button disabled={busy||!token||confirmation!=='DELETE ALL STAGING CLIENT DATA'} onClick={()=>call('staging-cleanup-execute')}>Execute staging cleanup</button><pre style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{output}</pre></main>;
+}
