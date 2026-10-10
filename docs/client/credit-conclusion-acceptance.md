@@ -43,8 +43,27 @@ It creates no staging analysis or user data and makes no AI calls.
 
 ## Completed purge removal
 
-Remove the one-time instrumentation hook, purge module, startup reset script and
-Docker startup reset invocation. Temporary staging-only health verification uses
-`BEGIN READ ONLY`, fixed count queries and preserved-access booleans. It contains
-no DELETE, schema or data mutation. Remove that read-only diagnostic after the
-live evidence has been collected; retain ordinary database health only.
+The one-time instrumentation hook, purge module, startup reset script and Docker
+startup reset invocation are removed. Live staging on commit
+`7cf4c94b6a027f0cb0a954a68830bceb625576d8` returned `already-done` from a temporary
+read-only health verification on 2026-10-10. Counts were zero in every table:
+
+- ai_usage, ai_messages, ai_conversations;
+- application_messages, application_status_history;
+- client_documents, agent_prospects, agent_applications, deals;
+- analysis_entitlements, payments, payment_orders, subscriptions;
+- agent_leads, checko_profiles, analyses.
+
+The same read-only transaction confirmed the preserved user, ADMIN role and
+agent account/code. No staging analysis was created by this task. Zero analyses
+and client metadata confirm that VIVOLINE and the old synthetic history are absent
+from those database tables. No claim is made about physical storage objects.
+
+The temporary count verification is removed in the final tree as well. Health
+returns only ordinary connection status using SELECT 1. No purge/reset trigger,
+maintenance route or destructive runtime capability remains.
+
+Validation of the first staging commit: CI 6296/6296 tests, strict 24-business-case
+acceptance, browser/print checks, lint and standalone artifact validation PASS.
+The final small removal is independently built and checked by targeted tests,
+with the unchanged staging workflow enforcing the complete gates again.

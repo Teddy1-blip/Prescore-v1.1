@@ -19,8 +19,8 @@ test('credit conclusion uses full-source calculated results without changing the
 });
 test('conclusion cannot introduce legacy scoring or side effects',()=>{const s=fs.readFileSync('app/components/workspace/credit-conclusion.tsx','utf8');assert.doesNotMatch(s,/analysis\.(score|grade)|estimatedLimit|stressLimit|baseMonthlyPaymentCapacity|UnifiedRiskContext|compareCreditPortfolio|fetch\(|\?\?\s*0|\|\|\s*0/);const client=fs.readFileSync('app/components/workspace/client.tsx','utf8');assert.match(client,/view==='home'[\s\S]*?<CreditConclusion/);assert.match(client,/view==='analysis'&&<CreditConclusion/);});
 
-test('completed purge capability removed; temporary health verification is read-only',()=>{
+test('completed purge and temporary verification removed; ordinary health is read-only',()=>{
  for(const f of ['instrumentation.ts','lib/staging-history-purge.ts','scripts/platform/staging-reset.mjs'])assert.equal(fs.existsSync(f),false);
  assert.doesNotMatch(fs.readFileSync('Dockerfile','utf8'),/staging-reset/);
- const health=fs.readFileSync('app/api/health/route.ts','utf8');assert.doesNotMatch(health,/DELETE FROM|TRUNCATE|DROP TABLE|INSERT INTO|UPDATE public/);assert.match(health,/BEGIN READ ONLY/);
+ const health=fs.readFileSync('app/api/health/route.ts','utf8');assert.doesNotMatch(health,/DELETE FROM|TRUNCATE|DROP TABLE|INSERT INTO|UPDATE public/);assert.match(health,/SELECT 1/);assert.doesNotMatch(health,/STAGING_HISTORY_PURGE|STAGING_CLIENT_DATA_RESET|verification/);
 });

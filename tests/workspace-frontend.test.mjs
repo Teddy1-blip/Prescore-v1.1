@@ -45,7 +45,7 @@ test('BASIC conclusion keeps direct access to separate banking analysis',async()
  assert.match(client,/view==='banking'&&<BankingAnalysis/);
  const rt=await createWorkspaceRuntime();try{
  const {conclusionFixture}=await import('./fixtures/credit-conclusion.mjs');
- const model=conclusionFixture().model;model.full=null;model.entitlement='BASIC';model.fullAvailability='NOT_ENTITLED';
+ const model=conclusionFixture().model;model.full=null;model.state='READY_BASIC';model.entitlement='BASIC';model.fullAvailability='LOCKED';
  const {CreditConclusion}=rt.load('app/components/workspace/credit-conclusion.tsx');
  const html=renderToStaticMarkup(React.createElement(CreditConclusion,{model}));
  assert.match(html,/Банковский результат сохранён/);

@@ -208,3 +208,4 @@
 .ps-client-recovery .conclusion-source-strip span{font-size:11px;background:#edf4f3;padding:6px;border-radius:4px}
 .ps-client-recovery .conclusion-index>p{color:#d0e5df}
 @media(max-width:600px){.ps-client-recovery .conclusion-heading{margin:10px 0 16px}.ps-client-recovery .conclusion-heading h1{margin:6px 0 12px}.ps-client-recovery .conclusion-context{padding:0}.ps-client-recovery .conclusion-context label{width:100%}.ps-client-recovery .conclusion-context select{height:38px}}
+.ps-client-recovery .conclusion-footer{background:transparent;padding:0;border:0;color:#567079}
