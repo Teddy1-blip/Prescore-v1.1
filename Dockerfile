@@ -18,4 +18,4 @@ COPY --from=build --chown=node:node /app/lib/platform/environment.ts ./lib/platf
 RUN mkdir -p /data/prescore && chown -R node:node /data
 USER node
 EXPOSE 3000
-CMD ["node", "server.js"]
+CMD ["sh", "-c", "node --experimental-strip-types scripts/platform/staging-reset.mjs && exec node server.js"]
