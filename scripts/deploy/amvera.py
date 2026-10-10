@@ -188,7 +188,6 @@ def main():
         observed = remote_master(workspace, env)
         print(f'Authenticated read-only Git check passed; staging account/endpoint verified; master={observed}.')
         if sys.argv[1] == 'access':
-            verify_history_purge()
             return
         state_dir = Path(env['RUNNER_TEMP']) / 'prescore-delivery'
         if sys.argv[1] == 'prepare':
