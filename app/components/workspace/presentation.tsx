@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import {BankingLedger} from "./banking-ledger";
 import {PortfolioDepth, sourceLabel, sourceState} from "./credit-depth";
 import { DataPanel, concentrationPercent, factValue } from "./data-panel";
 import { useState, type ReactNode } from "react";
@@ -8,7 +9,7 @@ import type { WorkspaceModelV1, WorkspaceFactV1 } from "../../../lib/workspace/m
 export const money = (value: number | null | undefined) => value == null || !Number.isFinite(value) ? "Недостаточно данных" : new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(value) + " ₽";
 export const date = (value: string | null | undefined) => value ? value.slice(0,10).split("-").reverse().join(".") : "Период не указан";
 export const reportUrl = (id: string) => `/dashboard/report-v2?analysisId=${encodeURIComponent(id)}`;
-const factMoney = (f: WorkspaceFactV1) => f.status === "UNKNOWN" ? "Недостаточно данных" : money(f.value);
+const factMoney = (f: WorkspaceFactV1) => f.status === "NOT_APPLICABLE" ? "Не применимо" : f.status === "UNKNOWN" ? "Недостаточно данных" : money(f.value);
 const sourceNames: Record<string,string> = { BANK_STATEMENTS:"Банковские выписки", FINANCIAL_STATEMENTS:"Бухгалтерская отчётность", QUARTERLY_REPORT:"Квартальная отчётность", CREDIT_HISTORY:"Кредитная история", EXTERNAL_SOURCE:"Открытые сведения", BANK_STATEMENT:"Банковские выписки", BFO:"Бухгалтерская отчётность", QUARTERLY:"Квартальная отчётность", BKI:"Кредитная история" };
 export function Heading({eyebrow,title,children}:{eyebrow:string;title:string;children?:ReactNode}){return <header className="ws-heading"><span className="ws-eyebrow">{eyebrow}</span><h1>{title}</h1>{children}</header>;}
 export function EmptyHome({start}:{start?:()=>void}) { return <section className="ws-empty"><div><span className="ws-eyebrow">ВАШ БИЗНЕС. ЯСНАЯ КАРТИНА.</span><h1>{start?<>Начните с<br/>банковской выписки</>:'Сохранённых анализов пока нет'}</h1><p>{start?'Загрузите выписку, чтобы увидеть финансовую картину бизнеса: поступления, платежи и движение денег.':'Результаты появятся здесь после загрузки выписок владельцем компании.'}</p>{start&&<><button className="ws-primary" onClick={start}>Загрузить выписку <span aria-hidden="true">↗</span></button><small>TXT 1CClientBankExchange · до 30 файлов одного ИНН</small></>}</div><div className="ws-empty-art" aria-hidden="true"><span>01 / ДАННЫЕ</span><div className="ws-signal-lines"><i/><i/><i/></div><strong>От движения денег<br/>к понятным решениям.</strong><span>ВЫПИСКИ → ФИНАНСОВАЯ КАРТИНА</span></div></section>; }
@@ -28,7 +29,7 @@ export function Sources({model}:{model:WorkspaceModelV1}) {
  const s=model.basic.sources,missing=missingSourceLabels(s.missingSources);
  const processed=new Set(s.availability.filter(a=>a.status==='READY').map(a=>sourceNames[a.source]));
  const inconsistent=missing.known.filter(name=>processed.has(name));
- return <section className="ws-sources"><div><span className="ws-eyebrow">ОСНОВА АНАЛИЗА</span><h2>Источники и покрытие</h2><p>{s.statements.bankNames?.join(' · ')||'Банки не определены'}</p><p>{date(s.statements.periodFrom)} — {date(s.statements.periodTo)}</p><div className="ws-inline-facts"><span><b>{s.statements.count??'—'}</b> выписок</span><span><b>{s.statements.accountCount??'—'}</b> счетов</span></div></div><div>{!!missing.known.length&&<p className="ws-missing">В сохранённом списке недостающих сведений: {missing.known.join(', ')}.</p>}{missing.unknown&&<p>Есть дополнительные требования к данным. Их описание доступно в подробном анализе.</p>}{!!inconsistent.length&&<p className="ws-source-conflict">Статусы требуют сверки: {inconsistent.join(', ')} одновременно отмечены как обработанные и недостающие. Полнота оценки не подтверждена.</p>}<details className="ws-source-details" open><summary>Состояние источников и банковских данных</summary><div className="ws-source-list">{s.availability.map((item,i)=><div key={i}><span>{sourceLabel(item.source)}</span><b>{sourceState(item.status)}</b><small>{date(item.periodFrom)} — {date(item.periodTo)}</small></div>)}{!s.availability.length&&<p>Сведения об источниках недоступны.</p>}</div><p>Обработка источника сама по себе не подтверждает его использование во всех выводах. Основания выводов приведены в подробном анализе.</p><p>Заполненность банковских данных: {s.completeness===null?'не определена':s.completeness+'%'}. Показатель учитывает заполненные поля операций и покрытие периода выписками. Это не полнота кредитной оценки.</p></details>{model.full&&<a href={reportUrl(model.analysisId)+'#data'}>Подробнее об основаниях и ограничениях ↗</a>}</div></section>;
+ return <section className="ws-sources"><div><span className="ws-eyebrow">ОСНОВА АНАЛИЗА</span><h2>Источники и покрытие</h2><p>Банковские выписки: {sourceState(s.statements.status)}</p><p>{s.statements.bankNames?.join(' · ')||'Банки не определены'}</p><p>{date(s.statements.periodFrom)} — {date(s.statements.periodTo)}</p><div className="ws-inline-facts"><span><b>{s.statements.count??'—'}</b> выписок</span><span><b>{s.statements.accountCount??'—'}</b> счетов</span></div></div><div>{!!missing.known.length&&<p className="ws-missing">В сохранённом списке недостающих сведений: {missing.known.join(', ')}.</p>}{missing.unknown&&<p>Есть дополнительные требования к данным. Их описание доступно в подробном анализе.</p>}{!!inconsistent.length&&<p className="ws-source-conflict">Статусы требуют сверки: {inconsistent.join(', ')} одновременно отмечены как обработанные и недостающие. Полнота оценки не подтверждена.</p>}<details className="ws-source-details" open><summary>Состояние источников и банковских данных</summary><div className="ws-source-list">{s.availability.map((item,i)=><div key={i}><span>{sourceLabel(item.source)}</span><b>{sourceState(item.status)}</b><small>{date(item.periodFrom)} — {date(item.periodTo)}</small></div>)}{!s.availability.length&&<p>Сведения об источниках недоступны.</p>}</div><p>Обработка источника сама по себе не подтверждает его использование во всех выводах. Основания выводов приведены в подробном анализе.</p><p>Заполненность банковских данных: {s.completeness===null?'не определена':s.completeness+'%'}. Показатель учитывает заполненные поля операций и покрытие периода выписками. Это не полнота кредитной оценки.</p></details>{model.full&&<a href={reportUrl(model.analysisId)+'#data'}>Подробнее об основаниях и ограничениях ↗</a>}</div></section>;
 }
 export function BankingAnalysis({model,includeSources=true}:{model:WorkspaceModelV1;includeSources?:boolean}) {
  const b=model.basic.bankingFacts;
@@ -41,10 +42,11 @@ export function BankingAnalysis({model,includeSources=true}:{model:WorkspaceMode
   ["Чистый внешний денежный поток",b.netCashFlow],
   ["Остаток на конец периода",b.endingBalance],
   ["Среднедневной остаток",b.averageDailyBalance],
-  ...(factValue(b.minimumDailyBalance)!==null?[["Минимальный остаток",b.minimumDailyBalance]]:[]),
- ].map(([label,fact])=><div key={String(label)}><dt>{String(label)}</dt><dd>{factMoney(fact as WorkspaceFactV1)}</dd></div>)}{factValue(b.lowLiquidityDays)!==null&&<div><dt>Дни низкой ликвидности</dt><dd>{factValue(b.lowLiquidityDays)}</dd></div>}</dl><p className="ws-kpi-note">Среднее за наблюдаемый период. Среднее по полным месяцам: {factMoney(b.fullMonthOperatingAverage)}.</p></section>
+  ["Минимальный остаток",b.minimumDailyBalance],
+ ].map(([label,fact])=><div key={String(label)}><dt>{String(label)}</dt><dd>{factMoney(fact as WorkspaceFactV1)}</dd></div>)}<div><dt>Дни низкой ликвидности</dt><dd>{factValue(b.lowLiquidityDays)??"Не определено"}</dd></div></dl><p className="ws-kpi-note">Среднее за наблюдаемый период. Среднее по полным месяцам: {factMoney(b.fullMonthOperatingAverage)}.</p></section>
  <DataPanel model={model}><Flow model={model}/></DataPanel>
  <BankingDetails model={model}/>
+ <BankingLedger model={model}/>
  {includeSources&&<Sources model={model}/>}
  </>;
 }
@@ -54,7 +56,7 @@ export function BankingDetails({model}:{model:WorkspaceModelV1}) {
  return <section className="ws-banking-details" aria-label="Детали банковского анализа">
   <h2>Платежи и контрагенты</h2><p>Наблюдаемые операции по выпискам. Неизвестные суммы не означают отсутствие платежей.</p>
   <dl className="ws-payment-facts">{[["Основной долг",b.loanPrincipalPayments],["Проценты",b.interestPayments],["Неразделённые долговые платежи",b.unsplitDebtPayments],["Лизинг",b.leasingPayments],["Налоги",b.taxPayments],["Социальные взносы",b.socialContributions],["Переводы физическим лицам",b.transfersToIndividuals]].map(([label,f])=><div key={String(label)}><dt>{String(label)}</dt><dd>{factMoney(f as WorkspaceFactV1)}</dd></div>)}</dl>
-  <div className="ws-counterparty-grid"><div><h3>Крупнейшие контрагенты</h3>{b.topCounterparties?.length?<dl className="ws-detail-list">{b.topCounterparties.map((c,i)=><div key={i}><dt>{c.name||'Название не указано'}</dt><dd>{money(c.amount)}</dd></div>)}</dl>:<p>Недостаточно данных о контрагентах.</p>}</div><div><h3>Концентрация прямых покупателей</h3><dl className="ws-detail-list"><div><dt>Крупнейший покупатель</dt><dd>{percent(b.directCustomerTop1)}</dd></div><div><dt>Три крупнейших покупателя</dt><dd>{percent(b.directCustomerTop3)}</dd></div></dl><p>Доли в прямых операционных поступлениях. Показатели пересекаются и не складываются.</p></div></div>
+  <div className="ws-counterparty-grid"><div><h3>Крупнейшие контрагенты</h3>{b.topCounterparties?.length?<dl className="ws-detail-list">{b.topCounterparties.map((c,i)=><div key={i}><dt>{c.name||'Название не указано'}</dt><dd>{money(c.amount)}<small>Доля: {new Intl.NumberFormat("ru-RU",{maximumFractionDigits:1}).format(c.share*100)}%</small></dd></div>)}</dl>:<p>Недостаточно данных о контрагентах.</p>}</div><div><h3>Концентрация прямых покупателей</h3><dl className="ws-detail-list"><div><dt>Крупнейший покупатель</dt><dd>{percent(b.directCustomerTop1)}</dd></div><div><dt>Три крупнейших покупателя</dt><dd>{percent(b.directCustomerTop3)}</dd></div></dl><p>Доли в прямых операционных поступлениях. Показатели пересекаются и не складываются.</p></div></div>
  </section>;
 }
 export function Home({model,retry}:{model:WorkspaceModelV1;retry?:()=>void}) {
@@ -83,18 +85,22 @@ function ClientRecoveryShell({view,choose,children,context,companyName,available
  const items=[
   {id:'home',label:'Обзор',icon:<LayoutDashboard/>},
   {id:'upload',label:'Новый анализ',icon:<FileSearch/>},
-  {id:'analysis',label:'Полный анализ',icon:<Gauge/>},
+  {id:'banking',label:'Банковский анализ',icon:<FileSearch/>},
+  {id:'analysis',label:'Кредитный анализ',icon:<Gauge/>},
   {id:'obligations',label:'БКИ и портфель',icon:<WalletCards/>},
-  {id:'company',label:'Компания и отчётность',icon:<Building2/>},
-  {id:'financing',label:'Предложения банков',icon:<Landmark/>},
+  {id:'company',label:'Финансовый анализ / отчётность',icon:<Building2/>},
+  {id:'reconciliation',label:'Сверка источников',icon:<ShieldCheck/>},
+  {id:'recommendations',label:'Рекомендации и план',icon:<Gauge/>},
+  {id:'sources',label:'Источники и качество',icon:<Files/>},
+  {id:'financing',label:'Финансирование',icon:<Landmark/>},
   {id:'analyst',label:'Кредитный аналитик',icon:<Sparkles/>},
   {id:'applications',label:'Заявки в банки',icon:<BriefcaseBusiness/>},
   {id:'documents',label:'Документы',icon:<Files/>},
  ];
  const groups=[
-  {title:'АНАЛИЗ',ids:['home','upload','analysis']},
-  {title:'ФИНАНСИРОВАНИЕ',ids:['financing','applications']},
-  {title:'ДАННЫЕ',ids:['documents','obligations','company']},
+  {title:'АНАЛИЗ',ids:['home','upload','banking','analysis','company','obligations','reconciliation']},
+  {title:'ФИНАНСИРОВАНИЕ',ids:['financing','recommendations','applications']},
+  {title:'ДАННЫЕ',ids:['sources','documents']},
   {title:'ПОМОЩЬ',ids:['analyst']},
  ];
  const visibleItems=items.filter(item=>!availableViews||availableViews.includes(item.id));

@@ -118,3 +118,25 @@
 
 .ws .ws-document-context { display:flex; flex-direction:column; gap:6px; line-height:1.6; }
 .ws .ws-document-context > * { position:static; margin:0; line-height:1.6; }
+
+/* CLIENT credit workstation: existing dashboard palette and typography. */
+.ps-client-recovery .cc-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:18px 0}
+.ps-client-recovery .cc-card{min-width:0;padding:24px;background:var(--ps-card,#fff);border:1px solid #dce4e0;border-radius:16px;overflow-wrap:anywhere}
+.ps-client-recovery .cc-card h3,.ps-client-recovery .cc-card h2{margin:10px 0;font-size:21px;line-height:1.3}
+.ps-client-recovery .cc-card p{line-height:1.6}.ps-client-recovery .cc-card li{margin:8px 0;line-height:1.5}
+.ps-client-recovery .cc-tone-critical{border-left:4px solid #ab3941}.ps-client-recovery .cc-tone-attention{border-left:4px solid #be863a}.ps-client-recovery .cc-tone-positive{border-left:4px solid #26745e}
+.ps-client-recovery .cc-badge{display:inline-block;padding:5px 9px;border-radius:8px;background:#eef3f0;font-size:12px;margin:3px 5px 3px 0}
+.ps-client-recovery .cc-money{background:#fff;padding:28px;border:1px solid #dce4e0;border-radius:20px;margin:24px 0}
+.ps-client-recovery .cc-money dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;margin:24px 0}
+.ps-client-recovery .cc-money dt{font-size:13px;color:#556761}.ps-client-recovery .cc-money dd{font-size:clamp(19px,2vw,29px);font-weight:650;letter-spacing:-.04em;margin:7px 0;overflow-wrap:anywhere}
+.ps-client-recovery .cc-credit-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));background:#eaf2ee;border:1px solid #cadbd2;border-radius:20px;margin-bottom:22px}
+.ps-client-recovery .cc-credit-kpis article{padding:24px;min-width:0}.ps-client-recovery .cc-credit-kpis strong{display:block;font-size:clamp(22px,3vw,38px);margin-top:10px;overflow-wrap:anywhere}
+.ps-client-recovery .cc-index-panel{padding:28px;background:#eaf2ee;border-radius:20px;margin:24px 0}.ps-client-recovery .cc-index-head{display:grid;grid-template-columns:1fr 2fr;gap:30px}.ps-client-recovery .cc-index-head strong{display:block;font-size:clamp(32px,5vw,64px);line-height:1.2;margin:16px 0}.ps-client-recovery .cc-components{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.ps-client-recovery .cc-components article{padding:16px;background:#fff;border-radius:12px;min-width:0}
+.ps-client-recovery .cc-table-scroll{overflow-x:auto;max-width:100%;margin:14px 0}.ps-client-recovery .cc-table-scroll table{border-collapse:collapse;width:100%;min-width:560px;font-size:14px}.ps-client-recovery .cc-table-scroll th,.ps-client-recovery .cc-table-scroll td{text-align:left;padding:14px 12px;border-bottom:1px solid #dce4e0;vertical-align:top}.ps-client-recovery .cc-table-scroll thead{background:#edf3ef}.ps-client-recovery .cc-table-scroll small{display:block;margin-top:6px;color:#52655d}.ps-client-recovery .cc-table-scroll caption{text-align:left;padding:10px 0;color:#52655d}
+.ps-client-recovery .cc-timeline{list-style:none;margin:20px 0;padding:0 0 0 20px;border-left:2px solid #94b4a5}.ps-client-recovery .cc-timeline>li{padding:0 0 25px 10px}.ps-client-recovery .cc-prose dt{font-size:12px;font-weight:700;color:#52655d;margin-top:14px}.ps-client-recovery .cc-prose dd{margin:5px 0;line-height:1.6}
+.ps-client-recovery .cc-warning{font-size:12px;color:#655636}.ps-client-recovery .cc-warning ul{padding-left:18px}.ps-client-recovery .ps-sidebar nav{overflow-y:auto;min-height:0}.ps-client-recovery .ps-sidebar nav button{min-height:40px}
+@media(max-width:1024px){.ps-client-recovery .cc-money dl{grid-template-columns:repeat(2,minmax(0,1fr))}.ps-client-recovery .cc-components{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.ps-client-recovery .cc-cards,.ps-client-recovery .cc-credit-kpis,.ps-client-recovery .cc-index-head,.ps-client-recovery .cc-components{grid-template-columns:1fr}.ps-client-recovery .cc-card,.ps-client-recovery .cc-money,.ps-client-recovery .cc-index-panel{padding:18px}.ps-client-recovery .cc-money dl{gap:18px 12px}.ps-client-recovery .cc-money dd{font-size:19px}.ps-client-recovery .cc-timeline{padding-left:12px}}
+.ps-client-recovery .cc-evidence-search{display:block;width:100%;max-width:640px;padding:13px;border:1px solid #a4b9ae;border-radius:10px;margin:8px 0;font:inherit}
+.ps-client-recovery .cc-card summary{font-weight:650;cursor:pointer;padding:8px 0}.ps-client-recovery .cc-card:focus-within{outline-color:#397c67}
+.ps-client-recovery .cc-index-head meter{display:block;width:100%;height:12px;accent-color:#397c67}

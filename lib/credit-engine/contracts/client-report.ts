@@ -28,6 +28,8 @@ export type ClientReportVisualV1={
  factorActions:Record<string,string[]>;
 };
 export type ClientReportModelV1={
+ financialAnalysis?:import('../client-report/source-detail.ts').PublicFinancialAnalysis|null;
+ reconciliation?:import('../client-report/source-detail.ts').PublicReconciliation;
  expertise?:PrescoreExpertiseV1;
  analysisV3?:AnalysisV3Presentation;
  visual:ClientReportVisualV1;

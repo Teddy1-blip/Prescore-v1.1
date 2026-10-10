@@ -60,7 +60,8 @@ test('recovery keeps classic CLIENT and BROKER UX on current analytical contract
  assert.match(presentation,/function ClientRecoveryShell/);
  assert.match(presentation,/Новый анализ/);
  assert.match(presentation,/БКИ и портфель/);
- assert.match(presentation,/Предложения банков/);
+ assert.match(presentation,/Финансирование/);
+ assert.doesNotMatch(presentation,/label:\s*'Предложения банков'/);
  assert.doesNotMatch(presentation,legacy);
 });
 
