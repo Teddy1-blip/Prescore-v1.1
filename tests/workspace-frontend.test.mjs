@@ -40,11 +40,17 @@ test('production broker GET executes PostgreSQL curator ordering without alias e
 });
 
 
-test('BASIC Analysis tab keeps statement analysis visible instead of reducing the page to an upgrade notice',()=>{
+test('BASIC conclusion keeps direct access to separate banking analysis',async()=>{
  const client=fs.readFileSync('app/components/workspace/client.tsx','utf8');
- assert.match(client,/view==='analysis'[\s\S]*<BankingAnalysis model=\{model\}/);
- assert.match(client,/Рассчитанные банковские данные сохранены/);
- assert.match(client,/open=\{!model.full\}/);
+ assert.match(client,/view==='banking'&&<BankingAnalysis/);
+ const rt=await createWorkspaceRuntime();try{
+ const {conclusionFixture}=await import('./fixtures/credit-conclusion.mjs');
+ const model=conclusionFixture().model;model.full=null;model.entitlement='BASIC';model.fullAvailability='NOT_ENTITLED';
+ const {CreditConclusion}=rt.load('app/components/workspace/credit-conclusion.tsx');
+ const html=renderToStaticMarkup(React.createElement(CreditConclusion,{model}));
+ assert.match(html,/Банковский результат сохранён/);
+ assert.ok(html.includes('view=banking'));
+ }finally{await rt.close();}
 });
 
 

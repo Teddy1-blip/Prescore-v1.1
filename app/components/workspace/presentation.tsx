@@ -83,10 +83,9 @@ export function Shell({broker=false,view,choose,children,secondary,context,compa
 function ClientRecoveryShell({view,choose,children,context,companyName,availableViews}:{view:string;choose:(v:string)=>void;children:ReactNode;context?:ReactNode;companyName?:string;availableViews?:string[]}){
  const [menu,setMenu]=useState(false);
  const items=[
-  {id:'home',label:'Обзор',icon:<LayoutDashboard/>},
+  {id:'home',label:'Кредитное заключение',icon:<LayoutDashboard/>},
   {id:'upload',label:'Новый анализ',icon:<FileSearch/>},
   {id:'banking',label:'Банковский анализ',icon:<FileSearch/>},
-  {id:'analysis',label:'Кредитный анализ',icon:<Gauge/>},
   {id:'obligations',label:'БКИ и портфель',icon:<WalletCards/>},
   {id:'company',label:'Финансовый анализ / отчётность',icon:<Building2/>},
   {id:'reconciliation',label:'Сверка источников',icon:<ShieldCheck/>},
