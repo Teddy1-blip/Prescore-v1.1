@@ -11,6 +11,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.request
 
 REPOSITORY = 'Teddy1-blip/Prescore-v1.1'
@@ -151,6 +152,26 @@ def push(workspace, state_dir, env, observed):
             output.write(summary)
 
 
+
+def verify_history_purge():
+    url = 'https://prescore-staging-dorogovab.amvera.io/api/health'
+    last = 'unavailable'
+    for _ in range(6):
+        try:
+            request = urllib.request.Request(url, headers={'User-Agent': 'Prescore-staging-access-check'})
+            with urllib.request.urlopen(request, timeout=20) as response:
+                payload = json.load(response)
+            purge = payload.get('purge') or {}
+            last = str(purge.get('status') or 'missing')
+            if payload.get('maintenanceMarker') == 'STAGING_HISTORY_PURGE_20261010' and last in ('done', 'already-done'):
+                print('Staging runtime confirmed old client history purge: ' + last + '.')
+                return
+        except Exception:
+            last = 'request-failed'
+        time.sleep(10)
+    raise DeliveryError('Staging runtime did not confirm old client history purge; status=' + last + '.')
+
+
 def main():
     env = {k: v for k, v in os.environ.items() if not k.startswith(('GIT_', 'GCM_'))}
     validate_destination(env)
@@ -167,6 +188,7 @@ def main():
         observed = remote_master(workspace, env)
         print(f'Authenticated read-only Git check passed; staging account/endpoint verified; master={observed}.')
         if sys.argv[1] == 'access':
+            verify_history_purge()
             return
         state_dir = Path(env['RUNNER_TEMP']) / 'prescore-delivery'
         if sys.argv[1] == 'prepare':
