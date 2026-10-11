@@ -138,3 +138,22 @@
 .pc-section-intro h2{font-size:20px;margin-top:5px}
 .pc-section-intro p{margin-top:6px;color:var(--pc-muted);font-size:12px;max-width:760px}
 @media(max-width:560px){.pc-section-intro{display:block}.pc-section-intro>button{margin-top:12px}}
+
+/* Localized document source picker */
+.pc-file-control{position:relative;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:10px;border:1px solid #cbd7dc;border-radius:4px;background:#fff;min-height:42px;padding:5px}
+.pc-file-native{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;opacity:0!important;cursor:pointer!important;padding:0!important;border:0!important}
+.pc-file-button{display:inline-flex;align-items:center;justify-content:center;min-height:30px;padding:5px 10px;border-radius:3px;background:#eef4f5;color:#24434f;font-size:11px;font-weight:650}
+.pc-file-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--pc-muted);font-size:11px}
+.pc-file-control:focus-within{outline:3px solid #0b969e;outline-offset:3px}
+.pc-file-control:hover .pc-file-button{background:#e2efef}
+
+/* Analyst should feel like a working tool, not a blank full-height canvas before history loads. */
+.pc-app .ps-ai-messages.is-idle{height:270px;min-height:270px;background:#f7f9fa}
+.pc-app .ps-ai-messages.is-idle .ps-ai-state,
+.pc-app .ps-ai-messages.is-idle .ps-ai-empty{max-width:520px}
+@media(max-width:650px){
+ .pc-app .ps-ai-messages.is-idle{height:250px;min-height:250px}
+ .pc-file-control{grid-template-columns:1fr}
+ .pc-file-button{justify-self:start}
+ .pc-file-name{white-space:normal}
+}
