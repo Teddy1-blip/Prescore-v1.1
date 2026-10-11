@@ -14,3 +14,8 @@ Milestone 2 SHA: `4884eea0f2436b4d2fc140f78e9574dd332e45a5`. Tests 5/5.
 
 ## Milestone 3
 Company periods, deterministic renewal, owner/INN/time-bound FULL resolver and read-only dated legacy access. Subscription + existing entitlement tests 3/3.
+
+Milestone 3 SHA: `fce6ca39203e9c29a7bdf70d2a86c9ef3e7df68e`. Tests 3/3; typecheck 0 new diagnostics.
+
+## Milestone 4
+Atomic commissions/outbox, Fake/Disabled settlement, leased bounded worker, confirmed refund adjustments and negative-balance offset. Targeted settlement 3/3; a concurrency test exposed missing reservation subtraction, fixed before commit.
