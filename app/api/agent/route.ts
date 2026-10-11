@@ -148,7 +148,7 @@ export async function GET(request: Request) {
         FROM agent_leads l WHERE l.agent_code = ? ORDER BY l.updated_at DESC LIMIT 200`).bind(code),
       db.prepare(`SELECT id, lead_id AS leadId, analysis_id AS analysisId, company_name AS companyName,
         bank, product, requested_amount AS requestedAmount, calculated_limit AS calculatedLimit,
-        CASE WHEN status IN ('Подготовка', 'Подготовка документов') THEN 'Подготовка заявки' ELSE status END AS status, next_action AS nextAction,
+        COALESCE((SELECT d.status FROM deals d WHERE d.id = agent_applications.id), status) AS status, next_action AS nextAction,
         created_at AS createdAt, updated_at AS updatedAt
         FROM agent_applications WHERE agent_code = ? ORDER BY updated_at DESC LIMIT 300`).bind(code),
       db.prepare(`SELECT p.agent_code AS agentCode, p.name, p.agency, p.city, p.status, p.created_at AS createdAt,
