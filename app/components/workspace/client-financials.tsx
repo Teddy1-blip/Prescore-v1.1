@@ -1,14 +1,102 @@
 "use client";
 import type {WorkspaceModelV1} from '../../../lib/workspace/model';
 import type {PublicFinancialMetric} from '../../../lib/credit-engine/client-report/source-detail';
-import {Heading,FullAccessNotice,date} from './presentation';
+import {FullAccessNotice,date} from './presentation';
 import {label,sourceLabel} from './credit-depth';
-import {FactorRows as Factors} from './client-insights';
+import {FactorRows,Panel} from './client-insights';
+
 const messages:Record<string,string>={
- SOURCE_FIELD_MISSING:'В источнике отсутствует необходимое поле.',MISSING_NOT_ZERO:'Отсутствующие значения не приравнены к нулю.',ZERO_DENOMINATOR:'Расчёт неприменим при нулевой базе.',NON_POSITIVE_EQUITY_DENOMINATOR:'Расчёт ограничен неположительным капиталом.',ENDING_BALANCE_DENOMINATOR:'Использован остаток на конец периода вместо среднего.',ENDING_DENOMINATOR_FALLBACK:'Средняя величина недоступна; использована конечная.',AVERAGE_DENOMINATOR_USED:'Использована средняя величина на начало и конец периода.',PERIOD_NOT_COMPARABLE:'Периоды не сопоставимы.',INTERIM_PERIOD_NOT_ANNUALIZED:'Промежуточные результаты не пересчитаны в годовые.',PERIOD_BOUNDARIES_UNKNOWN:'Границы периода не подтверждены.',SOURCE_FIELD_UNKNOWN:'Значение источника неизвестно.',CASH_BASIS_VS_ACCRUAL_BASIS:'Поступления отражают движение денег, выручка — метод начисления.',VAT_AND_ACCOUNTING_PRESENTATION_MAY_DIFFER:'НДС и правила учёта могут влиять на сопоставимость.',CUSTOMER_ADVANCE_TIMING_MAY_DIFFER:'Авансы покупателей могут относиться к другому периоду.',RECEIVABLE_COLLECTION_TIMING_MAY_DIFFER:'Погашение дебиторской задолженности может относиться к другому периоду.',BANK_ACCOUNT_SET_NOT_PROVEN_COMPLETE:'Полнота набора банковских счетов не подтверждена.',CROSS_PERIOD_COMPARABILITY_REQUIRED:'Необходимо проверить сопоставимость периодов.',SOURCE_MISSING:'Источник не добавлен.',NO_REPORTED_INTEREST_EXPENSE:'Расходы по процентам в отчётности не указаны.'};
-export function Warnings({items}:{items:string[]}){if(!items.length)return null;const known=[...new Set(items.map(s=>messages[s]).filter(Boolean))],extra=items.filter(s=>!messages[s]).length;return <div className="cc-warning"><ul>{known.map(s=><li key={s}>{s}</li>)}</ul>{extra>0&&<p>Дополнительные ограничения источника: {extra}. Используйте показатель с указанной достоверностью и проверьте исходный документ.</p>}</div>;}
-export function numeric(value:number|string|null,status:string,unit:string){if(status==='NOT_APPLICABLE')return 'Не применимо';if(status==='UNKNOWN'||value===null)return 'Не определено';if(typeof value==='string')return value;return new Intl.NumberFormat('ru-RU',{maximumFractionDigits:unit==='RUB'?0:3}).format(value)+({RUB:' ₽',PERCENT:'%',DAYS:' дн.',COUNT:'',RATIO:' ×'}[unit]??'');}
-function MetricTable({metrics}:{metrics:PublicFinancialMetric[]}){return <div className="cc-table-scroll"><table><thead><tr><th>Показатель</th><th>Значение</th><th>Качество и период</th></tr></thead><tbody>{metrics.map(m=><tr key={m.key}><th scope="row">{m.label}</th><td>{numeric(m.value,m.status,m.unit)}</td><td>{label(m.status)} · {label(m.confidence)} · {label(m.origin)}<small>{m.periodFrom||m.periodTo?date(m.periodFrom)+' — '+date(m.periodTo):date(m.asOf)}</small><Warnings items={m.warnings}/></td></tr>)}</tbody></table></div>;}
-export function FinancialStatements({model}:{model:WorkspaceModelV1}){const r=model.full?.report;if(!r)return <FullAccessNotice model={model}/>;const a=r.financialAnalysis;return <><Heading eyebrow="ФИНАНСОВЫЙ АНАЛИЗ" title="Отчётность, капитал и эффективность"><p>Показатели рассчитаны сервером по полученной БФО и квартальной отчётности. Денежный поток по выпискам не заменяет бухгалтерскую выручку.</p></Heading>{a?.history.length?<><Warnings items={a.warnings}/>{a.history.map(p=><section className="ws-section" key={p.id}><h2>{sourceLabel(p.source)} · {date(p.period.from)} — {date(p.period.to)}</h2><p>На {date(p.period.asOf)} · {p.period.kind==='ANNUAL'?'Годовая':p.period.kind==='INTERIM'?'Промежуточная':'Период не уточнён'} · Достоверность: {label(p.quality.confidence)}</p><p>Период доходов и расходов: {({FULL_YEAR:"Полный год",CUMULATIVE_YTD:"Нарастающим итогом с начала года",STANDALONE_PERIOD:"Отдельный период",UNKNOWN:"Не определён"})[p.period.flowPeriodType]??"Не определён"} · месяцев: {p.period.monthsCovered??"не определено"}.</p><p>Покрытие основных полей баланса: {new Intl.NumberFormat("ru-RU",{maximumFractionDigits:1}).format(p.quality.coreBalanceFieldCoverage*100)}%; финансового результата: {new Intl.NumberFormat("ru-RU",{maximumFractionDigits:1}).format(p.quality.coreIncomeFieldCoverage*100)}%.</p><p>Баланс: {p.quality.balanceReconciled===null?'сверка не определена':p.quality.balanceReconciled?'сходится':'требует сверки'}; финансовый результат: {p.quality.incomeReconciled===null?'сверка не определена':p.quality.incomeReconciled?'сходится':'требует сверки'}.</p><Warnings items={p.quality.warnings}/>{p.groups.map(g=><section key={g.key}><h3>{g.title}</h3><MetricTable metrics={g.metrics}/></section>)}</section>)}<section className="ws-section"><h2>Изменения по сопоставимым периодам</h2>{a.trends.map((t,i)=><article className="cc-card" key={i}><h3>{t.label}</h3><p>{date(a.history.find(p=>p.id===t.previousId)?.period.asOf)} → {date(a.history.find(p=>p.id===t.currentId)?.period.asOf)}</p><p>{t.comparability==='COMPARABLE_ANNUAL_YOY'?'Сопоставимые годовые периоды':t.comparability==='COMPARABLE_INTERIM_YOY'?'Сопоставимые промежуточные периоды':'Сопоставимость для расчёта динамики не подтверждена'}</p><MetricTable metrics={[{...t.absolute,key:'absolute',label:'Изменение суммы'},{...t.relative,key:'relative',label:'Относительное изменение'}]}/></article>)}</section></>:<section className="cc-card"><h2>Отчётность для финансового анализа не обработана</h2><p>Отсутствие показателей не означает нулевую выручку или отсутствие активов.</p></section>}<section className="ws-section"><h2>Финансовые выводы текущего отчёта</h2>{r.detailedSections.filter(s=>/financial|финанс|отчёт|отчет|капитал|ликвид|рентаб/i.test(s.id+' '+s.title)).map(s=><section key={s.id}><h3>{s.title}</h3><Factors model={model} items={s.factors}/></section>)}</section></>;}
-const outcomes:Record<string,string>={AGREES:'Источники согласуются',WITHIN_TOLERANCE:'Согласуются в пределах допустимого отклонения',CONFLICT:'Расхождение источников',RELATIONSHIP_OBSERVED:'Связь показателей наблюдается',NOT_COMPARABLE:'Сведения не сопоставимы',INSUFFICIENT_DATA:'Недостаточно сведений для сверки',SOURCE_MISSING:'Источник не добавлен'};
-export function ReconciliationDetails({model}:{model:WorkspaceModelV1}){const r=model.full?.report;if(!r)return <FullAccessNotice model={model}/>;const a=r.reconciliation;return <><Heading eyebrow="СВЕРКА ИСТОЧНИКОВ" title="Где данные согласуются, а где нужна проверка"><p>Разные определения и периоды могут объяснять различия. Расхождение само по себе не является кредитным решением.</p></Heading>{a?<><p>Достоверность: {label(a.confidence)}</p><Warnings items={a.warnings}/>{a.findings.map(f=><article className={'cc-card '+(f.requiresReview?'cc-tone-attention':'')} key={f.id}><span className="cc-badge">{outcomes[f.outcome]??'Состояние сверки не определено'}</span><h2>{f.title}</h2><p>{f.requiresReview?'Требуется проверить источники.':'Отдельная проверка этим результатом не запрошена.'} Достоверность: {label(f.confidence)}.</p><p>Сопоставимость: {({EXACT_PERIOD:"Одинаковый период",EXACT_ASOF:"Одинаковая дата",NEAR_ASOF:"Близкие даты",FULL_MONTH_ALIGNED:"Совмещены полные месяцы",PARTIAL:"Частичная",NONE:"Не подтверждена"})[f.comparability]??"Не определена"}.</p><div className="cc-cards">{[f.left,f.right].map((side,n)=><div key={n}>{side.map((v,i)=><div key={i}><h3>{sourceLabel(v.sourceType)} · {v.label}</h3><strong>{numeric(v.value,v.status,v.unit)}</strong><p>{date(v.period.from)} — {date(v.period.to)} · На {date(v.period.asOf)}</p><small>{label(v.status)} · {label(v.confidence)}</small><Warnings items={v.warnings}/></div>)}{!side.length&&<p>Сопоставляемый источник отсутствует.</p>}</div>)}</div><dl className="ws-detail-list"><div><dt>Разница в единицах исходных показателей</dt><dd>{numeric(f.absoluteDifference,'KNOWN','')}</dd></div><div><dt>Относительное отклонение</dt><dd>{numeric(f.relativeDifference,'KNOWN','RATIO')}</dd></div><div><dt>Соотношение значений</dt><dd>{numeric(f.ratio,'KNOWN','RATIO')}</dd></div><div><dt>Разница дат</dt><dd>{numeric(f.temporalGapDays,'KNOWN','DAYS')}</dd></div></dl><Warnings items={[...f.reasons,...f.warnings]}/></article>)}{!a.findings.length&&<p>Результаты сопоставления источников пока отсутствуют.</p>}</>:<p>Детальная сверка не опубликована для этого анализа.</p>}<section className="ws-section"><h2>Влияние на кредитную оценку</h2>{r.detailedSections.filter(s=>/reconcil|сверк|источник/i.test(s.id+' '+s.title)).map(s=><section key={s.id}><h3>{s.title}</h3><Factors model={model} items={s.factors}/></section>)}<Factors model={model} items={r.limitations}/></section></>;}
+ SOURCE_FIELD_MISSING:'В источнике отсутствует необходимое поле.',
+ MISSING_NOT_ZERO:'Отсутствующие значения не приравнены к нулю.',
+ ZERO_DENOMINATOR:'Расчёт неприменим при нулевой базе.',
+ NON_POSITIVE_EQUITY_DENOMINATOR:'Расчёт ограничен неположительным капиталом.',
+ ENDING_BALANCE_DENOMINATOR:'Использован остаток на конец периода вместо среднего.',
+ ENDING_DENOMINATOR_FALLBACK:'Средняя величина недоступна; использована конечная.',
+ AVERAGE_DENOMINATOR_USED:'Использована средняя величина на начало и конец периода.',
+ PERIOD_NOT_COMPARABLE:'Периоды не сопоставимы.',
+ INTERIM_PERIOD_NOT_ANNUALIZED:'Промежуточные результаты не пересчитаны в годовые.',
+ PERIOD_BOUNDARIES_UNKNOWN:'Границы периода не подтверждены.',
+ SOURCE_FIELD_UNKNOWN:'Значение источника неизвестно.',
+ CASH_BASIS_VS_ACCRUAL_BASIS:'Поступления отражают движение денег, выручка — метод начисления.',
+ VAT_AND_ACCOUNTING_PRESENTATION_MAY_DIFFER:'НДС и правила учёта могут влиять на сопоставимость.',
+ CUSTOMER_ADVANCE_TIMING_MAY_DIFFER:'Авансы покупателей могут относиться к другому периоду.',
+ RECEIVABLE_COLLECTION_TIMING_MAY_DIFFER:'Погашение дебиторской задолженности может относиться к другому периоду.',
+ BANK_ACCOUNT_SET_NOT_PROVEN_COMPLETE:'Полнота набора банковских счетов не подтверждена.',
+ CROSS_PERIOD_COMPARABILITY_REQUIRED:'Необходимо проверить сопоставимость периодов.',
+ SOURCE_MISSING:'Источник не добавлен.',
+ NO_REPORTED_INTEREST_EXPENSE:'Расходы по процентам в отчётности не указаны.'
+};
+
+export function Warnings({items}:{items:string[]}){
+ if(!items.length)return null;
+ const known=[...new Set(items.map(s=>messages[s]).filter(Boolean))],extra=items.filter(s=>!messages[s]).length;
+ return <div className="pc-data-note"><ul>{known.map(s=><li key={s}>{s}</li>)}</ul>{extra>0&&<p>Есть дополнительные ограничения источника: {extra}. Проверьте исходный документ и достоверность показателя.</p>}</div>;
+}
+
+export function numeric(value:number|string|null,status:string,unit:string){
+ if(status==='NOT_APPLICABLE')return 'Не применимо';
+ if(status==='UNKNOWN'||value===null)return 'Не определено';
+ if(typeof value==='string')return value;
+ return new Intl.NumberFormat('ru-RU',{maximumFractionDigits:unit==='RUB'?0:3}).format(value)+({RUB:' ₽',PERCENT:'%',DAYS:' дн.',COUNT:'',RATIO:' ×'}[unit]??'');
+}
+
+function MetricTable({metrics}:{metrics:PublicFinancialMetric[]}){
+ return <div className="pc-table-scroll"><table><thead><tr><th>Показатель</th><th>Значение</th><th>Качество и период</th></tr></thead><tbody>{metrics.map(m=><tr key={m.key}><th scope="row">{m.label}</th><td>{numeric(m.value,m.status,m.unit)}</td><td>{label(m.status)} · {label(m.confidence)} · {label(m.origin)}<small>{m.periodFrom||m.periodTo?date(m.periodFrom)+' — '+date(m.periodTo):date(m.asOf)}</small><Warnings items={m.warnings}/></td></tr>)}</tbody></table></div>;
+}
+
+export function FinancialStatements({model}:{model:WorkspaceModelV1}){
+ const r=model.full?.report;
+ if(!r)return <FullAccessNotice model={model}/>;
+ const a=r.financialAnalysis;
+ const conclusions=r.detailedSections.filter(s=>/financial|финанс|отчёт|отчет|капитал|ликвид|рентаб/i.test(s.id+' '+s.title));
+ return <>
+  <Panel title="Финансовая отчётность">
+   <p>Показатели рассчитаны сервером по полученной БФО и квартальной отчётности. Денежный поток по выпискам не заменяет бухгалтерскую выручку.</p>
+   {!a?.history.length&&<div className="pc-empty-inline"><h3>Отчётность для финансового анализа не обработана</h3><p>Отсутствие показателей не означает нулевую выручку, прибыль или отсутствие активов.</p></div>}
+  </Panel>
+  {a?.history.map((p,index)=><section className="pc-panel pc-financial-period" key={p.id}>
+   <header><div><h2>{sourceLabel(p.source)}</h2><p>{date(p.period.from)} — {date(p.period.to)} · на {date(p.period.asOf)}</p></div><span className="pc-badge">{p.period.kind==='ANNUAL'?'Годовая':p.period.kind==='INTERIM'?'Промежуточная':'Период не уточнён'}</span></header>
+   <div className="pc-quality-grid">
+    <div><span>Достоверность</span><strong>{label(p.quality.confidence)}</strong></div>
+    <div><span>Поля баланса</span><strong>{new Intl.NumberFormat('ru-RU',{maximumFractionDigits:1}).format(p.quality.coreBalanceFieldCoverage*100)}%</strong></div>
+    <div><span>Финансовый результат</span><strong>{new Intl.NumberFormat('ru-RU',{maximumFractionDigits:1}).format(p.quality.coreIncomeFieldCoverage*100)}%</strong></div>
+    <div><span>Период результата</span><strong>{({FULL_YEAR:'Полный год',CUMULATIVE_YTD:'С начала года',STANDALONE_PERIOD:'Отдельный период',UNKNOWN:'Не определён'})[p.period.flowPeriodType]??'Не определён'}</strong></div>
+   </div>
+   <p className="pc-muted">Баланс: {p.quality.balanceReconciled===null?'сверка не определена':p.quality.balanceReconciled?'сходится':'требует сверки'} · финансовый результат: {p.quality.incomeReconciled===null?'сверка не определена':p.quality.incomeReconciled?'сходится':'требует сверки'} · месяцев в периоде: {p.period.monthsCovered??'не определено'}.</p>
+   <Warnings items={[...(index===0?a.warnings:[]),...p.quality.warnings]}/>
+   <div className="pc-metric-groups">{p.groups.map(g=><details className="pc-metric-group" key={g.key}><summary>{g.title}<span>{g.metrics.length} показателей</span></summary><MetricTable metrics={g.metrics}/></details>)}</div>
+  </section>)}
+  {!!a?.trends.length&&<Panel title="Изменения по сопоставимым периодам"><div className="pc-trend-cards">{a.trends.map((t,i)=><article key={i}><span>{t.comparability==='COMPARABLE_ANNUAL_YOY'?'Год к году':t.comparability==='COMPARABLE_INTERIM_YOY'?'Промежуточный период':'Сопоставимость ограничена'}</span><h3>{t.label}</h3><p>{date(a.history.find(p=>p.id===t.previousId)?.period.asOf)} → {date(a.history.find(p=>p.id===t.currentId)?.period.asOf)}</p><MetricTable metrics={[{...t.absolute,key:'absolute',label:'Изменение суммы'},{...t.relative,key:'relative',label:'Относительное изменение'}]}/></article>)}</div></Panel>}
+  <Panel title="Финансовые выводы текущего анализа">{conclusions.length?conclusions.map(s=><section className="pc-factor-section" key={s.id}><h3>{s.title}</h3><FactorRows model={model} items={s.factors}/></section>):<p className="pc-muted">Отдельные финансовые выводы не выделены в текущей версии анализа.</p>}</Panel>
+ </>;
+}
+
+const outcomes:Record<string,string>={
+ AGREES:'Источники согласуются',
+ WITHIN_TOLERANCE:'Согласуются в пределах допустимого отклонения',
+ CONFLICT:'Есть расхождение',
+ RELATIONSHIP_OBSERVED:'Связь показателей наблюдается',
+ NOT_COMPARABLE:'Сведения не сопоставимы',
+ INSUFFICIENT_DATA:'Недостаточно сведений',
+ SOURCE_MISSING:'Источник не добавлен'
+};
+
+export function ReconciliationDetails({model}:{model:WorkspaceModelV1}){
+ const r=model.full?.report;
+ if(!r)return <FullAccessNotice model={model}/>;
+ const a=r.reconciliation;
+ return <>
+  <Panel title="Сопоставление источников">
+   <p>Prescore сравнивает банковские данные, отчётность и кредитную историю там, где показатели и периоды действительно сопоставимы. Расхождение само по себе не является кредитным решением.</p>
+   {a&&<div className="pc-statusline"><span className="pc-badge">Достоверность: {label(a.confidence)}</span><span className={'pc-badge'+(a.findings.some(f=>f.requiresReview)?' attention':'')}>{a.findings.filter(f=>f.requiresReview).length} требуют проверки</span></div>}
+   {a&&<Warnings items={a.warnings}/>}
+  </Panel>
+  {a?<div className="pc-reconciliation-list">{a.findings.map(f=><article className={'pc-recon-card'+(f.requiresReview?' needs-review':'')} key={f.id}>
+   <header><div><span>{outcomes[f.outcome]??'Состояние сверки не определено'}</span><h2>{f.title}</h2></div><span className={'pc-badge'+(f.requiresReview?' attention':'')}>{f.requiresReview?'Проверить':'Без отдельной проверки'}</span></header>
+   <p>{f.requiresReview?'Есть расхождение или ограничение сопоставимости, которое стоит объяснить до подачи заявки.':'Сопоставление не выявило отдельного действия по этому факту.'}</p>
+   <p className="pc-muted">Сопоставимость: {({EXACT_PERIOD:'одинаковый период',EXACT_ASOF:'одинаковая дата',NEAR_ASOF:'близкие даты',FULL_MONTH_ALIGNED:'совмещены полные месяцы',PARTIAL:'частичная',NONE:'не подтверждена'})[f.comparability]??'не определена'} · достоверность: {label(f.confidence)}.</p>
+   <details><summary>Сравнить исходные показатели</summary><div className="pc-recon-sides">{[f.left,f.right].map((side,n)=><div key={n}>{side.map((v,i)=><div className="pc-recon-value" key={i}><h3>{sourceLabel(v.sourceType)} · {v.label}</h3><strong>{numeric(v.value,v.status,v.unit)}</strong><p>{date(v.period.from)} — {date(v.period.to)} · на {date(v.period.asOf)}</p><small>{label(v.status)} · {label(v.confidence)}</small><Warnings items={v.warnings}/></div>)}{!side.length&&<p>Сопоставляемый источник отсутствует.</p>}</div>)}</div><dl className="pc-definition"><div><dt>Абсолютная разница</dt><dd>{numeric(f.absoluteDifference,'KNOWN','')}</dd></div><div><dt>Относительное отклонение</dt><dd>{numeric(f.relativeDifference,'KNOWN','RATIO')}</dd></div><div><dt>Соотношение значений</dt><dd>{numeric(f.ratio,'KNOWN','RATIO')}</dd></div><div><dt>Разница дат</dt><dd>{numeric(f.temporalGapDays,'KNOWN','DAYS')}</dd></div></dl><Warnings items={[...f.reasons,...f.warnings]}/></details>
+  </article>)}{!a.findings.length&&<Panel title="Сверка завершена"><p>Отдельные результаты сопоставления источников пока отсутствуют.</p></Panel>}</div>:<Panel title="Сверка недоступна"><p>Детальная сверка не опубликована для этого анализа.</p></Panel>}
+  <Panel title="Влияние на кредитную оценку">{r.detailedSections.filter(s=>/reconcil|сверк|источник/i.test(s.id+' '+s.title)).map(s=><section className="pc-factor-section" key={s.id}><h3>{s.title}</h3><FactorRows model={model} items={s.factors}/></section>)}<FactorRows model={model} items={r.limitations}/></Panel>
+ </>;
+}
