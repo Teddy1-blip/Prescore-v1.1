@@ -47,7 +47,7 @@ file existence alone is not evidence. Canonical stages 05–17 are orchestrated 
 | 05 Financial analysis | lib/credit-engine/financial-analysis/engine.ts:buildFinancialAnalysis | BFO and quarterly snapshots | Financial analysis history and trends | Finance; analysis financial-state section | tests/financial-analysis-v2.test.mjs |
 | 06 Reconciliation | lib/credit-engine/reconciliation/engine.ts:buildReconciliation | Bank metrics, financials, BKI, manifest | Cross-source findings and comparison values | Analysis → Сопоставление данных | tests/reconciliation-v1.test.mjs |
 | 07 Risk and stop factors | lib/credit-engine/risk/engine.ts:evaluateRiskFacts | adaptRiskFacts output | Risk assessment | Analysis risk hierarchy and verdict | tests/risk-engine-v1.test.mjs |
-| 08 Credit Lab | lib/credit-engine/credit-lab/business-corpus.mjs; scripts/credit-lab-business.mjs | Synthetic source bundles | Full calculated pipeline acceptance | Staging infrastructure only | tests/credit-lab-business.test.mjs; tests/credit-lab-runtime.test.mjs |
+| 08 Credit Lab | lib/credit-engine/credit-lab/business-corpus.mjs; scripts/credit-lab-business.mjs | Synthetic source bundles | Full calculated pipeline acceptance | Isolated QA outside client navigation | tests/credit-lab-business.test.mjs; tests/credit-lab-runtime.test.mjs |
 | 09 Context/case | lib/credit-engine/context/engine.ts:buildContextAssessment | Risk, source analysis, financing case | ContextAssessment | Context and limiting factors | tests/context-engine-v1.test.mjs |
 | 10 Index | lib/credit-engine/index/engine.ts:buildPrescoreIndex | Risk and context | PrescoreIndex 0–1000 and components | Executive metrics; analysis factors | tests/prescore-index-v1.test.mjs; tests/client-product.test.mjs |
 | 11 Readiness | lib/credit-engine/readiness/engine.ts:buildFinancingReadiness | Risk/context/index | FinancingReadiness | Independent metric and explanation | tests/financing-readiness-v1.test.mjs |
@@ -138,3 +138,10 @@ Supported source boundaries remain explicit: banking import accepts TXT
 BKI and quarterly inputs use their existing parsers; BFO/company retrieval uses the
 existing open-data operation. Missing data receives an explanation/action, never
 invented values. Availability of an external data provider remains a runtime condition.
+
+Financial trends are shown as compact rows (absolute change, relative change,
+comparison period and comparability), preserving canonical values and warnings.
+Application counters use the same existing operational statuses, deduplicate mirrored
+client/broker records by ID, and return UNKNOWN if any status cannot be classified.
+Source-state browser fixtures each own a fresh isolated runtime, avoiding accumulation
+of source bundles during acceptance; runtime exit codes/signals are logged.

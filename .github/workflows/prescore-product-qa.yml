@@ -28,7 +28,8 @@ jobs:
       - name: Build
         run: npm run build
       - name: Product regression suite
-        run: npm test
+        # The previous step already built the exact SHA; run the full suite once.
+        run: node --experimental-strip-types --test tests/*.test.mjs
       - name: Canonical business acceptance
         run: npm run credit-lab:business -- "$RUNNER_TEMP/credit-lab-product-${{ github.run_id }}-${{ github.run_attempt }}"
       - name: Lint

@@ -48,3 +48,13 @@ test('dossier exposes maturity from canonical portfolio; unknown values never be
   assert.match(html,/Факторинг/);assert.match(html,/Режим просмотра/);assert.doesNotMatch(html,/Новая заявка|Отменить|Чат<\/button>/);
  }finally{await rt.close();}
 });
+
+
+test('active application counter deduplicates mirrored records and retains unknown statuses',async()=>{
+ const {readWorkspaceOperations}=await import('../lib/workspace/service.ts');
+ const run=async rows=>readWorkspaceOperations({prepare:()=>({bind:()=>({first:async()=>({count:0,analysis_count:0}),all:async()=>({results:rows})})})},'analysis','inn',{email:'owner',isAdmin:false});
+ const model=await run([{id:'1',status:'Подготовка документов',source:'deal'},{id:'1',status:'Подготовка заявки',source:'agent'},{id:'2',status:'Закрыта',source:'deal'}]);
+ assert.equal(model.applications.count,2);assert.equal(model.applications.activeCount,1);
+ assert.equal((await run([])).applications.activeCount,0);
+ assert.equal((await run([{id:'1',status:'Неизвестный статус',source:'deal'}])).applications.activeCount,null);
+});

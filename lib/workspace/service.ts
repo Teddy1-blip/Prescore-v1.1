@@ -149,7 +149,11 @@ export async function readWorkspaceOperations(
       }
       const statuses = [...counts].map(([status, count]) => ({ status, count })).sort((a, b) => a.status.localeCompare(b.status, "ru"));
       const count = logical.size;
-      applications = { status: count ? "AVAILABLE" : "NONE", count, activeCount: null, statuses };
+      const activeStatuses=new Set(['Новая','Черновик','Подготовка','Подготовка заявки','Подготовка документов','Требуются документы','Отправлена в банк','На рассмотрении у финансового партнёра','Предварительное решение','Одобрена']);
+      const terminalStatuses=new Set(['Выдана','Отклонена','Закрыта','Отменена клиентом']);
+      const known=[...logical.values()].every(row=>activeStatuses.has(row.status)||terminalStatuses.has(row.status));
+      const activeCount=known?[...logical.values()].filter(row=>activeStatuses.has(row.status)).length:null;
+      applications = { status: count ? "AVAILABLE" : "NONE", count, activeCount, statuses };
     }
   } catch { /* Missing operational schema stays UNKNOWN and never becomes zero. */ }
   return { documents, applications };
