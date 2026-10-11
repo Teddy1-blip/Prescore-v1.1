@@ -29,9 +29,9 @@ async function fileBase64(file: File) {
   return btoa(binary);
 }
 
-type DocumentsProps = { companyInn: string; companyName: string; analysisId: string; readOnly?: boolean };
+type DocumentsProps = { companyInn: string; companyName: string; analysisId: string; readOnly?: boolean; showHeading?: boolean };
 export default function DocumentsHub(props:DocumentsProps){return <DocumentsContext key={props.companyInn+":"+props.analysisId} {...props}/>;}
-function DocumentsContext({ companyInn, companyName, analysisId, readOnly = false }: DocumentsProps) {
+function DocumentsContext({ companyInn, companyName, analysisId, readOnly = false, showHeading = true }: DocumentsProps) {
   const input = useRef<HTMLInputElement>(null),pending=useRef(false),requestId=useRef(0);
   const [category, setCategory] = useState(categories[0]);
   const [documents, setDocuments] = useState<DocumentMeta[]>([]);
@@ -70,7 +70,7 @@ function DocumentsContext({ companyInn, companyName, analysisId, readOnly = fals
 
   const shown=scope==='analysis'?documents.filter(d=>d.analysisId===analysisId):documents;
   return <>
-    <div className="ps-heading"><div><span>ЕДИНОЕ ДОСЬЕ</span><h1>Документы клиента</h1><p>{companyName} · ИНН {companyInn || "не определён"}. Это досье компании. Документы других анализов могут входить в общее досье; связь каждого файла показана отдельно.</p></div></div>
+    {showHeading&&<div className="ps-heading"><div><span>ЕДИНОЕ ДОСЬЕ</span><h1>Документы клиента</h1><p>{companyName} · ИНН {companyInn || "не определён"}. Это досье компании. Документы других анализов могут входить в общее досье; связь каждого файла показана отдельно.</p></div></div>}
     <p className="ws-document-warning">Загрузка в Documents Hub не включает файл в кредитный расчёт автоматически. Банковские выписки, БКИ и квартальную отчётность передавайте через соответствующие разделы анализа.</p>
     {error&&<p role="alert" className="ps-chat-error">{error} <button disabled={loading||uploading} onClick={()=>void load()}>Обновить список</button></p>}{message&&<p role="status">{message}</p>}
     <div className="ps-documents-layout">{!readOnly && <section className="ps-card ps-doc-upload"><div><FileArchive /><span><small>ДОКУМЕНТЫ КОМПАНИИ</small><h2>Добавить в досье</h2><p>Файл привязывается к компании и выбранному анализу. Вложения заявки добавляются через её чат. Допустимы PDF, Excel, CSV, TXT, DOC и DOCX до 1 250 КБ.</p></span></div><label>Тип документа<select disabled={uploading} value={category} onChange={(event) => setCategory(event.target.value)}>{categories.map((item) => <option key={item}>{item}</option>)}</select></label><input ref={input} hidden multiple disabled={uploading} type="file" accept=".pdf,.xlsx,.xls,.csv,.txt,.doc,.docx" onChange={(event) => void upload(event)} /><button disabled={uploading || !companyInn} onClick={() => input.current?.click()}>{uploading ? <><LoaderCircle className="spin" /> Сохраняем…</> : <><UploadCloud /> Выбрать документы</>}</button><small className="ps-storage-note"><ShieldCheck /> Документы доступны владельцу и уполномоченным участникам работы с компанией.</small></section>}
