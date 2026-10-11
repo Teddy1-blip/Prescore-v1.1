@@ -1,0 +1,81 @@
+name: Prescore product QA
+
+on:
+  push:
+    branches: [prescore-product-v1]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prescore-product-v1-qa
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Product regression suite
+        run: npm test
+      - name: Canonical business acceptance
+        run: npm run credit-lab:business -- "$RUNNER_TEMP/credit-lab-product-${{ github.run_id }}-${{ github.run_attempt }}"
+      - name: Lint
+        run: npm run lint
+      - name: Validate deployable artifact
+        run: npm run validate:artifact
+      - name: Standalone PDF extraction
+        run: node scripts/platform/pdf-artifact-smoke.mjs
+      - name: Preserve business acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b5e75b540449e92b4886f43607fa02
+        with:
+          name: product-credit-lab-${{ github.sha }}
+          path: ${{ runner.temp }}/credit-lab-product-${{ github.run_id }}-${{ github.run_attempt }}/
+          if-no-files-found: error
+          retention-days: 30
+
+  presentation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: npm ci
+      - name: Install browser
+        run: npx --no-install playwright install --with-deps chromium
+      - name: Build canonical presentation harness
+        run: node --experimental-strip-types scripts/qa/client-analysis-v3-harness.mjs "$RUNNER_TEMP/client-v3-browser/harness"
+      - name: Full Analysis V3 responsive acceptance
+        run: node scripts/qa/client-analysis-v3-browser.mjs "$RUNNER_TEMP/client-v3-browser"
+      - name: CLIENT product routes and responsive regression
+        run: node scripts/qa/client-product-browser.mjs "$RUNNER_TEMP/client-product-browser"
+      - name: Preserve presentation evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b5e75b540449e92b4886f43607fa02
+        with:
+          name: product-presentation-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/client-v3-browser/*.json
+            ${{ runner.temp }}/client-v3-browser/*.png
+            ${{ runner.temp }}/client-v3-browser/*.pdf
+            ${{ runner.temp }}/client-product-browser/*.json
+            ${{ runner.temp }}/client-product-browser/*.png
+          if-no-files-found: error
+          retention-days: 30
