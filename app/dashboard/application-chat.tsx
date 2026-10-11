@@ -27,8 +27,9 @@ function ApplicationContext({ applicationId, title, companyInn, analysisId, role
   const dialog = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const overflow = document.body.style.overflow; document.body.style.overflow = "hidden";
     dialog.current?.querySelector<HTMLElement>('button')?.focus();
-    return () => { previous?.focus(); };
+    return () => { document.body.style.overflow = overflow; previous?.focus(); };
   }, []);
 
 
@@ -93,7 +94,7 @@ function ApplicationContext({ applicationId, title, companyInn, analysisId, role
     setSending(true); setError("");
     try {
       if (file.size > 1_250_000) throw new Error("Для пилотного хранилища файл должен быть до 1 250 КБ");
-      const upload = await fetch("/api/documents", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ companyInn, analysisId, applicationId, category: "Документы по заявке", fileName: file.name, mimeType: file.type, sizeBytes: file.size, contentBase64: await fileBase64(file), uploadedBy: role === "broker" ? "Брокер" : "Клиент" }) });
+      const upload = await fetch("/api/documents", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ companyInn, analysisId: role === "broker" ? "" : analysisId, applicationId, category: "Документы по заявке", fileName: file.name, mimeType: file.type, sizeBytes: file.size, contentBase64: await fileBase64(file), uploadedBy: role === "broker" ? "Брокер" : "Клиент" }) });
       const uploadBody = await upload.json() as { document?: DocumentMeta; error?: string };
       if (!upload.ok || !uploadBody.document) throw new Error(uploadBody.error || "Документ не загружен");
       const linked=await fetch("/api/communications", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ applicationId, authorRole: role, authorName: role === "broker" ? "Брокер Прескор" : "Клиент", message: `Прикреплён документ: ${file.name}`, documentId: uploadBody.document.id }) });
