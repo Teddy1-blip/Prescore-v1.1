@@ -79,3 +79,12 @@ by `tests/credit-portfolio-v1.test.mjs`. No missing BKI is interpreted as zero d
 No edits to canonical orchestrator, economics, entitlement logic, authentication,
 database schema, production, DNS or protected main. No purge/reset/cleanup added.
 No messages sent to banks. Recipient form adds an in-flight submission guard.
+
+## Live integration finding: PDF runtime
+
+An authenticated upload of the controlled synthetic BKI PDF failed on the original
+staging with `DOMMatrix is not defined`. The production build had bundled PDF.js
+without its dynamically required native canvas dependency. `next.config.ts` now keeps
+PDF.js/canvas external and explicitly traces the PDF worker and Linux native canvas
+package into standalone. A deployment-artifact text-extraction gate exercises those
+copied dependencies before delivery. No parser or credit calculation was changed.

@@ -58,6 +58,8 @@ jobs:
           retention-days: 90
       - run: npm run lint
       - run: npm run validate:artifact
+      - name: Standalone PDF extraction (BKI and financial sources)
+        run: node scripts/platform/pdf-artifact-smoke.mjs
 
   presentation:
     needs: access
