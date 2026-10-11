@@ -132,3 +132,9 @@
  .pc-recon-card>header{display:block}
  .pc-recon-card>header>.pc-badge{margin-top:8px}
 }
+
+.pc-section-intro{display:flex;justify-content:space-between;gap:20px;align-items:start;margin:0 0 18px}
+.pc-section-intro>div>span{display:block;color:var(--pc-accent);font-size:10px;letter-spacing:1px;font-weight:700}
+.pc-section-intro h2{font-size:20px;margin-top:5px}
+.pc-section-intro p{margin-top:6px;color:var(--pc-muted);font-size:12px;max-width:760px}
+@media(max-width:560px){.pc-section-intro{display:block}.pc-section-intro>button{margin-top:12px}}
