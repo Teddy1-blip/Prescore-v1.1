@@ -1,8 +1,9 @@
+import {createHash} from "node:crypto";
 import {getRuntime} from "../../../lib/platform/runtime";
 import { averagePartnerCommissionRate, partnerCommissions } from "../../../lib/partner-commissions";
 import { bankControlKey, productControlKey, readControlState } from "../../../lib/admin-controls";
 import { matchGuaranteePolicies } from "../../../lib/bank-guarantees";
-import { requireApiUser, unauthorized } from "../api-auth";
+import { requireApiUser, unauthorized, readableAnalysis } from "../api-auth";
 
 type PreparedStatement = {
   bind: (...values: unknown[]) => PreparedStatement;
@@ -262,25 +263,35 @@ export async function POST(request: Request) {
       }
       const controls = await readControlState(db);
       if ((!guarantee && controls.disabled.has(bankControlKey(bank))) || controls.disabled.has(productControlKey(product))) return Response.json({ error: "Маршрут отключён администратором" }, { status: 409 });
-      const id = crypto.randomUUID();
       const analysisId = String(body.analysisId || "");
       const requestedAmount = Number(body.requestedAmount) || 0;
       const nextAction = String(body.nextAction || "Проверить комплект документов");
-      const lead = await db.prepare("SELECT consent_at AS consentAt FROM agent_leads WHERE id = ? AND agent_code = ? LIMIT 1").bind(leadId, agentCode).first<{ consentAt?: string }>();
+      const lead = await db.prepare("SELECT consent_at AS consentAt, company_inn AS companyInn, company_name AS companyName FROM agent_leads WHERE id = ? AND agent_code = ? LIMIT 1").bind(leadId, agentCode).first<{ consentAt?: string; companyInn:string; companyName:string }>();
       if (!lead) return Response.json({ error: "Клиент не принадлежит вашему кабинету" }, { status: 403 });
+      if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) return Response.json({error:"Укажите положительную сумму заявки"},{status:400});
+      if (companyName !== lead.companyName) return Response.json({error:"Компания не соответствует клиенту"},{status:400});
+      if (analysisId) {
+        const access = await readableAnalysis(db, analysisId, user!);
+        if (!access) return Response.json({error:"Нет доступа к анализу"},{status:403});
+        const source = await db.prepare("SELECT company_inn AS inn FROM analyses WHERE id = ? LIMIT 1").bind(analysisId).first<{inn:string}>();
+        if (source?.inn !== lead.companyInn) return Response.json({error:"Анализ относится к другой компании"},{status:400});
+      }
+      const id = "broker-" + createHash("sha256").update(JSON.stringify([agentCode,leadId,analysisId,bank,product,requestedAmount,guarantee?[body.law,body.guaranteeType,body.noticeNumber,body.termDays]:null])).digest("hex");
+      const existing = await db.prepare("SELECT id FROM agent_applications WHERE id = ? AND agent_code = ? LIMIT 1").bind(id,agentCode).first();
+      if(existing) return Response.json({id,ok:true,duplicate:true});
       const analysisOwner = analysisId ? await db.prepare("SELECT owner_email AS ownerEmail FROM analyses WHERE id = ? LIMIT 1").bind(analysisId).first<{ ownerEmail?: string }>() : null;
       const dealOwner = analysisOwner?.ownerEmail || user?.email || "";
-      await db.batch([db.prepare(`INSERT INTO agent_applications
+      await db.batch([db.prepare(`INSERT OR IGNORE INTO agent_applications
         (id, agent_code, lead_id, analysis_id, company_name, bank, product, requested_amount, calculated_limit, reward_rate_bps, status, next_action, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(
           id, agentCode, leadId, analysisId, companyName, bank, product,
           requestedAmount, Number(body.calculatedLimit) || 0,
           Math.round(averagePartnerCommissionRate * 10_000), "Подготовка заявки",
           nextAction, now, now,
-        ), db.prepare(`INSERT OR REPLACE INTO deals (id, analysis_id, company_name, product, amount, status, owner, next_action, bank, application_group_id, consent_at, owner_email, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'Подготовка документов', 'Брокер', ?, ?, ?, ?, ?, ?, ?)`)
+        ), db.prepare(`INSERT OR IGNORE INTO deals (id, analysis_id, company_name, product, amount, status, owner, next_action, bank, application_group_id, consent_at, owner_email, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'Подготовка документов', 'Брокер', ?, ?, ?, ?, ?, ?, ?)`)
           .bind(id, analysisId, companyName, product, requestedAmount, nextAction, bank, id, lead?.consentAt || now, dealOwner, now, now),
-        db.prepare("INSERT INTO application_status_history (id, application_id, from_status, to_status, actor_role, actor_email, public_comment, created_at) VALUES (?, ?, '', 'Подготовка документов', 'AGENT', ?, 'Брокер создал заявку', ?)").bind(crypto.randomUUID(), id, user?.email || "", now),
-        db.prepare("INSERT INTO audit_log (id, entity_type, entity_id, action, actor_role, actor_email, metadata, created_at) VALUES (?, 'APPLICATION', ?, 'CREATE', 'AGENT', ?, ?, ?)").bind(crypto.randomUUID(), id, user?.email || "", JSON.stringify({ bank, product, applicationType: guarantee ? "guarantee" : "credit", law: body.law, guaranteeType: body.guaranteeType, noticeNumber: body.noticeNumber, termDays: body.termDays }), now),
+        db.prepare("INSERT OR IGNORE INTO application_status_history (id, application_id, from_status, to_status, actor_role, actor_email, public_comment, created_at) VALUES (?, ?, '', 'Подготовка документов', 'AGENT', ?, 'Брокер создал заявку', ?)").bind(id+"-created", id, user?.email || "", now),
+        db.prepare("INSERT OR IGNORE INTO audit_log (id, entity_type, entity_id, action, actor_role, actor_email, metadata, created_at) VALUES (?, 'APPLICATION', ?, 'CREATE', 'AGENT', ?, ?, ?)").bind(id+"-audit", id, user?.email || "", JSON.stringify({ bank, product, applicationType: guarantee ? "guarantee" : "credit", law: body.law, guaranteeType: body.guaranteeType, noticeNumber: body.noticeNumber, termDays: body.termDays }), now),
       ]);
       return Response.json({ id, ok: true }, { status: 201 });
     }

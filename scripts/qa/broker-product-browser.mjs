@@ -1,0 +1,36 @@
+import {spawn} from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import {chromium} from 'playwright';
+const out=path.resolve(process.argv[2]??'/tmp/broker-product-qa');fs.mkdirSync(out,{recursive:true});
+const server=spawn(process.execPath,['--experimental-strip-types','scripts/qa/workspace-harness.mjs',out+'/harness','4190'],{stdio:['ignore','pipe','inherit']});
+await new Promise((resolve,reject)=>{server.stdout.on('data',b=>{if(String(b).includes('listening'))resolve();});server.on('error',reject);server.on('exit',c=>reject(Error('Harness exit '+c)));});
+let browser;const checks=[],errors=[];
+try{
+ browser=await chromium.launch({headless:true,...(process.env.QA_CHROMIUM_PATH?{executablePath:process.env.QA_CHROMIUM_PATH}:{}),args:['--no-sandbox']});
+ const context=await browser.newContext(),page=await context.newPage(),origin='http://127.0.0.1:4190';page.on('pageerror',e=>errors.push(e.message));
+ const seed=await(await page.request.get(origin+'/__qa/seed')).json();
+ const owner=await(await page.request.get(origin+'/api/workspace-model?analysisId='+seed.id)).json();
+ await context.addCookies([{name:'qa-role',value:'broker',url:origin}]);
+ const assigned=await(await page.request.get(origin+'/api/workspace-model?analysisId='+seed.id)).json();
+ assert.equal(assigned.access.role,'ASSIGNED_BROKER');assert.equal(assigned.access.readOnly,true);assert.deepEqual(assigned.full.canonical,owner.full.canonical);assert.deepEqual(assigned.full.report,owner.full.report);checks.push('owner and assigned broker canonical/report equality');
+ for(const width of [1440,1024,768,390,360]){
+ await page.setViewportSize({width,height:1000});
+ for(const view of ['home','clients','applications','pipeline','documents','partners']){
+ await page.goto(origin+'/agent?view='+view);await page.getByText('Алексей · брокер',{exact:true}).waitFor();
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'overflow '+view+' '+width);
+ if(width===1440||width===390)await page.screenshot({path:out+'/'+view+'-'+width+'.png',fullPage:true});checks.push(view+' '+width);if(view==='clients'){await page.getByRole('button',{name:'Добавить клиента',exact:true}).click();await page.getByRole('dialog').waitFor();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'lead modal overflow '+width);await page.keyboard.press('Escape');}if(view==='applications'){await page.getByRole('button',{name:'Создать заявку'}).click();await page.getByRole('dialog').waitFor();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'application modal overflow '+width);await page.keyboard.press('Escape');}
+ }
+ for(const dossierView of ['home','analysis','banking','obligations','financing','documents','applications']){
+ await page.goto(origin+'/agent?view=dossier&analysisId='+seed.id+'&dossierView='+dossierView);await page.getByRole('navigation',{name:'Разделы досье'}).waitFor();
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'dossier overflow '+dossierView+' '+width);checks.push('dossier '+dossierView+' '+width);if(width===1440||width===390)await page.screenshot({path:out+'/dossier-'+dossierView+'-'+width+'.png',fullPage:true});
+ }
+ }
+ await page.setViewportSize({width:1440,height:1000});await page.goto(origin+'/agent?view=clients');await page.getByRole('button',{name:'Добавить клиента',exact:true}).click();
+ await page.getByLabel('Компания',{exact:true}).fill('ООО Новый клиент');await page.getByLabel('ИНН',{exact:true}).fill('7701234567');await page.getByLabel('Контактное лицо',{exact:true}).fill('Тестовый контакт');await page.getByLabel('Email',{exact:true}).fill('new@qa.test');await page.locator('input[name=consent]').check();await page.getByRole('dialog').getByRole('button',{name:'Добавить клиента'}).click();await page.getByRole('status').getByText('Клиент добавлен').waitFor();await page.reload();await page.getByRole('heading',{name:'ООО Новый клиент'}).waitFor();checks.push('lead persistence after reload');
+ await page.goto(origin+'/agent?view=applications');await page.getByRole('button',{name:'Создать заявку'}).click();await page.getByLabel('Цель финансирования',{exact:true}).fill('Оборотные средства');await page.locator('input[name=consent]').check();await page.getByRole('dialog').getByRole('button',{name:'Добавить заявку'}).click();await page.getByText('Заявка добавлена',{exact:true}).waitFor();await page.reload();await page.getByLabel('Статус заявки').first().waitFor();checks.push('application persistence after reload');
+ await page.getByLabel('Статус заявки').first().selectOption('Требуются документы');await page.getByText('Статус обновлён',{exact:true}).waitFor();await page.reload();assert.equal(await page.getByLabel('Статус заявки').first().inputValue(),'Требуются документы');checks.push('status persistence after reload');
+ await context.addCookies([{name:'qa-role',value:'stranger',url:origin}]);assert.equal((await page.request.get(origin+'/api/workspace-model?analysisId='+seed.id)).status(),404);checks.push('stranger forbidden');
+ assert.deepEqual(errors,[]);fs.writeFileSync(out+'/result.json',JSON.stringify({checks,errors},null,2));console.log(JSON.stringify({passed:checks.length,errors}));
+}finally{await browser?.close();server.kill('SIGTERM');}
