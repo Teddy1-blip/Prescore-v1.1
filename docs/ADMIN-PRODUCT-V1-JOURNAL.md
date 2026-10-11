@@ -19,3 +19,12 @@ Milestone 2 commit: 038c124e2b2be4d8f73cde7df68a17fae39ee003.
 Real agent_accounts registry, logical applications (deal takes precedence; same-ID mirror deduplicated), paginated status history/messages/document associations and metadata-only document registry. Broker forecasts are separate from unavailable accruals. No document content, storage keys or curator client details in list APIs. Targeted ADMIN tests: 5/5. BROKER regression: 10/10. Typecheck: no new diagnostics.
 
 Assignment gap: authorization grants access through any matching agent_lead; applications independently store agent_code. Existing contracts have no atomic company reassignment/cascade for all leads, applications and access relations. Assignment stays read-only; client ownership is unchanged.
+
+Milestone 3 commit: 27b07983899990346552edca416fe9b25c2d4efd.
+
+## Milestone 4
+Existing per-analysis BASIC/FULL access management; grants/revokes and safe UI module flags use atomic audit transactions. Orders, confirmed payments and entitlement states are separate resources. No new subscription lifecycle or manual fabrication of payments. Product section exposes actual canonical policies/risk registry read-only and code-owned operational BROKER routes. Legacy credit controls have no mutation API.
+
+Audit filters and metadata allowlist; aggregated AI usage (no conversations/credentials); actual DB/schema reachability, build SHA if supplied, configured AI and storage metadata. No uptime fabrication. Code-owned catalog editing remains a domain-contract gap, not a mutable credit governance panel.
+
+Milestone 4 validation: targeted ADMIN tests 6/6; typecheck no new diagnostics.
