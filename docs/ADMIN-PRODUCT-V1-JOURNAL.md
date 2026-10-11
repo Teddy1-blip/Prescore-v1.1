@@ -35,3 +35,13 @@ Milestone 4 commit: a1d27e4f765b86417f5ad834f2a0f200b68f2d22.
 Responsive/browser acceptance added for nine ADMIN views, company/application details, six canonical dossier sections, BASIC/FULL persistence, safe flags, empty/filter/error states and role authorization. Widths: 1440/1024/768/390/360. Existing CLIENT/BROKER/Analysis V3 QA is retained in the same workflow.
 
 Local build and lint passed. Local Chromium download is blocked (the network returns an invalid ZIP); browser acceptance will execute in GitHub Actions, which successfully installs Chromium. Local complete tests and 24 business cases are also being executed. No PASS asserted until the final workflow completes.
+
+Milestone 5 QA candidate: 3487e1750e81703c41e85c42aed7b22e9cf1bf29. ADMIN targeted tests 6/6. Build/lint passed; business cases 24/24. Full CI pending.
+
+QA candidate 3487e175: Analysis V3, CLIENT and BROKER browser gates passed. ADMIN passed all nine views, details and six dossier sections at all five widths with no page errors or overflow, then revealed a real controlled-checkbox interaction defect. Fixed flags to update immediately and reload authoritative state after failure; browser acceptance will be rerun.
+
+Prepared migration 0005 invalidates only derived observations when canonical inputs change. Added snapshot-lock/fingerprint race protection, actual schema-trigger verification, source/canonical overview distributions, metadata bounds, safe application navigation and a generated Next route-export type fix. ADMIN tests 7/7; rollback and profile invalidation are explicit checks. Local standalone PDF extraction/artifact validation passed after dependencies became local.
+
+Visual review of downloaded browser evidence found that inherited mobile workspace CSS stacked ADMIN cells and hid their labels despite passing the no-overflow assertion. Scoped ADMIN overrides retain real table headers and local horizontal scrolling. Browser QA now explicitly checks visible table headers at every width.
+
+Full local npm test passed 6330/6330 (build included). Credit Lab 24/24; lint/artifact/PDF passed. ADMIN browser gate is now a separate concurrent CI job so a failure can be diagnosed without waiting for unrelated presentation gates. Existing complete CLIENT/BROKER/Analysis V3 QA remains mandatory.

@@ -42,7 +42,7 @@ export async function auditList(db:PortableDatabase,q:AdminQuery){
  if(q.from){where.push('created_at>=?');values.push(q.from);}
  if(q.to){where.push('created_at<?');values.push(new Date(new Date(q.to).getTime()+86400000).toISOString().slice(0,10));}
  if(q.search){where.push('(entity_id ILIKE ? OR actor_email ILIKE ? OR action ILIKE ?)');values.push(...Array(3).fill('%'+q.search+'%'));}
- const page=await pageRows(db,`SELECT id,entity_type AS entityType,entity_id AS entityId,action,actor_role AS actorRole,actor_email AS actorEmail,metadata,created_at AS createdAt FROM audit_log ${where.length?'WHERE '+where.join(' AND '):''}`,values,q,'"createdAt" DESC,id DESC');
+ const page=await pageRows(db,`SELECT id,entity_type AS entityType,entity_id AS entityId,action,actor_role AS actorRole,actor_email AS actorEmail,substr(metadata,1,4096) AS metadata,created_at AS createdAt FROM audit_log ${where.length?'WHERE '+where.join(' AND '):''}`,values,q,'"createdAt" DESC,id DESC');
  page.items=page.items.map(r=>({...r,metadata:safeMetadata(r.metadata)}));return page;
 }
 export async function aiUsage(db:PortableDatabase){
@@ -55,12 +55,14 @@ export async function systemStatus(db:PortableDatabase){
  await rows(db,'SELECT 1 AS reachable');
  const columns=await rows(db,`SELECT table_name AS tableName,column_name AS columnName FROM information_schema.columns WHERE table_schema=current_schema()`);
  const required=catalog.filter(t=>['analyses','agent_accounts','agent_leads','deals','agent_applications','client_documents','analysis_entitlements','audit_log','ai_usage','admin_analysis_observations'].includes(t.table));
+ const triggers=await rows(db,"SELECT tgname FROM pg_trigger WHERE NOT tgisinternal AND tgname IN ('admin_analysis_observation_changed','admin_profile_observation_changed')");
+ const missingTriggers=['admin_analysis_observation_changed','admin_profile_observation_changed'].filter(name=>!triggers.some(r=>r.tgname===name));
  const missing=required.flatMap(t=>t.columns.filter(c=>!columns.some(r=>r.tableName===t.table&&r.columnName===c)).map(c=>t.table+'.'+c));
  let ai='UNAVAILABLE';try{if(configuredProvider())ai='CONFIGURED';}catch{/* invalid configuration remains unavailable */}
  const storage=(await rows(db,'SELECT COUNT(*) AS files,SUM(size_bytes) AS bytes FROM client_documents'))[0];
  const failed=(await rows(db,'SELECT COUNT(*) AS failures FROM ai_usage WHERE success=0'))[0].failures;
  const sha=process.env.PRESCORE_BUILD_SHA??process.env.GITHUB_SHA??null;
- return {database:'REACHABLE',schema:missing.length?'MIGRATION_REQUIRED':'COMPATIBLE',missingColumns:missing,buildSha:sha&&/^[a-f0-9]{40}$/.test(sha)?sha:null,ai,storageMetadata:storage,recordedAiFailures:failed,uptime:null};
+ return {database:'REACHABLE',schema:missing.length||missingTriggers.length?'MIGRATION_REQUIRED':'COMPATIBLE',missingColumns:missing,missingTriggers,buildSha:sha&&/^[a-f0-9]{40}$/.test(sha)?sha:null,ai,storageMetadata:storage,recordedAiFailures:failed,uptime:null};
 }
 export async function mutateAdmin(db:PortableDatabase,body:Record<string,unknown>,email:string){
  const now=new Date().toISOString();

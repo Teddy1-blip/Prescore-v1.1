@@ -15,7 +15,7 @@ export const applicationProjection=`SELECT id,analysis_id AS analysisId,company_
 export async function applicationList(db:PortableDatabase,q:AdminQuery){
  const where:string[]=[];const values:unknown[]=[];
  if(q.search){where.push('(company_name ILIKE ? OR company_inn ILIKE ? OR owner_email ILIKE ? OR id ILIKE ?)');values.push(...Array(4).fill('%'+q.search+'%'));}
- for(const [v,k] of [[q.status,'status'],[q.product,'product'],[q.company,'company_inn'],[q.agentCode,'agent_code']] as const){if(v){where.push(k+'=?');values.push(v);}}
+ for(const [v,k] of [[q.analysisId,'analysis_id'],[q.status,'status'],[q.product,'product'],[q.company,'company_inn'],[q.agentCode,'agent_code']] as const){if(v){where.push(k+'=?');values.push(v);}}
  if(q.activity)where.push(`status ${q.activity==='active'?'NOT ':''}IN (${CLOSED})`);
  return pageRows(db,applicationProjection+(where.length?' WHERE '+where.join(' AND '):''),values,q,'"updatedAt" DESC,id DESC');
 }

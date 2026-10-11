@@ -1,6 +1,6 @@
 import {accessList,orderList,paymentList,product,auditList,aiUsage,systemStatus,mutateAdmin} from '../../../lib/admin/governance';
 import {brokerList,applicationList,documentList,applicationDetail} from '../../../lib/admin/operations';
-import { observeCanonical,fingerprintSQL } from '../../../lib/admin/observations';
+import { observeCanonical,fingerprintSQL,observationOverview } from '../../../lib/admin/observations';
 import type { WorkspaceModelV1 } from '../../../lib/workspace/model';
 import { getRuntime } from '../../../lib/platform/runtime';
 import { requireApiUser } from '../api-auth';
@@ -10,7 +10,7 @@ import { safeMetadata,rows } from '../../../lib/admin/resources';
 import { overview,parseAdminQuery } from '../../../lib/admin/resources';
 export const dynamic='force-dynamic';
 const headers={'Cache-Control':'private, no-store, max-age=0',Pragma:'no-cache',Vary:'Cookie, Authorization'};
-export function adminJson(body:unknown,status=200){return Response.json(body,{status,headers});}
+function adminJson(body:unknown,status=200){return Response.json(body,{status,headers});}
 export async function GET(request:Request){
  const user=await requireApiUser();
  if(!user)return adminJson({error:'Требуется вход'},401);
@@ -18,7 +18,7 @@ export async function GET(request:Request){
  let q;try{q=parseAdminQuery(request.url);}catch{return adminJson({error:'Некорректные параметры запроса'},400);}
  try{
   const db=getRuntime().DB;
-  if(q.resource==='overview'){const result=await overview(db);result.applicationStatuses=await logicalOverview(db);return adminJson({resource:q.resource,...result,summary:{...result.summary,activeApplications:await activeApplicationCount(db)}});}
+  if(q.resource==='overview'){const result=await overview(db);result.applicationStatuses=await logicalOverview(db);return adminJson({resource:q.resource,...result,...await observationOverview(db),summary:{...result.summary,activeApplications:await activeApplicationCount(db)}});}
   if(q.resource==='access')return adminJson(await accessList(db,q));
   if(q.resource==='orders')return adminJson(await orderList(db,q));
   if(q.resource==='payments')return adminJson(await paymentList(db,q));

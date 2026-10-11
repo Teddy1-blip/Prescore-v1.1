@@ -22,6 +22,7 @@ export async function pageRows(db: PortableDatabase, sql: string, values: unknow
 }
 export function safeMetadata(input: unknown): unknown {
  let value: unknown=input;
+ if(typeof input==='string'&&input.length>4096)return '[Слишком большая metadata скрыта]';
  if(typeof input==='string'){try{value=JSON.parse(input);}catch{return '[Некорректная metadata]';}}
  // Allow operational scalar fields only; never serialize arbitrary nested documents/conversations.
  const allowed=new Set(['enabled','count','tier','previousTier','companyInn','analysisId','applicationId','orderId','agentCode','previousAgentCode','status','fromStatus','toStatus','reasonCode','category','fileName','sizeBytes']);
@@ -44,7 +45,7 @@ export async function overview(db: PortableDatabase) {
  rows(db,`SELECT product,COUNT(*) AS count FROM deals GROUP BY product ORDER BY count DESC LIMIT 20`),
  rows(db,`SELECT CASE WHEN e.tier='FULL' AND e.revoked_at='' THEN 'FULL' ELSE 'BASIC' END AS tier,COUNT(*) AS count FROM analyses a LEFT JOIN analysis_entitlements e ON e.analysis_id=a.id GROUP BY CASE WHEN e.tier='FULL' AND e.revoked_at='' THEN 'FULL' ELSE 'BASIC' END`),
  rows(db,`SELECT COUNT(*) AS files,COALESCE(SUM(size_bytes),0) AS bytes FROM client_documents`),
- rows(db,`SELECT provider,model,COUNT(*) AS requests,SUM(success) AS success,SUM(CASE WHEN success=0 THEN 1 ELSE 0 END) AS failure,SUM(input_tokens) AS inputTokens,SUM(output_tokens) AS outputTokens,AVG(latency_ms) AS latencyMs FROM ai_usage GROUP BY provider,model`),
+ rows(db,`SELECT provider,model,COUNT(*) AS requests,SUM(success) AS success,SUM(CASE WHEN success=0 THEN 1 ELSE 0 END) AS failure,SUM(input_tokens) AS inputTokens,SUM(output_tokens) AS outputTokens,AVG(latency_ms) AS latencyMs FROM ai_usage GROUP BY provider,model ORDER BY requests DESC LIMIT 50`),
  ]);
  return {summary:{...summary[0],basic:Number(tiers.find(t=>t.tier==='BASIC')?.count??0),full:Number(tiers.find(t=>t.tier==='FULL')?.count??0)},daily,applicationStatuses:statuses,productUsage:usage,tiers,storage:storage[0],ai,canonicalAvailability:{state:'UNKNOWN',reason:'Summary is evaluated per analysis on demand'},sourceCompleteness:{state:'UNKNOWN',reason:'Source state is loaded with the canonical dossier'}};
 }
