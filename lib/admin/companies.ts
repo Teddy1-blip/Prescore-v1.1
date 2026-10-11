@@ -2,7 +2,7 @@ import {observationJoin,observationColumns} from './observations.ts';
 import {pageRows,rows,type AdminQuery,CLOSED} from './resources.ts';
 import type {PortableDatabase} from '../db/compatibility.ts';
 export const logicalApplications=`SELECT d.id,d.analysis_id,d.company_name,COALESCE(a.company_inn,l.company_inn,'') AS company_inn,COALESCE(NULLIF(d.owner_email,''),a.owner_email,l.email,'') AS owner_email,
- COALESCE(aa.agent_code,l.agent_code,'') AS agent_code,d.product,d.bank,d.amount,COALESCE(aa.status,d.status) AS status,COALESCE(aa.next_action,d.next_action) AS next_action,d.created_at,COALESCE(aa.updated_at,d.updated_at) AS updated_at
+ COALESCE(aa.agent_code,l.agent_code,'') AS agent_code,d.product,d.bank,d.amount,d.status AS status,d.next_action AS next_action,d.created_at,d.updated_at AS updated_at
  FROM deals d LEFT JOIN analyses a ON a.id=d.analysis_id LEFT JOIN agent_applications aa ON aa.id=d.id LEFT JOIN agent_leads l ON l.id=aa.lead_id
  UNION ALL SELECT aa.id,aa.analysis_id,aa.company_name,COALESCE(a.company_inn,l.company_inn,'') AS company_inn,COALESCE(a.owner_email,l.email,'') AS owner_email,aa.agent_code,aa.product,aa.bank,aa.requested_amount AS amount,aa.status,aa.next_action,aa.created_at,aa.updated_at
  FROM agent_applications aa LEFT JOIN analyses a ON a.id=aa.analysis_id LEFT JOIN agent_leads l ON l.id=aa.lead_id WHERE NOT EXISTS(SELECT 1 FROM deals d WHERE d.id=aa.id)`;

@@ -1,3 +1,4 @@
+import {brokerList,applicationList,documentList,applicationDetail} from '../../../lib/admin/operations';
 import { observeCanonical } from '../../../lib/admin/observations';
 import type { WorkspaceModelV1 } from '../../../lib/workspace/model';
 import { getRuntime } from '../../../lib/platform/runtime';
@@ -17,6 +18,10 @@ export async function GET(request:Request){
  try{
   const db=getRuntime().DB;
   if(q.resource==='overview'){const result=await overview(db);result.applicationStatuses=await logicalOverview(db);return adminJson({resource:q.resource,...result,summary:{...result.summary,activeApplications:await activeApplicationCount(db)}});}
+  if(q.resource==='brokers')return adminJson(await brokerList(db,q));
+  if(q.resource==='applications')return adminJson(await applicationList(db,q));
+  if(q.resource==='documents')return adminJson(await documentList(db,q));
+  if(q.resource==='application'){const detail=await applicationDetail(db,q);return detail?adminJson(detail):adminJson({error:'Заявка не найдена'},404);}
   if(q.resource==='companies')return adminJson(await companyList(db,q));
   if(q.resource==='analyses')return adminJson(await analysisList(db,q));
   if(q.resource==='company'){const detail=await companyDetail(db,q);if(!detail)return adminJson({error:'Компания не найдена'},404);detail.audit.items=detail.audit.items.map(r=>({...r,metadata:safeMetadata(r.metadata)}));return adminJson(detail);}
