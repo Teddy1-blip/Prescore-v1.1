@@ -8,3 +8,5 @@
 .pc-app .ad-content .ad-table tr{display:table-row;width:auto;padding:0;border-top:0}
 .pc-app .ad-content .ad-table th,.pc-app .ad-content .ad-table td{display:table-cell;width:auto;min-width:120px;padding:10px 12px;border-bottom:1px solid #e3e9eb}
 .pc-app .ad-content .ad-table td::before{content:none}
+.pc-app .ad-content .ad-table{table-layout:auto;width:max-content;min-width:100%}
+.pc-app .ad-content .ad-table th,.pc-app .ad-content .ad-table td{width:160px;min-width:140px;max-width:280px;word-break:normal;overflow-wrap:break-word}

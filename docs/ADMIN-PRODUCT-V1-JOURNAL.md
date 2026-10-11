@@ -45,3 +45,7 @@ Prepared migration 0005 invalidates only derived observations when canonical inp
 Visual review of downloaded browser evidence found that inherited mobile workspace CSS stacked ADMIN cells and hid their labels despite passing the no-overflow assertion. Scoped ADMIN overrides retain real table headers and local horizontal scrolling. Browser QA now explicitly checks visible table headers at every width.
 
 Full local npm test passed 6330/6330 (build included). Credit Lab 24/24; lint/artifact/PDF passed. ADMIN browser gate is now a separate concurrent CI job so a failure can be diagnosed without waiting for unrelated presentation gates. Existing complete CLIENT/BROKER/Analysis V3 QA remains mandatory.
+
+Milestone 5 implementation candidate: fcfb1bd16ceb304917670cd1e0c1ef165c267cb9. Final CI pending.
+
+fcfb1bd1 ADMIN browser QA: 125/125 checks, no page errors. Visual review still exposed inherited fixed table layout squeezing columns on mobile. Fixed intrinsic table width and column sizing; added explicit minimum column-width assertions. This is why numeric QA alone is not treated as final visual acceptance. Final responsive rerun follows.
