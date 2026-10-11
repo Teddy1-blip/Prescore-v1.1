@@ -12,7 +12,7 @@ test('commercial client uses one navigation and separate executive/analysis path
  const {model}=conclusionFixture(),before=JSON.stringify(model),props={model,choose:()=>{},retry:()=>{}};
  assert.deepEqual(shell.CLIENT_NAV.map(i=>i.label),['Обзор','Анализ Prescore','Финансы','Обязательства','Финансирование','Документы','Заявки','Кредитный аналитик']);
  const overview=render(insights.ExecutiveOverview,props);assert.match(overview,/Обзор компании/);assert.doesNotMatch(overview,/av-scenario-grid|pc-memo|CLIENT.*ANALYSIS V3/);
- for(const section of ['conclusion','factors','capacity','financials','reconciliation','plan','evidence'])await t.test(section,()=>{const html=render(analysis.FullCreditAnalysis,{...props,initialSection:section});assert.doesNotMatch(html,/NaN|undefined|Infinity/);assert.match(html,/Анализ Prescore/);});
+ for(const section of ['conclusion','factors','capacity','financials','obligations','financing','reconciliation','plan','evidence'])await t.test(section,()=>{const html=render(analysis.FullCreditAnalysis,{...props,initialSection:section});assert.doesNotMatch(html,/NaN|undefined|Infinity/);assert.match(html,/Анализ Prescore/);});
  for(const C of [analysis.FinancingProducts,analysis.DebtPortfolio])assert.doesNotMatch(render(C,props),/NaN|undefined|Infinity/);
  assert.equal(JSON.stringify(model),before,'presentation must not mutate canonical results');
  const basic=structuredClone(model);delete basic.full;basic.entitlement='BASIC';basic.state='READY_BASIC';basic.fullAvailability='LOCKED';basic.basic.bankingFacts.grossInflow={...basic.basic.bankingFacts.grossInflow,value:0,status:'KNOWN'};basic.basic.bankingFacts.operatingInflow={...basic.basic.bankingFacts.operatingInflow,value:987654321,status:'UNKNOWN'};

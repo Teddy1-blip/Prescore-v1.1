@@ -157,3 +157,14 @@
  .pc-file-button{justify-self:start}
  .pc-file-name{white-space:normal}
 }
+
+/* Complete dossier: compact values, reasons and sources share the same rhythm. */
+.pc-products .pc-panel>h3{margin-top:14px;font-size:12px}
+.pc-products .pc-panel>p,.pc-products .pc-panel li{font-size:12px;margin-top:7px}
+.pc-products .pc-panel ul{padding-left:18px}
+.pc-source-table td small{margin-top:8px;line-height:1.5}
+.pc-factor a{display:inline-block;text-decoration:underline;text-underline-offset:3px}
+.pc-app .ps-crm-table>div{min-width:0}
+.pc-app td:has(>.ws-published-value),.pc-app td:has(>strong){font-variant-numeric:tabular-nums}
+.pc-app .pc-definition dt,.pc-app .pc-definition dd{min-width:0;overflow-wrap:anywhere}
+.pc-app .pc-table-scroll:focus-visible{outline:2px solid var(--pc-accent);outline-offset:3px}

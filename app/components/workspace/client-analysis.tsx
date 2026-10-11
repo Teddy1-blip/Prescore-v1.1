@@ -5,18 +5,20 @@ import {Financing} from '../../dashboard/report-v2/analysis-v3';
 import {Panel,FactorRows,ActionItem,Why,CreditSummary,SourceSummary} from './client-insights';
 import {ReconciliationDetails,FinancialStatements} from './client-financials';
 import {FullAccessNotice,money,date} from './presentation';
+import {productPurpose,productReason} from './product-copy';
 import {PublishedValue,label} from './credit-depth';
 
-export function FinancingProducts({model}:{model:WorkspaceModelV1}){
+export function FinancingProducts({model,embedded=false}:{model:WorkspaceModelV1;embedded?:boolean}){
  const r=model.full?.report;
  if(!r)return <FullAccessNotice model={model}/>;
  const products=[...r.productFit.primary,...r.productFit.other];
  return <>
-  <div className="pc-page-title"><div><h1>Финансирование</h1><p>Какие механизмы подходят профилю компании и что нужно уточнить до обращения к кредитору</p></div></div>
+  <div className="pc-page-title"><div>{embedded?<h2>Финансирование</h2>:<h1>Финансирование</h1>}<p>Какие механизмы подходят профилю компании и что нужно уточнить до обращения к кредитору</p></div></div>
   <p className="pc-analysis-section-note">{r.productFit.bankSeparation}</p>
   <div className="pc-products">{products.map(p=><Panel key={p.id} title={p.title}>
    <div className="pc-statusline"><span className="pc-badge">{p.fit}</span></div>
-   <p><b>Для чего:</b> {p.purpose}</p>
+   <p><b>Для чего:</b> {productPurpose(p.family)}</p><p><b>Соответствие цели:</b> {p.purpose}</p>
+   <ProductReasons model={model} family={p.family}/>
    <p><b>Связь с долговой ёмкостью:</b> {p.capacity}</p>
    <p><b>Запрос:</b> {p.requested}</p>
    {p.missing.length>0&&<><h3>До подачи нужно уточнить</h3><ul>{p.missing.map((s,i)=><li key={i}>{s}</li>)}</ul></>}
@@ -27,16 +29,22 @@ export function FinancingProducts({model}:{model:WorkspaceModelV1}){
  </>;
 }
 
-export function DebtPortfolio({model}:{model:WorkspaceModelV1}){
+function ProductReasons({model,family}:{model:WorkspaceModelV1;family:string}){
+ const candidate=model.full?.canonical.productSelection.candidates.find(c=>c.productFamily===family);
+ if(!candidate)return <p>Подробные причины соответствия в этой версии анализа не раскрыты.</p>;
+ return <>{candidate.supportReasonCodes.length>0&&<><h3>Почему рассматривается</h3><ul>{candidate.supportReasonCodes.map(code=><li key={code}>{productReason(code)}</li>)}</ul></>}{candidate.constraintReasonCodes.length>0&&<><h3>Ограничения</h3><ul>{candidate.constraintReasonCodes.map(code=><li key={code}>{productReason(code)}</li>)}</ul></>}</>;
+}
+
+export function DebtPortfolio({model,embedded=false}:{model:WorkspaceModelV1;embedded?:boolean}){
  const p=model.full?.report.analysisV3,b=model.basic.bankingFacts;
  return <>
-  <div className="pc-page-title"><div><h1>Обязательства</h1><p>Договоры, текущие платежи и долговая нагрузка</p></div></div>
+  <div className="pc-page-title"><div>{embedded?<h2>Обязательства</h2>:<h1>Обязательства</h1>}<p>Договоры, текущие платежи и долговая нагрузка</p></div></div>
   <Panel title="Обслуживание долга по выпискам">
    <dl className="pc-definition">{[['Основной долг',b.loanPrincipalPayments],['Проценты',b.interestPayments],['Лизинг',b.leasingPayments],['Неразделённые платежи',b.unsplitDebtPayments]].map(([name,f])=><div key={String(name)}><dt>{String(name)}</dt><dd>{money((f as typeof b.grossInflow).status==='UNKNOWN'?null:(f as typeof b.grossInflow).value)}</dd></div>)}</dl>
    <p className="pc-muted">За {date(model.basic.analysis.period.from)} — {date(model.basic.analysis.period.to)}. Платежи по выпискам не заменяют договорный график и не доказывают отсутствие других обязательств.</p>
   </Panel>
   {!model.full?<FullAccessNotice model={model}/>:<Panel title="Кредитный портфель">
-   {p?.portfolio.length?<div className="pc-table-scroll" tabIndex={0} aria-label="Таблица обязательств"><table><thead><tr><th>Кредитор / инструмент</th><th>Статус</th><th>Основной долг / лимит</th><th>Платёж</th><th>Следующий платёж</th><th>Просрочка</th></tr></thead><tbody>{p.portfolio.map(o=><tr key={o.id}><th><PublishedValue value={o.creditor}/><small>{label(o.type)} · {label(o.exposure)}</small></th><td><PublishedValue value={o.status}/></td><td><PublishedValue value={o.principal} currency/><small>Лимит</small><PublishedValue value={o.limit} currency/>{o.exposure==='CONTINGENT'&&<><small>Условное обязательство</small><PublishedValue value={o.contingent} currency/></>}</td><td><PublishedValue value={o.payment} currency/><PublishedValue value={o.paymentFrequency}/></td><td><PublishedValue value={o.nextPayment} currency/><PublishedValue value={o.nextDate}/></td><td><PublishedValue value={o.overdue} currency/></td></tr>)}</tbody></table></div>:<p>Обязательства не раскрыты в полученных данных. Добавьте БКИ и договоры. Это не подтверждение отсутствия долга.</p>}
+   {p?.portfolio.length?<div className="pc-table-scroll" tabIndex={0} aria-label="Таблица обязательств"><table><thead><tr><th>Кредитор / инструмент</th><th>Статус</th><th>Основной долг / лимит</th><th>Платёж</th><th>Следующий платёж</th><th>Срок погашения</th><th>Просрочка</th></tr></thead><tbody>{p.portfolio.map(o=><tr key={o.id}><th><PublishedValue value={o.creditor}/><small>{label(o.type)} · {label(o.exposure)}</small></th><td><PublishedValue value={o.status}/></td><td><PublishedValue value={o.principal} currency/><small>Лимит</small><PublishedValue value={o.limit} currency/>{o.exposure==='CONTINGENT'&&<><small>Условное обязательство</small><PublishedValue value={o.contingent} currency/></>}</td><td><PublishedValue value={o.payment} currency/><PublishedValue value={o.paymentFrequency}/></td><td><PublishedValue value={o.nextPayment} currency/><PublishedValue value={o.nextDate} dateValue/></td><td>{o.maturity?<PublishedValue value={o.maturity} dateValue/>:'Недостаточно данных'}</td><td><PublishedValue value={o.overdue} currency/></td></tr>)}</tbody></table></div>:<p>Обязательства не раскрыты в полученных данных. Добавьте кредитную историю, чтобы Prescore сопоставил обязательства с платежами по выписке. Это не подтверждение отсутствия долга.</p>}
    <p className="pc-muted">Остаток долга, доступный лимит и условные обязательства учитываются отдельно. Просрочка показана на дату источника.</p>
   </Panel>}
  </>;
@@ -45,11 +53,11 @@ export function DebtPortfolio({model}:{model:WorkspaceModelV1}){
 export function FullCreditAnalysis({model,retry,initialSection='conclusion'}:{model:WorkspaceModelV1;retry:()=>void;initialSection?:string}){
  const [tab,setTab]=useState(()=>{
   const value=typeof window==='undefined'?initialSection:new URLSearchParams(window.location.search).get('section')||initialSection;
-  return ['conclusion','factors','capacity','financials','reconciliation','plan','evidence'].includes(value)?value:'conclusion';
+  return ['conclusion','factors','capacity','financials','obligations','financing','reconciliation','plan','evidence'].includes(value)?value:'conclusion';
  });
  const r=model.full?.report;
  if(!r)return <FullAccessNotice model={model} retry={retry}/>;
- const tabs=[['conclusion','Заключение'],['factors','Оценка и риски'],['capacity','Долговая ёмкость'],['financials','Финансовое состояние'],['reconciliation','Сопоставление данных'],['plan','План действий'],['evidence','Источники']];
+ const tabs=[['conclusion','Заключение'],['factors','Оценка и риски'],['capacity','Долговая ёмкость'],['financials','Финансовое состояние'],['obligations','Обязательства'],['financing','Финансирование'],['reconciliation','Сопоставление данных'],['plan','План действий'],['evidence','Источники']];
  const all=[...r.primaryFactors,...r.contextHighlights,...r.readiness.constraints,...r.detailedSections.flatMap(s=>s.factors)];
  const topConstraint=r.readiness.constraints[0]??r.limitations[0]??r.dataQuality[0];
  const expertise=r.expertise;
@@ -81,6 +89,8 @@ export function FullCreditAnalysis({model,retry,initialSection='conclusion'}:{mo
 
   {tab==='capacity'&&<div className="pc-canonical av-report"><Financing model={r}/></div>}
   {tab==='financials'&&<FinancialStatements model={model}/>}
+  {tab==='obligations'&&<DebtPortfolio model={model} embedded/>}
+  {tab==='financing'&&<FinancingProducts model={model} embedded/>}
   {tab==='reconciliation'&&<ReconciliationDetails model={model}/>}
   {tab==='plan'&&<ActionPlan model={model}/>}
   {tab==='evidence'&&<>

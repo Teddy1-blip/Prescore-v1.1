@@ -16,7 +16,7 @@ try{
  await page.goto(origin+'/dashboard?analysisId='+seed.id+'&view='+view);await page.getByLabel('Сохранённый анализ').waitFor();await page.waitForFunction(()=>!document.body.innerText.includes('Загружаем финансовую картину')&&!document.body.innerText.includes('Загружаем кабинет'));
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'overflow '+view+' '+width);
  if(width===1440||width===390)await page.screenshot({path:out+'/'+view+'-'+width+'.png',fullPage:true});
- if(view==='analysis'){for(const title of ['Оценка и риски','Долговая ёмкость','Финансовое состояние','Сопоставление данных','План действий','Источники']){await page.getByRole('navigation',{name:'Разделы анализа',exact:true}).getByRole('button',{name:title,exact:true}).click();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'analysis '+title+' '+width);}}
+ if(view==='analysis'){for(const title of ['Оценка и риски','Долговая ёмкость','Финансовое состояние','Обязательства','Финансирование','Сопоставление данных','План действий','Источники']){await page.getByRole('navigation',{name:'Разделы анализа',exact:true}).getByRole('button',{name:title,exact:true}).click();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'analysis '+title+' '+width);}}
  checks.push(view+' '+width);
  }
  }
