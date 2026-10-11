@@ -2,9 +2,34 @@
 import { useRef, useState, type FormEvent } from "react";
 export function SourceUpload({analysisId,kind,saved}:{analysisId:string;kind:'BKI'|'QUARTERLY';saved:()=>void}) {
  const pending=useRef(false);
- const [busy,setBusy]=useState(false),[message,setMessage]=useState('');
- async function submit(e:FormEvent<HTMLFormElement>){e.preventDefault();if(pending.current)return;pending.current=true;const form=e.currentTarget;setBusy(true);setMessage('');try{const data=new FormData(form);data.set('analysisId',analysisId);data.set('sourceType',kind);const r=await fetch('/api/source-documents',{method:'POST',body:data});const body=await r.json();if(!r.ok)throw Error(body.error||'Документ не сохранён');form.reset();setMessage('Источник добавлен. Анализ обновлён.');saved();}catch(e){setMessage(e instanceof Error?e.message:'Ошибка загрузки');}finally{pending.current=false;setBusy(false);}}
- return <form onSubmit={submit} className="ws-source-upload"><h2>{kind==='BKI'?'Добавить кредитную историю':'Добавить квартальную отчётность'}</h2><p>{kind==='BKI'?'Текстовый PDF. Обязательства появятся после проверки источника.':'PDF, XLSX или CSV с данными компании. Бухгалтерскую отчётность из реестра можно получить ниже, в блоке открытых сведений.'}</p>{kind==='BKI'&&<label>Кому принадлежит отчёт<select name="relationship"><option>Компания-заёмщик</option><option>ИП-заёмщик</option><option>Собственник</option><option>Руководитель</option><option>Поручитель</option><option>Не указано</option></select></label>}<label>Исходный документ<input type="file" name="file" required accept={kind==='BKI'?'.pdf':'.pdf,.xlsx,.csv'}/></label><label className="ws-consent"><input type="checkbox" required/>Подтверждаю право передать документ и согласие на обработку данных.</label><button disabled={busy} className="ws-primary">{busy?'Обрабатываем…':'Добавить источник'}</button>{message&&<p role="status">{message}</p>}</form>;
+ const [busy,setBusy]=useState(false),[message,setMessage]=useState(''),[fileName,setFileName]=useState('');
+ async function submit(e:FormEvent<HTMLFormElement>){
+  e.preventDefault();if(pending.current)return;pending.current=true;
+  const form=e.currentTarget;setBusy(true);setMessage('');
+  try{
+   const data=new FormData(form);data.set('analysisId',analysisId);data.set('sourceType',kind);
+   const r=await fetch('/api/source-documents',{method:'POST',body:data});const body=await r.json();
+   if(!r.ok)throw Error(body.error||'Документ не сохранён');
+   form.reset();setFileName('');setMessage('Источник добавлен. Анализ обновлён.');saved();
+  }catch(e){setMessage(e instanceof Error?e.message:'Ошибка загрузки');}
+  finally{pending.current=false;setBusy(false);}
+ }
+ const accept=kind==='BKI'?'.pdf':'.pdf,.xlsx,.csv';
+ return <form onSubmit={submit} className="ws-source-upload">
+  <h2>{kind==='BKI'?'Добавить кредитную историю':'Добавить квартальную отчётность'}</h2>
+  <p>{kind==='BKI'?'PDF с кредитной историей. Обязательства появятся после проверки источника.':'PDF, XLSX или CSV с данными компании. Бухгалтерскую отчётность из реестра можно получить ниже, в блоке открытых сведений.'}</p>
+  {kind==='BKI'&&<label>Кому принадлежит отчёт<select name="relationship"><option>Компания-заёмщик</option><option>ИП-заёмщик</option><option>Собственник</option><option>Руководитель</option><option>Поручитель</option><option>Не указано</option></select></label>}
+  <label>Исходный документ
+   <span className="pc-file-control">
+    <input className="pc-file-native" type="file" name="file" required accept={accept} onChange={e=>setFileName(e.currentTarget.files?.[0]?.name??'')}/>
+    <span className="pc-file-button">Выбрать файл</span>
+    <span className="pc-file-name">{fileName||'Файл не выбран'}</span>
+   </span>
+  </label>
+  <label className="ws-consent"><input type="checkbox" required/>Подтверждаю право передать документ и согласие на обработку данных.</label>
+  <button disabled={busy} className="ws-primary">{busy?'Обрабатываем…':'Добавить источник'}</button>
+  {message&&<p role="status">{message}</p>}
+ </form>;
 }
 type Profile={fetchedAt?:string;source?:string;company?:{name?:string;ogrn?:string;status?:string;registrationDate?:string;okved?:string;region?:string};contracts?:{items?:Array<{number?:string;subject?:string;amount?:number}>};error?:string};
 export function CompanyData({id,inn,updated}:{id:string;inn:string;updated:()=>void}) {
