@@ -49,3 +49,19 @@ Full local npm test passed 6330/6330 (build included). Credit Lab 24/24; lint/ar
 Milestone 5 implementation candidate: fcfb1bd16ceb304917670cd1e0c1ef165c267cb9. Final CI pending.
 
 fcfb1bd1 ADMIN browser QA: 125/125 checks, no page errors. Visual review still exposed inherited fixed table layout squeezing columns on mobile. Fixed intrinsic table width and column sizing; added explicit minimum column-width assertions. This is why numeric QA alone is not treated as final visual acceptance. Final responsive rerun follows.
+
+Milestone 5 commit: 2f53a5dc5da3c227a819349958220ad9082b5e82. Final workflow must validate this exact HEAD.
+
+## Milestone commit ledger
+
+| Milestone | Commit |
+| --- | --- |
+| 1 · shell/API/legacy removal | f4e9c662efdb6ee3c2a9eff0042ab933df6b138f |
+| 2 · companies/analyses/canonical dossier | 038c124e2b2be4d8f73cde7df68a17fae39ee003 |
+| 3 · brokers/applications/documents | 27b07983899990346552edca416fe9b25c2d4efd |
+| 4 · access/product/audit/system | a1d27e4f765b86417f5ad834f2a0f200b68f2d22 |
+| 5 · responsive/QA/final implementation | 2f53a5dc5da3c227a819349958220ad9082b5e82 |
+
+Additional QA/fix commits: 3487e1750e81703c41e85c42aed7b22e9cf1bf29, fcfb1bd16ceb304917670cd1e0c1ef165c267cb9.
+
+The final documentation commit retains the same runtime implementation. Its exact final HEAD must pass all three CI jobs: validate, presentation, admin. The final delivery provides the run URL and result. Local build, npm test 6330/6330, 24/24 business cases, lint, artifact and PDF passed. Earlier final implementation ADMIN acceptance passed 125 checks; the final run also asserts readable mobile columns. No external DB/deployment verification is claimed.

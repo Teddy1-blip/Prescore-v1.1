@@ -58,3 +58,16 @@ Migrations 0004 and 0005 are prepared, tested on isolated PostgreSQL-compatible 
 `.github/workflows/prescore-product-qa.yml` retains full build/tests/Credit Lab/lint/artifact/PDF plus CLIENT, BROKER and Analysis V3 browser/print gates and adds ADMIN browser QA. It deploys nothing.
 
 The work journal records milestone commits and validation evidence. Final CI evidence is linked in the delivery; no unfinished route is counted as PASS.
+
+## Changed files
+
+- `.github/workflows/prescore-product-qa.yml`
+- `app/admin/admin-dashboard.tsx`, `app/admin/admin.css`, `app/api/admin/route.ts`
+- `app/components/workspace/canonical-dossier.tsx`, `client-shell.tsx`, `use-model.ts`
+- `lib/admin/companies.ts`, `governance.ts`, `observations.ts`, `operations.ts`, `resources.ts`
+- `lib/db/catalog.json`, `lib/db/schema.ts`, `lib/db/migrations/0004_admin_observations.sql`, `0005_admin_cache_invalidation.sql`
+- `scripts/qa/admin-product-browser.mjs`, `scripts/qa/workspace-harness.mjs`
+- `tests/admin-product.test.mjs`, `tests/fixtures/workspace-runtime.mjs`
+- `docs/ADMIN-PRODUCT-V1.md`, `docs/ADMIN-PRODUCT-V1-JOURNAL.md`
+
+Existing credit-engine files and CLIENT/BROKER application handlers were not changed. Shared shell defaults and the standard workspace-model endpoint remain compatible; ADMIN supplies explicit navigation and its own server-authorized canonical URL.
