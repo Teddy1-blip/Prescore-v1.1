@@ -1,19 +1,24 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Analyze, Crm, AnalysisHistory, ScreeningSummary, type UploadReceipt, type StoredAnalysis, type Deal } from "./client-operations";
-import { Shell, EmptyHome, Obligations, BankingAnalysis, FullAccessNotice, date } from "./presentation";
+import { Analyze, Crm, ScreeningSummary, type UploadReceipt, type StoredAnalysis, type Deal } from "./client-operations";
+import { EmptyHome, FullAccessNotice, date } from "./presentation";
 import { useWorkspaceModel, selectAnalysis } from "./use-model";
 import { CompanyData, SourceUpload, RecipientApplications } from "./source-operations";
-import {CreditConclusion} from "./credit-conclusion";
-import {RecommendationsScreen, SourcesScreen, ProductFitScreen} from "./client-credit-sections";
-import {FinancialAnalysisScreen,ReconciliationScreen} from "./client-source-sections";
+import {ClientShell} from './client-shell';
+import {ExecutiveOverview,CashTrend,Panel,SourceSummary} from './client-insights';
+import {FullCreditAnalysis,FinancingProducts,DebtPortfolio} from './client-analysis';
+import {FinancialStatements} from './client-financials';
+import {sourceState} from './credit-depth';
+import {BankingLedger} from './banking-ledger';
 import DocumentsHub from "../../dashboard/documents-hub";
 import AiAnalyst from "../../dashboard/ai-analyst";
 import "../../dashboard/dashboard.css";
 import "./workspace.css";
-export const clientModuleKeys:Record<string,string>={home:'overview',banking:'report',reconciliation:'report',recommendations:'report',sources:'company',upload:'analysis',analysis:'report',financing:'offers',obligations:'credit',applications:'applications',documents:'documents',company:'company',analyst:'analyst'};
+import "../../dashboard/report-v2/analysis-v3.css";
+import "./client-product.css";
+export const clientModuleKeys:Record<string,string>={home:'overview',banking:'report',upload:'analysis',analysis:'report',financing:'offers',obligations:'credit',applications:'applications',documents:'documents',analyst:'analyst'};
 export function resolveClientView(value:string|null){
- const aliases:Record<string,string>={overview:'home',report:'analysis',credit:'obligations',offers:'financing',crm:'applications',analyze:'upload'};
+ const aliases:Record<string,string>={overview:'home',report:'analysis',credit:'obligations',offers:'financing',crm:'applications',analyze:'upload',company:'documents',sources:'documents',reconciliation:'analysis',recommendations:'analysis'};
  return value?(aliases[value]??(Object.hasOwn(clientModuleKeys,value)?value:'home')):'home';
 }
 export function clientAvailableViews(modules:Record<string,boolean>,readOnly:boolean){
@@ -40,23 +45,19 @@ export default function ClientWorkspace(){
  useEffect(()=>{if(loading||modulesLoading||state.loading)return;const timer=setTimeout(()=>{const allowed=clientAvailableViews(modules,locked);if(!allowed.includes(view)){const fallback=allowed.includes('home')?'home':allowed[0];setNotice(view==='upload'&&locked?'Загрузка выписок недоступна в режиме чтения.':'Раздел временно недоступен.');if(fallback){setView(fallback);const url=new URL(window.location.href);url.searchParams.set('view',fallback);window.history.replaceState(null,'',url);}}},0);return()=>clearTimeout(timer);},[loading,modulesLoading,state.loading,modules,locked,view]);
  const disabled=modules[clientModuleKeys[view]]===false;
  const companyName=model?.basic.analysis.company.name?.trim()||selected?.companyName?.trim()||'Компания не указана';
- return <Shell view={view} choose={choose} companyName={companyName} availableViews={availableViews} secondary={<><button onClick={()=>choose('company')}>Компания и отчётность</button><button onClick={()=>choose('analyst')}>Помощник</button></>} context={selected&&<section className={"ws-context "+(['home','analysis'].includes(view)?'conclusion-context':'')}><div><span className="ws-eyebrow">{locked?'ДОСЬЕ · ТОЛЬКО ЧТЕНИЕ':'КОМПАНИЯ'}</span><h2>{companyName}</h2><p>ИНН {model?.basic.analysis.company.inn??selected.companyInn}</p>{model&&<><p>Период: {date(model.basic.analysis.period.from)} — {date(model.basic.analysis.period.to)}</p><p>{model.basic.sources.statements.bankNames?.join(' · ')||'Банки не определены'}</p><p>Выписок: {model.basic.sources.statements.count??'не определено'} · Счетов: {model.basic.sources.statements.accountCount??'не определено'}</p></>}</div><label>Сохранённый анализ<select aria-label="Сохранённый анализ" value={selectedId} onChange={e=>chooseAnalysis(e.target.value)}>{analyses.map(a=><option key={a.id} value={a.id}>{a.companyName} · {date(a.createdAt??a.periodTo)}</option>)}</select><small>{model?`${date(model.basic.analysis.period.from)} — ${date(model.basic.analysis.period.to)}`:'Получаем данные'}</small></label>{availableViews.includes('upload')&&<button onClick={()=>choose('upload')}>Добавить выписки ↗</button>}</section>}>
+ return <ClientShell view={view} choose={choose} availableViews={availableViews} context={<><div className="pc-company"><b>{companyName}</b><span>{selected?'ИНН '+(model?.basic.analysis.company.inn??selected.companyInn):'Добавьте компанию с первой выпиской'}{model?' · '+model.entitlement+' · Выписки: '+sourceState(model.basic.sources.statements.status):''}{locked?' · Только чтение':''}</span></div>{analyses.length>0&&<label className="pc-version"><span>Версия анализа</span><select aria-label="Сохранённый анализ" value={selectedId} onChange={e=>chooseAnalysis(e.target.value)}>{analyses.map(a=><option key={a.id} value={a.id}>{a.companyName} · {date(a.createdAt??a.periodTo)}</option>)}</select><small>{model?date(model.basic.analysis.period.from)+' — '+date(model.basic.analysis.period.to):'Получаем данные'}</small></label>}</>}>
+
  {operationsError&&<p role="alert">{operationsError}. Показанные операции могут быть неактуальны. <button disabled={operationsLoading} onClick={()=>void refresh()}>Обновить операции</button></p>}
  {notice&&<p role="status" className="ws-notice">{notice}</p>}{error&&<p role="alert">{error} <button onClick={()=>window.location.reload()}>Повторить</button></p>}
  {loading||modulesLoading?<p role="status">Загружаем кабинет…</p>:disabled?<p>Раздел временно недоступен.</p>:view==='upload'?(locked?<p>Загрузка выписок недоступна в режиме чтения. Выберите доступный раздел в меню.</p>:<Analyze key={selectedId} onResult={accept}/>):!selected?(selectedId?<p role="alert">Запрошенный анализ недоступен. Выберите доступную версию в истории; другой анализ автоматически не подставляется.</p>:!error&&<EmptyHome start={availableViews.includes('upload')?()=>choose('upload'):undefined}/>):state.loading?<p role="status">Загружаем финансовую картину…</p>:state.error?<p role="alert">{state.error} <button onClick={refresh}>Повторить</button></p>:model&&<>
- {view==='home'&&<><CreditConclusion key={selectedId} model={model} retry={refresh}/><ScreeningSummary key={selectedId} receipt={uploadReceipt?.id===selectedId?uploadReceipt.receipt:{screeningResults:selected.screeningResults}} open={uploadReceipt?.id===selectedId}/></>}
- {view==='banking'&&<BankingAnalysis key={selectedId} model={model}/>}
- {view==='recommendations'&&<RecommendationsScreen key={selectedId} model={model}/>}
- {view==='sources'&&<SourcesScreen key={selectedId} model={model}/>}
- {view==='reconciliation'&&<ReconciliationScreen key={selectedId} model={model}/>}
- {view==='analysis'&&<CreditConclusion key={selectedId} model={model} retry={refresh}/>}
- {view==='financing'&&<><ProductFitScreen model={model}/>{!locked&&availableViews.includes('applications')&&<section className="ws-section"><h2>Подготовить обычную заявку</h2><p>Вы можете указать цель и запрошенную сумму самостоятельно.</p><button onClick={()=>choose('applications')}>Перейти к заявкам ↗</button></section>}</>}
- {view==='obligations'&&<><Obligations key={selectedId} model={model}/>{!locked&&<SourceUpload key={selectedId+'-bki'} analysisId={selectedId} kind="BKI" saved={refresh}/>}</>}
- {view==='documents'&&<DocumentsHub key={selectedId} companyInn={selected.companyInn} companyName={selected.companyName} analysisId={selectedId} readOnly={locked}/>}
- {view==='applications'&&(locked?<p>Управление заявками доступно в кабинете брокера.</p>:<><section className="ws-section"><p>Таблица и её счётчики: заявки выбранного анализа из клиентского списка. Общий счётчик досье учитывает также доступные брокерские записи и может отличаться: {model.basic.operations.applications.count??'не определён'}.</p><button disabled={operationsLoading} onClick={()=>void refresh()}>{operationsLoading?'Обновляем…':'Обновить заявки'}</button></section><Crm key={selectedId} deals={deals.filter(d=>d.analysisId===selectedId)} analyses={[selected]} selected={selected} addDeal={addDeal} updateDeal={updateDeal}/><RecipientApplications key={selectedId} analysis={selected} saved={refresh}/></>)}
- {view==='company'&&<><FinancialAnalysisScreen key={selectedId} model={model}/><CompanyData key={selectedId} id={selectedId} inn={selected.companyInn} updated={refresh}/>{!locked&&<SourceUpload key={selectedId+'-quarterly'} analysisId={selectedId} kind="QUARTERLY" saved={refresh}/>}</>}
+ {view==='home'&&<><ExecutiveOverview key={selectedId} model={model} choose={choose} retry={refresh}/>{uploadReceipt?.id===selectedId&&<ScreeningSummary key={selectedId} receipt={uploadReceipt.receipt} open/>}</>}
+ {view==='banking'&&<><div className="pc-page-title"><div><h1>Финансы</h1><p>Денежный поток, ликвидность и финансовая отчётность</p></div></div><Panel title="Движение денег"><CashTrend model={model}/></Panel><BankingLedger model={model}/><FinancialStatements model={model}/>{!model.full?.report.financialAnalysis?.history.length&&<button className="pc-text-button" onClick={()=>choose('documents')}>Добавить отчётность в документах →</button>}<Panel title="Крупнейшие контрагенты">{model.basic.bankingFacts.topCounterparties?.length?<div className="pc-table-scroll"><table><thead><tr><th>Контрагент</th><th>Поступления, ₽</th><th>Доля</th></tr></thead><tbody>{model.basic.bankingFacts.topCounterparties.map((c,i)=><tr key={c.name+i}><th>{c.name}</th><td>{new Intl.NumberFormat('ru-RU').format(c.amount)}</td><td>{new Intl.NumberFormat('ru-RU',{maximumFractionDigits:1}).format(c.share*100)}%</td></tr>)}</tbody></table></div>:<p>Контрагенты не определены в доступной выписке.</p>}</Panel></>}
+ {view==='analysis'&&<FullCreditAnalysis key={selectedId} model={model} retry={refresh}/>}
+ {view==='financing'&&<><FinancingProducts model={model}/>{!locked&&availableViews.includes('applications')&&<Panel title="Подготовить заявку"><p>Укажите цель и запрашиваемую сумму. Подготовка заявки не означает отправку в банк.</p><button className="pc-primary" onClick={()=>choose('applications')}>Перейти к заявкам</button></Panel>}</>}
+ {view==='obligations'&&<><DebtPortfolio key={selectedId} model={model}/>{!locked&&<SourceUpload key={selectedId+'-bki'} analysisId={selectedId} kind="BKI" saved={refresh}/>}</>}
+ {view==='documents'&&<><div className="pc-page-title"><div><h1>Документы</h1><p>Комплект источников и файлы компании</p></div></div><Panel title="Что учтено в анализе"><SourceSummary model={model}/><p>Кредитная история и отчётность обновляют анализ через формы ниже. Остальные файлы хранятся в досье и не меняют оценку автоматически.</p></Panel><DocumentsHub key={selectedId} companyInn={selected.companyInn} companyName={selected.companyName} analysisId={selectedId} readOnly={locked}/>{!locked&&<><SourceUpload key={selectedId+'-bki'} analysisId={selectedId} kind="BKI" saved={refresh}/><SourceUpload key={selectedId+'-quarterly'} analysisId={selectedId} kind="QUARTERLY" saved={refresh}/>{modules.company!==false&&<CompanyData key={selectedId} id={selectedId} inn={selected.companyInn} updated={refresh}/>}</>}</>}
+ {view==='applications'&&(locked?<p>Управление заявками доступно в кабинете брокера.</p>:<><div className="pc-page-title"><div><h1>Заявки</h1><p>Сохранённые заявки, статусы и переписка</p></div><button disabled={operationsLoading} onClick={()=>void refresh()}>{operationsLoading?'Обновляем…':'Обновить'}</button></div><Crm key={selectedId} deals={deals.filter(d=>d.analysisId===selectedId)} analyses={[selected]} selected={selected} addDeal={addDeal} updateDeal={updateDeal}/><RecipientApplications key={selectedId} analysis={selected} saved={refresh}/></>)}
  {view==='analyst'&&(model.full?<AiAnalyst key={selectedId} analysisId={selectedId}/>:<FullAccessNotice model={model} retry={refresh}/>)}
  </>}
- <AnalysisHistory analyses={analyses} selectedId={selectedId} select={chooseAnalysis}/>
- </Shell>;
+ </ClientShell>;
 }

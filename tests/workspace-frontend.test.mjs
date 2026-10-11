@@ -42,7 +42,7 @@ test('production broker GET executes PostgreSQL curator ordering without alias e
 
 test('BASIC conclusion keeps direct access to separate banking analysis',async()=>{
  const client=fs.readFileSync('app/components/workspace/client.tsx','utf8');
- assert.match(client,/view==='banking'&&<BankingAnalysis/);
+ assert.match(client,/view==='banking'[\s\S]*?<BankingLedger/);
  const rt=await createWorkspaceRuntime();try{
  const {conclusionFixture}=await import('./fixtures/credit-conclusion.mjs');
  const model=conclusionFixture().model;model.full=null;model.state='READY_BASIC';model.entitlement='BASIC';model.fullAvailability='LOCKED';
