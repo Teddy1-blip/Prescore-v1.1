@@ -26,5 +26,67 @@ try{
  await page.getByRole('button',{name:'Почему?',exact:true}).first().click();await page.getByRole('dialog',{name:'Основания вывода'}).waitFor();await page.keyboard.press('Escape');assert.equal(await page.locator('dialog[open]').count(),0);checks.push('evidence modal keyboard');
  const unknown=await(await page.request.get(origin+'/__qa/seed?case=CL-RU-BUS-011')).json();await page.reload();await page.getByLabel('Сохранённый анализ').selectOption(unknown.id);await page.getByRole('heading',{name:'Обзор компании',exact:true}).waitFor();await page.reload();await page.getByRole('heading',{name:'Обзор компании',exact:true}).waitFor();assert.equal(await page.getByLabel('Сохранённый анализ').inputValue(),unknown.id);checks.push('selection and reload');
  await page.setViewportSize({width:390,height:900});await page.getByRole('button',{name:'Открыть меню',exact:true}).click();await page.getByRole('navigation',{name:'Разделы кабинета'}).getByRole('button',{name:'Документы',exact:true}).click();assert.equal(await page.getByRole('button',{name:'Открыть меню'}).getAttribute('aria-expanded'),'false');checks.push('mobile navigation');
+
+ // Refresh preserves the mounted application table and local search state.
+ await page.setViewportSize({width:1440,height:1000});
+ await page.goto(origin+'/dashboard?analysisId='+seed.id+'&view=applications');
+ await page.getByPlaceholder('Банк, компания или продукт').fill('Оборотный');
+ await page.route('**/api/workspace-model?*',async route=>{await new Promise(resolve=>setTimeout(resolve,650));await route.continue();});
+ await page.getByRole('button',{name:'Обновить',exact:true}).click();
+ await page.getByText('Обновляем данные. Текущая версия остаётся на экране.',{exact:true}).waitFor();
+ assert.equal(await page.getByPlaceholder('Банк, компания или продукт').inputValue(),'Оборотный');
+ await page.waitForFunction(()=>!document.body.innerText.includes('Обновляем данные. Текущая версия остаётся на экране.'));
+ assert.equal(await page.getByPlaceholder('Банк, компания или продукт').inputValue(),'Оборотный');
+ await page.unroute('**/api/workspace-model?*');checks.push('application table preserved through refresh');
+ // Real business fixtures with missing/partial/conflicting sources.
+ for(const caseId of ['011','013','016','017','022']){
+  const current=await(await page.request.get(origin+'/__qa/seed?case=CL-RU-BUS-'+caseId)).json();
+  for(const view of ['home','analysis','banking','obligations','financing','documents','applications','analyst']){
+   await page.setViewportSize({width:360,height:1000});await page.goto(origin+'/dashboard?analysisId='+current.id+'&view='+view);
+   await page.waitForFunction(()=>!document.body.innerText.includes('Загружаем финансовую картину')&&!document.body.innerText.includes('Загружаем кабинет'));
+   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'fixture '+caseId+' '+view);
+   assert.doesNotMatch(await page.locator('main').innerText(),/NaN|Infinity|undefined/);
+   checks.push('source state '+caseId+' '+view);
+  }
+ }
+ // Server models remain authoritative; BASIC and unavailable states disclose no FULL data.
+ for(const state of ['basic','unavailable']){
+  const altered=structuredClone(model);delete altered.full;altered.state='READY_BASIC';altered.entitlement=state==='basic'?'BASIC':'FULL';altered.fullAvailability=state==='basic'?'LOCKED':'UNAVAILABLE';
+  await page.route('**/api/workspace-model?*',route=>route.fulfill({json:altered}));
+  for(const view of ['home','analysis','banking','obligations','financing','documents','applications','analyst']){
+   await page.goto(origin+'/dashboard?analysisId='+seed.id+'&view='+view);
+   await page.getByLabel('Сохранённый анализ').waitFor();
+   await page.waitForFunction(()=>!document.body.innerText.includes('Загружаем финансовую картину')&&!document.body.innerText.includes('Загружаем кабинет'));
+   assert.equal(await page.locator('[data-credit-index]').count(),0);assert.equal(await page.locator('[data-prudential-capacity]').count(),0);
+   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),state+' '+view);
+   checks.push(state+' '+view);
+  }
+  await page.unroute('**/api/workspace-model?*');
+ }
+ // Read-only broker sees history without mutation controls.
+ await context.addCookies([{name:'qa-role',value:'broker',url:origin}]);
+ await page.goto(origin+'/dashboard?client='+seed.id+'&from=agent&view=applications');
+ await page.getByText('Режим просмотра',{exact:true}).first().waitFor();
+ assert.equal(await page.getByRole('button',{name:'Новая заявка',exact:true}).count(),0);
+ assert.equal(await page.getByRole('button',{name:'Отменить',exact:true}).count(),0);
+ assert.equal(await page.getByRole('button',{name:'Новый анализ',exact:true}).count(),0);
+ checks.push('broker read-only applications');await context.clearCookies();
+ // Failed model refresh retains the last model; retry restores it.
+ await page.goto(origin+'/dashboard?analysisId='+seed.id+'&view=applications');
+ await page.getByPlaceholder('Банк, компания или продукт').waitFor();
+ await page.route('**/api/workspace-model?*',route=>route.fulfill({status:503,json:{error:'QA unavailable'}}));
+ await page.getByRole('button',{name:'Обновить',exact:true}).click();await page.getByText(/Показана последняя полученная версия/).waitFor();
+ assert.equal(await page.getByPlaceholder('Банк, компания или продукт').count(),1);
+ await page.unroute('**/api/workspace-model?*');await page.getByRole('button',{name:'Повторить',exact:true}).click();
+ await page.waitForFunction(()=>!document.body.innerText.includes('Показана последняя полученная версия'));
+ checks.push('failed refresh retains application table and recovers');
+ // No saved analyses and initial API errors.
+ await page.route('**/api/workspace',route=>route.fulfill({json:{analyses:[],deals:[],readOnly:false}}));
+ await page.goto(origin+'/dashboard');await page.getByRole('button',{name:'Загрузить выписку'}).waitFor();
+ assert.equal(await page.locator('[data-credit-index]').count(),0);checks.push('no analysis actionable state');
+ await page.unroute('**/api/workspace');
+ await page.route('**/api/workspace',route=>route.fulfill({status:503,json:{error:'QA unavailable'}}));
+ await page.goto(origin+'/dashboard');await page.getByRole('alert').waitFor();
+ assert.match(await page.getByRole('alert').innerText(),/Повторить/);checks.push('initial API error actionable');await page.unroute('**/api/workspace');
  assert.deepEqual(errors,[]);checks.push('no browser runtime errors');console.log('PASS',checks.length);
 }catch(e){console.error(e);await page.screenshot({path:out+'/failure.png',fullPage:true});process.exitCode=1;}finally{fs.writeFileSync(out+'/result.json',JSON.stringify({checks,errors},null,2));await browser.close();server.kill('SIGTERM');}

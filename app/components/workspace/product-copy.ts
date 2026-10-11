@@ -1,5 +1,5 @@
 // Labels for existing canonical reasons. This file never evaluates product fit.
-const purpose:Record<string,string>={WORKING_CAPITAL:'Пополнение оборотных средств',CONTRACT_EXECUTION:'Исполнение контракта',CAPEX:'Покупка основных средств',REFINANCING:'Рефинансирование обязательств',LIQUIDITY_BUFFER:'Резерв ликвидности',RECEIVABLES_FINANCE:'Финансирование дебиторской задолженности'};
+const purpose:Record<string,string>={WORKING_CAPITAL:'Пополнение оборотных средств',CONTRACT_EXECUTION:'Исполнение контракта',INVESTMENT:'Инвестиции в развитие',EQUIPMENT:'Покупка оборудования',SEASONAL_NEED:'Сезонная потребность',LIQUIDITY_GAP:'Кассовый разрыв',CAPEX:'Покупка основных средств',REFINANCING:'Рефинансирование обязательств',LIQUIDITY_BUFFER:'Резерв ликвидности',RECEIVABLES_FINANCE:'Финансирование дебиторской задолженности'};
 const reasons:Record<string,string>={
  CONTRACT_DOCUMENT_MATCHED:'Документы подтверждают связь с контрактом.',
  ACTIVE_CONTRACT_CONTEXT_PRESENT:'В источниках есть действующие контракты.',

@@ -170,7 +170,7 @@ export async function POST(request: Request) {
   try {
     const db = await getDatabase();
     await ensureSchema(db);
-    const body = await request.json() as { type?: string; analysis?: AnalysisPayload & Record<string, unknown>; deal?: Record<string, unknown>; analysisId?: string; companyName?: string; companyInn?: string; agentCode?: string; consentAt?: string; creditHistory?: CreditHistoryReport; quarterlyReport?: QuarterlyFinancialReport; applications?: Array<{ bank?: string; product?: string; amount?: number }> };
+    const body = await request.json() as { type?: string; analysis?: AnalysisPayload & Record<string, unknown>; deal?: Record<string, unknown>; analysisId?: string; companyName?: string; companyInn?: string; agentCode?: string; consentAt?: string; creditHistory?: CreditHistoryReport; quarterlyReport?: QuarterlyFinancialReport; requestId?: string; applications?: Array<{ bank?: string; product?: string; amount?: number }> };
     if (body.type === "analysis" && body.analysis) {
       return Response.json({ error: "Расчётный результат создаётся и изменяется только серверными модулями" }, { status: 409 });
     }
@@ -211,15 +211,21 @@ export async function POST(request: Request) {
       if (!analysisId || !companyName || !product) return Response.json({ error: "Заполните компанию и продукт" }, { status: 400 });
       const ownership = await db.batch([db.prepare("SELECT owner_email AS ownerEmail FROM analyses WHERE id = ? LIMIT 1").bind(analysisId)]);
       if (String((ownership[0]?.results as Array<{ ownerEmail?: string }>)[0]?.ownerEmail || "") !== user.email && !user.isAdmin) return Response.json({ error: "Нет доступа к анализу" }, { status: 403 });
-      await db.prepare(`INSERT INTO deals
+      const findSaved=async()=>{
+        const saved=await db.prepare("SELECT id, analysis_id AS analysisId, product, amount, bank, owner_email AS ownerEmail FROM deals WHERE id = ? LIMIT 1").bind(id).first<{id:string;analysisId:string;product:string;amount:number;bank:string;ownerEmail:string}>();
+        if(!saved)return null;
+        return saved.ownerEmail===user.email&&saved.analysisId===analysisId&&saved.product===product&&Number(saved.amount)===(Number(item.amount)||0)&&saved.bank===String(item.bank||"")?Response.json({deal:{...item,id},replayed:true}):Response.json({error:"Этот идентификатор уже использован для другой заявки"},{status:409});
+      };
+      const replay=await findSaved();if(replay)return replay;
+      try{await db.batch([
+        db.prepare(`INSERT INTO deals
         (id, analysis_id, company_name, product, amount, status, owner, next_action, bank, application_group_id, consent_at, owner_email, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .bind(id, analysisId, companyName, product, Number(item.amount) || 0, String(item.status || "Новая"), String(item.owner || "Не назначен"), String(item.nextAction || "Связаться с клиентом"), String(item.bank || ""), String(item.applicationGroupId || ""), String(item.consentAt || ""), user.email, new Date().toISOString(), new Date().toISOString())
-        .run();
-      await db.batch([
+        .bind(id, analysisId, companyName, product, Number(item.amount) || 0, String(item.status || "Новая"), String(item.owner || "Не назначен"), String(item.nextAction || "Связаться с клиентом"), String(item.bank || ""), String(item.applicationGroupId || ""), String(item.consentAt || ""), user.email, new Date().toISOString(), new Date().toISOString()),
+
         db.prepare("INSERT INTO application_status_history (id, application_id, from_status, to_status, actor_role, actor_email, public_comment, created_at) VALUES (?, ?, '', ?, 'CLIENT', ?, 'Создан черновик заявки', ?)").bind(crypto.randomUUID(), id, String(item.status || "Новая"), user.email, new Date().toISOString()),
         db.prepare("INSERT INTO audit_log (id, entity_type, entity_id, action, actor_role, actor_email, metadata, created_at) VALUES (?, 'APPLICATION', ?, 'CREATE', 'CLIENT', ?, ?, ?)").bind(crypto.randomUUID(), id, user.email, JSON.stringify({ product, bank: String(item.bank || "") }), new Date().toISOString()),
-      ]);
+      ]);}catch(error){const replay=await findSaved();if(replay)return replay;throw error;}
       try {
         const rows = await db.batch([db.prepare("SELECT company_inn AS companyInn FROM analyses WHERE id = ? LIMIT 1").bind(analysisId)]);
         const companyInn = String((rows[0]?.results as Array<{ companyInn?: string }> | undefined)?.[0]?.companyInn || "");
@@ -246,7 +252,20 @@ export async function POST(request: Request) {
       if (!analysisId || !companyName || !/^(?:\d{10}|\d{12})$/.test(companyInn) || !consentAt || body.applications.length > 12) return Response.json({ error: "Проверьте компанию, согласие и список получателей" }, { status: 400 });
       const ownership = await db.batch([db.prepare("SELECT owner_email AS ownerEmail FROM analyses WHERE id = ? LIMIT 1").bind(analysisId)]);
       if (String((ownership[0]?.results as Array<{ ownerEmail?: string }>)[0]?.ownerEmail || "") !== user.email && !user.isAdmin) return Response.json({ error: "Нет доступа к анализу" }, { status: 403 });
-      const groupId = crypto.randomUUID();
+      const groupId = body.requestId || crypto.randomUUID();
+      if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(groupId))return Response.json({error:"Некорректный идентификатор запроса"},{status:400});
+      const requested=[...new Map(body.applications.map(item=>{
+        const bank=String(item.bank||"").trim(),product=String(item.product||"").trim(),amount=Math.max(0,Number(item.amount)||0);
+        return [JSON.stringify([bank.toLocaleLowerCase('ru-RU'),product,amount]),{bank,product,amount}];
+      })).values()].filter(item=>item.bank&&item.product).sort((a,b)=>a.bank.localeCompare(b.bank)||a.product.localeCompare(b.product)||a.amount-b.amount);
+      const findGroup=async()=>{
+        const rows=await db.batch([db.prepare("SELECT id, analysis_id AS analysisId, company_name AS companyName, product, amount, status, owner, next_action AS nextAction, bank, application_group_id AS applicationGroupId, consent_at AS consentAt, created_at AS createdAt, updated_at AS updatedAt FROM deals WHERE application_group_id = ? AND owner_email = ? ORDER BY bank, product, amount").bind(groupId,user.email)]);
+        const deals=rows[0].results as Array<{analysisId:string;bank:string;product:string;amount:number}>;
+        if(!deals.length)return null;
+        const matches=deals.length===requested.length&&requested.every(item=>deals.some(d=>d.analysisId===analysisId&&d.bank.toLocaleLowerCase('ru-RU')===item.bank.toLocaleLowerCase('ru-RU')&&d.product===item.product&&Number(d.amount)===item.amount));
+        return matches?Response.json({groupId,deals,replayed:true}):Response.json({error:"Идентификатор запроса уже использован с другими параметрами"},{status:409});
+      };
+      const replay=await findGroup();if(replay)return replay;
       const now = new Date().toISOString();
       const leadQuery = await db.batch([db.prepare("SELECT id, agent_code AS agentCode FROM agent_leads WHERE company_inn = ? ORDER BY updated_at DESC LIMIT 1").bind(companyInn)]);
       const leadRecord = (leadQuery[0]?.results as Array<{ id?: string; agentCode?: string }> | undefined)?.[0];
@@ -257,22 +276,22 @@ export async function POST(request: Request) {
         (id, agent_code, company_name, company_inn, contact_name, phone, email, source, status, subscription_status, consent_at, created_at, updated_at)
         VALUES (?, ?, ?, ?, '', '', '', 'Клиентский кабинет', 'Подготовка заявки', 'Активна', ?, ?, ?)`)
         .bind(leadId, agentCode, companyName, companyInn, consentAt, now, now).run();
-      const created = body.applications.map((item) => {
-        const id = crypto.randomUUID();
+      const created = requested.map((item,index) => {
+        const id = groupId+'-'+index;
         const bank = String(item.bank || "").trim();
         const product = String(item.product || "").trim();
         const amount = Math.max(0, Number(item.amount) || 0);
         return { id, analysisId, companyName, product, amount, status: "Подготовка документов", owner: "Брокер", nextAction: "Проверить документы и согласие перед отправкой", bank, applicationGroupId: groupId, consentAt, createdAt: now, updatedAt: now };
       }).filter((item) => item.bank && item.product);
       if (!created.length) return Response.json({ error: "Не выбраны получатели" }, { status: 400 });
-      await db.batch(created.flatMap((item) => [
+      try{await db.batch(created.flatMap((item) => [
         db.prepare(`INSERT INTO deals (id, analysis_id, company_name, product, amount, status, owner, next_action, bank, application_group_id, consent_at, owner_email, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
           .bind(item.id, item.analysisId, item.companyName, item.product, item.amount, item.status, item.owner, item.nextAction, item.bank, item.applicationGroupId, item.consentAt, user.email, now, now),
         db.prepare(`INSERT OR REPLACE INTO agent_applications (id, agent_code, lead_id, analysis_id, company_name, bank, product, requested_amount, calculated_limit, reward_rate_bps, status, next_action, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`)
           .bind(item.id, agentCode, leadId, analysisId, companyName, item.bank, item.product, item.amount, item.amount, "Подготовка заявки", item.nextAction, now, now),
         db.prepare("INSERT INTO application_status_history (id, application_id, from_status, to_status, actor_role, actor_email, public_comment, created_at) VALUES (?, ?, '', ?, 'CLIENT', ?, 'Заявка создана по выбранному маршруту', ?)").bind(crypto.randomUUID(), item.id, item.status, user.email, now),
         db.prepare("INSERT INTO audit_log (id, entity_type, entity_id, action, actor_role, actor_email, metadata, created_at) VALUES (?, 'APPLICATION', ?, 'CREATE', 'CLIENT', ?, ?, ?)").bind(crypto.randomUUID(), item.id, user.email, JSON.stringify({ bank: item.bank, product: item.product }), now),
-      ]));
+      ]));}catch(error){const replay=await findGroup();if(replay)return replay;throw error;}
       return Response.json({ groupId, deals: created }, { status: 201 });
     }
     return Response.json({ error: "Неизвестный тип операции" }, { status: 400 });

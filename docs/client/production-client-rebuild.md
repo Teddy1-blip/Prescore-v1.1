@@ -1,6 +1,8 @@
 # CLIENT production rebuild — 2026-10-11
 
-Source: `bf112665e3fc36c79e3834d98524bb0eea7ff2b5`. Target: staging only.
+Product baseline: `cf4574adf24b39a22d9dc41e12fec38456678680`.
+Active branch: `prescore-product-v1`. Acceptance is repository and isolated QA only;
+Amvera, live HTTP checks, deployment, migrations and database cleanup are outside this task.
 
 ## Product
 
@@ -9,7 +11,8 @@ One `/dashboard` shell: Обзор, Анализ Prescore, Финансы, Об�
 Company, INN, access tier, statement state, period and saved version are header context.
 
 `view=home` is an executive summary; `view=analysis` renders the existing public
-canonical report with section navigation, source-linked evidence dialogs, the existing
+canonical report with section navigation for conclusion, factors, capacity, financials, obligations,
+financing, reconciliation, action plan and sources; source-linked evidence dialogs; the existing
 Analysis V3 capacity/scenario component and canonical Expertise content. No financial
 formula or credit decision is computed in React. Formatting percentages and chart
 geometry do not change canonical values. `UNKNOWN` remains unknown, including known
@@ -70,9 +73,11 @@ by `tests/credit-portfolio-v1.test.mjs`. No missing BKI is interpreted as zero d
   mobile navigation and no runtime errors.
 - Repository suite: all existing tests, with only retired presentation wiring assertions
   updated to the new user path. Canonical engine and authorization tests unchanged.
-- Build and lint; GitHub staging delivery gates remain in place.
-- Live verification is recorded separately after deployment; local synthetic checks are
-  not presented as proof of a live authenticated upload or provider AI response.
+- Build, lint, standalone validation and standalone PDF extraction.
+- `.github/workflows/prescore-product-qa.yml` provides the final repository gate;
+  it does not deliver to Amvera.
+- Local synthetic checks are not presented as proof of an external provider AI response.
+  No deployment or live verification is required or performed for Product V1.
 
 ## Safety
 
@@ -88,3 +93,48 @@ without its dynamically required native canvas dependency. `next.config.ts` now 
 PDF.js/canvas external and explicitly traces the PDF worker and Linux native canvas
 package into standalone. A deployment-artifact text-extraction gate exercises those
 copied dependencies before delivery. No parser or credit calculation was changed.
+
+## Product V1 completion
+
+The current shell and visual style are retained. `client-analysis` uses one canonical
+report and includes the obligations and product surfaces inside the report as well as
+in their dedicated cabinet sections. Embedded sections have section headings rather
+than competing page titles. Risk factors are deduplicated by claim identity and linked
+to existing canonical remedies and the 7/30/60 plan; no recommendation is computed
+in React. Evidence dialogs localize enum values and preserve numerical values.
+
+`product-copy.ts` explains product mechanisms and translates existing canonical
+support/constraint reason codes. Fit, ordering, purpose alignment, capacity alignment
+and missing inputs come from the current server model. Product fit remains explicitly
+separate from a bank offer. The server allowlist `analysisV3Presentation` now publishes
+maturity with its original knowledge, confidence, origin and observation date; it adds
+no calculation and exposes no contract identifiers. A missing maturity stays unknown.
+
+`client-documents.tsx` consolidates source status, period, received date when published,
+analytical purpose and the next action. Company identifiers and uploaded-file counts
+are taken from the workspace model. The overview describes banking completeness as
+banking-field/period coverage, never as completeness of the whole credit assessment.
+
+`use-model` retains the current model while refreshing the same analysis. Selecting a
+different analysis never reuses the previous company's model. A failed refresh leaves
+the mounted application list and search in place with an explicit stale-data alert and
+retry. `Crm` exposes dates/history in read-only mode without create/cancel/chat controls.
+
+Application save retries reuse the same request identity. The existing workspace API
+returns a confirmed draft or recipient group on replay, rejects changed parameters,
+normalizes duplicate recipients, and creates the draft plus audit/history in one existing
+transaction. Concurrent retry acceptance uses real API handlers and the existing test
+database, without schema changes. Authentication and ownership checks are retained.
+
+New proof: `tests/client-completion.test.mjs` checks concurrent save/replay, ownership,
+parameter mismatch, duplicate recipients, canonical maturity, UNKNOWN versus real zero,
+and read-only application rendering. Product browser QA now also covers the new report
+sections, source-limited business fixtures, all eight BASIC/unavailable sections,
+read-only broker access, retained applications during refresh, failed refresh/recovery,
+initial API error and the actionable no-analysis state.
+
+Supported source boundaries remain explicit: banking import accepts TXT
+1CClientBankExchange; generic uploaded files are stored, not parsed as statements;
+BKI and quarterly inputs use their existing parsers; BFO/company retrieval uses the
+existing open-data operation. Missing data receives an explanation/action, never
+invented values. Availability of an external data provider remains a runtime condition.
