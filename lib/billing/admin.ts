@@ -28,6 +28,7 @@ export async function anomalies(tx:Tx){return rows(tx,`SELECT 'PAYMENT_WITHOUT_P
  UNION ALL SELECT 'REFUND_ACCESS_MISMATCH',p.id FROM billing_payments p JOIN billing_periods sp ON sp.payment_id=p.id WHERE p.refunded_minor<>sp.refunded_minor
  UNION ALL SELECT 'FAILED_PAYOUT_WITHOUT_RETRY',p.id FROM billing_payouts p WHERE p.status IN ('FAILED','RETRY_REQUIRED') AND NOT EXISTS(SELECT 1 FROM billing_outbox b WHERE b.aggregate_id=p.commission_id AND b.status IN ('PENDING','PROCESSING','REQUIRES_REVIEW'))
  UNION ALL SELECT 'UNKNOWN_PAYMENT_REVIEW',id FROM billing_payments WHERE status='UNKNOWN_REVIEW'
+ UNION ALL SELECT 'REFUND_RECONCILIATION_REQUIRED',id FROM billing_events WHERE result='REFUND_REQUIRES_RECONCILIATION'
  UNION ALL SELECT 'UNKNOWN_REFUND_REVIEW',id FROM billing_refunds WHERE status='UNKNOWN_REVIEW'
  UNION ALL SELECT 'PAYOUT_REQUIRES_REVIEW',aggregate_id FROM billing_outbox WHERE status='REQUIRES_REVIEW'
  UNION ALL SELECT 'AMOUNT_OR_CURRENCY_MISMATCH',p.id FROM billing_payments p JOIN billing_orders o ON o.id=p.order_id WHERE p.amount_minor<>o.amount_minor OR p.currency<>o.currency

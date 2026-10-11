@@ -40,3 +40,5 @@ Milestone 7 SHA: `441676380bc063ec49788848c47bd395214277eb`. Initial billing bro
 Follow-up implementation SHA: `d1af69fc6184b6bf6827711861aff961779b8727`. Targeted billing 18/18, typecheck 0 new (10 pre-existing diagnostics). Follow-up preview calculation moved to the server after React purity lint found Date.now in render; subscription tests 3/3 and targeted lint then passed. Final validation is run on the subsequent documentation HEAD and reported with its exact SHA/Actions URL in the delivery result.
 
 Journal documentation SHA: `8d21abc7d32ca25030bc5727dd82c9322f366369`. Final server period-preview correction is checked by the exact subsequent HEAD workflow; no deployment or live calls.
+
+Server preview SHA: `265aa20afa7a037aec5a0acb94cab3cdbe0b287a`. Final reconciliation visibility correction: ambiguous refund notifications appear explicitly in ADMIN anomalies; rejected Cancel responds FAILED consistently with persisted state.
