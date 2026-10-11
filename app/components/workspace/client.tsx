@@ -4,6 +4,7 @@ import { Analyze, Crm, ScreeningSummary, type UploadReceipt, type StoredAnalysis
 import { EmptyHome, FullAccessNotice, date } from "./presentation";
 import { useWorkspaceModel, selectAnalysis } from "./use-model";
 import { CompanyData, SourceUpload, RecipientApplications } from "./source-operations";
+import {ClientBilling} from './billing';
 import {ClientShell} from './client-shell';
 import {ExecutiveOverview,CashTrend,Panel} from './client-insights';
 import {FullCreditAnalysis,FinancingProducts,DebtPortfolio} from './client-analysis';
@@ -18,13 +19,13 @@ import "../../dashboard/dashboard.css";
 import "./workspace.css";
 import "../../dashboard/report-v2/analysis-v3.css";
 import "./client-product.css";
-export const clientModuleKeys:Record<string,string>={home:'overview',banking:'report',upload:'analysis',analysis:'report',financing:'offers',obligations:'credit',applications:'applications',documents:'documents',analyst:'analyst'};
+export const clientModuleKeys:Record<string,string>={home:'overview',banking:'report',upload:'analysis',analysis:'report',financing:'offers',obligations:'credit',applications:'applications',documents:'documents',analyst:'analyst',billing:'billing'};
 export function resolveClientView(value:string|null){
  const aliases:Record<string,string>={overview:'home',report:'analysis',credit:'obligations',offers:'financing',crm:'applications',analyze:'upload',company:'documents',sources:'documents',reconciliation:'analysis',recommendations:'analysis'};
  return value?(aliases[value]??(Object.hasOwn(clientModuleKeys,value)?value:'home')):'home';
 }
 export function clientAvailableViews(modules:Record<string,boolean>,readOnly:boolean){
- return Object.keys(clientModuleKeys).filter(view=>modules[clientModuleKeys[view]]!==false&&!(view==='upload'&&readOnly));
+ return Object.keys(clientModuleKeys).filter(view=>modules[clientModuleKeys[view]]!==false&&!(['upload','billing'].includes(view)&&readOnly));
 }
 export default function ClientWorkspace(){
  const [analyses,setAnalyses]=useState<StoredAnalysis[]>([]),[deals,setDeals]=useState<Deal[]>([]),[selectedId,setSelectedId]=useState(''),[view,setView]=useState('home'),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState(''),[readOnly,setReadOnly]=useState(false),[revision,setRevision]=useState(0),[modules,setModules]=useState<Record<string,boolean>>({}),[modulesLoading,setModulesLoading]=useState(true);
@@ -52,6 +53,7 @@ export default function ClientWorkspace(){
  {operationsError&&<p role="alert">{operationsError}. Показанные операции могут быть неактуальны. <button disabled={operationsLoading} onClick={()=>void refresh()}>Обновить операции</button></p>}
  {state.refreshing&&<p role="status" className="pc-muted">Обновляем данные. Текущая версия остаётся на экране.</p>}{state.refreshError&&<p role="alert">{state.refreshError} Показана последняя полученная версия. <button onClick={refresh}>Повторить</button></p>}{notice&&<p role="status" className="ws-notice">{notice}</p>}{error&&<p role="alert">{error} <button onClick={()=>window.location.reload()}>Повторить</button></p>}
  {loading||modulesLoading?<p role="status">Загружаем кабинет…</p>:disabled?<p>Раздел временно недоступен.</p>:view==='upload'?(locked?<p>Загрузка выписок недоступна в режиме чтения. Выберите доступный раздел в меню.</p>:<Analyze key={selectedId} onResult={accept}/>):!selected?(selectedId?<p role="alert">Запрошенный анализ недоступен. Выберите доступную версию в истории; другой анализ автоматически не подставляется.</p>:!error&&<EmptyHome start={availableViews.includes('upload')?()=>choose('upload'):undefined}/>):state.loading?<p role="status">Загружаем финансовую картину…</p>:state.error?<p role="alert">{state.error} <button onClick={refresh}>Повторить</button></p>:model&&<>
+ {view==='billing'&&<ClientBilling key={selectedId} analysisId={selectedId} readOnly={locked}/>}
  {view==='home'&&<><ExecutiveOverview key={selectedId} model={model} choose={choose} retry={refresh}/>{uploadReceipt?.id===selectedId&&<ScreeningSummary key={selectedId} receipt={uploadReceipt.receipt} open/>}</>}
  {view==='banking'&&<><div className="pc-page-title"><div><h1>Финансы</h1><p>Денежный поток, ликвидность и финансовая отчётность</p></div></div><Panel title="Движение денег"><CashTrend model={model}/></Panel><BankingLedger model={model}/><FinancialStatements model={model}/>{!model.full?.report.financialAnalysis?.history.length&&<button className="pc-text-button" onClick={()=>choose('documents')}>Добавить отчётность в документах →</button>}<Panel title="Крупнейшие контрагенты">{model.basic.bankingFacts.topCounterparties?.length?<div className="pc-table-scroll"><table><thead><tr><th>Контрагент</th><th>Поступления, ₽</th><th>Доля</th></tr></thead><tbody>{model.basic.bankingFacts.topCounterparties.map((c,i)=><tr key={c.name+i}><th>{c.name}</th><td>{new Intl.NumberFormat('ru-RU').format(c.amount)}</td><td>{new Intl.NumberFormat('ru-RU',{maximumFractionDigits:1}).format(c.share*100)}%</td></tr>)}</tbody></table></div>:<p>Контрагенты не определены в доступной выписке.</p>}</Panel></>}
  {view==='analysis'&&<FullCreditAnalysis key={selectedId} model={model} retry={refresh}/>}

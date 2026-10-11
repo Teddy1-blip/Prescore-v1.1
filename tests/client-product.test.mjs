@@ -10,7 +10,7 @@ test('commercial client uses one navigation and separate executive/analysis path
  const rt=await createWorkspaceRuntime();try{
  const shell=rt.load('app/components/workspace/client-shell.tsx'),insights=rt.load('app/components/workspace/client-insights.tsx'),analysis=rt.load('app/components/workspace/client-analysis.tsx'),routing=rt.load('app/components/workspace/client.tsx');
  const {model}=conclusionFixture(),before=JSON.stringify(model),props={model,choose:()=>{},retry:()=>{}};
- assert.deepEqual(shell.CLIENT_NAV.map(i=>i.label),['Обзор','Анализ Prescore','Финансы','Обязательства','Финансирование','Документы','Заявки','Кредитный аналитик']);
+ assert.deepEqual(shell.CLIENT_NAV.map(i=>i.label),['Обзор','Анализ Prescore','Финансы','Обязательства','Финансирование','Документы','Заявки','Кредитный аналитик','Подписка компании']);
  const overview=render(insights.ExecutiveOverview,props);assert.match(overview,/Обзор компании/);assert.doesNotMatch(overview,/av-scenario-grid|pc-memo|CLIENT.*ANALYSIS V3/);
  for(const section of ['conclusion','factors','capacity','financials','obligations','financing','reconciliation','plan','evidence'])await t.test(section,()=>{const html=render(analysis.FullCreditAnalysis,{...props,initialSection:section});assert.doesNotMatch(html,/NaN|undefined|Infinity/);assert.match(html,/Анализ Prescore/);});
  for(const C of [analysis.FinancingProducts,analysis.DebtPortfolio])assert.doesNotMatch(render(C,props),/NaN|undefined|Infinity/);

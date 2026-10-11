@@ -19,3 +19,8 @@ Milestone 3 SHA: `fce6ca39203e9c29a7bdf70d2a86c9ef3e7df68e`. Tests 3/3; typechec
 
 ## Milestone 4
 Atomic commissions/outbox, Fake/Disabled settlement, leased bounded worker, confirmed refund adjustments and negative-balance offset. Targeted settlement 3/3; a concurrency test exposed missing reservation subtraction, fixed before commit.
+
+Milestone 4 SHA: `357eb4eff58624bd562960a391668f35a0958c78`. Settlement tests 3/3; typecheck 0 new diagnostics.
+
+## Milestone 5
+CLIENT subscription/consent/history, server-state return page; BROKER sales/commission/payout-profile UI with curator privacy. Authorization and shared product regression tests.
