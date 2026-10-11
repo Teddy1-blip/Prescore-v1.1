@@ -34,3 +34,5 @@ Milestone 6 SHA: `8fee3abd060064ef7d002d162b2d4d60d51c8915`. Billing tests 7/7, 
 
 ## Milestone 7
 Billing browser lifecycle + five viewport matrix, existing regressions, official live checklist, full final CI. No live API calls.
+
+Milestone 7 SHA: `441676380bc063ec49788848c47bd395214277eb`. Initial billing browser 134/134, existing ADMIN 125/125. Follow-up refines sales cohort/channel/renewal charts and adds refund/renewal race and rejected-refund regression tests; final exact HEAD CI will be checked after this commit. Billing targeted now 18/18.
