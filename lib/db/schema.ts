@@ -294,7 +294,7 @@ export const adminAnalysisObservations = pgTable("admin_analysis_observations", 
 
 // Billing migrations own foreign keys, uniqueness and immutable ledger constraints.
 export const billingOrders = pgTable("billing_orders", {
- id: text("id"),
+ id: text("id").primaryKey(),
  orderNumber: text("order_number"),
  ownerEmail: text("owner_email"),
  companyInn: text("company_inn"),
@@ -318,7 +318,7 @@ export const billingOrders = pgTable("billing_orders", {
  idempotencyKey: text("idempotency_key"),
 });
 export const billingPayments = pgTable("billing_payments", {
- id: text("id"),
+ id: text("id").primaryKey(),
  orderId: text("order_id"),
  provider: text("provider"),
  providerPaymentId: text("provider_payment_id"),
@@ -338,7 +338,7 @@ export const billingPayments = pgTable("billing_payments", {
  receiptReference: text("receipt_reference"),
 });
 export const billingEvents = pgTable("billing_events", {
- id: text("id"),
+ id: text("id").primaryKey(),
  provider: text("provider"),
  providerPaymentId: text("provider_payment_id"),
  fingerprint: text("fingerprint"),
@@ -349,7 +349,7 @@ export const billingEvents = pgTable("billing_events", {
  result: text("result"),
 });
 export const billingSubscriptions = pgTable("billing_subscriptions", {
- id: text("id"),
+ id: text("id").primaryKey(),
  ownerEmail: text("owner_email"),
  companyInn: text("company_inn"),
  companyName: text("company_name"),
@@ -361,7 +361,7 @@ export const billingSubscriptions = pgTable("billing_subscriptions", {
  updatedAt: timestamp("updated_at", {withTimezone:true,mode:"string"}),
 });
 export const billingPeriods = pgTable("billing_periods", {
- id: text("id"),
+ id: text("id").primaryKey(),
  subscriptionId: text("subscription_id"),
  paymentId: text("payment_id"),
  orderId: text("order_id"),
@@ -373,7 +373,7 @@ export const billingPeriods = pgTable("billing_periods", {
  createdAt: timestamp("created_at", {withTimezone:true,mode:"string"}),
 });
 export const billingPayoutProfiles = pgTable("billing_payout_profiles", {
- beneficiaryCode: text("beneficiary_code"),
+ beneficiaryCode: text("beneficiary_code").primaryKey(),
  beneficiaryType: text("beneficiary_type"),
  recipientId: text("recipient_id"),
  verificationStatus: text("verification_status"),
@@ -383,7 +383,7 @@ export const billingPayoutProfiles = pgTable("billing_payout_profiles", {
  updatedAt: timestamp("updated_at", {withTimezone:true,mode:"string"}),
 });
 export const billingCommissions = pgTable("billing_commissions", {
- id: text("id"),
+ id: text("id").primaryKey(),
  paymentId: text("payment_id"),
  orderId: text("order_id"),
  role: text("role"),
@@ -401,7 +401,7 @@ export const billingCommissions = pgTable("billing_commissions", {
  idempotencyKey: text("idempotency_key"),
 });
 export const billingPayouts = pgTable("billing_payouts", {
- id: text("id"),
+ id: text("id").primaryKey(),
  commissionId: text("commission_id"),
  beneficiaryCode: text("beneficiary_code"),
  amountMinor: bigint("amount_minor", { mode: "number" }),
@@ -417,7 +417,7 @@ export const billingPayouts = pgTable("billing_payouts", {
  idempotencyKey: text("idempotency_key"),
 });
 export const billingRefunds = pgTable("billing_refunds", {
- id: text("id"),
+ id: text("id").primaryKey(),
  paymentId: text("payment_id"),
  amountMinor: bigint("amount_minor", { mode: "number" }),
  cumulativeMinor: bigint("cumulative_minor", { mode: "number" }),
@@ -429,7 +429,7 @@ export const billingRefunds = pgTable("billing_refunds", {
  idempotencyKey: text("idempotency_key"),
 });
 export const billingLedger = pgTable("billing_ledger", {
- id: text("id"),
+ id: text("id").primaryKey(),
  kind: text("kind"),
  paymentId: text("payment_id"),
  beneficiaryCode: text("beneficiary_code"),
@@ -440,7 +440,7 @@ export const billingLedger = pgTable("billing_ledger", {
  createdAt: timestamp("created_at", {withTimezone:true,mode:"string"}),
 });
 export const billingOutbox = pgTable("billing_outbox", {
- id: text("id"),
+ id: text("id").primaryKey(),
  eventType: text("event_type"),
  aggregateId: text("aggregate_id"),
  payload: text("payload"),
@@ -452,7 +452,7 @@ export const billingOutbox = pgTable("billing_outbox", {
  idempotencyKey: text("idempotency_key"),
 });
 export const billingFunnel = pgTable("billing_funnel", {
- id: text("id"),
+ id: text("id").primaryKey(),
  ownerEmail: text("owner_email"),
  companyInn: text("company_inn"),
  orderId: text("order_id"),

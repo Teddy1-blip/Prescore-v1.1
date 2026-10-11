@@ -1,0 +1,3 @@
+/** Prepared contract only. Never guess a tax/receipt payload or enable live fiscalization from a browser. */
+export type FiscalizationContract={required:boolean;configured:boolean;taxConfigurationReference:string|null;receiptContact:string|null;items:{name:string;quantity:number;priceMinor:number;amountMinor:number;taxCode:string;paymentMethod:string;paymentObject:string}[];providerReceiptId:string|null;providerReceiptStatus:string|null};
+export const UNCONFIGURED_RECEIPT: FiscalizationContract={required:true,configured:false,taxConfigurationReference:null,receiptContact:null,items:[],providerReceiptId:null,providerReceiptStatus:null};

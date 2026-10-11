@@ -32,8 +32,8 @@ try{
  }
  }
  await page.setViewportSize({width:1440,height:1000});await page.goto(origin+'/dashboard?analysisId='+seed.id);await page.getByRole('heading',{name:'Обзор компании',exact:true}).waitFor();
- assert.equal(await page.getByRole('navigation',{name:'Разделы кабинета'}).getByRole('button').count(),8);assert.equal(await page.locator('.pc-content .pc-canonical').count(),0);
- let model=await(await page.request.get(origin+'/api/workspace-model?analysisId='+seed.id)).json();assert.match(await page.locator('[data-credit-index]').innerText(),new RegExp(String(model.full.canonical.prescoreIndex.value)));checks.push('canonical index and eight navigation entries');
+ assert.equal(await page.getByRole('navigation',{name:'Разделы кабинета'}).getByRole('button').count(),9);assert.equal(await page.locator('.pc-content .pc-canonical').count(),0);
+ let model=await(await page.request.get(origin+'/api/workspace-model?analysisId='+seed.id)).json();assert.match(await page.locator('[data-credit-index]').innerText(),new RegExp(String(model.full.canonical.prescoreIndex.value)));checks.push('canonical index and nine navigation entries including subscription');
  await page.goto(origin+'/dashboard?analysisId='+seed.id+'&view=financing');
  await page.getByLabel('Цель финансирования',{exact:true}).selectOption('WORKING_CAPITAL');
  await page.getByLabel('Предпочтительный продукт',{exact:true}).selectOption('CREDIT_LINE');

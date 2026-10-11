@@ -54,7 +54,9 @@ export async function processState(db:BillingDB,provider:PaymentProvider,state:P
  const cumulative=status==='REFUNDED'?p.amount_minor:state.refundedMinor;
  if(cumulative===undefined){await tx.query("UPDATE billing_events SET result='REFUND_REQUIRES_RECONCILIATION' WHERE fingerprint=$1",[fingerprint]);await tx.query("UPDATE billing_payments SET raw_status=$1,updated_at=now() WHERE id=$2",[state.rawStatus,p.id]);return {refundReview:true};}
  if(cumulative<p.refunded_minor)return {ignored:true};await applyRefund(tx,p,o,cumulative,fingerprint);
- await tx.query("INSERT INTO billing_refunds(id,payment_id,amount_minor,cumulative_minor,status,reason,created_at,confirmed_at,idempotency_key) SELECT $1,$2,$3,$4,'SUCCEEDED','Provider notification',now(),now(),$5 WHERE $3>0 ON CONFLICT(idempotency_key) DO NOTHING",[randomUUID(),p.id,cumulative-p.refunded_minor,cumulative,fingerprint]);return {status};
+ const matched=await tx.query("UPDATE billing_refunds SET status='SUCCEEDED',cumulative_minor=$1,confirmed_at=now() WHERE payment_id=$2 AND status IN ('PROCESSING','UNKNOWN_REVIEW') AND amount_minor=$3 RETURNING id",[cumulative,p.id,cumulative-p.refunded_minor]);
+ if(matched.rows.length)return {status};
+ await tx.query("INSERT INTO billing_refunds(id,payment_id,amount_minor,cumulative_minor,status,reason,created_at,confirmed_at,idempotency_key) SELECT $1,$2,$3,$4,'SUCCEEDED','Provider notification',now(),now(),$5 WHERE $3::bigint>0 ON CONFLICT(idempotency_key) DO NOTHING",[randomUUID(),p.id,cumulative-p.refunded_minor,cumulative,fingerprint]);return {status};
  }
  await tx.query('UPDATE billing_payments SET provider_payment_id=$1,raw_status=$2,status=$3,confirmed_at=CASE WHEN $3=\'SUCCEEDED\' THEN $4::timestamptz ELSE confirmed_at END,failed_at=CASE WHEN $3=\'FAILED\' THEN $4::timestamptz ELSE failed_at END,updated_at=$4 WHERE id=$5',[state.providerPaymentId,state.rawStatus,status,now,p.id]);
  await tx.query('UPDATE billing_orders SET status=$1,updated_at=$2 WHERE id=$3',[status==='SUCCEEDED'?'PAID':status==='FAILED'||status==='CANCELLED'?'CANCELLED':status==='UNKNOWN_REVIEW'?'UNKNOWN_REVIEW':'PAYMENT_PENDING',now,o.id]);

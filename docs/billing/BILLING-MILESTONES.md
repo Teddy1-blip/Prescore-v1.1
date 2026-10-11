@@ -29,3 +29,8 @@ Milestone 5 SHA: `3a93d542b5d4bc37054b90b5d01ae3fa0d8338e7`. CLIENT/BROKER/autho
 
 ## Milestone 6
 ADMIN sales/subscriptions/commissions/payouts, ledger analytics, anomalies, filtered audited CSV and reason-required safe operations. Billing targeted 7/7. Server payment polling and confirmed refund callbacks integrated.
+
+Milestone 6 SHA: `8fee3abd060064ef7d002d162b2d4d60d51c8915`. Billing tests 7/7, targeted lint clean, typecheck 0 new.
+
+## Milestone 7
+Billing browser lifecycle + five viewport matrix, existing regressions, official live checklist, full final CI. No live API calls.

@@ -1,3 +1,4 @@
+import {fullMetadataPredicate} from '../billing/access-sql.ts';
 import {observationJoin,observationColumns} from './observations.ts';
 import {pageRows,rows,type AdminQuery,CLOSED} from './resources.ts';
 import type {PortableDatabase} from '../db/compatibility.ts';
@@ -10,7 +11,7 @@ const companyBase=`WITH company_ids AS (SELECT company_inn FROM analyses UNION S
  SELECT c.company_inn AS inn,COALESCE(a.company_name,(SELECT l.company_name FROM agent_leads l WHERE l.company_inn=c.company_inn ORDER BY l.updated_at DESC LIMIT 1),(SELECT p.company_name FROM payment_orders p WHERE p.company_inn=c.company_inn ORDER BY p.created_at DESC LIMIT 1),'') AS name,
  COALESCE(a.owner_email,(SELECT l.email FROM agent_leads l WHERE l.company_inn=c.company_inn ORDER BY l.updated_at DESC LIMIT 1),(SELECT p.user_email FROM payment_orders p WHERE p.company_inn=c.company_inn ORDER BY p.created_at DESC LIMIT 1),'') AS ownerEmail,
  (SELECT COUNT(*) FROM analyses v WHERE v.company_inn=c.company_inn) AS analysisCount,a.id AS analysisId,a.created_at AS latestAt,a.period_from AS periodFrom,a.period_to AS periodTo,
- CASE WHEN e.tier='FULL' AND e.revoked_at='' THEN 'FULL' WHEN a.id IS NOT NULL THEN 'BASIC' ELSE NULL END AS tier,
+ CASE WHEN ${fullMetadataPredicate} THEN 'FULL' WHEN a.id IS NOT NULL THEN 'BASIC' ELSE NULL END AS tier,
  (SELECT MIN(v.created_at) FROM (SELECT company_inn,created_at FROM analyses UNION ALL SELECT company_inn,created_at FROM agent_leads UNION ALL SELECT company_inn,created_at FROM client_documents UNION ALL SELECT company_inn,created_at FROM payment_orders) AS v WHERE v.company_inn=c.company_inn) AS createdAt,
  (SELECT string_agg(DISTINCT l.agent_code,', ') FROM agent_leads l WHERE l.company_inn=c.company_inn) AS broker,
  (SELECT COUNT(*) FROM client_documents d WHERE d.company_inn=c.company_inn) AS documentCount,
@@ -18,7 +19,7 @@ const companyBase=`WITH company_ids AS (SELECT company_inn FROM analyses UNION S
  ${observationColumns}
  FROM company_ids c LEFT JOIN latest a ON a.company_inn=c.company_inn AND a.rn=1 LEFT JOIN analysis_entitlements e ON e.analysis_id=a.id ${observationJoin} WHERE c.company_inn<>''`;
 const analysisBase=`SELECT a.id AS analysisId,a.company_name AS name,a.company_inn AS inn,a.owner_email AS ownerEmail,a.created_at AS createdAt,a.period_from AS periodFrom,a.period_to AS periodTo,
- CASE WHEN e.tier='FULL' AND e.revoked_at='' THEN 'FULL' ELSE 'BASIC' END AS tier,
+ CASE WHEN ${fullMetadataPredicate} THEN 'FULL' ELSE 'BASIC' END AS tier,
  (SELECT string_agg(DISTINCT l.agent_code,', ') FROM agent_leads l WHERE l.company_inn=a.company_inn) AS broker,${observationColumns}
  FROM analyses a LEFT JOIN analysis_entitlements e ON e.analysis_id=a.id ${observationJoin}`;
 export async function companyList(db:PortableDatabase,q:AdminQuery){

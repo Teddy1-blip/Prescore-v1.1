@@ -73,7 +73,7 @@ export async function resolveAnalysisTier(db: EntitlementDatabase, input: { anal
     if (owned) return "FULL" as const;
   }
   if (!input.readOnly) await ensureFreeEntitlement(db, input.analysisId, input.userEmail, input.companyInn);
-  const row = await db.prepare("SELECT tier FROM analysis_entitlements WHERE analysis_id = ? AND user_email = ? LIMIT 1")
+  const row = await db.prepare("SELECT tier FROM analysis_entitlements WHERE analysis_id = ? AND user_email = ? AND revoked_at = '' LIMIT 1")
     .bind(input.analysisId, input.userEmail.toLowerCase()).first<{ tier?: string }>();
   if (row?.tier === "FULL") return "FULL" as const;
 
