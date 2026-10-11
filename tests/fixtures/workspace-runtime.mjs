@@ -13,7 +13,7 @@ export async function createWorkspaceRuntime(){
  let transactionTail=Promise.resolve();
  const pool={query,connect:async()=>{let unlock;const turn=new Promise(resolve=>{unlock=resolve;});const previous=transactionTail;transactionTail=turn;await previous;let released=false;return{query,release(){if(released)return;released=true;unlock();}};}};
  const db=new PortableDatabase(pool,JSON.parse(fs.readFileSync('lib/db/catalog.json','utf8')));
- for(const m of ['0001_product.sql','0003_runtime_indexes.sql'])await pg.exec(fs.readFileSync('lib/db/migrations/'+m,'utf8'));
+ for(const m of ['0001_product.sql','0003_runtime_indexes.sql','0004_admin_observations.sql'])await pg.exec(fs.readFileSync('lib/db/migrations/'+m,'utf8'));
  function load(file){file=path.resolve(file);if(cache.has(file))return cache.get(file);const exports={};cache.set(file,exports);
  const code=ts.transpileModule(fs.readFileSync(file,'utf8'),{fileName:file,compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText;
  new Function('exports','require',code)(exports,name=>{

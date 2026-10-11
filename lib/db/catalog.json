@@ -377,5 +377,25 @@
     "primaryKey": [
       "id"
     ]
+  },
+  {
+    "table": "admin_analysis_observations",
+    "columns": [
+      "analysis_id",
+      "input_fingerprint",
+      "canonical_version",
+      "canonical_state",
+      "source_state",
+      "completeness",
+      "index_value",
+      "readiness",
+      "assessment",
+      "debt_capacity_status",
+      "critical_count",
+      "observed_at"
+    ],
+    "primaryKey": [
+      "analysis_id"
+    ]
   }
 ]

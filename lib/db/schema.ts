@@ -1,6 +1,6 @@
 // Portable storage projection. Existing analytical schema semantics retained.
 import { sql } from "drizzle-orm";
-import { bigint, pgTable, text } from "drizzle-orm/pg-core";
+import { bigint, doublePrecision, pgTable, text } from "drizzle-orm/pg-core";
 
 export const analyses = pgTable("analyses", {
   id: text("id").primaryKey(),
@@ -274,4 +274,20 @@ export const aiUsage = pgTable("ai_usage", {
   success: bigint("success", { mode: "number" }).notNull(),
   errorType: text("error_type"),
   createdAt: text("created_at").notNull(),
+});
+
+// ADMIN observations cache published outputs; credit math remains in the canonical engine.
+export const adminAnalysisObservations = pgTable("admin_analysis_observations", {
+ analysisId: text("analysis_id").primaryKey().references(()=>analyses.id),
+ inputFingerprint: text("input_fingerprint").notNull(),
+ canonicalVersion: text("canonical_version").notNull(),
+ canonicalState: text("canonical_state").notNull(),
+ sourceState: text("source_state").notNull(),
+ completeness: doublePrecision("completeness"),
+ indexValue: doublePrecision("index_value"),
+ readiness: text("readiness"),
+ assessment: text("assessment"),
+ debtCapacityStatus: text("debt_capacity_status"),
+ criticalCount: bigint("critical_count", {mode:"number"}),
+ observedAt: text("observed_at").notNull(),
 });
