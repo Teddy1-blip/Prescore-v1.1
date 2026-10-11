@@ -319,7 +319,7 @@ export async function PATCH(request: Request) {
     }
     const allowed = ["Подготовка заявки", "Подготовка документов", "Требуются документы", "На рассмотрении у финансового партнёра", "Предварительное решение", "Одобрена", "Выдана", "Отклонена", "Закрыта"];
     if (!allowed.includes(body.status)) return Response.json({ error: "Недопустимый статус заявки" }, { status: 400 });
-    const current = await db.prepare("SELECT status FROM agent_applications WHERE id = ? AND agent_code = ? LIMIT 1").bind(body.id, account.agentCode).first<{ status?: string }>();
+    const current = await db.prepare("SELECT COALESCE((SELECT d.status FROM deals d WHERE d.id = agent_applications.id), status) AS status FROM agent_applications WHERE id = ? AND agent_code = ? LIMIT 1").bind(body.id, account.agentCode).first<{ status?: string }>();
     if (!current?.status) return Response.json({ error: "Заявка не найдена" }, { status: 404 });
     const terminal = ["Выдана", "Отклонена", "Закрыта", "Отменена клиентом"];
     if (terminal.includes(current.status) && current.status !== body.status) return Response.json({ error: "Завершённый статус нельзя изменить" }, { status: 409 });
