@@ -69,3 +69,66 @@
  .pc-disclosure>.pc-table-scroll{margin:12px}
  .pc-expertise-grid{gap:10px}
 }
+
+.pc-data-note{margin-top:10px;padding:10px 12px;background:#f7f9fa;border-left:2px solid #9fb1ba;color:var(--pc-muted);font-size:11px}
+.pc-data-note ul{margin:0;padding-left:18px}.pc-data-note p{margin-top:6px}
+.pc-empty-inline{margin-top:14px;padding:16px;background:#f8fafb;border:1px dashed #cdd9de;border-radius:5px}
+.pc-empty-inline p{color:var(--pc-muted);font-size:12px}
+.pc-financial-period>header{align-items:center}
+.pc-quality-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1px solid var(--pc-line);border-radius:5px;margin:14px 0 10px}
+.pc-quality-grid>div{padding:12px;border-right:1px solid var(--pc-line);min-width:0}
+.pc-quality-grid>div:last-child{border-right:0}
+.pc-quality-grid span{display:block;font-size:10px;color:var(--pc-muted)}
+.pc-quality-grid strong{display:block;margin-top:4px;font-size:13px}
+.pc-metric-groups{display:grid;gap:8px;margin-top:14px}
+.pc-metric-group{border:1px solid var(--pc-line);border-radius:5px;background:#fff;overflow:hidden}
+.pc-metric-group>summary{cursor:pointer;display:flex;justify-content:space-between;gap:12px;padding:12px 14px;font-weight:650;font-size:12px;background:#fafbfb}
+.pc-metric-group>summary span{font-size:10px;color:var(--pc-muted);font-weight:400}
+.pc-metric-group[open]>summary{border-bottom:1px solid var(--pc-line)}
+.pc-metric-group .pc-table-scroll{border:0;border-radius:0}
+.pc-trend-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.pc-trend-cards>article{border:1px solid var(--pc-line);border-radius:5px;padding:14px;min-width:0}
+.pc-trend-cards>article>span{font-size:10px;color:var(--pc-accent);font-weight:700}
+.pc-trend-cards>article>h3{margin-top:4px}
+.pc-trend-cards>article>p{font-size:11px;color:var(--pc-muted);margin:3px 0 10px}
+.pc-factor-section+.pc-factor-section{margin-top:18px;padding-top:18px;border-top:1px solid var(--pc-line)}
+.pc-reconciliation-list{display:grid;gap:12px;margin-bottom:20px}
+.pc-recon-card{background:#fff;border:1px solid var(--pc-line);border-radius:6px;padding:18px}
+.pc-recon-card.needs-review{border-left:3px solid #b27621}
+.pc-recon-card>header{display:flex;justify-content:space-between;gap:16px;align-items:start}
+.pc-recon-card>header>div>span{font-size:10px;color:var(--pc-muted);text-transform:uppercase;letter-spacing:.6px}
+.pc-recon-card h2{margin-top:4px}
+.pc-recon-card>p{font-size:12px;margin-top:8px}
+.pc-recon-card details{margin-top:12px;border-top:1px solid var(--pc-line);padding-top:10px}
+.pc-recon-card details>summary{cursor:pointer;color:var(--pc-accent);font-size:11px;font-weight:650}
+.pc-recon-sides{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}
+.pc-recon-sides>div{border:1px solid var(--pc-line);border-radius:4px;padding:12px}
+.pc-recon-value+.pc-recon-value{border-top:1px solid var(--pc-line);margin-top:10px;padding-top:10px}
+.pc-recon-value strong{display:block;font-size:16px;margin:5px 0}
+.pc-recon-value p,.pc-recon-value small{font-size:10px;color:var(--pc-muted)}
+
+/* Bring legacy operational widgets into the same CLIENT surface */
+.pc-app .ps-heading>div>span{color:var(--pc-accent);font-size:10px;letter-spacing:1px;font-weight:700}
+.pc-app .ps-heading h1{letter-spacing:-.5px}
+.pc-app .ps-card{border-color:var(--pc-line);box-shadow:none}
+.pc-app .ps-documents-layout,.pc-app .ps-crm-kpis{margin-top:14px}
+.pc-app .ps-doc-upload,.pc-app .ps-doc-checklist,.pc-app .ps-doc-list{border:1px solid var(--pc-line);box-shadow:none}
+.pc-app .ps-table-scroll{border:1px solid var(--pc-line);border-radius:5px}
+.pc-app .ps-ai-shell{border:1px solid var(--pc-line);overflow:hidden}
+.pc-app .ps-ai-shell>header{border-bottom:1px solid var(--pc-line)}
+.pc-app .ps-ai-chips button{border-color:var(--pc-line);background:#fff}
+.pc-app .ps-ai-chips button:hover:not(:disabled){border-color:#9ec8ca;background:#f4fbfa}
+.pc-app .ps-ai-shell form button{background:var(--pc-accent)}
+@media(max-width:900px){
+ .pc-quality-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .pc-quality-grid>div:nth-child(2){border-right:0}
+ .pc-quality-grid>div:nth-child(-n+2){border-bottom:1px solid var(--pc-line)}
+ .pc-trend-cards,.pc-recon-sides{grid-template-columns:1fr}
+}
+@media(max-width:560px){
+ .pc-quality-grid{grid-template-columns:1fr}
+ .pc-quality-grid>div{border-right:0;border-bottom:1px solid var(--pc-line)}
+ .pc-quality-grid>div:last-child{border-bottom:0}
+ .pc-recon-card>header{display:block}
+ .pc-recon-card>header>.pc-badge{margin-top:8px}
+}
