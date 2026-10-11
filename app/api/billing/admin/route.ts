@@ -1,0 +1,8 @@
+import {getRuntime} from '../../../../lib/platform/runtime';
+import {requireApiUser,unauthorized} from '../../api-auth';
+import {billingQuery,sales,billingList,anomalies,adminBillingMutation,exportBilling} from '../../../../lib/billing/admin';
+import {requestRefund} from '../../../../lib/billing/refunds';
+import {paymentProvider} from '../../../../lib/billing/providers';
+import {billingFailure,billingResponse,billingHeaders,body} from '../../../../lib/billing/http';
+export async function GET(request:Request){const user=await requireApiUser();if(!user)return unauthorized();if(!user.isAdmin)return billingResponse({error:'ADMIN_REQUIRED'},403);try{const db=getRuntime().DB,q=billingQuery(request.url);if(new URL(request.url).searchParams.get('export')==='csv')return new Response(await exportBilling(db,q,user.email),{headers:{...billingHeaders,'Content-Type':'text/csv; charset=utf-8','Content-Disposition':'attachment; filename="prescore-'+q.resource+'.csv"'}});return billingResponse(q.resource==='sales'?await sales(db.pool,q):q.resource==='anomalies'?{items:await anomalies(db.pool)}:await billingList(db.pool,q));}catch(e){return billingFailure(e);}}
+export async function POST(request:Request){const user=await requireApiUser();if(!user)return unauthorized();if(!user.isAdmin)return billingResponse({error:'ADMIN_REQUIRED'},403);try{const input=await body(request);return billingResponse(input.action==='refund'?await requestRefund(getRuntime().DB,String(input.id??''),Number(input.amountMinor),String(input.idempotencyKey??''),String(input.reason??''),user.email,paymentProvider()):await adminBillingMutation(getRuntime().DB,input,user.email));}catch(e){return billingFailure(e);}}

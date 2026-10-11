@@ -24,3 +24,8 @@ Milestone 4 SHA: `357eb4eff58624bd562960a391668f35a0958c78`. Settlement tests 3/
 
 ## Milestone 5
 CLIENT subscription/consent/history, server-state return page; BROKER sales/commission/payout-profile UI with curator privacy. Authorization and shared product regression tests.
+
+Milestone 5 SHA: `3a93d542b5d4bc37054b90b5d01ae3fa0d8338e7`. CLIENT/BROKER/authorization targeted tests 22/22; typecheck 0 new.
+
+## Milestone 6
+ADMIN sales/subscriptions/commissions/payouts, ledger analytics, anomalies, filtered audited CSV and reason-required safe operations. Billing targeted 7/7. Server payment polling and confirmed refund callbacks integrated.
