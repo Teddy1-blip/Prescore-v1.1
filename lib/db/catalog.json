@@ -397,5 +397,244 @@
     "primaryKey": [
       "analysis_id"
     ]
+  },
+  {
+    "table": "billing_orders",
+    "columns": [
+      "id",
+      "order_number",
+      "owner_email",
+      "company_inn",
+      "company_name",
+      "analysis_id",
+      "plan_code",
+      "plan_version",
+      "amount_minor",
+      "currency",
+      "status",
+      "source_channel",
+      "attribution_status",
+      "broker_code",
+      "curator_code",
+      "offer_version",
+      "privacy_version",
+      "accepted_at",
+      "created_at",
+      "expires_at",
+      "updated_at",
+      "idempotency_key"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "billing_payments",
+    "columns": [
+      "id",
+      "order_id",
+      "provider",
+      "provider_payment_id",
+      "raw_status",
+      "status",
+      "amount_minor",
+      "currency",
+      "payment_url",
+      "confirmed_at",
+      "failed_at",
+      "created_at",
+      "updated_at",
+      "refunded_minor",
+      "provider_fee_minor",
+      "idempotency_key",
+      "receipt_status",
+      "receipt_reference"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "billing_events",
+    "columns": [
+      "id",
+      "provider",
+      "provider_payment_id",
+      "fingerprint",
+      "raw_status",
+      "safe_payload",
+      "received_at",
+      "processed_at",
+      "result"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "billing_subscriptions",
+    "columns": [
+      "id",
+      "owner_email",
+      "company_inn",
+      "company_name",
+      "plan_code",
+      "status",
+      "access_from",
+      "access_until",
+      "created_at",
+      "updated_at"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "billing_periods",
+    "columns": [
+      "id",
+      "subscription_id",
+      "payment_id",
+      "order_id",
+      "starts_at",
+      "ends_at",
+      "original_ends_at",
+      "status",
+      "refunded_minor",
+      "created_at"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "billing_payout_profiles",
+    "columns": [
+      "beneficiary_code",
+      "beneficiary_type",
+      "recipient_id",
+      "verification_status",
+      "masked_destination",
+      "compliance_hold",
+      "created_at",
+      "updated_at"
+    ],
+    "primaryKey": [
+      "beneficiary_code"
+    ]
+  },
+  {
+    "table": "billing_commissions",
+    "columns": [
+      "id",
+      "payment_id",
+      "order_id",
+      "role",
+      "beneficiary_code",
+      "rate_bps",
+      "gross_basis_minor",
+      "amount_minor",
+      "status",
+      "reversal_minor",
+      "adjustment_minor",
+      "hold_reason",
+      "policy_version",
+      "created_at",
+      "updated_at",
+      "idempotency_key"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "billing_payouts",
+    "columns": [
+      "id",
+      "commission_id",
+      "beneficiary_code",
+      "amount_minor",
+      "currency",
+      "provider",
+      "provider_payout_id",
+      "status",
+      "attempt",
+      "failure_code",
+      "next_retry_at",
+      "created_at",
+      "completed_at",
+      "idempotency_key"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "billing_refunds",
+    "columns": [
+      "id",
+      "payment_id",
+      "amount_minor",
+      "cumulative_minor",
+      "status",
+      "provider_refund_id",
+      "reason",
+      "created_at",
+      "confirmed_at",
+      "idempotency_key"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "billing_ledger",
+    "columns": [
+      "id",
+      "kind",
+      "payment_id",
+      "beneficiary_code",
+      "amount_minor",
+      "currency",
+      "reference_id",
+      "idempotency_key",
+      "created_at"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "billing_outbox",
+    "columns": [
+      "id",
+      "event_type",
+      "aggregate_id",
+      "payload",
+      "status",
+      "attempts",
+      "next_attempt_at",
+      "created_at",
+      "processed_at",
+      "idempotency_key"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "billing_funnel",
+    "columns": [
+      "id",
+      "owner_email",
+      "company_inn",
+      "order_id",
+      "event_type",
+      "created_at",
+      "idempotency_key"
+    ],
+    "primaryKey": [
+      "id"
+    ]
   }
 ]
