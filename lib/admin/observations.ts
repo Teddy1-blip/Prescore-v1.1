@@ -6,9 +6,9 @@ import {rows} from './resources.ts';
 // Version follows the public projection and canonical wiring. Fingerprint follows both saved inputs.
 export const OBSERVATION_VERSION=WORKSPACE_MODEL_V1+':'+CANONICAL_WIRING_VERSION;
 export const fingerprintSQL="md5(a.payload || COALESCE((SELECT p.payload FROM checko_profiles p WHERE p.inn=a.company_inn),''))";
-export async function observeCanonical(db:PortableDatabase,model:WorkspaceModelV1){
+export async function observeCanonical(db:PortableDatabase,model:WorkspaceModelV1,expectedFingerprint?:string){
  const input=(await rows(db,`SELECT ${fingerprintSQL} AS fingerprint FROM analyses a WHERE a.id=?`,[model.analysisId]))[0];
- if(!input)return;
+ if(!input||expectedFingerprint&&input.fingerprint!==expectedFingerprint)return;
  const c=model.full?.canonical;
  const source=model.basic?.sources;
  const incomplete=(source?.completeness!==null&&source?.completeness!==undefined&&source.completeness<100)||source?.missingSources?.length||source?.availability?.some(s=>s.status!=='READY');

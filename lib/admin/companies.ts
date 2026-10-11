@@ -7,11 +7,11 @@ export const logicalApplications=`SELECT d.id,d.analysis_id,d.company_name,COALE
  UNION ALL SELECT aa.id,aa.analysis_id,aa.company_name,COALESCE(a.company_inn,l.company_inn,'') AS company_inn,COALESCE(a.owner_email,l.email,'') AS owner_email,aa.agent_code,aa.product,aa.bank,aa.requested_amount AS amount,aa.status,aa.next_action,aa.created_at,aa.updated_at
  FROM agent_applications aa LEFT JOIN analyses a ON a.id=aa.analysis_id LEFT JOIN agent_leads l ON l.id=aa.lead_id WHERE NOT EXISTS(SELECT 1 FROM deals d WHERE d.id=aa.id)`;
 const companyBase=`WITH company_ids AS (SELECT company_inn FROM analyses UNION SELECT company_inn FROM agent_leads UNION SELECT company_inn FROM client_documents UNION SELECT company_inn FROM payment_orders), latest AS (SELECT a.*,ROW_NUMBER() OVER(PARTITION BY company_inn ORDER BY created_at DESC,id DESC) AS rn FROM analyses a), apps AS (${logicalApplications})
- SELECT c.company_inn AS inn,COALESCE(a.company_name,(SELECT l.company_name FROM agent_leads l WHERE l.company_inn=c.company_inn ORDER BY l.updated_at DESC LIMIT 1),'') AS name,
- COALESCE(a.owner_email,(SELECT l.email FROM agent_leads l WHERE l.company_inn=c.company_inn ORDER BY l.updated_at DESC LIMIT 1),'') AS ownerEmail,
+ SELECT c.company_inn AS inn,COALESCE(a.company_name,(SELECT l.company_name FROM agent_leads l WHERE l.company_inn=c.company_inn ORDER BY l.updated_at DESC LIMIT 1),(SELECT p.company_name FROM payment_orders p WHERE p.company_inn=c.company_inn ORDER BY p.created_at DESC LIMIT 1),'') AS name,
+ COALESCE(a.owner_email,(SELECT l.email FROM agent_leads l WHERE l.company_inn=c.company_inn ORDER BY l.updated_at DESC LIMIT 1),(SELECT p.user_email FROM payment_orders p WHERE p.company_inn=c.company_inn ORDER BY p.created_at DESC LIMIT 1),'') AS ownerEmail,
  (SELECT COUNT(*) FROM analyses v WHERE v.company_inn=c.company_inn) AS analysisCount,a.id AS analysisId,a.created_at AS latestAt,a.period_from AS periodFrom,a.period_to AS periodTo,
  CASE WHEN e.tier='FULL' AND e.revoked_at='' THEN 'FULL' WHEN a.id IS NOT NULL THEN 'BASIC' ELSE NULL END AS tier,
- (SELECT MIN(v.created_at) FROM analyses v WHERE v.company_inn=c.company_inn) AS createdAt,
+ (SELECT MIN(v.created_at) FROM (SELECT company_inn,created_at FROM analyses UNION ALL SELECT company_inn,created_at FROM agent_leads UNION ALL SELECT company_inn,created_at FROM client_documents UNION ALL SELECT company_inn,created_at FROM payment_orders) AS v WHERE v.company_inn=c.company_inn) AS createdAt,
  (SELECT string_agg(DISTINCT l.agent_code,', ') FROM agent_leads l WHERE l.company_inn=c.company_inn) AS broker,
  (SELECT COUNT(*) FROM client_documents d WHERE d.company_inn=c.company_inn) AS documentCount,
  (SELECT COUNT(*) FROM apps ap WHERE ap.company_inn=c.company_inn) AS applicationCount,
@@ -47,8 +47,8 @@ export async function companyDetail(db:PortableDatabase,q:AdminQuery){
  const company=(await rows(db,`SELECT * FROM (${companyBase}) AS company WHERE inn=?`,[q.id]))[0];
  if(!company)return null;
  const analyses=await analysisList(db,{...q,company:q.id});
- const applications=await pageRows(db,`SELECT id,product,bank,status,next_action AS nextAction,agent_code AS broker,analysis_id AS analysisId,amount,created_at AS createdAt FROM (${logicalApplications}) AS ap WHERE company_inn=?`,[q.id],q,'"createdAt" DESC,id DESC');
- const documents=await pageRows(db,`SELECT id,analysis_id AS analysisId,application_id AS applicationId,category,file_name AS fileName,mime_type AS mime,size_bytes AS sizeBytes,uploaded_by AS uploadedBy,created_at AS createdAt FROM client_documents WHERE company_inn=?`,[q.id],q,'"createdAt" DESC,id DESC');
+ const applications=await pageRows(db,`SELECT id,company_name AS companyName,company_inn AS companyInn,owner_email AS ownerEmail,product,bank,status,next_action AS nextAction,agent_code AS broker,analysis_id AS analysisId,amount,created_at AS createdAt,updated_at AS updatedAt FROM (${logicalApplications}) AS ap WHERE company_inn=?`,[q.id],q,'"createdAt" DESC,id DESC');
+ const documents=await pageRows(db,`SELECT id,company_inn AS companyInn,analysis_id AS analysisId,application_id AS applicationId,category,file_name AS fileName,mime_type AS mime,size_bytes AS sizeBytes,uploaded_by AS uploadedBy,created_at AS createdAt,CASE WHEN storage_key<>'' THEN 'METADATA_PRESENT' WHEN content_base64<>'' THEN 'INLINE_PRESENT' ELSE 'UNAVAILABLE' END AS storageState FROM client_documents WHERE company_inn=?`,[q.id],q,'"createdAt" DESC,id DESC');
  const audit=await pageRows(db,`SELECT id,entity_type AS entityType,entity_id AS entityId,action,actor_role AS actorRole,actor_email AS actorEmail,metadata,created_at AS createdAt FROM audit_log WHERE entity_id=? OR entity_id IN (SELECT id FROM analyses WHERE company_inn=?) OR entity_id IN (SELECT id FROM (${logicalApplications}) AS ap WHERE company_inn=?)`,[q.id,q.id,q.id],q,'"createdAt" DESC,id DESC');
  return {company,analyses,applications,documents,audit};
 }

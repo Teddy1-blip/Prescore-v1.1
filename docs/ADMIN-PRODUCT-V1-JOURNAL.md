@@ -28,3 +28,10 @@ Existing per-analysis BASIC/FULL access management; grants/revokes and safe UI m
 Audit filters and metadata allowlist; aggregated AI usage (no conversations/credentials); actual DB/schema reachability, build SHA if supplied, configured AI and storage metadata. No uptime fabrication. Code-owned catalog editing remains a domain-contract gap, not a mutable credit governance panel.
 
 Milestone 4 validation: targeted ADMIN tests 6/6; typecheck no new diagnostics.
+
+Milestone 4 commit: a1d27e4f765b86417f5ad834f2a0f200b68f2d22.
+
+## Milestone 5 — QA candidate
+Responsive/browser acceptance added for nine ADMIN views, company/application details, six canonical dossier sections, BASIC/FULL persistence, safe flags, empty/filter/error states and role authorization. Widths: 1440/1024/768/390/360. Existing CLIENT/BROKER/Analysis V3 QA is retained in the same workflow.
+
+Local build and lint passed. Local Chromium download is blocked (the network returns an invalid ZIP); browser acceptance will execute in GitHub Actions, which successfully installs Chromium. Local complete tests and 24 business cases are also being executed. No PASS asserted until the final workflow completes.

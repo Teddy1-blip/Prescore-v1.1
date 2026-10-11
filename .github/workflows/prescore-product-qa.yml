@@ -72,6 +72,8 @@ jobs:
         run: node scripts/qa/client-product-browser.mjs "$RUNNER_TEMP/client-product-browser"
       - name: BROKER canonical consistency and operational responsive regression
         run: node scripts/qa/broker-product-browser.mjs "$RUNNER_TEMP/broker-product-browser"
+      - name: ADMIN canonical and operational responsive regression
+        run: node scripts/qa/admin-product-browser.mjs "$RUNNER_TEMP/admin-product-browser"
       - name: Preserve presentation evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -85,5 +87,7 @@ jobs:
             ${{ runner.temp }}/client-product-browser/*.png
             ${{ runner.temp }}/broker-product-browser/*.json
             ${{ runner.temp }}/broker-product-browser/*.png
+            ${{ runner.temp }}/admin-product-browser/*.json
+            ${{ runner.temp }}/admin-product-browser/*.png
           if-no-files-found: error
           retention-days: 30

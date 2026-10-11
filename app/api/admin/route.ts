@@ -1,12 +1,12 @@
 import {accessList,orderList,paymentList,product,auditList,aiUsage,systemStatus,mutateAdmin} from '../../../lib/admin/governance';
 import {brokerList,applicationList,documentList,applicationDetail} from '../../../lib/admin/operations';
-import { observeCanonical } from '../../../lib/admin/observations';
+import { observeCanonical,fingerprintSQL } from '../../../lib/admin/observations';
 import type { WorkspaceModelV1 } from '../../../lib/workspace/model';
 import { getRuntime } from '../../../lib/platform/runtime';
 import { requireApiUser } from '../api-auth';
 import { companyList,analysisList,companyDetail,logicalOverview,activeApplicationCount } from '../../../lib/admin/companies';
 import { GET as workspaceModel } from '../workspace-model/route';
-import { safeMetadata } from '../../../lib/admin/resources';
+import { safeMetadata,rows } from '../../../lib/admin/resources';
 import { overview,parseAdminQuery } from '../../../lib/admin/resources';
 export const dynamic='force-dynamic';
 const headers={'Cache-Control':'private, no-store, max-age=0',Pragma:'no-cache',Vary:'Cookie, Authorization'};
@@ -33,7 +33,7 @@ export async function GET(request:Request){
   if(q.resource==='companies')return adminJson(await companyList(db,q));
   if(q.resource==='analyses')return adminJson(await analysisList(db,q));
   if(q.resource==='company'){const detail=await companyDetail(db,q);if(!detail)return adminJson({error:'Компания не найдена'},404);detail.audit.items=detail.audit.items.map(r=>({...r,metadata:safeMetadata(r.metadata)}));return adminJson(detail);}
-  if(q.resource==='canonical'){if(!q.analysisId)return adminJson({error:'Укажите analysisId'},400);const u=new URL(request.url);u.search='?analysisId='+encodeURIComponent(q.analysisId);const response=await workspaceModel(new Request(u,{headers:request.headers}));const model=await response.clone().json() as WorkspaceModelV1;if(model.basic)await observeCanonical(db,model);if(model.access)model.access={role:'ADMIN',readOnly:true};return adminJson(model,response.status);}
+  if(q.resource==='canonical'){if(!q.analysisId)return adminJson({error:'Укажите analysisId'},400);const u=new URL(request.url);u.search='?analysisId='+encodeURIComponent(q.analysisId);const input=(await rows(db,`SELECT ${fingerprintSQL} AS fingerprint FROM analyses a WHERE a.id=?`,[q.analysisId]))[0];const response=await workspaceModel(new Request(u,{headers:request.headers}));const model=await response.clone().json() as WorkspaceModelV1;if(model.basic)await observeCanonical(db,model,String(input?.fingerprint??''));if(model.access)model.access={role:'ADMIN',readOnly:true};return adminJson(model,response.status);}
   return adminJson({error:'Ресурс пока недоступен'},503);
  }catch(error){if(error instanceof Error&&error.message==='INVALID_QUERY')return adminJson({error:'Некорректные параметры запроса'},400);return adminJson({error:'Не удалось прочитать данные системы',code:'ADMIN_DATA_UNAVAILABLE'},503);}
 }
