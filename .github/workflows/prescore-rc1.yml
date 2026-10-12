@@ -1,0 +1,148 @@
+name: Prescore RC1
+on:
+  push:
+    branches: [prescore-product-v1]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+env:
+  NEXT_TELEMETRY_DISABLED: '1'
+concurrency:
+  group: prescore-rc1-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  static:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with: {node-version: '22'}
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run build
+      - run: npm run validate:artifact
+      - run: node scripts/platform/pdf-artifact-smoke.mjs
+      - run: node scripts/release/dependency-audit.mjs
+        env: {RC_REPORT_DIR: '${{ runner.temp }}/rc-reports'}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: always()
+        with:
+          name: rc-static-${{ github.sha }}
+          path: ${{ runner.temp }}/rc-reports/*.json
+          if-no-files-found: error
+  product-regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with: {node-version: '22'}
+      - run: node scripts/release/wait-product.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RC_REPORT_DIR: ${{ runner.temp }}/rc-reports
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: always()
+        with:
+          name: rc-product-${{ github.sha }}
+          path: ${{ runner.temp }}/rc-reports/*.json
+          if-no-files-found: error
+  postgres:
+    name: postgres-${{ matrix.scenario }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix: {scenario: [clean-e2e-restore, upgrade, worker]}
+    services:
+      postgres:
+        image: postgres:15-bookworm
+        env:
+          POSTGRES_USER: rc
+          POSTGRES_PASSWORD: synthetic-ci-only-password
+          POSTGRES_DB: prescore_rc_ci
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U rc -d prescore_rc_ci"
+          --health-interval 3s --health-timeout 3s --health-retries 30
+    env:
+      DATABASE_URL: postgresql://rc:synthetic-ci-only-password@127.0.0.1:5432/prescore_rc_ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with: {node-version: '22'}
+      - run: npm ci
+      - run: node scripts/release/ci-environment.mjs
+      - name: Clean migrations / upgrade preservation
+        run: node --experimental-strip-types scripts/release/database-scenarios.mjs "${{ matrix.scenario == 'upgrade' && 'upgrade' || 'clean' }}"
+      - run: npm run db:verify
+      - name: Actual worker concurrency / crash / lease / SIGTERM
+        if: matrix.scenario == 'worker'
+        run: node --experimental-strip-types scripts/release/worker-scenarios.mjs
+      - name: Production standalone build
+        if: matrix.scenario != 'worker'
+        run: npm run build && node scripts/release/package-runtime.mjs
+      - name: Native PostgreSQL backup tools and Chromium
+        if: matrix.scenario != 'worker'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          npx --no-install playwright install --with-deps chromium
+      - name: Real HTTP E2E / restart / clean restore / post-restore E2E
+        if: matrix.scenario != 'worker'
+        run: node --experimental-strip-types scripts/release/e2e.mjs
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: always()
+        with:
+          name: rc-${{ matrix.scenario }}-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/rc-reports/*.json
+            ${{ runner.temp }}/rc-reports/*.png
+          if-no-files-found: error
+  container:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with: {node-version: '22'}
+      - run: docker build --build-arg SOURCE_SHA="${{ github.sha }}" --build-arg BUILD_TIMESTAMP="${{ github.event.head_commit.timestamp }}" -t prescore:rc1 .
+      - run: node scripts/release/container-smoke.mjs
+        env: {RC_REPORT_DIR: '${{ runner.temp }}/rc-reports'}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: always()
+        with:
+          name: rc-container-${{ github.sha }}
+          path: ${{ runner.temp }}/rc-reports/*.json
+          if-no-files-found: error
+  artifacts:
+    runs-on: ubuntu-24.04
+    needs: [static, product-regression, postgres, container]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with: {node-version: '22'}
+      - run: npm ci
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          pattern: rc-*-${{ github.sha }}
+          path: ${{ runner.temp }}/rc-manifest/reports
+      - name: Deterministic release evidence / CycloneDX
+        run: node --experimental-strip-types scripts/release/manifest.mjs "$RUNNER_TEMP/rc-manifest"
+        env:
+          PRESCORE_SOURCE_SHA: ${{ github.sha }}
+          PRESCORE_BUILD_TIMESTAMP: ${{ github.event.head_commit.timestamp }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: prescore-rc1-release-${{ github.sha }}
+          path: ${{ runner.temp }}/rc-manifest/
+          if-no-files-found: error

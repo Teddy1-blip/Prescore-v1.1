@@ -34,3 +34,8 @@ M6 SHA: `e9338a659454529ce5a8e2d42bdc5aee6c2efd59`. Product/auth/security target
 
 ## M7
 Full RC E2E through real standalone HTTP/auth/uploads/callbacks and a separate worker, synthetic bank/BKI/quarterly source documents, billing/privacy/application/chat/local-AI/restart, clean DB/storage restore and equality/performance assertions. No QA bypass routes or preset scoring models. Actual real-PostgreSQL execution is gated by RC CI, not claimed from local contract tests.
+
+M7 SHA: `0130904e2b927f3a4185a41bb5197e470ef433bd`. Local PDF/archive/E2E contract/storage tests 4/4, lint clean. Production-like execution pending RC gates.
+
+## M8
+Dedicated RC workflow: static/audit, reuse exact-SHA Product regression, independent real PostgreSQL clean+upgrade+worker jobs, container smoke, coordinated restore and artifact aggregation. Deterministic release manifest plus CycloneDX SBOM; all operational docs. Actions updated to verified official pinned current commits to remove obsolete Node runtime warnings. No live/deployment steps.
