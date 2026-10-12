@@ -19,3 +19,8 @@ M3 SHA: `3a1c2d6b34a1207f14c09fd9bb14aec257ebbbfd`. Targeted 8/8; typecheck 0; r
 
 ## M4
 Actual separate-worker kill-after-acceptance, lease recovery, concurrent workers, provider replay, retries/max attempts/manual retry, heartbeat and SIGTERM scenarios. Provider state remains persistent, no business economics changes.
+
+M4 SHA: `4e07ae884a7d687b48ce58cb48f509c29e389a43`. Targeted settlement/provider/runtime 8/8; actual process concurrency/restart queued for PostgreSQL CI.
+
+## M5
+Atomic fsync/rename document persistence, read-only reconciliation, standard pg_dump/pg_restore custom-format backup, bounded checksum-verified storage archive and privileged empty-target restore. Coordinated set requires stopped app/workers; interrupted incomplete sets cannot verify or restore. Full real restore drill is a dedicated CI gate.

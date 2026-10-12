@@ -28,7 +28,13 @@
     "start:rc": "node --experimental-strip-types scripts/release/start.mjs",
     "worker:billing": "node --experimental-strip-types scripts/billing/payout-worker.mjs",
     "worker:billing:once": "node --experimental-strip-types scripts/billing/payout-worker.mjs --once",
-    "worker:ready": "node --experimental-strip-types scripts/release/worker-ready.mjs"
+    "worker:ready": "node --experimental-strip-types scripts/release/worker-ready.mjs",
+    "storage:verify": "node --experimental-strip-types scripts/release/storage-verify.mjs",
+    "backup:create": "node --experimental-strip-types scripts/release/backup.mjs create",
+    "backup:verify": "node --experimental-strip-types scripts/release/backup.mjs verify",
+    "backup:restore": "node --experimental-strip-types scripts/release/backup.mjs restore",
+    "storage:backup": "node --experimental-strip-types scripts/release/backup.mjs storage",
+    "storage:backup:verify": "node --experimental-strip-types scripts/release/backup.mjs storage-verify"
   },
   "dependencies": {
     "better-auth": "1.7.5",
