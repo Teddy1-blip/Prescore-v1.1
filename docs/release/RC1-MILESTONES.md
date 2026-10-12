@@ -29,3 +29,8 @@ M5 SHA: `6f08a64d565b2f52860323a832a993ddc8a55b7b`. Targeted 12/12; typecheck 0.
 
 ## M6
 Central CSRF with cryptographically verified callback exemption, nonce CSP/security headers, PostgreSQL multi-instance limiter, actual streamed input bounds, error/log sanitization and safe diagnostic IDs. Fixed chat role spoofing/document association and whitespace CSV injection. Exact dependency versions + production audit gate; operational summaries and bounded stable Broker/partner paging.
+
+M6 SHA: `e9338a659454529ce5a8e2d42bdc5aee6c2efd59`. Product/auth/security targeted 33/33, zero diagnostics, strict build PASS and full lint clean.
+
+## M7
+Full RC E2E through real standalone HTTP/auth/uploads/callbacks and a separate worker, synthetic bank/BKI/quarterly source documents, billing/privacy/application/chat/local-AI/restart, clean DB/storage restore and equality/performance assertions. No QA bypass routes or preset scoring models. Actual real-PostgreSQL execution is gated by RC CI, not claimed from local contract tests.
