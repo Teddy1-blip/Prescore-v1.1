@@ -22,5 +22,5 @@ test('conclusion cannot introduce legacy scoring or side effects',()=>{const s=f
 test('completed purge and temporary verification removed; ordinary health is read-only',()=>{
  for(const f of ['instrumentation.ts','lib/staging-history-purge.ts','scripts/platform/staging-reset.mjs'])assert.equal(fs.existsSync(f),false);
  assert.doesNotMatch(fs.readFileSync('Dockerfile','utf8'),/staging-reset/);
- const health=fs.readFileSync('app/api/health/route.ts','utf8');assert.doesNotMatch(health,/DELETE FROM|TRUNCATE|DROP TABLE|INSERT INTO|UPDATE public/);assert.match(health,/SELECT 1/);assert.doesNotMatch(health,/STAGING_HISTORY_PURGE|STAGING_CLIENT_DATA_RESET|verification/);
+ const health=fs.readFileSync('app/api/health/route.ts','utf8');assert.doesNotMatch(health,/DELETE FROM|TRUNCATE|DROP TABLE|INSERT INTO|UPDATE public/);assert.doesNotMatch(health,/getPool|SELECT 1/);assert.doesNotMatch(health,/STAGING_HISTORY_PURGE|STAGING_CLIENT_DATA_RESET|verification/);
 });

@@ -15,6 +15,7 @@ export function getPool() {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString || !/^postgres(?:ql)?:\/\//.test(connectionString)) throw new Error('DATABASE_CONFIGURATION_MISSING');
   pool = new Pool({connectionString, max: 10, connectionTimeoutMillis: 5000, idleTimeoutMillis: 30000, statement_timeout: 15000});
+  if(process.env.PRESCORE_PROCESS_ROLE==='app')process.once('SIGTERM',()=>{void pool?.end();});
   pool.on('error', () => { console.error('POSTGRES_POOL_ERROR'); });
   return pool;
 }

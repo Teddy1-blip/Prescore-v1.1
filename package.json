@@ -24,7 +24,11 @@
     "credit-lab:business": "node --experimental-strip-types scripts/credit-lab-business.mjs",
     "typecheck": "node scripts/platform/typecheck.mjs",
     "db:status": "node --experimental-strip-types scripts/platform/db-migrate.mjs --status",
-    "db:verify": "node --experimental-strip-types scripts/platform/db-migrate.mjs --verify"
+    "db:verify": "node --experimental-strip-types scripts/platform/db-migrate.mjs --verify",
+    "start:rc": "node --experimental-strip-types scripts/release/start.mjs",
+    "worker:billing": "node --experimental-strip-types scripts/billing/payout-worker.mjs",
+    "worker:billing:once": "node --experimental-strip-types scripts/billing/payout-worker.mjs --once",
+    "worker:ready": "node --experimental-strip-types scripts/release/worker-ready.mjs"
   },
   "dependencies": {
     "better-auth": "1.7.5",

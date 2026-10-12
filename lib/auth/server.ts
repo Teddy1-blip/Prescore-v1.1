@@ -20,14 +20,14 @@ async function sendAccountEmail(email:string,url:string,subject:string) {
 function createAuth() {
  const secret=process.env.AUTH_SECRET,baseURL=process.env.PRESCORE_BASE_URL;
  if(!secret||secret.length<32||!baseURL)throw new Error('AUTH_CONFIGURATION_MISSING');
- if(process.env.NODE_ENV==='production'&&!baseURL.startsWith('https://'))throw new Error('AUTH_HTTPS_REQUIRED');
+ if(process.env.NODE_ENV==='production'&&!baseURL.startsWith('https://')&&!(process.env.PRESCORE_RUNTIME_MODE==='release-candidate'&&['localhost','127.0.0.1'].includes(new URL(baseURL).hostname)))throw new Error('AUTH_HTTPS_REQUIRED');
  return betterAuth({
   appName:'Prescore',database:getPool(),secret,baseURL,trustedOrigins:[new URL(baseURL).origin],
   emailAndPassword:{enabled:true,requireEmailVerification:true,minPasswordLength:8,revokeSessionsOnPasswordReset:true,sendResetPassword:async({user,url})=>sendAccountEmail(user.email,url,'Восстановление доступа к Prescore')},
   emailVerification:{sendOnSignUp:true,sendOnSignIn:false,autoSignInAfterVerification:false,sendVerificationEmail:async({user,url})=>sendAccountEmail(user.email,url,'Подтверждение почты Prescore')},
   session:{expiresIn:60*60*24*7,updateAge:60*60*24,cookieCache:{enabled:false}},
   rateLimit:{enabled:true,storage:'database',window:60,max:30,customRules:{'/send-verification-email':{window:60,max:3},'/sign-in/email':{window:60,max:5},'/request-password-reset':{window:60,max:3},'/sign-up/email':{window:60,max:3}}},
-  advanced:{useSecureCookies:process.env.NODE_ENV==='production',cookiePrefix:'prescore',defaultCookieAttributes:{httpOnly:true,sameSite:'lax',secure:process.env.NODE_ENV==='production'}},
+  advanced:{useSecureCookies:baseURL.startsWith('https://'),cookiePrefix:'prescore',defaultCookieAttributes:{httpOnly:true,sameSite:'lax',secure:baseURL.startsWith('https://')}},
   logger:{disabled:true},
   databaseHooks:{session:{create:{after:async(session)=>{await getPool().query('INSERT INTO platform_security_events(id,user_id,event,created_at) VALUES($1,$2,$3,now())',[randomUUID(),session.userId,'SESSION_CREATED']);}},delete:{after:async(session)=>{await getPool().query('INSERT INTO platform_security_events(id,user_id,event,created_at) VALUES($1,$2,$3,now())',[randomUUID(),session.userId,'SESSION_DELETED']);}}}},
  });
