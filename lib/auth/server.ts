@@ -6,6 +6,7 @@ import {smtpConfiguration} from '../platform/environment.ts';
 import type {AuthRole,AuthSession} from './contracts.ts';
 
 async function sendAccountEmail(email:string,url:string,subject:string) {
+ if(process.env.PRESCORE_RUNTIME_MODE==='release-candidate'&&process.env.PRESCORE_ALLOW_RC_FAKE==='true'&&process.env.MAIL_PROVIDER==='POSTGRES_FAKE'){await getPool().query('INSERT INTO rc_mailbox(id,recipient,subject,body) VALUES($1,$2,$3,$4)',[randomUUID(),email,subject,url]);return;}
  const config=smtpConfiguration(process.env);
  const transport=nodemailer.createTransport(config.transport);
  const verification=subject==='Подтверждение почты Prescore';

@@ -460,3 +460,8 @@ export const billingFunnel = pgTable("billing_funnel", {
  createdAt: timestamp("created_at", {withTimezone:true,mode:"string"}),
  idempotencyKey: text("idempotency_key"),
 });
+
+// RC1 operational state; SQL migrations own complete constraints/indexes.
+export const rcProviderState=pgTable("rc_provider_state",{provider:text("provider").notNull(),id:text("id").notNull(),idempotencyKey:text("idempotency_key").notNull(),state:text("state").notNull(),createdAt:text("created_at").notNull()});
+export const runtimeWorkers=pgTable("runtime_workers",{id:text("id").primaryKey(),heartbeatAt:text("heartbeat_at").notNull(),status:text("status").notNull(),sourceSha:text("source_sha").notNull(),processed:bigint("processed",{mode:"number"}).notNull()});
+export const runtimeRateLimits=pgTable("runtime_rate_limits",{bucket:text("bucket").primaryKey(),count:bigint("count",{mode:"number"}).notNull(),expiresAt:text("expires_at").notNull()});
