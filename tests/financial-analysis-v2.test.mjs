@@ -1,3 +1,4 @@
+import * as releaseSecurity from '../lib/release/security.ts';
 import assert from "node:assert/strict";
 import test from "node:test";
 import fs from "node:fs";
@@ -233,6 +234,7 @@ function checkoRouteHarness() {
     if (name.includes("contracts/sources")) return { INFRASTRUCTURE_VERSIONS: { integrity: "PRESCORE-INTEGRITY-1" } };
     if (name.includes("api-auth") || name.includes("entitlements")) return {};
     if (name.includes("platform/runtime")) return { getRuntime() { throw new Error("UNEXPECTED_RUNTIME_ACCESS"); } };
+    if (name === "../../../lib/release/security") return releaseSecurity;
     throw new Error(`Unexpected import: ${name}`);
   });
   return exports;
