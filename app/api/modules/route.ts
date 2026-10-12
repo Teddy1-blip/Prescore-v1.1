@@ -2,7 +2,7 @@ import {getRuntime} from "../../../lib/platform/runtime";
 import { requireApiUser, unauthorized } from "../api-auth";
 import { readControlSettings } from "../../../lib/admin-controls";
 
-type PreparedStatement = { bind: (...values: unknown[]) => PreparedStatement; run: () => Promise<unknown> };
+type PreparedStatement = { bind: (...values: unknown[]) => PreparedStatement; run: () => Promise<unknown>; first: <T = unknown>() => Promise<T | null> };
 type RuntimeDatabase = { prepare: (query: string) => PreparedStatement; batch: (statements: PreparedStatement[]) => Promise<Array<{ results: unknown[] }>> };
 
 const defaults = ["overview", "analysis", "report", "credit", "company", "offers", "analyst", "applications", "documents", "chats", "exports", "methodology", "agent", "prospects"];

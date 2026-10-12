@@ -21,7 +21,10 @@
     "ai:smoke": "node --experimental-strip-types scripts/platform/ai-smoke.mjs",
     "env:check": "node --experimental-strip-types scripts/platform/env-check.mjs",
     "credit-lab:development": "node --experimental-strip-types scripts/credit-lab-development.mjs",
-    "credit-lab:business": "node --experimental-strip-types scripts/credit-lab-business.mjs"
+    "credit-lab:business": "node --experimental-strip-types scripts/credit-lab-business.mjs",
+    "typecheck": "node scripts/platform/typecheck.mjs",
+    "db:status": "node --experimental-strip-types scripts/platform/db-migrate.mjs --status",
+    "db:verify": "node --experimental-strip-types scripts/platform/db-migrate.mjs --verify"
   },
   "dependencies": {
     "better-auth": "1.7.5",

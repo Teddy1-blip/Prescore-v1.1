@@ -636,5 +636,180 @@
     "primaryKey": [
       "id"
     ]
+  },
+  {
+    "table": "platform_bootstrap",
+    "columns": [
+      "id",
+      "applied_at",
+      "user_id"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "platform_roles",
+    "columns": [
+      "user_id",
+      "role"
+    ],
+    "primaryKey": [
+      "user_id",
+      "role"
+    ]
+  },
+  {
+    "table": "platform_security_events",
+    "columns": [
+      "id",
+      "user_id",
+      "event",
+      "created_at"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "user",
+    "columns": [
+      "id",
+      "name",
+      "email",
+      "emailVerified",
+      "image",
+      "createdAt",
+      "updatedAt"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "session",
+    "columns": [
+      "id",
+      "userId",
+      "token",
+      "expiresAt",
+      "ipAddress",
+      "userAgent",
+      "createdAt",
+      "updatedAt"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "account",
+    "columns": [
+      "id",
+      "userId",
+      "accountId",
+      "providerId",
+      "accessToken",
+      "refreshToken",
+      "idToken",
+      "accessTokenExpiresAt",
+      "refreshTokenExpiresAt",
+      "scope",
+      "password",
+      "createdAt",
+      "updatedAt"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "verification",
+    "columns": [
+      "id",
+      "identifier",
+      "value",
+      "expiresAt",
+      "createdAt",
+      "updatedAt"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "rateLimit",
+    "columns": [
+      "id",
+      "key",
+      "count",
+      "lastRequest"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "rc_provider_state",
+    "columns": [
+      "provider",
+      "id",
+      "idempotency_key",
+      "state",
+      "created_at"
+    ],
+    "primaryKey": [
+      "provider",
+      "id"
+    ]
+  },
+  {
+    "table": "rc_mailbox",
+    "columns": [
+      "id",
+      "recipient",
+      "subject",
+      "body",
+      "created_at"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "runtime_workers",
+    "columns": [
+      "id",
+      "heartbeat_at",
+      "status",
+      "source_sha",
+      "processed"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "runtime_rate_limits",
+    "columns": [
+      "bucket",
+      "count",
+      "expires_at"
+    ],
+    "primaryKey": [
+      "bucket"
+    ]
+  },
+  {
+    "table": "runtime_operations",
+    "columns": [
+      "id",
+      "event",
+      "result",
+      "created_at"
+    ],
+    "primaryKey": [
+      "id"
+    ]
   }
 ]
