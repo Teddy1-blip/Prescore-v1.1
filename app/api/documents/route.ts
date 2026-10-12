@@ -109,9 +109,9 @@ export async function POST(request: Request) {
     const stored = await documentStorage().put(bytes,String(body.mimeType || "application/octet-stream"));
     const storageKey = stored.key;
     try { await db.prepare(`INSERT INTO client_documents (id, company_inn, analysis_id, application_id, category, file_name, mime_type, size_bytes, content_base64, uploaded_by, status, storage_key, owner_email, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Загружен', ?, ?, ?)`)
-      .bind(id, companyInn, analysisId, applicationId, String(body.category || "Прочее").slice(0, 80), fileName, String(body.mimeType || "application/octet-stream"), sizeBytes, "", String(body.uploadedBy || "Клиент").slice(0, 80), storageKey, user.email, createdAt).run();
+      .bind(id, companyInn, analysisId, applicationId, String(body.category || "Прочее").slice(0, 80), fileName, String(body.mimeType || "application/octet-stream"), sizeBytes, "", user.email, storageKey, user.email, createdAt).run();
     } catch (error) { await documentStorage().delete(storageKey); throw error; }
-    return Response.json({ document: { id, companyInn, analysisId: body.analysisId || "", applicationId: body.applicationId || "", category: body.category || "Прочее", fileName, mimeType: body.mimeType || "application/octet-stream", sizeBytes, uploadedBy: body.uploadedBy || "Клиент", status: "Загружен", createdAt } }, { status: 201 });
+    return Response.json({ document: { id, companyInn, analysisId: body.analysisId || "", applicationId: body.applicationId || "", category: body.category || "Прочее", fileName, mimeType: body.mimeType || "application/octet-stream", sizeBytes, uploadedBy: user.email, status: "Загружен", createdAt } }, { status: 201 });
   } catch {
     return Response.json({ error: "Не удалось сохранить документ. Повторите загрузку." }, { status: 500 });
   }

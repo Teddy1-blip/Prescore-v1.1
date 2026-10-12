@@ -44,6 +44,7 @@ export function validateEnvironment(env: PlatformEnvironment): EnvironmentIssue[
  if (!(root?.startsWith('/data/') || (mode&&root?.startsWith('/')&&!root.startsWith('/app')&&root!=='/')) || root?.split('/').includes('..') || (root&&invalidText(root))) add('PRESCORE_STORAGE_ROOT', 'PERSISTENT_STORAGE_PATH_REQUIRED');
  try { if(!(rcFake&&env.MAIL_PROVIDER==='POSTGRES_FAKE'))smtpConfiguration(env); } catch (e) { add('SMTP', e instanceof Error ? e.message : 'MAIL_CONFIGURATION_INVALID'); }
  if (env.PRESCORE_INTERNAL_REPORT_PREVIEW && !['0', '1'].includes(env.PRESCORE_INTERNAL_REPORT_PREVIEW)) add('PRESCORE_INTERNAL_REPORT_PREVIEW', 'BOOLEAN_FLAG_INVALID');
+ if(env.NODE_ENV==='production'&&!mode)add('PRESCORE_RUNTIME_MODE','RUNTIME_MODE_REQUIRED');
  if(mode&&!['development','test','release-candidate','production'].includes(mode))add('PRESCORE_RUNTIME_MODE','RUNTIME_MODE_INVALID');
  if((rc||mode==='production')&&env.NODE_ENV!=='production')add('NODE_ENV','PRODUCTION_RUNTIME_REQUIRED');
  if(env.AUTH_SECRET&&new Set(env.AUTH_SECRET).size<12)add('AUTH_SECRET','AUTH_SECRET_WEAK');

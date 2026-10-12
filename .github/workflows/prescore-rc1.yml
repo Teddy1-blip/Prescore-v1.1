@@ -84,7 +84,9 @@ jobs:
       - run: npm run db:verify
       - name: Actual worker concurrency / crash / lease / SIGTERM
         if: matrix.scenario == 'worker'
-        run: node --experimental-strip-types scripts/release/worker-scenarios.mjs
+        run: |
+          node --experimental-strip-types scripts/release/worker-scenarios.mjs
+          node --experimental-strip-types scripts/release/storage-crash.mjs
       - name: Production standalone build
         if: matrix.scenario != 'worker'
         run: npm run build && node scripts/release/package-runtime.mjs

@@ -39,3 +39,9 @@ M7 SHA: `0130904e2b927f3a4185a41bb5197e470ef433bd`. Local PDF/archive/E2E contra
 
 ## M8
 Dedicated RC workflow: static/audit, reuse exact-SHA Product regression, independent real PostgreSQL clean+upgrade+worker jobs, container smoke, coordinated restore and artifact aggregation. Deterministic release manifest plus CycloneDX SBOM; all operational docs. Actions updated to verified official pinned current commits to remove obsolete Node runtime warnings. No live/deployment steps.
+
+M8 SHA: `21fe25f184e4f94d3076ed1f901c59f6b71cd657`. Local diagnostics0/lint clean/manifest+SBOM generated. First real PostgreSQL worker job passed kill/lease/concurrency/retry/manual-retry/SIGTERM. Other full RC gates are running; no premature PASS. Follow-up moves environment validation before pool creation and strengthens drift detection/evidence.
+
+First RC run: worker PASS; clean/upgrade E2E hit signup rate limits (test now respects windows), container PDF smoke passed app/worker but used wrong artifact root (fixed), dependency audit blocked on real critical/high issues (patched within supported major). Added migration0008 lookup/drift checks, startup config-before-pool and persistent Init crash/late-callback/storage crash proof. Targeted RC+billing30/30; final CI is rerun after corrections.
+
+Follow-up candidate: dependency critical/high0, patched runtime esbuild0.28.2, RC+billing targeted30/30, diagnostics0, strict Next16.4 build PASS. Migration0008 and actual upload/Init crash gates supplement the first-run corrections. Security-derived document actor replaces caller label. Final exact-SHA Product/RC validation is mandatory.
