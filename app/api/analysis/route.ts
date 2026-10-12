@@ -1,3 +1,4 @@
+import {safeErrorText} from '../../../lib/release/security';
 import {getRuntime} from "../../../lib/platform/runtime";
 import { analysisForStorage, analyzeBankStatements, screenBankStatements, type StatementInput } from "../../../lib/prescore";
 import { sha256Hex } from "../../../lib/credit-engine/source-foundation";
@@ -66,6 +67,6 @@ export async function POST(request: Request) {
       screeningResults: screened.screeningResults,
     });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Не удалось выполнить анализ" }, { status: 400 });
+    return Response.json({ error: safeErrorText(error, "Не удалось выполнить анализ") }, { status: 400 });
   }
 }

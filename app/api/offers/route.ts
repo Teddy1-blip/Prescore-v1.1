@@ -1,3 +1,4 @@
+import {safeErrorText} from '../../../lib/release/security';
 import {getRuntime} from "../../../lib/platform/runtime";
 import { evaluateBankRoutes, type BankRoute } from "../../../lib/bank-offers";
 import { buildUnifiedRiskContext } from "../../../lib/risk-context";
@@ -56,6 +57,6 @@ export async function GET(request: Request) {
     const routes = blocked ? [] : chooseRoutes(controlledRoutes, need);
     return Response.json({ ...evaluated, routes, fullRouteCount: controlledRoutes.length, adminExcludedCount: evaluated.routes.length - controlledRoutes.length, blocked, blockedBy: risk?.globalStops.map((item) => item.title).slice(0, 5) ?? [], termsDate: productTermsDate, riskCode: risk?.finalConclusion.code ?? "PREPARE", readOnly: access.access === "agent" });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Не удалось подобрать маршруты" }, { status: 500 });
+    return Response.json({ error: safeErrorText(error, "Не удалось подобрать маршруты") }, { status: 500 });
   }
 }

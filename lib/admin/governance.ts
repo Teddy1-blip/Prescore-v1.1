@@ -1,3 +1,4 @@
+import {runtimeVersion} from '../release/version.ts';
 import type {PortableDatabase} from '../db/compatibility.ts';
 import {pageRows,rows,safeMetadata,type AdminQuery} from './resources.ts';
 import {partnerCommissions} from '../partner-commissions.ts';
@@ -62,7 +63,8 @@ export async function systemStatus(db:PortableDatabase){
  const storage=(await rows(db,'SELECT COUNT(*) AS files,SUM(size_bytes) AS bytes FROM client_documents'))[0];
  const failed=(await rows(db,'SELECT COUNT(*) AS failures FROM ai_usage WHERE success=0'))[0].failures;
  const sha=process.env.PRESCORE_BUILD_SHA??process.env.GITHUB_SHA??null;
- return {database:'REACHABLE',schema:missing.length||missingTriggers.length?'MIGRATION_REQUIRED':'COMPATIBLE',missingColumns:missing,missingTriggers,buildSha:sha&&/^[a-f0-9]{40}$/.test(sha)?sha:null,ai,storageMetadata:storage,recordedAiFailures:failed,uptime:null};
+ const operational=(await db.pool.query("SELECT (SELECT COUNT(*) FROM billing_outbox WHERE status IN ('PENDING','PROCESSING')) AS pending,(SELECT MIN(created_at) FROM billing_outbox WHERE status IN ('PENDING','PROCESSING')) AS oldest,(SELECT COUNT(*) FROM runtime_workers WHERE status='RUNNING' AND heartbeat_at>now()-interval '45 seconds') AS workers,(SELECT COUNT(*) FROM runtime_operations WHERE result<>'OK' AND created_at>now()-interval '30 days') AS recordedErrors")).rows[0];
+ return {version:runtimeVersion(),operational,database:'REACHABLE',schema:missing.length||missingTriggers.length?'MIGRATION_REQUIRED':'COMPATIBLE',missingColumns:missing,missingTriggers,buildSha:sha&&/^[a-f0-9]{40}$/.test(sha)?sha:null,ai,storageMetadata:storage,recordedAiFailures:failed,uptime:null};
 }
 export async function mutateAdmin(db:PortableDatabase,body:Record<string,unknown>,email:string){
  const now=new Date().toISOString();

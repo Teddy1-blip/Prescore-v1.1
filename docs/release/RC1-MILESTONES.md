@@ -24,3 +24,8 @@ M4 SHA: `4e07ae884a7d687b48ce58cb48f509c29e389a43`. Targeted settlement/provider
 
 ## M5
 Atomic fsync/rename document persistence, read-only reconciliation, standard pg_dump/pg_restore custom-format backup, bounded checksum-verified storage archive and privileged empty-target restore. Coordinated set requires stopped app/workers; interrupted incomplete sets cannot verify or restore. Full real restore drill is a dedicated CI gate.
+
+M5 SHA: `6f08a64d565b2f52860323a832a993ddc8a55b7b`. Targeted 12/12; typecheck 0. pg_dump/restore/container drill pending real CI.
+
+## M6
+Central CSRF with cryptographically verified callback exemption, nonce CSP/security headers, PostgreSQL multi-instance limiter, actual streamed input bounds, error/log sanitization and safe diagnostic IDs. Fixed chat role spoofing/document association and whitespace CSV injection. Exact dependency versions + production audit gate; operational summaries and bounded stable Broker/partner paging.

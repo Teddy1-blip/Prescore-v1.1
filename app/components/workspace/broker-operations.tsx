@@ -15,7 +15,7 @@ export type Application = {
 };
 export type CuratedAgent = { agentCode: string; name: string; agency: string; city: string; status: string; createdAt: string; clientsCount: number; activeSubscriptions: number; monthlyIncome: number };
 export type OfferOption = { id: string; bank: string; product: string; kind: string };
-export type AgentData = { agent: { code: string; name: string; referralPath: string; isAdmin?: boolean }; modules?: { prospects?: boolean }; leads: Lead[]; applications: Application[]; offerOptions: OfferOption[]; applicationForecast: number; curator: { referralPath: string; agents: CuratedAgent[]; agentsCount: number; clientsCount: number; activeSubscriptions: number; monthlyIncome: number } };
+export type AgentData = { pagination?:{page:number;limit:number;hasNext:boolean}; agent: { code: string; name: string; referralPath: string; isAdmin?: boolean }; modules?: { prospects?: boolean }; leads: Lead[]; applications: Application[]; offerOptions: OfferOption[]; applicationForecast: number; curator: { referralPath: string; agents: CuratedAgent[]; agentsCount: number; clientsCount: number; activeSubscriptions: number; monthlyIncome: number } };
 
 function useBrokerDialog(close:()=>void){
  const form=useRef<HTMLFormElement>(null),onClose=useRef(close);useEffect(()=>{onClose.current=close;},[close]);

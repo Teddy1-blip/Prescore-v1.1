@@ -1,3 +1,4 @@
+import {safeErrorText} from '../../../lib/release/security';
 import {parseFinancingRequest} from "../../../lib/workspace/financing-request";
 import {getRuntime} from "../../../lib/platform/runtime";
 import { analysisForStorage, type AnalysisResult } from "../../../lib/prescore";
@@ -161,7 +162,7 @@ export async function GET(request: Request) {
     const deals = (dealResult.results as Array<Record<string, unknown>>).map((deal) => ({ ...deal, statusHistory: histories.filter((item) => item.applicationId === deal.id) }));
     return Response.json({ analyses, deals, readOnly: false, accessRole: "owner" });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Не удалось загрузить кабинет" }, { status: 500 });
+    return Response.json({ error: safeErrorText(error, "Не удалось загрузить кабинет") }, { status: 500 });
   }
 }
 
@@ -308,7 +309,7 @@ export async function POST(request: Request) {
     }
     return Response.json({ error: "Неизвестный тип операции" }, { status: 400 });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Не удалось сохранить данные" }, { status: 500 });
+    return Response.json({ error: safeErrorText(error, "Не удалось сохранить данные") }, { status: 500 });
   }
 }
 
@@ -334,6 +335,6 @@ export async function PATCH(request: Request) {
     ]);
     return Response.json({ ok: true });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Не удалось обновить заявку" }, { status: 500 });
+    return Response.json({ error: safeErrorText(error, "Не удалось обновить заявку") }, { status: 500 });
   }
 }

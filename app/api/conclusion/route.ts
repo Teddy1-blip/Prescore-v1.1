@@ -1,3 +1,4 @@
+import {safeErrorText} from '../../../lib/release/security';
 import {getRuntime} from "../../../lib/platform/runtime";
 import { buildRiskShadow } from "../../../lib/credit-engine/risk/integration";
 import { buildUnifiedRiskContext } from "../../../lib/risk-context";
@@ -34,6 +35,6 @@ export async function GET(request: Request) {
     const risk = buildRiskShadow({ analysis: { ...analysis, ...reconciliation }, companyProfile: profile, asOfDate });
     return Response.json({ ...buildUnifiedRiskContext(profile, analysis, controls), ...reconciliation, ...risk, readOnly: access.access === "agent" });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Не удалось сформировать единое заключение" }, { status: 500 });
+    return Response.json({ error: safeErrorText(error, "Не удалось сформировать единое заключение") }, { status: 500 });
   }
 }

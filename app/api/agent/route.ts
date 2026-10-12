@@ -1,3 +1,5 @@
+import {boundedPage} from '../../../lib/release/pagination';
+import {safeErrorText} from '../../../lib/release/security';
 import {createHash} from "node:crypto";
 import {getRuntime} from "../../../lib/platform/runtime";
 import { averagePartnerCommissionRate, partnerCommissions } from "../../../lib/partner-commissions";
@@ -131,6 +133,7 @@ export async function GET(request: Request) {
   if (!user) return unauthorized();
   if (!user.roles.includes("AGENT") && !user.isAdmin) return Response.json({error:"Нет доступа к кабинету агента"},{status:403});
   try {
+    const paging=boundedPage(request.url);
     const db = await getDatabase();
     await ensureSchema(db);
     const controls = await readControlState(db);
@@ -145,19 +148,19 @@ export async function GET(request: Request) {
         l.created_at AS createdAt, l.updated_at AS updatedAt,
         (SELECT COUNT(*) FROM payment_orders po WHERE po.company_inn = l.company_inn AND po.status = 'Оплачен') AS paidFullOrders,
         (SELECT a.id FROM analyses a WHERE a.company_inn = l.company_inn ORDER BY a.created_at DESC LIMIT 1) AS analysisId
-        FROM agent_leads l WHERE l.agent_code = ? ORDER BY l.updated_at DESC LIMIT 200`).bind(code),
+        FROM agent_leads l WHERE l.agent_code = ? ORDER BY l.updated_at DESC,l.id DESC LIMIT ? OFFSET ?`).bind(code,paging.limit,paging.offset),
       db.prepare(`SELECT id, lead_id AS leadId, analysis_id AS analysisId, company_name AS companyName,
         bank, product, requested_amount AS requestedAmount, calculated_limit AS calculatedLimit,
         COALESCE((SELECT d.status FROM deals d WHERE d.id = agent_applications.id), status) AS status, next_action AS nextAction,
         created_at AS createdAt, updated_at AS updatedAt
-        FROM agent_applications WHERE agent_code = ? ORDER BY updated_at DESC LIMIT 300`).bind(code),
+        FROM agent_applications WHERE agent_code = ? ORDER BY updated_at DESC,id DESC LIMIT ? OFFSET ?`).bind(code,paging.limit,paging.offset),
       db.prepare(`SELECT p.agent_code AS agentCode, p.name, p.agency, p.city, p.status, p.created_at AS createdAt,
         COUNT(l.id) AS clientsCount,
         COALESCE(SUM((SELECT COUNT(*) FROM payment_orders po WHERE po.company_inn = l.company_inn AND po.status = 'Оплачен')), 0) AS activeSubscriptions
         FROM agent_partners p LEFT JOIN agent_leads l ON l.agent_code = p.agent_code
         WHERE p.curator_code = ?
         GROUP BY p.agent_code, p.name, p.agency, p.city, p.status, p.created_at
-        ORDER BY "activeSubscriptions" DESC, p.created_at DESC LIMIT 100`).bind(code),
+        ORDER BY "activeSubscriptions" DESC, p.created_at DESC,p.agent_code DESC LIMIT ? OFFSET ?`).bind(code,paging.limit,paging.offset),
     ]);
     const partners = (partnerResult.results as Array<Record<string, unknown>>).map((item) => ({
       ...item,
@@ -168,6 +171,7 @@ export async function GET(request: Request) {
     const applications = applicationResult.results as Array<Record<string, unknown>>;
     const applicationForecast = applications.reduce((sum, item) => sum + (Number(item.calculatedLimit) || 0) * averagePartnerCommissionRate, 0);
     return Response.json({
+      pagination:{page:paging.page,limit:paging.limit,hasNext:[leadResult,applicationResult,partnerResult].some(r=>r.results.length===paging.limit)},
       agent: { code, name: account.name, referralPath: `/ref/${encodeURIComponent(code)}`, isAdmin: user.isAdmin },
       modules: { prospects: prospectsModule == null || Boolean(prospectsModule.enabled) },
       leads: leadResult.results,
@@ -184,7 +188,7 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Не удалось загрузить агентский кабинет" }, { status: 500 });
+    return Response.json({ error: safeErrorText(error, "Не удалось загрузить агентский кабинет") }, { status: 500 });
   }
 }
 
@@ -297,7 +301,7 @@ export async function POST(request: Request) {
     }
     return Response.json({ error: "Неизвестный тип операции" }, { status: 400 });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Не удалось сохранить данные" }, { status: 500 });
+    return Response.json({ error: safeErrorText(error, "Не удалось сохранить данные") }, { status: 500 });
   }
 }
 
@@ -343,6 +347,6 @@ export async function PATCH(request: Request) {
     ]);
     return Response.json({ ok: true });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Не удалось обновить статус" }, { status: 500 });
+    return Response.json({ error: safeErrorText(error, "Не удалось обновить статус") }, { status: 500 });
   }
 }

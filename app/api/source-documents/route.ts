@@ -1,3 +1,5 @@
+import {validateZipBudget} from '../../../lib/release/archive-limits';
+import {safeErrorText} from '../../../lib/release/security';
 import {getRuntime} from "../../../lib/platform/runtime";
 import { buildRiskShadow } from "../../../lib/credit-engine/risk/integration";
 import { applyAnalysisControls, readControlState } from "../../../lib/admin-controls";
@@ -93,6 +95,7 @@ export async function POST(request: Request) {
     if (!analysis) return Response.json({ error: "Сохранённый анализ повреждён" }, { status: 409 });
 
     const bytes = new Uint8Array(await file.arrayBuffer());
+    if(lowerName.endsWith('.xlsx'))validateZipBudget(bytes);if(file.name.length>180)return Response.json({error:'FILENAME_TOO_LONG'},{status:400});
     const contentHash = await sha256Hex(bytes);
     const existingSource = sourceType === "BKI" ? analysis.sourceManifest?.bki : analysis.sourceManifest?.quarterly;
     if (existingSource?.contentHash === contentHash) {
@@ -190,6 +193,6 @@ export async function POST(request: Request) {
       originalFileStored: false,
     });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Не удалось обработать источник" }, { status: 400 });
+    return Response.json({ error: safeErrorText(error, "Не удалось обработать источник") }, { status: 400 });
   }
 }

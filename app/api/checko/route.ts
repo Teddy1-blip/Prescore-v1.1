@@ -1,3 +1,4 @@
+import {safeErrorText} from '../../../lib/release/security';
 import {getRuntime} from "../../../lib/platform/runtime";
 import { readableAnalysis, requireApiUser, unauthorized } from "../api-auth";
 import { resolveAnalysisTier, type AnalysisTier } from "../../../lib/entitlements";
@@ -525,6 +526,6 @@ export async function GET(request: Request) {
       .bind(inn, JSON.stringify(profile), rawSnapshot, profile.fetchedAt, new Date().toISOString()).run();
     return Response.json({ ...profileView({ ...profile, cached: false }, tier), tier });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Не удалось получить данные из внешнего источника" }, { status: 500 });
+    return Response.json({ error: safeErrorText(error, "Не удалось получить данные из внешнего источника") }, { status: 500 });
   }
 }
