@@ -14,3 +14,8 @@ M2 SHA: `98464e9ba484cbe4213f4f450f8413d74a024d4b`. Strict production build PASS
 
 ## M3
 Real-PostgreSQL clean and pre-billing upgrade scenarios; catalog/auth/legacy preservation checks. Persistent RC Fake providers use the official interfaces and PostgreSQL, shared by app/worker and surviving process restarts. RC mail transport stores verification mail only in isolated DB; no public test endpoints.
+
+M3 SHA: `3a1c2d6b34a1207f14c09fd9bb14aec257ebbbfd`. Targeted 8/8; typecheck 0; real PostgreSQL scenarios pending dedicated CI.
+
+## M4
+Actual separate-worker kill-after-acceptance, lease recovery, concurrent workers, provider replay, retries/max attempts/manual retry, heartbeat and SIGTERM scenarios. Provider state remains persistent, no business economics changes.
