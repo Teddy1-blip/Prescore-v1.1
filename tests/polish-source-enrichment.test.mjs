@@ -1,4 +1,5 @@
 import test from 'node:test';
+import React from 'react';import {renderToStaticMarkup} from 'react-dom/server';
 import assert from 'node:assert/strict';
 import {createWorkspaceRuntime} from './fixtures/workspace-runtime.mjs';
 import {statementFixture} from './fixtures/block1-statements.mjs';
@@ -18,7 +19,7 @@ test('corporate credit PDF preserves published balances, dates and overdue; part
   assert.equal((await upload(rt,a,'BKI',corporateBkiFile(a.companyInn))).status,200);
   const first=await model(rt,a),o=first.full.report.analysisV3.portfolio[0];
   assert.equal(o.creditor.value,'Тест Банк');assert.equal(o.reportedPrincipal.value,120000);assert.equal(o.reportedPrincipal.asOf,'2026-08-02');assert.equal(o.principal.value,null);assert.equal(o.limit.value,200000);assert.equal(o.payment.value,9000);
-  assert.equal(o.nextDate.value,'2026-11-01');assert.equal(o.maturity.value,'2028-01-01');assert.equal(o.overdue.value,0);assert.equal(o.overdue.knowledge,'KNOWN');
+  assert.equal(o.nextDate.value,'2026-11-01');assert.equal(o.maturity.value,'2028-01-01');assert.equal(o.overdue.value,0);assert.equal(o.overdue.knowledge,'KNOWN');const ai=rt.load('lib/ai-credit-analyst.ts').buildSanitizedCreditContext('Кредитная история',first);assert.equal(ai.portfolio[0].reportedPrincipal.value,120000);const {SourceAppendix}=rt.load('app/dashboard/report-v2/source-appendix.tsx');const html=renderToStaticMarkup(React.createElement(SourceAppendix,{model:first.full.report}));assert.match(html,/120(?:&#x27;|[\s\u00a0])*000/);assert.match(html,/2026-08-02/);
   assert.deepEqual((await model(rt,a,rt.broker)).full,first.full);assert.deepEqual(await model(rt,a),first);
   assert.equal((await upload(rt,a,'BKI',corporateBkiFile(a.companyInn))).status,409);
   assert.equal((await upload(rt,a,'BKI',corporateBkiFile('7701234567'))).status,400);

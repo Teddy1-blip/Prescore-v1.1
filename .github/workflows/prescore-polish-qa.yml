@@ -30,4 +30,5 @@ jobs:
           path: |
             ${{ runner.temp }}/polish-sources/*.json
             ${{ runner.temp }}/polish-sources/*.png
+            ${{ runner.temp }}/polish-sources/*.pdf
           if-no-files-found: error

@@ -1,4 +1,4 @@
-# Source acceptance (M1, in progress)
+# Source acceptance and supported format boundaries
 
 All data synthetic. No provider/deployment calls. Normalized sources persist in `analyses.payload`; WorkspaceModelV1 is recalculated from persisted inputs. Generic document storage is distinct.
 
@@ -11,4 +11,9 @@ All data synthetic. No provider/deployment calls. Normalized sources persist in 
 | Open BFO/company/legal | existing Checko adapter; cached or explicit request | /api/checko | checko_profiles and canonical profile input | company information/shared analysis | Existing source fixtures; live paid requests prohibited. Upload BFO does not depend on this provider |
 | Generic company/application files | existing bounded document upload | /api/documents | client_documents + persistent storage | DocumentsHub/chat | Existing RC1/product tests; not an analytical source |
 
-M1 local: baseline targeted 141/141; bank/credit/source-authority 9/9; new actual-byte/enrichment checks in `tests/polish-source-enrichment.test.mjs`. Browser proof is separate `scripts/qa/polish-source-browser.mjs`; CI must pass and images must be reviewed before acceptance.
+M1 local: baseline targeted 141/141; bank/credit/source-authority 9/9; new actual-byte/enrichment checks in `tests/polish-source-enrichment.test.mjs`. M4 browser run 38451312136 passed 33 checks, including nonempty corporate PDF and retry. Browser proof is separate `scripts/qa/polish-source-browser.mjs`; CI must pass and images must be reviewed before acceptance.
+
+
+Credit details: NBKI explicit creditor, amount/limit, balances, payment, opening/final/next-payment dates, report date, and overdue are parsed when published. Missing current balance is not replaced with a historical balance: UI/print/AI disclose the dated reported amount separately. Zero overdue requires explicit source evidence. Limits, funded and contingent exposures remain separate; personal credit reports do not become company debt.
+
+Normalized financial and credit sources (including provenance/hash) are persisted, not the uploaded original bytes. `originalFileStored:false` is explicit in the analytical upload response; originals can be retained via the separate generic dossier flow. Tests use actual synthetic file bytes; no real client documents/secrets are committed. Supported BFO import does not imply arbitrary Excel/PDF layout or multi-year table import.

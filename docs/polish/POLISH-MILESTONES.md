@@ -22,4 +22,8 @@ M5 commit: 0cad3b8be64df67d4cbee81d289c9bbffc56d3b4; typecheck clean.
 
 M6: direct Russian BFO/BKI actions, disclosed file limits, keyboard focus and native 200% zoom scenarios for source upload/BROKER dossier. Six exact viewport sizes apply to CLIENT, BROKER and full analysis. Numeric alternatives and unknown/partial states remain visible.
 
-M7: pending exact-SHA full CI and artifact review. Final PASS is prohibited until exact-SHA full source/browser/RC1 acceptance completes.
+M6 commit: 348fa2d17a89d300442e7d5c22e155dc70f749c4; typecheck clean.
+
+M7: acceptance wiring at current HEAD. Print/PDF source appendix and minimized AI dated source facts close cross-surface enrichment gaps. Added 19-block and screen/state matrices. Full Product QA and RC1 now trigger for this branch; branch-scoped concurrency prevents cancellation of protected-branch runs. No deployment workflow filter was changed. The final report must cite actual same-HEAD outcomes and artifacts; this document does not pre-assert PASS.
+
+M4 source browser run 38451312136: 33 checks passed, including actual nonempty corporate PDF, failed-upload retry and confirmed model refresh. Final updated native-dossier/zoom/PDF scenarios still require their HEAD run. Final PASS is prohibited until exact-SHA full source/browser/RC1 acceptance completes.

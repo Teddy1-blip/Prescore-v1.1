@@ -2,14 +2,14 @@ name: Prescore product QA
 
 on:
   push:
-    branches: [prescore-product-v1]
+    branches: [prescore-product-v1, prescore-polish-v1]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: prescore-product-v1-qa
+  group: prescore-product-qa-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
