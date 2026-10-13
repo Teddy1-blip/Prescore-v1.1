@@ -6,7 +6,7 @@ import {Panel} from './client-insights';
 
 const sources=[
  {key:'BANK_STATEMENTS',types:['BANK_STATEMENT'],benefit:'Денежный поток, налоги, долговые платежи и ликвидность.',action:'Создайте новый анализ с выписками по всем счетам за сопоставимый период.'},
- {key:'FINANCIAL_STATEMENTS',types:['BFO','FINANCIAL_STATEMENT'],benefit:'Выручка, прибыль, активы, капитал и финансовые коэффициенты.',action:'Получите открытую отчётность через сведения компании ниже.'},
+ {key:'FINANCIAL_STATEMENTS',types:['BFO','FINANCIAL_STATEMENT'],benefit:'Выручка, прибыль, активы, капитал и финансовые коэффициенты.',action:'Добавьте бухгалтерскую отчётность через форму ниже.'},
  {key:'QUARTERLY_REPORT',types:['QUARTERLY'],benefit:'Финансовое состояние после последней годовой отчётности.',action:'Добавьте квартальную отчётность через форму ниже.'},
  {key:'CREDIT_HISTORY',types:['BKI','CREDIT_HISTORY'],benefit:'Обязательства, просрочка и сопоставление долга с платежами по выпискам.',action:'Добавьте кредитную историю через форму ниже.'},
  {key:'EXTERNAL_SOURCE',types:['CHECKO','EIS','LEGAL_SOURCE'],benefit:'Регистрационные сведения, правовые ограничения и контракты, когда доступны.',action:'Получите открытые сведения компании; проверьте дату каждого источника.'}
@@ -22,6 +22,6 @@ export function DocumentSources({model}:{model:WorkspaceModelV1}){
   })}</tbody></table></div>
   <dl className="pc-definition"><div><dt>Сведения компании</dt><dd>{model.basic.analysis.company.name} · ИНН {model.basic.analysis.company.inn}</dd></div><div><dt>Файлы компании</dt><dd>{model.basic.operations.documents.count??'Недостаточно данных'}</dd></div><div><dt>Файлы выбранного анализа</dt><dd>{model.basic.operations.documents.analysisCount??'Недостаточно данных'}</dd></div></dl>
   {model.basic.financingRequest&&<p className="pc-muted">Заявленные параметры финансирования сохранены {date(model.basic.financingRequest.receivedAt)}. Они используются как сведения клиента, без независимого документального подтверждения.</p>}
-  <p>Кредитная история и квартальная отчётность обновляют анализ через формы ниже. Произвольные файлы сохраняются в досье и не меняют оценку автоматически.</p>
+  <p>Бухгалтерская отчётность, кредитная история и квартальные данные дополняют общую финансовую картину через формы ниже. Произвольные файлы сохраняются в досье и не меняют оценку автоматически.</p>
  </Panel>;
 }

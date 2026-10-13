@@ -1,3 +1,4 @@
+import {financialSources} from "../credit-engine/financial-analysis/source-selection.ts";
 import type { AnalysisResult } from "../prescore.ts";
 import type { BankStatementMetricsV2, MetricResult } from "../credit-engine/contracts/metrics.ts";
 import type { SourceStatus } from "../credit-engine/contracts/sources.ts";
@@ -117,8 +118,7 @@ function sourceAvailability(analysis: AnalysisResult): WorkspaceBasicV1["sources
   const manifest = analysis.sourceManifest;
   const sources = [
     ...(Array.isArray(manifest?.bankStatements) ? manifest.bankStatements.map((item) => ({ source: "BANK_STATEMENTS", item })) : []),
-    ...(manifest?.bfo ? [{ source: "FINANCIAL_STATEMENTS", item: manifest.bfo }] : []),
-    ...(manifest?.quarterly ? [{ source: "QUARTERLY_REPORT", item: manifest.quarterly }] : []),
+    ...financialSources(manifest).map(item => ({source: item.sourceType === "BFO" ? "FINANCIAL_STATEMENTS" : "QUARTERLY_REPORT", item})),
     ...(manifest?.bki ? [{ source: "CREDIT_HISTORY", item: manifest.bki }] : []),
     ...(Array.isArray(manifest?.external) ? manifest.external.map((item) => ({ source: item.sourceId.startsWith("client-request-") ? "CLIENT_DECLARATION" : "EXTERNAL_SOURCE", item })) : []),
   ];

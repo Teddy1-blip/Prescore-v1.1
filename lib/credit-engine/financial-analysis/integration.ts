@@ -2,7 +2,7 @@ import type { FinancialAnalysisV2, FinancialMetricsComparisonSummary, FinancialS
 import type { SourceEnvelope } from "../contracts/sources.ts";
 import type { QuarterlyFinancialReport } from "../../quarterly-report.ts";
 import { adaptCheckoBfo } from "./checko-bfo-adapter.ts";
-import { adaptQuarterlyReport } from "./quarterly-adapter.ts";
+import { adaptFinancialReport } from "./quarterly-adapter.ts";
 import { buildFinancialAnalysis } from "./engine.ts";
 import { compareFinancialMetrics } from "./comparison.ts";
 
@@ -26,10 +26,12 @@ export function checkoFinancialShadow(raw: unknown, source: SourceEnvelope | und
 }
 export function quarterlyFinancialShadow(report: QuarterlyFinancialReport, source: SourceEnvelope, existing: FinancialStatementSnapshot[] = []): FinancialShadowFields {
   try {
-    const snapshot = adaptQuarterlyReport(report, source);
-    const snapshots = [...existing.filter(s => s.snapshotId !== snapshot.snapshotId), snapshot];
+    const snapshot = adaptFinancialReport(report, source);
+    const snapshots = [...existing.filter(s => !(s.sourceType === snapshot.sourceType
+      && s.period.kind === snapshot.period.kind && s.period.from === snapshot.period.from
+      && s.period.to === snapshot.period.to && s.period.asOf === snapshot.period.asOf)), snapshot];
     const analysis = buildFinancialAnalysis(snapshots);
-    return { financialStatementsV2: snapshots, financialAnalysisV2: analysis, financialMetricsComparison: compareFinancialMetrics(analysis, report.ratios, "QUARTERLY", snapshot.snapshotId), financialShadowWarnings: [] };
+    return { financialStatementsV2: snapshots, financialAnalysisV2: analysis, financialMetricsComparison: compareFinancialMetrics(analysis, report.ratios, source.sourceType === "BFO" ? "BFO" : "QUARTERLY", snapshot.snapshotId), financialShadowWarnings: [] };
   } catch {
     // Clear stale shadow results; the authoritative report still succeeds.
     return { financialStatementsV2: undefined, financialAnalysisV2: undefined, financialMetricsComparison: undefined, financialShadowWarnings: ["FINANCIAL_SHADOW_SOURCE_UNAVAILABLE"] };

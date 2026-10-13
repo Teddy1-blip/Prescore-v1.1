@@ -1,6 +1,6 @@
 "use client";
 import { useRef, useState, type FormEvent } from "react";
-export function SourceUpload({analysisId,kind,saved}:{analysisId:string;kind:'BKI'|'QUARTERLY';saved:()=>void}) {
+export function SourceUpload({analysisId,kind,saved}:{analysisId:string;kind:'BKI'|'QUARTERLY'|'BFO';saved:()=>void|Promise<void>}) {
  const pending=useRef(false);
  const [busy,setBusy]=useState(false),[message,setMessage]=useState(''),[fileName,setFileName]=useState('');
  async function submit(e:FormEvent<HTMLFormElement>){
@@ -10,14 +10,14 @@ export function SourceUpload({analysisId,kind,saved}:{analysisId:string;kind:'BK
    const data=new FormData(form);data.set('analysisId',analysisId);data.set('sourceType',kind);
    const r=await fetch('/api/source-documents',{method:'POST',body:data});const body=await r.json();
    if(!r.ok)throw Error(body.error||'Документ не сохранён');
-   form.reset();setFileName('');setMessage('Источник добавлен. Анализ обновлён.');saved();
+   form.reset();setFileName('');setMessage('Документ сохранён. Обновляем анализ…');await saved();setMessage('Документ добавлен. Финансовая картина обновлена.');
   }catch(e){setMessage(e instanceof Error?e.message:'Ошибка загрузки');}
   finally{pending.current=false;setBusy(false);}
  }
  const accept=kind==='BKI'?'.pdf':'.pdf,.xlsx,.csv';
- return <form onSubmit={submit} className="ws-source-upload">
-  <h2>{kind==='BKI'?'Добавить кредитную историю':'Добавить квартальную отчётность'}</h2>
-  <p>{kind==='BKI'?'PDF с кредитной историей. Обязательства появятся после проверки источника.':'PDF, XLSX или CSV с данными компании. Бухгалтерскую отчётность из реестра можно получить ниже, в блоке открытых сведений.'}</p>
+ return <form onSubmit={submit} className="ws-source-upload" aria-label={kind==='BKI'?'Добавить кредитную историю':kind==='BFO'?'Добавить бухгалтерскую отчётность':'Добавить квартальную отчётность'}>
+  <h2>{kind==='BKI'?'Добавить кредитную историю':kind==='BFO'?'Добавить бухгалтерскую отчётность':'Добавить квартальную отчётность'}</h2>
+  <p>{kind==='BKI'?'PDF с кредитной историей. Обязательства появятся после проверки источника.':kind==='BFO'?'Текстовый PDF, XLSX или CSV: ИНН, годовой период, единица измерения и строки отчётности. Один период в файле; другие годы добавляйте отдельными файлами. Повторная загрузка за тот же период обновит его.':'PDF, XLSX или CSV за промежуточный период. Укажите в файле период и единицу измерения.'}</p>
   {kind==='BKI'&&<label>Кому принадлежит отчёт<select name="relationship"><option>Компания-заёмщик</option><option>ИП-заёмщик</option><option>Собственник</option><option>Руководитель</option><option>Поручитель</option><option>Не указано</option></select></label>}
   <label>Исходный документ
    <span className="pc-file-control">
@@ -27,7 +27,7 @@ export function SourceUpload({analysisId,kind,saved}:{analysisId:string;kind:'BK
    </span>
   </label>
   <label className="ws-consent"><input type="checkbox" required/>Подтверждаю право передать документ и согласие на обработку данных.</label>
-  <button disabled={busy} className="ws-primary">{busy?'Обрабатываем…':'Добавить источник'}</button>
+  <button disabled={busy} className="ws-primary">{busy?'Обрабатываем…':'Загрузить документ'}</button>
   {message&&<p role="status">{message}</p>}
  </form>;
 }

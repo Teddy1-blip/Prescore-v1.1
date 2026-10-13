@@ -1,3 +1,4 @@
+import {activeFinancialSnapshots} from "../financial-analysis/source-selection.ts";
 import type { AnalysisResult } from "../../prescore.ts";
 import type { CompanyProfileData } from "../../company-profile.ts";
 import type { ReconciliationInput, ReconciliationShadowFields, ReconciliationRule } from "../contracts/reconciliation.ts";
@@ -19,10 +20,7 @@ export function reconciliationForAnalysis(analysis: Omit<AnalysisResult, "transa
     const manifest = { ...(analysis.sourceManifest ?? { bankStatements: [] }), ...(profile?.sourceManifest?.bfo ? { bfo: profile.sourceManifest.bfo } : {}) };
     const current = [...(analysis.financialStatementsV2 ?? analysis.financialAnalysisV2?.history.map(p => p.snapshot) ?? []),
       ...(profile?.financialStatementsV2 ?? profile?.financialAnalysisV2?.history.map(p => p.snapshot) ?? [])];
-    const snapshots = current.filter(s => {
-      const active = s.sourceType === "QUARTERLY" ? manifest.quarterly : manifest.bfo;
-      return active?.sourceId === s.sourceId && (!active.contentHash || active.contentHash === s.source.contentHash);
-    }).map(s => ({ ...s, source: s.sourceType === "QUARTERLY" ? manifest.quarterly! : manifest.bfo! }));
+    const snapshots = activeFinancialSnapshots(current, [analysis.sourceManifest, profile?.sourceManifest]);
     const analyses = [analysis.financialAnalysisV2, profile?.financialAnalysisV2].filter(a => a !== undefined);
     const financialAnalysis = analyses.length ? { ...analyses[0],
       history: analyses.flatMap(a => a.history).filter(p => snapshots.some(s => s.snapshotId === p.snapshot.snapshotId)),

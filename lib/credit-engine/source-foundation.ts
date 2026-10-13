@@ -201,6 +201,7 @@ function allSources(manifest: AnalysisSourceManifest) {
     ...manifest.bankStatements,
     ...(manifest.bfo ? [manifest.bfo] : []),
     ...(manifest.quarterly ? [manifest.quarterly] : []),
+    ...(manifest.financialUploads ?? []).filter(s => s.sourceId !== manifest.bfo?.sourceId && s.sourceId !== manifest.quarterly?.sourceId),
     ...(manifest.bki ? [manifest.bki] : []),
     ...(manifest.external ?? []),
   ];
@@ -288,6 +289,16 @@ export function parseAuthoritativeQuarterlyText(input: {
   const analysisInn = normalizedInn(input.analysisInn);
   const reportInn = normalizedInn(report.companyInn);
   if (reportInn && reportInn !== analysisInn) throw new Error("ИНН квартальной отчётности не совпадает с компанией");
+  return report;
+}
+
+export function parseAuthoritativeBfoText(input: { text: string; fileName: string; analysisInn: string }): QuarterlyFinancialReport {
+  const years = [...new Set([...input.text.matchAll(/(?:за\s+|на\s+31[.]12[.])(20\d{2})/gi)].map(match => match[1]))];
+  if (years.length > 1) throw new Error("Файл содержит несколько годовых периодов. Загрузите каждый год отдельным файлом с одним столбцом значений.");
+  const report = parseQuarterlyReportText(input.text, input.fileName);
+  if (!report.companyInn) throw new Error("В бухгалтерской отчётности не найден ИНН компании.");
+  if (normalizedInn(report.companyInn) !== normalizedInn(input.analysisInn)) throw new Error("ИНН бухгалтерской отчётности не совпадает с компанией");
+  if (report.financialMetadataV2?.period.kind !== "ANNUAL") throw new Error("Укажите годовой период в файле, например: за 2025 год. Для промежуточных данных используйте квартальную отчётность.");
   return report;
 }
 

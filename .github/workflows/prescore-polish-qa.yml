@@ -1,0 +1,32 @@
+name: Prescore Product Polish QA
+on:
+  push:
+    branches: [prescore-polish-v1]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: prescore-polish-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  sources:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with: {node-version: '22'}
+      - run: npm ci
+      - run: npm run typecheck
+      - run: node --experimental-strip-types --test tests/polish-source-enrichment.test.mjs tests/client-source-workflow.test.mjs tests/source-authority.test.mjs tests/bank-statements.test.mjs tests/credit-history.test.mjs
+      - run: npx --no-install playwright install --with-deps chromium
+      - run: node scripts/qa/polish-source-browser.mjs "$RUNNER_TEMP/polish-sources"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: always()
+        with:
+          name: polish-sources-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/polish-sources/*.json
+            ${{ runner.temp }}/polish-sources/*.png
+          if-no-files-found: error
