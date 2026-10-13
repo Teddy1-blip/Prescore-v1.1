@@ -20,3 +20,6 @@ No scoring formulas, economics or entitlement rules changed. Milestone commit re
 Format boundaries (not hidden support): bank analytical upload remains 1C TXT only; no OCR; BFO annual uploads use one explicit period per file. Generic documents are a separate storage flow. No live provider, deployment or production mutation was used to obtain evidence.
 
 | P012 | HIGH | Visual review at 390px: inherited mobile table rules hide headers and force 680px block rows inside scroller; no page overflow but content clipped | Restore semantic table display/headers, wrapping and focusable internal scrolling | Source browser asserts computed table/header display at six sizes; screenshot review | Fix requires final HEAD acceptance |
+
+| QA01 | ACCEPTANCE_GATE | Native zoom searched the new window title before X11 had published it | Bounded xdotool --sync title wait, same native DPR=2 assertions retained | Final source browser | Pending superseding run |
+| QA02 | ACCEPTANCE_GATE | Container preparation returned run --rm without useful diagnostics; Unix-socket readiness could precede TCP startup | Require TCP readiness; persist redacted failure diagnostic while retaining all container assertions | Final container smoke | Pending superseding run |
