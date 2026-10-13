@@ -23,3 +23,5 @@ Format boundaries (not hidden support): bank analytical upload remains 1C TXT on
 
 | QA01 | ACCEPTANCE_GATE | Native zoom searched the new window title before X11 had published it | Bounded xdotool --sync title wait, same native DPR=2 assertions retained | Final source browser | Pending superseding run |
 | QA02 | ACCEPTANCE_GATE | Container preparation returned run --rm without useful diagnostics; Unix-socket readiness could precede TCP startup | Require TCP readiness; persist redacted failure diagnostic while retaining all container assertions | Final container smoke | Pending superseding run |
+
+| P013 | HIGH | With one annual and one interim report, 16 unavailable trend rows repeat unknown warnings across several mobile screens | Show calculated changes immediately (including zero); group unavailable changes behind one explanation and a closed keyboard disclosure | Actual-file financial presentation assertions and six-size browser disclosure checks | Requires final HEAD acceptance |

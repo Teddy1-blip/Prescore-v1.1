@@ -49,6 +49,9 @@ export function FinancialStatements({model}:{model:WorkspaceModelV1}){
  const r=model.full?.report;
  if(!r)return <FullAccessNotice model={model}/>;
  const a=r.financialAnalysis;
+ const hasChange=(t:NonNullable<typeof a>['trends'][number])=>[t.absolute,t.relative].some(m=>m.value!==null&&m.status!=='UNKNOWN'&&m.status!=='NOT_APPLICABLE');
+ const availableTrends=a?.trends.filter(hasChange)??[],unavailableTrends=a?.trends.filter(t=>!hasChange(t))??[];
+ const trendTable=(trends:NonNullable<typeof a>['trends'])=><div className="pc-table-scroll" tabIndex={0} aria-label="Финансовые тренды"><table><thead><tr><th>Показатель / периоды</th><th>Изменение суммы</th><th>Относительное изменение</th><th>Сопоставимость</th></tr></thead><tbody>{trends.map((t,i)=><tr key={i}><th>{t.label}<small>{date(a?.history.find(p=>p.id===t.previousId)?.period.asOf)} → {date(a?.history.find(p=>p.id===t.currentId)?.period.asOf)}</small></th><td>{numeric(t.absolute.value,t.absolute.status,t.absolute.unit)}<small>{label(t.absolute.status)}</small><Warnings items={t.absolute.warnings}/></td><td>{numeric(t.relative.value,t.relative.status,t.relative.unit)}<small>{label(t.relative.status)}</small><Warnings items={t.relative.warnings}/></td><td>{t.comparability==='COMPARABLE_ANNUAL_YOY'?'Год к году':t.comparability==='COMPARABLE_INTERIM_YOY'?'Промежуточный период':'Сопоставимость ограничена'}</td></tr>)}</tbody></table></div>;
  const conclusions=r.detailedSections.filter(s=>/financial|финанс|отчёт|отчет|капитал|ликвид|рентаб/i.test(s.id+' '+s.title));
  return <>
   <Panel title="Финансовая отчётность">
@@ -67,7 +70,10 @@ export function FinancialStatements({model}:{model:WorkspaceModelV1}){
    <Warnings items={[...(index===0?a.warnings:[]),...p.quality.warnings]}/>
    <div className="pc-metric-groups">{p.groups.map(g=><details className="pc-metric-group" key={g.key}><summary>{g.title}<span>{g.metrics.length} показателей</span></summary><MetricTable metrics={g.metrics}/></details>)}</div>
   </section>)}
-  {!!a?.trends.length&&<Panel title="Изменения по сопоставимым периодам"><div className="pc-table-scroll" tabIndex={0} aria-label="Финансовые тренды"><table><thead><tr><th>Показатель / периоды</th><th>Изменение суммы</th><th>Относительное изменение</th><th>Сопоставимость</th></tr></thead><tbody>{a.trends.map((t,i)=><tr key={i}><th>{t.label}<small>{date(a.history.find(p=>p.id===t.previousId)?.period.asOf)} → {date(a.history.find(p=>p.id===t.currentId)?.period.asOf)}</small></th><td>{numeric(t.absolute.value,t.absolute.status,t.absolute.unit)}<small>{label(t.absolute.status)}</small><Warnings items={t.absolute.warnings}/></td><td>{numeric(t.relative.value,t.relative.status,t.relative.unit)}<small>{label(t.relative.status)}</small><Warnings items={t.relative.warnings}/></td><td>{t.comparability==='COMPARABLE_ANNUAL_YOY'?'Год к году':t.comparability==='COMPARABLE_INTERIM_YOY'?'Промежуточный период':'Сопоставимость ограничена'}</td></tr>)}</tbody></table></div></Panel>}
+  {!!a?.trends.length&&<Panel title="Изменения по сопоставимым периодам">
+   {!!availableTrends.length&&trendTable(availableTrends)}
+   {!!unavailableTrends.length&&<><p className="pc-muted">Для {availableTrends.length?'остальных изменений':'оценки динамики'} нужны сопоставимые периоды и значения обоих периодов. Добавьте недостающую отчётность или уточните её показатели.</p><details className="pc-trend-limitations"><summary>Какие изменения пока нельзя оценить ({unavailableTrends.length})</summary>{trendTable(unavailableTrends)}</details></>}
+  </Panel>}
 
   {!!conclusions.length&&<Panel title="Финансовые выводы текущего анализа">{conclusions.length?conclusions.map(s=><section className="pc-factor-section" key={s.id}><h3>{s.title}</h3><FactorRows model={model} items={s.factors}/></section>):<p className="pc-muted">Отдельные финансовые выводы не выделены в текущей версии анализа.</p>}</Panel>}
  </>;
