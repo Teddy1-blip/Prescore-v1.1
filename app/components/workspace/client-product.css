@@ -174,3 +174,5 @@
 .pc-request-form label{display:grid;gap:6px;font-size:12px;min-width:0}
 .pc-request-form button{justify-self:start}
 @media(max-width:560px){.pc-request-form fieldset{grid-template-columns:1fr}}
+
+.pc-chart-data{margin-top:20px}.pc-chart-data caption{text-align:left;padding:12px 0;color:var(--pc-muted)}.pc-bars i.negative{background:#a32d39}

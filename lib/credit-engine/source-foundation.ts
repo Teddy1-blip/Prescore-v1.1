@@ -268,6 +268,7 @@ export function parseAuthoritativeCreditHistoryText(input: {
   const report = parseCreditHistoryText(input.text, input.fileName);
   const analysisInn = normalizedInn(input.analysisInn);
   const subjectInn = normalizedInn(report.subjectInn);
+  if (report.subjectType === "Юридическое лицо" && !subjectInn) throw new Error("В корпоративной кредитной истории не найден ИНН компании.");
   if (report.subjectType === "Юридическое лицо" && subjectInn && subjectInn !== analysisInn) {
     throw new Error("ИНН корпоративного БКИ не совпадает с компанией");
   }
@@ -288,6 +289,7 @@ export function parseAuthoritativeQuarterlyText(input: {
   const report = parseQuarterlyReportText(input.text, input.fileName);
   const analysisInn = normalizedInn(input.analysisInn);
   const reportInn = normalizedInn(report.companyInn);
+  if (!reportInn) throw new Error("В квартальной отчётности не найден ИНН компании.");
   if (reportInn && reportInn !== analysisInn) throw new Error("ИНН квартальной отчётности не совпадает с компанией");
   return report;
 }

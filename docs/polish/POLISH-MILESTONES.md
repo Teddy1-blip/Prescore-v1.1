@@ -6,4 +6,8 @@ M1 source implementation: BFO client upload, financial history/replacement, conc
 
 M2: source inventory now uses the exact canonical source set, including cached open BFO. Overview avoids repeated unknown labels without hiding limitations. Existing shell and analysis context retained.
 
-M3–M7: pending. Final PASS is prohibited until exact-SHA full source/browser/RC1 acceptance completes.
+M2 commit: 161e40f95218105ec2f4ff8abaa90f9eac29529c; workspace model/review tests 6/6.
+
+M3: NBKI published maturity/next-payment dates retained, explicit zero overdue distinguished from missing; SB missing balance remains null. Actual corporate PDF exercises known and incomplete obligations through persistence and canonical CLIENT/BROKER. Financial tables expose scale limitations; cash-flow chart has accurate coverage labels and keyboard-accessible numeric table.
+
+M4–M7: pending. Final PASS is prohibited until exact-SHA full source/browser/RC1 acceptance completes.

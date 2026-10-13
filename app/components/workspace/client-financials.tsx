@@ -6,6 +6,7 @@ import {label,sourceLabel} from './credit-depth';
 import {FactorRows,Panel} from './client-insights';
 
 const messages:Record<string,string>={
+ SCALE_UNCONFIRMED:'Единица измерения не подтверждена. Добавьте отчёт с указанием рублей, тысяч или миллионов рублей.',
  SOURCE_FIELD_MISSING:'В источнике отсутствует необходимое поле.',
  MISSING_NOT_ZERO:'Отсутствующие значения не приравнены к нулю.',
  ZERO_DENOMINATOR:'Расчёт неприменим при нулевой базе.',
@@ -41,7 +42,7 @@ export function numeric(value:number|string|null,status:string,unit:string){
 }
 
 function MetricTable({metrics}:{metrics:PublicFinancialMetric[]}){
- return <div className="pc-table-scroll"><table><thead><tr><th>Показатель</th><th>Значение</th><th>Качество и период</th></tr></thead><tbody>{metrics.map(m=><tr key={m.key}><th scope="row">{m.label}</th><td>{numeric(m.value,m.status,m.unit)}</td><td>{label(m.status)} · {label(m.confidence)} · {label(m.origin)}<small>{m.periodFrom||m.periodTo?date(m.periodFrom)+' — '+date(m.periodTo):date(m.asOf)}</small><Warnings items={m.warnings}/></td></tr>)}</tbody></table></div>;
+ return <div className="pc-table-scroll" tabIndex={0} aria-label="Финансовые показатели"><table><thead><tr><th>Показатель</th><th>Значение</th><th>Качество и период</th></tr></thead><tbody>{metrics.map(m=><tr key={m.key}><th scope="row">{m.label}</th><td>{numeric(m.value,m.status,m.unit)}</td><td>{label(m.status)} · {label(m.confidence)} · {label(m.origin)}<small>{m.periodFrom||m.periodTo?date(m.periodFrom)+' — '+date(m.periodTo):date(m.asOf)}</small><Warnings items={m.warnings}/></td></tr>)}</tbody></table></div>;
 }
 
 export function FinancialStatements({model}:{model:WorkspaceModelV1}){
@@ -51,7 +52,7 @@ export function FinancialStatements({model}:{model:WorkspaceModelV1}){
  const conclusions=r.detailedSections.filter(s=>/financial|финанс|отчёт|отчет|капитал|ликвид|рентаб/i.test(s.id+' '+s.title));
  return <>
   <Panel title="Финансовая отчётность">
-   <p>Показатели рассчитаны сервером по полученной БФО и квартальной отчётности. Денежный поток по выпискам не заменяет бухгалтерскую выручку.</p>
+   <p>Показатели основаны на бухгалтерской и квартальной отчётности. Денежный поток по выпискам не заменяет бухгалтерскую выручку.</p>
    {!a?.history.length&&<div className="pc-empty-inline"><h3>Отчётность для финансового анализа не обработана</h3><p>Отсутствие показателей не означает нулевую выручку, прибыль или отсутствие активов.</p></div>}
   </Panel>
   {a?.history.map((p,index)=><section className="pc-panel pc-financial-period" key={p.id}>
@@ -68,7 +69,7 @@ export function FinancialStatements({model}:{model:WorkspaceModelV1}){
   </section>)}
   {!!a?.trends.length&&<Panel title="Изменения по сопоставимым периодам"><div className="pc-table-scroll" tabIndex={0} aria-label="Финансовые тренды"><table><thead><tr><th>Показатель / периоды</th><th>Изменение суммы</th><th>Относительное изменение</th><th>Сопоставимость</th></tr></thead><tbody>{a.trends.map((t,i)=><tr key={i}><th>{t.label}<small>{date(a.history.find(p=>p.id===t.previousId)?.period.asOf)} → {date(a.history.find(p=>p.id===t.currentId)?.period.asOf)}</small></th><td>{numeric(t.absolute.value,t.absolute.status,t.absolute.unit)}<small>{label(t.absolute.status)}</small><Warnings items={t.absolute.warnings}/></td><td>{numeric(t.relative.value,t.relative.status,t.relative.unit)}<small>{label(t.relative.status)}</small><Warnings items={t.relative.warnings}/></td><td>{t.comparability==='COMPARABLE_ANNUAL_YOY'?'Год к году':t.comparability==='COMPARABLE_INTERIM_YOY'?'Промежуточный период':'Сопоставимость ограничена'}</td></tr>)}</tbody></table></div></Panel>}
 
-  <Panel title="Финансовые выводы текущего анализа">{conclusions.length?conclusions.map(s=><section className="pc-factor-section" key={s.id}><h3>{s.title}</h3><FactorRows model={model} items={s.factors}/></section>):<p className="pc-muted">Отдельные финансовые выводы не выделены в текущей версии анализа.</p>}</Panel>
+  {!!conclusions.length&&<Panel title="Финансовые выводы текущего анализа">{conclusions.length?conclusions.map(s=><section className="pc-factor-section" key={s.id}><h3>{s.title}</h3><FactorRows model={model} items={s.factors}/></section>):<p className="pc-muted">Отдельные финансовые выводы не выделены в текущей версии анализа.</p>}</Panel>}
  </>;
 }
 

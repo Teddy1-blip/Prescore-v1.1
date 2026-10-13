@@ -135,13 +135,10 @@ function dateValue(value?: string | null) {
   return "";
 }
 
-function lineValue(block: string, label: string, nextLabel: string) {
-  const pattern = new RegExp(`${label}\\s*(.*?)\\s{2,}${nextLabel}`, "i");
-  return block.match(pattern)?.[1]?.trim() ?? "";
-}
-
-function inlineValue(block: string, label: string) {
-  return block.match(new RegExp(`(?:^|\\n)\\s*${label}\\s*([^\\n]*)`, "i"))?.[1]?.trim() ?? "";
+// NBKI can place labelled fields on one row or separate PDF text lines.
+function nbkiField(block: string, label: string) {
+  const labels = "Финальн\\.платеж(?: %%)?|Вид|Размер/лимит|Открыт|Всего выплачено|Полная стоимость|Статус|Задолж-сть|Просрочено|След\\.платеж|Дата след\\.платежа|Кредитор|Счет|Отношение";
+  return block.match(new RegExp(`(?:^|\\n|[ \\t]+)${label}[ \\t]*([^\\n]*?)(?=[ \\t]+(?:${labels}):|\\n|$)`, "i"))?.[1]?.trim() ?? "";
 }
 
 function moneyTokens(value: string) {
@@ -189,7 +186,7 @@ function parseSbObligation(block: string, index: number): CreditObligation | nul
   const payoutSection = block.match(/Выплатили[\s\S]*?Полная стоимость кредита/i)?.[0] ?? "";
   const payouts = moneyTokens(payoutSection);
   const totalOutstanding = payouts.length >= 2 ? payouts[1] : null;
-  const outstandingPrincipal = totalOutstanding === null ? 0 : payouts.length >= 3 ? payouts[payouts.length - 1] : totalOutstanding;
+  const outstandingPrincipal = totalOutstanding === null ? null : payouts.length >= 3 ? payouts[payouts.length - 1] : totalOutstanding;
   const costSection = block.match(/Полная стоимость кредита[\s\S]*?Текущая просрочка/i)?.[0] ?? "";
   const rate = numberValue(costSection.match(/([\d]+[.,]\d+)\s*%\s*годовых/i)?.[1]);
   const costAmounts = moneyTokens(costSection);
@@ -299,18 +296,20 @@ function maxDelinquencyFromNbki(block: string) {
 }
 
 function parseNbkiObligation(block: string, index: number): CreditObligation | null {
-  const creditor = lineValue(block, "Кредитор:", "Финальн\\.платеж:") || inlineValue(block, "Кредитор:") || "Кредитор не определён";
-  const account = lineValue(block, "Счет:", "Финальн\\.платеж %%:") || inlineValue(block, "Счет:") || "";
+  const creditor = nbkiField(block, "Кредитор:") || "Кредитор не определён";
+  const account = nbkiField(block, "Счет:") || "";
   if (!creditor && !account) return null;
-  const kind = lineValue(block, "Вид:", "Размер\\/лимит:") || inlineValue(block, "Вид:");
-  const role = lineValue(block, "Отношение:", "Полная стоимость:") || inlineValue(block, "Отношение:") || "Принципал";
-  const limit = numberValue(lineValue(block, "Размер\\/лимит:", "Открыт:") || inlineValue(block, "Размер\\/лимит:"));
-  const rate = numberValue(lineValue(block, "Полная стоимость:", "Статус:") || inlineValue(block, "Полная стоимость:"));
-  const opened = lineValue(block, "Открыт:", "Всего выплачено:") || inlineValue(block, "Открыт:");
-  const status = lineValue(block, "Статус:", "Задолж-сть:") || inlineValue(block, "Статус:") || "Нет данных";
-  const debt = numberValue(lineValue(block, "Задолж-сть:", "Просрочено:") || inlineValue(block, "Задолж-сть:"));
-  const overdue = numberValue(lineValue(block, "Просрочено:", "След\\.платеж:") || inlineValue(block, "Просрочено:"));
-  const nextPayment = numberValue(inlineValue(block, "След\\.платеж:"));
+  const kind = nbkiField(block, "Вид:");
+  const role = nbkiField(block, "Отношение:") || "Принципал";
+  const limit = numberValue(nbkiField(block, "Размер\\/лимит:"));
+  const rate = numberValue(nbkiField(block, "Полная стоимость:"));
+  const opened = nbkiField(block, "Открыт:");
+  const status = nbkiField(block, "Статус:") || "Нет данных";
+  const debt = numberValue(nbkiField(block, "Задолж-сть:"));
+  const overdue = numberValue(nbkiField(block, "Просрочено:"));
+  const nextPayment = numberValue(nbkiField(block, "След\\.платеж:"));
+  const nextPaymentDate = dateValue(nbkiField(block, "Дата след\\.платежа:"));
+  const maturity = dateValue(nbkiField(block, "Финальн\\.платеж:"));
   const guaranteeSection = block.match(/Банковские гарантии[\s\S]*?(?=Задолженность на дату|Просрочки \()/i)?.[0] ?? "";
   const guaranteeAmount = numberValue(guaranteeSection.match(/Сумма:\s*([^\n]+)/i)?.[1]);
   const guaranteeUntil = guaranteeSection.match(/Действ\.до:\s*([^\n]+)/i)?.[1] ?? "";
@@ -325,7 +324,7 @@ function parseNbkiObligation(block: string, index: number): CreditObligation | n
     status,
     role,
     openedAt: dateValue(opened),
-    scheduledCloseAt: dateValue(guaranteeUntil),
+    scheduledCloseAt: dateValue(guaranteeUntil) || maturity,
     updatedAt: dateValue(block.match(/Последн\.обновление:\s*([^\n]+)/i)?.[1]),
     originalAmount: limit ?? guaranteeAmount ?? suretyAmount,
     creditLimit: limit,
@@ -333,12 +332,16 @@ function parseNbkiObligation(block: string, index: number): CreditObligation | n
     totalOutstanding: debt,
     monthlyPayment: nextPayment,
     nextPaymentAmount: nextPayment,
-    nextPaymentDate: "",
+    nextPaymentDate,
     annualRate: rate,
     rateLabel: rate === null ? "Ставка не указана" : "Полная стоимость",
-    overdueAmount: overdue ?? (maxDays === 0 ? 0 : null),
+    overdueAmount: overdue,
     maxDelinquencyDays: maxDays,
-    fieldProvenance: maxDays === 0 ? {maxDelinquencyDays:{origin:"REPORTED",value:0,reference:"Explicit bureau payment-history codes/count"}} : {},
+    fieldProvenance: {
+      ...(maxDays === 0 ? {maxDelinquencyDays:{origin:"REPORTED" as const,value:0,reference:"Explicit bureau payment-history codes/count"}} : {}),
+      ...(overdue === 0 ? {overdueAmount:{origin:"REPORTED" as const,value:0,reference:"NBKI Просрочено: 0"}} : {}),
+      ...(debt === 0 ? {principalOutstanding:{origin:"REPORTED" as const,value:0,reference:"NBKI Задолж-сть: 0"},totalOutstanding:{origin:"REPORTED" as const,value:0,reference:"NBKI Задолж-сть: 0"}} : {}),
+    },
     paymentQuality: delinquencyQuality(maxDays, overdue),
     collateral: "",
     guaranteeAmount,

@@ -23,3 +23,12 @@ export function financialText(inn,{period='2025 год',revenue=1200,profit=120,
 Чистая прибыль 2400 ${profit}`;}
 export function financialFile(inn,ext='csv',options={}){const text=financialText(inn,options);const bytes=ext==='pdf'?syntheticPdf(text.split('\n')):ext==='xlsx'?zipSync({'xl/worksheets/sheet1.xml':strToU8('<worksheet><sheetData>'+text.split('\n').map((line,i)=>`<row r="${i+1}"><c t="inlineStr"><is><t>${line}</t></is></c></row>`).join('')+'</sheetData></worksheet>')}):text;return new File([bytes],'financial.'+ext);}
 export function bkiFile(inn){return new File([syntheticPdf(['Субъект: Кредитная история юридического лица','ИНН','Номер',inn,'Сводка Счета','Все счета Всего: 0','При наличии вопросов обратитесь в НБКИ','Предоставлен 02-08-2026'])],'credit-history.pdf',{type:'application/pdf'});}
+
+export function corporateBkiFile(inn,{debt='120000',overdue='0',payment='9000',reportDate='02-08-2026',maturity='01-01-2028'}={}){return new File([syntheticPdf([
+ 'Субъект: Кредитная история юридического лица','Наименование организации','ООО ТЕСТ','ИНН','Номер',inn,
+ 'Сводка Счета','Все счета Всего: 1','Открытых: 1','Субъект: Кредитная история юридического лица',
+ 'Счет','Вид: Кредитная линия','Отношение: Заёмщик',`Кредитор: Тест Банк  Финальн.платеж: ${maturity}`,
+ 'Счет: LOAN-1','Размер/лимит: 200000','Открыт: 01-01-2025','Полная стоимость: 19.5','Статус: Действующий',
+ `Задолж-сть: ${debt}`,`Просрочено: ${overdue}  След.платеж: ${payment}`,'Дата след.платежа: 01-11-2026',
+ 'Последн.обновление: 01-08-2026','Просрочки (0 просроч.платежей)','При наличии вопросов обратитесь в НБКИ',`Предоставлен ${reportDate}`
+])],'corporate-credit-history.pdf',{type:'application/pdf'});}
