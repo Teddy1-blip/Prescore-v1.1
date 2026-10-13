@@ -72,6 +72,15 @@ export async function loadWorkspaceModelV1(analysisId: string, dependencies: Wor
     const report: ClientReportModelV1 = publicCanonicalModel(canonical.model, canonical);
     return {
       ...base,
+      // Publish the same source set that the canonical calculation actually read,
+      // including cached company BFO. The saved bank-only manifest is not enough.
+      basic: { ...basic, sources: { ...basic.sources, availability:
+        [...new Map(canonical.sourceObservations.map(source => [source.sourceId, source])).values()].map(source => ({
+          source: source.sourceId.startsWith("client-request-") ? "CLIENT_DECLARATION" :
+            ({ BANK_STATEMENT: "BANK_STATEMENTS", BFO: "FINANCIAL_STATEMENTS", QUARTERLY: "QUARTERLY_REPORT", BKI: "CREDIT_HISTORY" } as Record<string,string>)[source.sourceType] ?? "EXTERNAL_SOURCE",
+          status: source.status, periodFrom: source.periodFrom, periodTo: source.periodTo,
+        }))
+      } },
       state: "READY_FULL",
       fullAvailability: "READY",
       full: {

@@ -20,6 +20,9 @@ test('review cases preserve canonical values, warnings and distinct source compl
   assert.equal(model.state,'READY_FULL',suffix);
   assert.deepEqual(model.full.canonical.prescoreIndex,canonical.prescoreIndex,suffix);
   assert.deepEqual(model.full.canonical.debtCapacity,canonical.debtCapacity,suffix);
+  for(const source of canonical.sourceObservations.filter(s=>s.sourceType==='BFO')){
+   assert.ok(model.basic.sources.availability.some(s=>s.source==='FINANCIAL_STATEMENTS'&&s.status===source.status&&s.periodFrom===source.periodFrom&&s.periodTo===source.periodTo),'BFO source matches canonical '+suffix);
+  }
   const html=renderToStaticMarkup(React.createElement(Home,{model})),visible=text(html);
   assert.ok(visible.includes(model.full.report.hero.headline),suffix);
   assert.ok(visible.includes(model.full.report.index.status),suffix);
