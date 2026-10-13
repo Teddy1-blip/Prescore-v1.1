@@ -1,8 +1,7 @@
 "use client";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 export function SourceUpload({analysisId,kind,saved}:{analysisId:string;kind:'BKI'|'QUARTERLY'|'BFO';saved:()=>void|Promise<void>}) {
- const pending=useRef(false),mounted=useRef(true);
- useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
+ const pending=useRef(false);
  const [busy,setBusy]=useState(false),[message,setMessage]=useState(''),[failed,setFailed]=useState(false),[fileName,setFileName]=useState('');
  async function submit(e:FormEvent<HTMLFormElement>){
   e.preventDefault();if(pending.current)return;pending.current=true;
@@ -11,9 +10,9 @@ export function SourceUpload({analysisId,kind,saved}:{analysisId:string;kind:'BK
    const data=new FormData(form);data.set('analysisId',analysisId);data.set('sourceType',kind);
    const r=await fetch('/api/source-documents',{method:'POST',body:data});const body=await r.json();
    if(!r.ok)throw Error(body.error||'Документ не сохранён');
-   if(!mounted.current)return;form.reset();setFileName('');setMessage('Документ сохранён. Обновляем анализ…');await saved();if(mounted.current)setMessage('Документ добавлен. Финансовая картина обновлена.');
-  }catch(e){if(mounted.current){setFailed(true);setMessage(e instanceof Error?e.message:'Ошибка загрузки');}}
-  finally{pending.current=false;if(mounted.current)setBusy(false);}
+   if(!form.isConnected)return;form.reset();setFileName('');setMessage('Документ сохранён. Обновляем анализ…');await saved();if(form.isConnected)setMessage('Документ добавлен. Финансовая картина обновлена.');
+  }catch(e){if(form.isConnected){setFailed(true);setMessage(e instanceof Error?e.message:'Ошибка загрузки');}}
+  finally{pending.current=false;if(form.isConnected)setBusy(false);}
  }
  const accept=kind==='BKI'?'.pdf':'.pdf,.xlsx,.csv';
  return <form onSubmit={submit} className="ws-source-upload" id={'source-'+kind.toLowerCase()} aria-busy={busy} aria-label={kind==='BKI'?'Добавить кредитную историю':kind==='BFO'?'Добавить бухгалтерскую отчётность':'Добавить квартальную отчётность'}>

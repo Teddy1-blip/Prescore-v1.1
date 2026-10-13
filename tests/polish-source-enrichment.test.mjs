@@ -31,3 +31,20 @@ test('corporate credit PDF preserves published balances, dates and overdue; part
   assert.deepEqual(await model(rt,other),partial);assert.deepEqual((await model(rt,other,rt.broker)).full,partial.full);
  }finally{await rt.close();}
 });
+
+test('current FAILED financial envelope supersedes READY upload history without losing other years',async()=>{
+ const rt=await createWorkspaceRuntime();try{
+  const a=await create(rt);
+  for(const period of ['2024 год','2025 год'])assert.equal((await upload(rt,a,'BFO',financialFile(a.companyInn,'csv',{period}))).status,200);
+  const persisted=await saved(rt,a),before=structuredClone(persisted);
+  persisted.sourceManifest.bfo.status='FAILED';
+  await rt.db.prepare('UPDATE analyses SET payload = ? WHERE id = ?').bind(JSON.stringify(persisted),a.id).run();
+  const current=await model(rt,a);assert.equal(current.full.report.financialAnalysis.history.length,1);assert.equal(current.full.report.financialAnalysis.history[0].period.to,'2024-12-31');
+  assert.ok(current.basic.sources.availability.some(s=>s.source==='FINANCIAL_STATEMENTS'&&s.status==='FAILED'));
+  const {reconciliationForAnalysis}=rt.load('lib/credit-engine/reconciliation/integration.ts');
+  const facts=reconciliationForAnalysis(persisted).reconciliationV1.facts;
+  const failed=facts.find(f=>f.semanticCode==='REVENUE'&&f.period.to==='2025-12-31');assert.equal(failed.value,null);assert.equal(failed.status,'UNKNOWN');
+  assert.equal(facts.find(f=>f.semanticCode==='REVENUE'&&f.period.to==='2024-12-31').value,1200000);
+  assert.equal(before.sourceManifest.financialUploads.length,2);assert.deepEqual((await model(rt,a,rt.broker)).full,current.full);assert.deepEqual(await model(rt,a),current);
+ }finally{await rt.close();}
+});
