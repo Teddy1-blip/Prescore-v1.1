@@ -1,21 +1,22 @@
 "use client";
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 export function SourceUpload({analysisId,kind,saved}:{analysisId:string;kind:'BKI'|'QUARTERLY'|'BFO';saved:()=>void|Promise<void>}) {
- const pending=useRef(false);
- const [busy,setBusy]=useState(false),[message,setMessage]=useState(''),[fileName,setFileName]=useState('');
+ const pending=useRef(false),mounted=useRef(true);
+ useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
+ const [busy,setBusy]=useState(false),[message,setMessage]=useState(''),[failed,setFailed]=useState(false),[fileName,setFileName]=useState('');
  async function submit(e:FormEvent<HTMLFormElement>){
   e.preventDefault();if(pending.current)return;pending.current=true;
-  const form=e.currentTarget;setBusy(true);setMessage('');
+  const form=e.currentTarget;setBusy(true);setMessage('');setFailed(false);
   try{
    const data=new FormData(form);data.set('analysisId',analysisId);data.set('sourceType',kind);
    const r=await fetch('/api/source-documents',{method:'POST',body:data});const body=await r.json();
    if(!r.ok)throw Error(body.error||'Документ не сохранён');
-   form.reset();setFileName('');setMessage('Документ сохранён. Обновляем анализ…');await saved();setMessage('Документ добавлен. Финансовая картина обновлена.');
-  }catch(e){setMessage(e instanceof Error?e.message:'Ошибка загрузки');}
-  finally{pending.current=false;setBusy(false);}
+   if(!mounted.current)return;form.reset();setFileName('');setMessage('Документ сохранён. Обновляем анализ…');await saved();if(mounted.current)setMessage('Документ добавлен. Финансовая картина обновлена.');
+  }catch(e){if(mounted.current){setFailed(true);setMessage(e instanceof Error?e.message:'Ошибка загрузки');}}
+  finally{pending.current=false;if(mounted.current)setBusy(false);}
  }
  const accept=kind==='BKI'?'.pdf':'.pdf,.xlsx,.csv';
- return <form onSubmit={submit} className="ws-source-upload" aria-label={kind==='BKI'?'Добавить кредитную историю':kind==='BFO'?'Добавить бухгалтерскую отчётность':'Добавить квартальную отчётность'}>
+ return <form onSubmit={submit} className="ws-source-upload" id={'source-'+kind.toLowerCase()} aria-busy={busy} aria-label={kind==='BKI'?'Добавить кредитную историю':kind==='BFO'?'Добавить бухгалтерскую отчётность':'Добавить квартальную отчётность'}>
   <h2>{kind==='BKI'?'Добавить кредитную историю':kind==='BFO'?'Добавить бухгалтерскую отчётность':'Добавить квартальную отчётность'}</h2>
   <p>{kind==='BKI'?'PDF с кредитной историей. Обязательства появятся после проверки источника.':kind==='BFO'?'Текстовый PDF, XLSX или CSV: ИНН, годовой период, единица измерения и строки отчётности. Один период в файле; другие годы добавляйте отдельными файлами. Повторная загрузка за тот же период обновит его.':'PDF, XLSX или CSV за промежуточный период. Укажите в файле период и единицу измерения.'}</p>
   {kind==='BKI'&&<label>Кому принадлежит отчёт<select name="relationship"><option>Компания-заёмщик</option><option>ИП-заёмщик</option><option>Собственник</option><option>Руководитель</option><option>Поручитель</option><option>Не указано</option></select></label>}
@@ -28,14 +29,14 @@ export function SourceUpload({analysisId,kind,saved}:{analysisId:string;kind:'BK
   </label>
   <label className="ws-consent"><input type="checkbox" required/>Подтверждаю право передать документ и согласие на обработку данных.</label>
   <button disabled={busy} className="ws-primary">{busy?'Обрабатываем…':'Загрузить документ'}</button>
-  {message&&<p role="status">{message}</p>}
+  {message&&<p role={failed?'alert':'status'}>{message}</p>}
  </form>;
 }
 type Profile={fetchedAt?:string;source?:string;company?:{name?:string;ogrn?:string;status?:string;registrationDate?:string;okved?:string;region?:string};contracts?:{items?:Array<{number?:string;subject?:string;amount?:number}>};error?:string};
-export function CompanyData({id,inn,updated}:{id:string;inn:string;updated:()=>void}) {
+export function CompanyData({id,inn,updated}:{id:string;inn:string;updated:()=>void|Promise<void>}) {
  const [data,setData]=useState<Profile|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false);
- async function load(){setBusy(true);setError('');try{const r=await fetch(`/api/checko?inn=${encodeURIComponent(inn)}&analysisId=${encodeURIComponent(id)}`);const body=await r.json();if(!r.ok)throw Error(body.error||'Источник недоступен');setData(body);}catch(e){setError(e instanceof Error?e.message:'Источник недоступен');}finally{setBusy(false);}}
- return <section className="ws-section"><h2>Компания и открытая отчётность</h2><p>Регистрационные сведения и БФО из официальных источников. Кредитная интерпретация доступна в подробном анализе.</p><button disabled={busy} onClick={load}>{busy?'Получаем сведения…':'Получить открытые сведения'}</button>{!data&&<p>Открытые сведения в этом просмотре ещё не запрошены. Получение может обратиться к внешнему сервису.</p>}{data?.fetchedAt&&<p>Сведения получены: {data.fetchedAt.slice(0,10)}. Дата получения не гарантирует актуальность каждого факта.</p>}{error&&<p role="alert">{error}</p>}{data?.company&&<><dl className="ws-detail-list">{[['Компания',data.company.name],['ОГРН',data.company.ogrn],['Статус',data.company.status],['Регистрация',data.company.registrationDate],['Деятельность',data.company.okved],['Регион',data.company.region]].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value||'Не указано'}</dd></div>)}</dl><button onClick={updated}>Обновить финансовую картину по этим данным</button></>}{data?.contracts?.items?.map((x,i)=><p key={i}>Контракт {x.number} · {x.subject}</p>)}</section>;
+ async function load(){setBusy(true);setError('');try{const r=await fetch(`/api/checko?inn=${encodeURIComponent(inn)}&analysisId=${encodeURIComponent(id)}`);const body=await r.json();if(!r.ok)throw Error(body.error||'Источник недоступен');setData(body);await updated();}catch(e){setError(e instanceof Error?e.message:'Источник недоступен');}finally{setBusy(false);}}
+ return <section className="ws-section"><h2>Компания и открытая отчётность</h2><p>Регистрационные сведения и БФО из официальных источников. Кредитная интерпретация доступна в подробном анализе.</p><button disabled={busy} onClick={load}>{busy?'Получаем сведения…':'Получить открытые сведения'}</button>{!data&&<p>Открытые сведения в этом просмотре ещё не запрошены. Получение может обратиться к внешнему сервису.</p>}{data?.fetchedAt&&<p>Сведения получены: {data.fetchedAt.slice(0,10)}. Дата получения не гарантирует актуальность каждого факта.</p>}{error&&<p role="alert">{error}</p>}{data?.company&&<><dl className="ws-detail-list">{[['Компания',data.company.name],['ОГРН',data.company.ogrn],['Статус',data.company.status],['Регистрация',data.company.registrationDate],['Деятельность',data.company.okved],['Регион',data.company.region]].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value||'Не указано'}</dd></div>)}</dl></>}{data?.contracts?.items?.map((x,i)=><p key={i}>Контракт {x.number} · {x.subject}</p>)}</section>;
 }
 
 export function RecipientApplications({analysis,saved}:{analysis:{id:string;companyName:string;companyInn:string};saved:()=>void|Promise<void>}) {

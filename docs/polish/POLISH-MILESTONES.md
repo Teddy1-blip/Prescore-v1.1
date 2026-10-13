@@ -10,4 +10,8 @@ M2 commit: 161e40f95218105ec2f4ff8abaa90f9eac29529c; workspace model/review test
 
 M3: NBKI published maturity/next-payment dates retained, explicit zero overdue distinguished from missing; SB missing balance remains null. Actual corporate PDF exercises known and incomplete obligations through persistence and canonical CLIENT/BROKER. Financial tables expose scale limitations; cash-flow chart has accurate coverage labels and keyboard-accessible numeric table.
 
-M4–M7: pending. Final PASS is prohibited until exact-SHA full source/browser/RC1 acceptance completes.
+M3 commit: 8babadd8aba4894def368a4decb93fde4dceb635; actual-file and source authority tests 13/13, typecheck clean.
+
+M4: source success waits for the refreshed WorkspaceModelV1; failed refresh retains the last result with retry. Failed validation retains the selected file. Source forms precede generic dossier uploads. Explicit open-source lookup refreshes the existing model automatically when successful; no automatic paid-provider call. Existing documents/applications/chat/billing flows retained and covered by product regression.
+
+M5–M7: pending. Final PASS is prohibited until exact-SHA full source/browser/RC1 acceptance completes.
