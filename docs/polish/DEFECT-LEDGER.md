@@ -18,3 +18,5 @@ No scoring formulas, economics or entitlement rules changed. Milestone commit re
 | P011 | MEDIUM | Source upload forms below generic file checklist; no direct source actions | Direct named BFO/КИ anchors and forms before generic files | Source browser/native zoom | Final browser gate |
 
 Format boundaries (not hidden support): bank analytical upload remains 1C TXT only; no OCR; BFO annual uploads use one explicit period per file. Generic documents are a separate storage flow. No live provider, deployment or production mutation was used to obtain evidence.
+
+| P012 | HIGH | Visual review at 390px: inherited mobile table rules hide headers and force 680px block rows inside scroller; no page overflow but content clipped | Restore semantic table display/headers, wrapping and focusable internal scrolling | Source browser asserts computed table/header display at six sizes; screenshot review | Fix requires final HEAD acceptance |

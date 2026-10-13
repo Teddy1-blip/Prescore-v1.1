@@ -27,3 +27,5 @@ M6 commit: 348fa2d17a89d300442e7d5c22e155dc70f749c4; typecheck clean.
 M7: acceptance wiring at current HEAD. Print/PDF source appendix and minimized AI dated source facts close cross-surface enrichment gaps. Added 19-block and screen/state matrices. Full Product QA and RC1 now trigger for this branch; branch-scoped concurrency prevents cancellation of protected-branch runs. No deployment workflow filter was changed. The final report must cite actual same-HEAD outcomes and artifacts; this document does not pre-assert PASS.
 
 M4 source browser run 38451312136: 33 checks passed, including actual nonempty corporate PDF, failed-upload retry and confirmed model refresh. Final updated native-dossier/zoom/PDF scenarios still require their HEAD run. Final PASS is prohibited until exact-SHA full source/browser/RC1 acceptance completes.
+
+M7 initial acceptance commit: db312bb4d813529238b9a5670a2d595ca88f0a2a. Subsequent artifact inspection found P012 (mobile financial table headers/clipping); fixed before final acceptance. Workflow evidence must use the superseding HEAD, not this earlier SHA.
