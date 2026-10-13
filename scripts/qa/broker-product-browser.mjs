@@ -15,8 +15,8 @@ try{
  await context.addCookies([{name:'qa-role',value:'broker',url:origin}]);
  const assigned=await(await page.request.get(origin+'/api/workspace-model?analysisId='+seed.id)).json();
  assert.equal(assigned.access.role,'ASSIGNED_BROKER');assert.equal(assigned.access.readOnly,true);assert.deepEqual(assigned.full.canonical,owner.full.canonical);assert.deepEqual(assigned.full.report,owner.full.report);checks.push('owner and assigned broker canonical/report equality');
- for(const width of [1440,1024,768,390,360]){
- await page.setViewportSize({width,height:1000});
+ for(const [width,height] of [[1440,900],[1280,800],[1024,768],[768,1024],[390,844],[360,800]]){
+ await page.setViewportSize({width,height});
  for(const view of ['home','clients','applications','pipeline','documents','partners']){
  await page.goto(origin+'/agent?view='+view);await page.getByText('Алексей · брокер',{exact:true}).waitFor();if(view==='clients'){await page.waitForFunction(()=>!document.querySelector('.bp-client-summary')?.innerText.includes('Загружаем'));assert.ok((await page.locator('.bp-client-summary').getByText(/Prescore Index:/).first().innerText()).includes('Prescore Index: '+String(assigned.full.canonical.prescoreIndex.value)));assert.ok((await page.locator('.bp-client-summary').first().innerText()).includes(assigned.full.report.readiness.level));}
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'overflow '+view+' '+width);

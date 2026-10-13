@@ -14,4 +14,8 @@ M3 commit: 8babadd8aba4894def368a4decb93fde4dceb635; actual-file and source auth
 
 M4: source success waits for the refreshed WorkspaceModelV1; failed refresh retains the last result with retry. Failed validation retains the selected file. Source forms precede generic dossier uploads. Explicit open-source lookup refreshes the existing model automatically when successful; no automatic paid-provider call. Existing documents/applications/chat/billing flows retained and covered by product regression.
 
-M5–M7: pending. Final PASS is prohibited until exact-SHA full source/browser/RC1 acceptance completes.
+M4 commit: 4cb710274d465b043de4cda900ac6f1989932d6e; typecheck and lint clean.
+
+M5: BROKER uses the same enriched financial/credit components; native dossier source/reload scenarios added. Overview actions persist dossier section in URL. Entitlement copy localized; manual dossier refresh exposes failure instead of silently retaining stale data. Existing leads, pipeline, applications, chat, partnerships retained; exact six viewports now covered.
+
+M6–M7: pending. Final PASS is prohibited until exact-SHA full source/browser/RC1 acceptance completes.
