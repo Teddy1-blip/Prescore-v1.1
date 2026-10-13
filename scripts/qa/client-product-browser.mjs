@@ -21,8 +21,8 @@ const browser=await chromium.launch({headless:true,...(process.env.QA_CHROMIUM_P
 page.on('pageerror',e=>errors.push(e.message));
 try{
  let seed=await(await page.request.get(origin+'/__qa/seed')).json();fs.writeFileSync(out+'/seed.json',JSON.stringify(seed));
- for(const width of [1440,1024,768,390,360]){
- await page.setViewportSize({width,height:1000});
+ for(const [width,height] of [[1440,900],[1280,800],[1024,768],[768,1024],[390,844],[360,800]]){
+ await page.setViewportSize({width,height});
  for(const view of ['home','analysis','banking','obligations','financing','documents','applications','analyst','upload']){
  await page.goto(origin+'/dashboard?analysisId='+seed.id+'&view='+view);await page.getByLabel('Сохранённый анализ').waitFor();await page.waitForFunction(()=>!document.body.innerText.includes('Загружаем финансовую картину')&&!document.body.innerText.includes('Загружаем кабинет'));
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'overflow '+view+' '+width);

@@ -19,6 +19,7 @@ export function SourceUpload({analysisId,kind,saved}:{analysisId:string;kind:'BK
  return <form onSubmit={submit} className="ws-source-upload" id={'source-'+kind.toLowerCase()} aria-busy={busy} aria-label={kind==='BKI'?'Добавить кредитную историю':kind==='BFO'?'Добавить бухгалтерскую отчётность':'Добавить квартальную отчётность'}>
   <h2>{kind==='BKI'?'Добавить кредитную историю':kind==='BFO'?'Добавить бухгалтерскую отчётность':'Добавить квартальную отчётность'}</h2>
   <p>{kind==='BKI'?'PDF с кредитной историей. Обязательства появятся после проверки источника.':kind==='BFO'?'Текстовый PDF, XLSX или CSV: ИНН, годовой период, единица измерения и строки отчётности. Один период в файле; другие годы добавляйте отдельными файлами. Повторная загрузка за тот же период обновит его.':'PDF, XLSX или CSV за промежуточный период. Укажите в файле период и единицу измерения.'}</p>
+  <p className="pc-muted">{kind==='BKI'?'До 35 МБ. ':'До 25 МБ. '}PDF должен содержать текст: сканы и фотографии не распознаются.</p>
   {kind==='BKI'&&<label>Кому принадлежит отчёт<select name="relationship"><option>Компания-заёмщик</option><option>ИП-заёмщик</option><option>Собственник</option><option>Руководитель</option><option>Поручитель</option><option>Не указано</option></select></label>}
   <label>Исходный документ
    <span className="pc-file-control">

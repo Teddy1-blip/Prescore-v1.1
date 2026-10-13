@@ -21,7 +21,8 @@ jobs:
       - run: npm run typecheck
       - run: node --experimental-strip-types --test tests/polish-source-enrichment.test.mjs tests/client-source-workflow.test.mjs tests/source-authority.test.mjs tests/bank-statements.test.mjs tests/credit-history.test.mjs
       - run: npx --no-install playwright install --with-deps chromium
-      - run: node scripts/qa/polish-source-browser.mjs "$RUNNER_TEMP/polish-sources"
+      - run: sudo apt-get update && sudo apt-get install -y xvfb xdotool
+      - run: xvfb-run -a -s "-screen 0 1600x1200x24" node scripts/qa/polish-source-browser.mjs "$RUNNER_TEMP/polish-sources"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: always()
         with:

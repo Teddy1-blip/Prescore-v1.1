@@ -18,4 +18,8 @@ M4 commit: 4cb710274d465b043de4cda900ac6f1989932d6e; typecheck and lint clean.
 
 M5: BROKER uses the same enriched financial/credit components; native dossier source/reload scenarios added. Overview actions persist dossier section in URL. Entitlement copy localized; manual dossier refresh exposes failure instead of silently retaining stale data. Existing leads, pipeline, applications, chat, partnerships retained; exact six viewports now covered.
 
-M6–M7: pending. Final PASS is prohibited until exact-SHA full source/browser/RC1 acceptance completes.
+M5 commit: 0cad3b8be64df67d4cbee81d289c9bbffc56d3b4; typecheck clean.
+
+M6: direct Russian BFO/BKI actions, disclosed file limits, keyboard focus and native 200% zoom scenarios for source upload/BROKER dossier. Six exact viewport sizes apply to CLIENT, BROKER and full analysis. Numeric alternatives and unknown/partial states remain visible.
+
+M7: pending exact-SHA full CI and artifact review. Final PASS is prohibited until exact-SHA full source/browser/RC1 acceptance completes.
