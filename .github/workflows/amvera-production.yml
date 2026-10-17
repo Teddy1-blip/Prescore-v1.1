@@ -1,0 +1,149 @@
+name: Deliver exact RC2 to Amvera production
+
+on:
+  workflow_dispatch:
+    inputs:
+      promotion_preconditions_confirmed:
+        description: 'Confirm staging frozen, rollback snapshot ready, production secrets saved, exact source SHA verified and production delivery authorized'
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prescore-amvera-production
+  cancel-in-progress: false
+
+jobs:
+  deliver:
+    if: github.repository == 'Teddy1-blip/Prescore-v1.1' && github.ref == 'refs/heads/infra/amvera-prod-deploy' && inputs.promotion_preconditions_confirmed
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 277400d858968b774eaf967ae8de918408dcd663
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify literal product SHA
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "277400d858968b774eaf967ae8de918408dcd663"
+      - name: Prepare isolated production delivery tool
+        shell: bash
+        run: |
+          cat > "$RUNNER_TEMP/prescore-prod-delivery.py" <<'PY'
+          import hashlib, json, os, pathlib, re, subprocess, sys
+          SOURCE = "277400d858968b774eaf967ae8de918408dcd663"
+          URL = "https://git.msk1.amvera.ru/dorogovab/prescore-prod"
+          root = pathlib.Path(os.environ["RUNNER_TEMP"]) / "prescore-prod-delivery"
+          workspace = pathlib.Path(os.environ["GITHUB_WORKSPACE"])
+          env = os.environ.copy()
+          def require(ok, code):
+              if not ok:
+                  raise RuntimeError(code)
+          def git(*args, cwd=workspace):
+              p = subprocess.run(["git", "-c", "credential.helper=", "-c", "http.sslVerify=true",
+                  "-c", "http.followRedirects=false", "-c", "gc.auto=0", "-c", "maintenance.auto=false", *args],
+                  cwd=cwd, env=env, text=True, capture_output=True, timeout=180)
+              require(p.returncode == 0, "GIT_OPERATION_FAILED_OUTPUT_WITHHELD")
+              return p.stdout.strip()
+          def refs():
+              rows = git("ls-remote", "--refs", URL).splitlines()
+              result = {}
+              for row in rows:
+                  sha, ref = row.split()
+                  require(re.fullmatch("[0-9a-f]{40}", sha) and ref.startswith("refs/"), "REMOTE_REF_INVALID")
+                  result[ref] = sha
+              return result
+          try:
+              require(env.get("GITHUB_REPOSITORY") == "Teddy1-blip/Prescore-v1.1", "REPOSITORY_GUARD")
+              require(env.get("GITHUB_EVENT_NAME") == "workflow_dispatch", "EVENT_GUARD")
+              require(env.get("GITHUB_REF") == "refs/heads/infra/amvera-prod-deploy", "INFRA_REF_GUARD")
+              require(git("rev-parse", "HEAD") == SOURCE, "EXACT_SOURCE_GUARD")
+              require(env.get("AMVERA_PROD_GIT_URL") == URL, "PRODUCTION_DESTINATION_GUARD")
+              require(env.get("AMVERA_PROD_USERNAME") == "dorogovab", "PRODUCTION_ACCOUNT_GUARD")
+              require(bool(env.get("AMVERA_PROD_PASSWORD")), "PRODUCTION_PASSWORD_MISSING")
+              askpass = pathlib.Path(env["RUNNER_TEMP"]) / "prescore-prod-askpass.py"
+              askpass.write_text("#!/usr/bin/env python3\nimport os,sys\nprint(os.environ['AMVERA_PROD_USERNAME' if 'username' in sys.argv[1].lower() else 'AMVERA_PROD_PASSWORD'])\n")
+              askpass.chmod(0o700)
+              env.update(GIT_ASKPASS=str(askpass), GIT_TERMINAL_PROMPT="0")
+              repo = root / "repo.git"
+              backup = root / "backup"
+              if sys.argv[1] == "prepare":
+                  require(not root.exists(), "FRESH_DELIVERY_REQUIRED")
+                  backup.mkdir(parents=True, mode=0o700)
+                  before = refs()
+                  require(not before or "refs/heads/master" in before, "REMOTE_MASTER_REQUIRED")
+                  git("init", "--bare", str(repo))
+                  if before:
+                      git("fetch", "--no-tags", URL, "refs/*:refs/backup/*", cwd=repo)
+                      for ref, sha in before.items():
+                          require(git("rev-parse", "refs/backup/" + ref[5:], cwd=repo) == sha, "HISTORY_CHANGED")
+                      require(refs() == before, "HISTORY_CHANGED")
+                      git("bundle", "create", str(backup / "history.bundle"), "--all", cwd=repo)
+                      git("bundle", "verify", str(backup / "history.bundle"), cwd=repo)
+                  git("fetch", "--no-tags", str(workspace), SOURCE, cwd=repo)
+                  tree = git("rev-parse", SOURCE + "^{tree}", cwd=repo)
+                  parent = before.get("refs/heads/master")
+                  if parent:
+                      env.update(GIT_AUTHOR_NAME="Prescore production delivery",
+                                 GIT_AUTHOR_EMAIL="production@prescore.invalid",
+                                 GIT_COMMITTER_NAME="Prescore production delivery",
+                                 GIT_COMMITTER_EMAIL="production@prescore.invalid")
+                      commit = git("commit-tree", tree, "-p", parent, "-m",
+                                   "Deploy Prescore production\n\nSource-GitHub-SHA: " + SOURCE, cwd=repo)
+                  else:
+                      commit = SOURCE
+                  require(git("rev-parse", commit + "^{tree}", cwd=repo) == tree, "TREE_GUARD")
+                  git("update-ref", "refs/heads/production-delivery", commit, cwd=repo)
+                  state = dict(source=SOURCE, tree=tree, commit=commit, before=before)
+                  (root / "state.json").write_text(json.dumps(state))
+                  (backup / "manifest.json").write_text(json.dumps(dict(source=SOURCE, refs=before,
+                      empty_remote=not bool(before), run_id=env["GITHUB_RUN_ID"]), indent=2))
+                  sums = [hashlib.sha256(p.read_bytes()).hexdigest() + "  " + p.name for p in sorted(backup.iterdir())]
+                  (backup / "SHA256SUMS").write_text("\n".join(sums) + "\n")
+                  print("PRODUCTION_HISTORY_PREPARED source=" + SOURCE)
+              elif sys.argv[1] == "push":
+                  state = json.loads((root / "state.json").read_text())
+                  require(state["source"] == SOURCE, "STATE_SOURCE_GUARD")
+                  require(refs() == state["before"], "REMOTE_CHANGED_NO_PUSH")
+                  require(git("rev-parse", state["commit"] + "^{tree}", cwd=repo) == state["tree"], "TREE_GUARD")
+                  git("push", URL, "refs/heads/production-delivery:refs/heads/master", cwd=repo)
+                  after = refs()
+                  require(after.get("refs/heads/master") == state["commit"], "REMOTE_MASTER_VERIFICATION_FAILED")
+                  for ref, sha in state["before"].items():
+                      require(ref == "refs/heads/master" or after.get(ref) == sha, "OTHER_REF_CHANGED")
+                  git("fetch", "--no-tags", URL, "refs/heads/master:refs/verify/master", cwd=repo)
+                  require(git("rev-parse", "refs/verify/master^{tree}", cwd=repo) == state["tree"], "REMOTE_TREE_GUARD")
+                  print("PRODUCTION_DELIVERED source=" + SOURCE + " remote_commit=" + state["commit"] + " tree=" + state["tree"])
+              else:
+                  raise RuntimeError("INVALID_MODE")
+          except Exception as exc:
+              print(str(exc) if type(exc) is RuntimeError else "DELIVERY_FAILED_DETAILS_WITHHELD", file=sys.stderr)
+              sys.exit(1)
+          finally:
+              candidate = pathlib.Path(os.environ["RUNNER_TEMP"]) / "prescore-prod-askpass.py"
+              candidate.unlink(missing_ok=True)
+          
+          PY
+      - name: Preserve and verify existing Amvera Git history
+        env:
+          AMVERA_PROD_USERNAME: ${{ secrets.AMVERA_PROD_USERNAME }}
+          AMVERA_PROD_PASSWORD: ${{ secrets.AMVERA_PROD_PASSWORD }}
+          AMVERA_PROD_GIT_URL: ${{ secrets.AMVERA_PROD_GIT_URL }}
+        run: python3 "$RUNNER_TEMP/prescore-prod-delivery.py" prepare
+      - name: Retain history before any push
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: amvera-production-history-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/prescore-prod-delivery/backup/
+          if-no-files-found: error
+          retention-days: 90
+      - name: Fast-forward production master and verify exact product tree
+        env:
+          AMVERA_PROD_USERNAME: ${{ secrets.AMVERA_PROD_USERNAME }}
+          AMVERA_PROD_PASSWORD: ${{ secrets.AMVERA_PROD_PASSWORD }}
+          AMVERA_PROD_GIT_URL: ${{ secrets.AMVERA_PROD_GIT_URL }}
+        run: python3 "$RUNNER_TEMP/prescore-prod-delivery.py" push
