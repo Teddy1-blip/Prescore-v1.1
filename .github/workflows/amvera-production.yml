@@ -3,8 +3,8 @@ name: Deliver exact RC2 to Amvera production
 on:
   workflow_dispatch:
     inputs:
-      migrations_verified:
-        description: 'Confirm staging frozen, rollback available, env check and DB migrations verified'
+      promotion_preconditions_confirmed:
+        description: 'Confirm staging frozen, rollback snapshot ready, production secrets saved, exact source SHA verified and production delivery authorized'
         required: true
         type: boolean
         default: false
@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   deliver:
-    if: github.repository == 'Teddy1-blip/Prescore-v1.1' && github.ref == 'refs/heads/infra/amvera-prod-deploy' && inputs.migrations_verified
+    if: github.repository == 'Teddy1-blip/Prescore-v1.1' && github.ref == 'refs/heads/infra/amvera-prod-deploy' && inputs.promotion_preconditions_confirmed
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
