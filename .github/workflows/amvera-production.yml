@@ -75,6 +75,7 @@ jobs:
                   require(not root.exists(), "FRESH_DELIVERY_REQUIRED")
                   backup.mkdir(parents=True, mode=0o700)
                   before = refs()
+                  print("PRODUCTION_REFS_BEFORE=" + json.dumps(before, sort_keys=True))
                   require(not before or "refs/heads/master" in before, "REMOTE_MASTER_REQUIRED")
                   git("init", "--bare", str(repo))
                   if before:
@@ -112,11 +113,13 @@ jobs:
                   require(git("rev-parse", state["commit"] + "^{tree}", cwd=repo) == state["tree"], "TREE_GUARD")
                   git("push", URL, "refs/heads/production-delivery:refs/heads/master", cwd=repo)
                   after = refs()
+                  print("PRODUCTION_REFS_AFTER=" + json.dumps(after, sort_keys=True))
                   require(after.get("refs/heads/master") == state["commit"], "REMOTE_MASTER_VERIFICATION_FAILED")
                   for ref, sha in state["before"].items():
                       require(ref == "refs/heads/master" or after.get(ref) == sha, "OTHER_REF_CHANGED")
                   git("fetch", "--no-tags", URL, "refs/heads/master:refs/verify/master", cwd=repo)
                   require(git("rev-parse", "refs/verify/master^{tree}", cwd=repo) == state["tree"], "REMOTE_TREE_GUARD")
+                  print("Source-GitHub-SHA: " + SOURCE)
                   print("PRODUCTION_DELIVERED source=" + SOURCE + " remote_commit=" + state["commit"] + " tree=" + state["tree"])
               else:
                   raise RuntimeError("INVALID_MODE")
@@ -134,13 +137,7 @@ jobs:
           AMVERA_PROD_PASSWORD: ${{ secrets.AMVERA_PROD_PASSWORD }}
           AMVERA_PROD_GIT_URL: ${{ secrets.AMVERA_PROD_GIT_URL }}
         run: python3 "$RUNNER_TEMP/prescore-prod-delivery.py" prepare
-      - name: Retain history before any push
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: amvera-production-history-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/prescore-prod-delivery/backup/
-          if-no-files-found: error
-          retention-days: 90
+      # Owner-authorized first-deploy exception: local history is ephemeral, not a durable backup.
       - name: Fast-forward production master and verify exact product tree
         env:
           AMVERA_PROD_USERNAME: ${{ secrets.AMVERA_PROD_USERNAME }}
