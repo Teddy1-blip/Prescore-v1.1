@@ -1,7 +1,7 @@
 name: Prescore Product Polish QA
 on:
   push:
-    branches: [prescore-polish-v1, prescore-live-product-recovery-v1]
+    branches: [prescore-polish-v1]
   workflow_dispatch:
 permissions:
   contents: read
@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   sources:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -24,7 +24,7 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y xvfb xdotool imagemagick
       - run: xvfb-run -a -s "-screen 0 1600x1200x24" node scripts/qa/polish-source-browser.mjs "$RUNNER_TEMP/polish-sources"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-        if: always()
+        if: always() && vars.PRESCORE_UPLOAD_EVIDENCE == '1'
         with:
           name: polish-sources-${{ github.sha }}
           path: |

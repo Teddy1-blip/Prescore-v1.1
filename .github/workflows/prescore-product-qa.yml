@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   validate:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -39,7 +39,7 @@ jobs:
       - name: Standalone PDF extraction
         run: node scripts/platform/pdf-artifact-smoke.mjs
       - name: Preserve business acceptance evidence
-        if: always()
+        if: always() && vars.PRESCORE_UPLOAD_EVIDENCE == '1'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: product-credit-lab-${{ github.sha }}
@@ -48,7 +48,7 @@ jobs:
           retention-days: 30
 
   presentation:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -73,7 +73,7 @@ jobs:
       - name: BROKER canonical consistency and operational responsive regression
         run: node scripts/qa/broker-product-browser.mjs "$RUNNER_TEMP/broker-product-browser"
       - name: Preserve presentation evidence
-        if: always()
+        if: always() && vars.PRESCORE_UPLOAD_EVIDENCE == '1'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: product-presentation-${{ github.sha }}
@@ -89,7 +89,7 @@ jobs:
           retention-days: 30
 
   admin:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -105,7 +105,7 @@ jobs:
       - name: ADMIN canonical and operational responsive regression
         run: node scripts/qa/admin-product-browser.mjs "$RUNNER_TEMP/admin-product-browser"
       - name: Preserve ADMIN evidence
-        if: always()
+        if: always() && vars.PRESCORE_UPLOAD_EVIDENCE == '1'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: product-admin-${{ github.sha }}
@@ -116,7 +116,7 @@ jobs:
           retention-days: 30
 
   billing:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -131,7 +131,7 @@ jobs:
       - name: Billing lifecycle and partner settlement responsive QA (isolated Fake only)
         run: node scripts/qa/billing-browser.mjs "$RUNNER_TEMP/billing-browser"
       - name: Preserve billing evidence
-        if: always()
+        if: always() && vars.PRESCORE_UPLOAD_EVIDENCE == '1'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: product-billing-${{ github.sha }}

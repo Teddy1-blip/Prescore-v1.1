@@ -3,6 +3,7 @@ name: Deliver staging to Amvera
 on:
   push:
     branches: [staging]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -16,7 +17,7 @@ concurrency:
 jobs:
   access:
     if: github.repository == 'Teddy1-blip/Prescore-v1.1' && github.ref == 'refs/heads/staging'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -32,7 +33,7 @@ jobs:
 
   validate:
     needs: access
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -45,17 +46,18 @@ jobs:
       - run: python3 -m unittest discover -s tests/deploy -p 'test_*.py'
       - run: npm ci
       - run: npm run build
-      - run: npm test
+      - name: Full regression suite on the already built exact SHA
+        run: node --experimental-strip-types --test tests/*.test.mjs
       - name: Strict synthetic business acceptance (24 source bundles)
         run: npm run credit-lab:business -- "$RUNNER_TEMP/credit-lab-business-${{ github.run_id }}-${{ github.run_attempt }}"
       - name: Preserve synthetic business acceptance evidence
-        if: always()
+        if: always() && vars.PRESCORE_UPLOAD_EVIDENCE == '1'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: credit-lab-business-${{ github.sha }}
           path: ${{ runner.temp }}/credit-lab-business-${{ github.run_id }}-${{ github.run_attempt }}/
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 30
       - run: npm run lint
       - run: npm run validate:artifact
       - name: Standalone PDF extraction (BKI and financial sources)
@@ -63,7 +65,7 @@ jobs:
 
   presentation:
     needs: access
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -86,7 +88,7 @@ jobs:
       - name: CLIENT product routes, section navigation and responsive regression
         run: node scripts/qa/client-product-browser.mjs "$RUNNER_TEMP/client-product-browser"
       - name: Preserve isolated presentation evidence
-        if: always()
+        if: always() && vars.PRESCORE_UPLOAD_EVIDENCE == '1'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: client-v3-browser-${{ github.sha }}
@@ -97,11 +99,11 @@ jobs:
             ${{ runner.temp }}/client-product-browser/*.json
             ${{ runner.temp }}/client-product-browser/*.png
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 30
 
   deliver:
     needs: [validate, presentation]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -116,13 +118,24 @@ jobs:
           AMVERA_GIT_URL: ${{ secrets.AMVERA_GIT_URL }}
           GH_READ_TOKEN: ${{ github.token }}
         run: python3 scripts/deploy/amvera.py prepare
+      - name: Verify local staging rollback bundle
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib
+          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'prescore-delivery' / 'backup'
+          manifest = json.loads((root / 'manifest.json').read_text())
+          if not manifest.get('empty_remote'):
+              assert (root / 'amvera-history.bundle').is_file()
+          print('STAGING_HISTORY_BACKUP_VERIFIED')
+          PY
       - name: Preserve Amvera history before any push
+        if: vars.PRESCORE_UPLOAD_EVIDENCE == '1'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: amvera-history-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/prescore-delivery/backup/
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 30
       - name: Fast-forward Amvera master only
         env:
           AMVERA_USERNAME: ${{ secrets.AMVERA_USERNAME }}
