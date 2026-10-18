@@ -2,11 +2,12 @@
 import {useState} from 'react';
 import type {WorkspaceModelV1} from '../../../lib/workspace/model';
 import {Financing} from '../../dashboard/report-v2/analysis-v3';
-import {Panel,FactorRows,ActionItem,Why,CreditSummary,SourceSummary} from './client-insights';
+import {Panel,FactorRows,ActionItem,Why,CreditSummary,SourceSummary,AssessmentLimits} from './client-insights';
 import {ReconciliationDetails,FinancialStatements} from './client-financials';
 import {FullAccessNotice,money,date} from './presentation';
 import {productPurpose,productReason} from './product-copy';
 import {PublishedValue,label} from './credit-depth';
+import {BankingSnapshot} from './banking-ledger';
 import {ExplanationLibrary} from './explanation-library';
 
 export function FinancingProducts({model,embedded=false,showHeading=true}:{model:WorkspaceModelV1;embedded?:boolean;showHeading?:boolean}){
@@ -75,8 +76,8 @@ export function FullCreditAnalysis({model,retry,initialSection='conclusion'}:{mo
     <div><span className="pc-kicker">КРЕДИТНОЕ ЗАКЛЮЧЕНИЕ</span><h2>{r.hero.headline}</h2><p>{r.hero.summary}</p><div className="pc-statusline"><span className={'pc-badge'+(r.hero.globalStop?' critical':'')}>{r.hero.globalStop?'Есть критичное ограничение':'Критичного общего стоп-фактора нет'}</span><span className="pc-badge">{r.hero.confidence}</span></div></div>
     <aside><span>Ключевое ограничение</span><strong>{topConstraint?.title??'Отдельное ограничение не выделено'}</strong><small>{topConstraint?.text??'Проверьте комплект источников и готовность к финансированию.'}</small>{topConstraint&&<Why model={model} ids={[topConstraint.claimId]}/>}</aside>
    </section>
-   <CreditSummary model={model}/>
-   <Panel title="Готовность к финансированию"><h3>{r.readiness.level}</h3><p>{r.readiness.text}</p><FactorRows model={model} items={r.readiness.constraints}/></Panel>
+   <BankingSnapshot model={model}/><CreditSummary model={model}/><AssessmentLimits model={model}/>
+   {model.full!.canonical.financingReadiness.level!=='UNKNOWN'&&<Panel title="Готовность к финансированию"><h3>{r.readiness.level}</h3><p>{r.readiness.text}</p><FactorRows model={model} items={r.readiness.constraints}/></Panel>}
    {expertise&&<Panel title="Экспертный разбор">
     <p className="pc-analysis-section-note">Факты и интерпретация разделены: сначала вывод, затем детали и подтверждения.</p>
     <div className="pc-expertise-grid">{expertise.items.filter(i=>memoIds.has(i.id)||strengthIds.has(i.id)||attentionIds.has(i.id)).map(i=>{const tone=strengthIds.has(i.id)?'positive':attentionIds.has(i.id)?'attention':'memo';return <article className="pc-expertise-card" data-tone={tone} key={i.id}><span>{tone==='positive'?'Сильная сторона':tone==='attention'?'Требует внимания':'Взгляд кредитора'}</span><h3>{i.title}</h3><p><b>Факт.</b> {i.fact}</p><p>{i.interpretation}</p><details><summary>Влияние и следующий шаг</summary><p><b>Влияние.</b> {i.impact}</p>{i.limitation&&<p><b>Ограничение.</b> {i.limitation}</p>}{i.nextStep&&<p><b>Следующий шаг.</b> {i.nextStep}</p>}{i.closure.length>0&&<ul>{i.closure.map((s,n)=><li key={n}>{s}</li>)}</ul>}<Why model={model} ids={i.claimIds}/></details></article>;})}</div>

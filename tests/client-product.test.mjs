@@ -44,3 +44,19 @@ test('bank-first overview retains known zero and groups unknown credit outputs w
  assert.match(render(ExecutiveOverview,{model,choose:()=>{},retry:()=>{}}),/data-credit-index="true">0/);
  }finally{await rt.close();}
 });
+
+test('public explanations replace implementation wording and print deduplicates without mutating the report',async()=>{
+ const rt=await createWorkspaceRuntime();try{
+ const {model}=conclusionFixture(),{publicText:clientText}=rt.load('lib/credit-engine/client-report/copy.ts');
+ for(const text of ['Используется исходная причина ограничения.','Контекст требует дополнительной проверки и не является положительным фактором.']){
+  const publicText=clientText(text);assert.notEqual(publicText,text);assert.match(publicText,/проверьте/i);
+ }
+ const {printPresentation}=rt.load('app/dashboard/report-v2/print-report.tsx'),report=structuredClone(model.full.report);
+ const f=report.limitations[0]??report.primaryFactors[0]??report.readiness.constraints[0];assert.ok(f);
+ report.dataQuality=[f];report.limitations=[{...f,id:'duplicate-copy',claimId:'duplicate-claim'}];
+ const before=JSON.stringify(report),printed=printPresentation(report);
+ const rows=[...printed.primaryFactors,...printed.contextHighlights,...printed.capacity.details,...printed.dataQuality,...printed.limitations,...printed.readiness.constraints,...printed.detailedSections.flatMap(s=>s.factors)];
+ assert.equal(rows.filter(x=>x.title===f.title&&x.text===f.text&&x.status.tone===f.status.tone).length,1);
+ assert.equal(JSON.stringify(report),before);
+ }finally{await rt.close();}
+});

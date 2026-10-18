@@ -67,3 +67,11 @@ The actual protected print page now loads WorkspaceModelV1 and passes its full.r
 Broker filtering also preserves a new post-cutover lead for a company with only archived history, without linking its old dossier. Archive records and new leads are independent.
 
 Validation: zero type diagnostics; AI/archive/client tests 32/32; real source-enrichment tests 10/10 including current-context AI reset, local mode, identical CLIENT/BROKER print output and A/B isolation; updated archive checks 2/2 including fresh same-company lead. PDF rendering is component-level evidence here, not completed live PDF/visual acceptance.
+
+M5 commit: `e9492ac9727d8f4f02ea3f0216568eb41f976c32`.
+
+## M6 — presentation copy and responsive structure
+
+Confirmed facts precede detailed conclusions in the active analysis. Unknown primary report metrics are compact explanations with preserved anchors, not dominant cards. The existing responsive fact grid collapses to one column below 768px. Evidence and source text use final public wording; canonical report generation and all 24 pre-UI canonical fingerprints remain unchanged. Semantic duplicate factor cards combine evidence/action links. Print makes a separate presentation copy and removes repeated factor prose; the source model is not modified. BROKER no longer exposes internal entitlement terminology.
+
+Validation: zero type diagnostics; report contract 110/110; canonical and active component checks 132/132, including all 24 unchanged engine/output baseline hashes and immutable print deduplication. Initial regressions caught missing PDF disclaimer/anchors; both were restored rather than weakening the assertions. Full browser widths/native 200% and live PDF visual acceptance remain required; this commit does not assert visual PASS.

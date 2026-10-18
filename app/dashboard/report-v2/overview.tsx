@@ -8,7 +8,9 @@ import {VISUAL_POLICY} from '../../../lib/credit-engine/client-report/visual.ts'
 export function ExecutiveSummary({model:m,print=false}:{model:ClientReportModelV1;print?:boolean}){
  return <section id={print?undefined:'overview'} className={'cr-overview '+(m.hero.globalStop?'cr-global-stop':'')} aria-label="Итог анализа">
   <div className="cr-hero"><div><h2>{m.hero.headline}</h2><p>{m.hero.summary}</p><span className="cr-caption">{m.hero.status} · {m.hero.confidence}</span></div>{!print&&!m.hero.globalStop&&<Signature/>}</div>
-  <div className="cr-metrics"><IndexCard model={m} print={print}/><ReadinessCard model={m} print={print}/><DebtCapacityCard model={m}/></div>
+  <div className="cr-metrics">{m.index.value?.value!=null&&<IndexCard model={m} print={print}/>}{m.readiness.level!==COPY.readiness.UNKNOWN&&<ReadinessCard model={m} print={print}/>}{m.capacity.headline?.value!=null&&<DebtCapacityCard model={m}/>}</div>
+  {(m.index.value?.value==null||m.readiness.level===COPY.readiness.UNKNOWN||m.capacity.headline?.value==null)&&<p className="cr-disclaimer">Предварительная оценка. Пока не определены: {m.index.value?.value==null&&<span id="index">Prescore Index; </span>}{m.readiness.level===COPY.readiness.UNKNOWN&&<span id="readiness">готовность к финансированию; </span>}{m.capacity.headline?.value==null&&<span id="capacity">дополнительный долговой платёж</span>}. Подтверждённые источники, основания ограничений и действия приведены в отчёте.</p>}
+  {m.capacity.headline?.value==null&&<p className="cr-disclaimer">{m.capacity.disclaimer}</p>}
   <FactorFocus model={m} print={print}/>
  </section>;
 }

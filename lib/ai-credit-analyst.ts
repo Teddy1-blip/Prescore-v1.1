@@ -1,3 +1,4 @@
+import {publicText} from './credit-engine/client-report/copy.ts';
 import type { WorkspaceModelV1, WorkspaceFactV1 } from "./workspace/model.ts";
 import type { PresentationFactorV1, PresentationActionV1 } from "./credit-engine/contracts/client-report.ts";
 import type { AnalysisV3Value } from "./credit-engine/client-report/analysis-v3.ts";
@@ -148,5 +149,5 @@ export function buildLocalAnalystAnswer(question: string, model: WorkspaceModelV
   if(c.recommendations?.length) lines.push(`Следующее опубликованное действие: ${c.recommendations[0].title} — ${c.recommendations[0].action}`);
   if(!lines.length) lines.push("Данных недостаточно для ответа на этот вопрос.");
   lines.push("Ответ относится к доступным источникам. Окончательное кредитное решение принимает банк.");
-  return lines.join("\n\n");
+  return lines.map(publicText).join("\n\n");
 }
