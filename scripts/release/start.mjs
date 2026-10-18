@@ -1,4 +1,44 @@
 import {validateEnvironment} from '../../lib/platform/environment.ts';
-import {spawn} from 'node:child_process';import {getPool} from '../../lib/db/client.ts';import {readiness} from '../../lib/release/readiness.ts';
-const issues=validateEnvironment(process.env);if(issues.length){console.error(JSON.stringify({event:'STARTUP_REJECTED',code:'CONFIGURATION_INVALID',issues}));process.exit(1);}const pool=getPool();let check;try{check=await readiness(pool);}catch{check={ready:false,code:'STARTUP_FAILED'};}finally{await pool.end();}if(!check.ready){console.error(JSON.stringify({event:'STARTUP_REJECTED',code:check.code}));process.exit(1);}
-const child=spawn(process.execPath,['server.js'],{cwd:process.env.PRESCORE_STANDALONE_DIR??process.cwd(),stdio:'inherit',env:{...process.env,PRESCORE_PROCESS_ROLE:'app'}});let stopping=false;function stop(){if(stopping)return;stopping=true;child.kill('SIGTERM');const timer=setTimeout(()=>child.kill('SIGKILL'),20000);timer.unref();}process.on('SIGTERM',stop);process.on('SIGINT',stop);child.on('exit',(code,signal)=>{process.exitCode=stopping&&signal!=='SIGKILL'?0:code??(signal?1:0);});child.on('error',()=>{console.error('APP_PROCESS_FAILED');process.exitCode=1;});
+import {spawn} from 'node:child_process';
+import {getPool} from '../../lib/db/client.ts';
+import {readiness} from '../../lib/release/readiness.ts';
+import {migrate,migrationRegistry,safeOperationalCode} from '../../lib/release/migrations.ts';
+
+const issues=validateEnvironment(process.env);
+if(issues.length){
+ console.error(JSON.stringify({event:'STARTUP_REJECTED',code:'CONFIGURATION_INVALID',issues}));
+ process.exit(1);
+}
+
+const pool=getPool();
+let check;
+try{
+ await migrate(pool,await migrationRegistry());
+ check=await readiness(pool);
+}catch(error){
+ check={ready:false,code:safeOperationalCode(error)};
+}finally{
+ await pool.end();
+}
+if(!check.ready){
+ console.error(JSON.stringify({event:'STARTUP_REJECTED',code:check.code}));
+ process.exit(1);
+}
+
+const child=spawn(process.execPath,['server.js'],{
+ cwd:process.env.PRESCORE_STANDALONE_DIR??process.cwd(),
+ stdio:'inherit',
+ env:{...process.env,PRESCORE_PROCESS_ROLE:'app'},
+});
+let stopping=false;
+function stop(){
+ if(stopping)return;
+ stopping=true;
+ child.kill('SIGTERM');
+ const timer=setTimeout(()=>child.kill('SIGKILL'),20000);
+ timer.unref();
+}
+process.on('SIGTERM',stop);
+process.on('SIGINT',stop);
+child.on('exit',(code,signal)=>{process.exitCode=stopping&&signal!=='SIGKILL'?0:code??(signal?1:0);});
+child.on('error',()=>{console.error('APP_PROCESS_FAILED');process.exitCode=1;});
