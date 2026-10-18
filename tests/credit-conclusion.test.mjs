@@ -17,7 +17,19 @@ test('credit conclusion uses full-source calculated results without changing the
  for(const [amount,status]of [[null,'UNKNOWN'],[0,'KNOWN']]){model.full.canonical.debtCapacity.headlineCapacity.monthlyIncrementalDebtServiceCapacity.prudential=amount;const text=renderToStaticMarkup(React.createElement(CreditConclusion,{model}));assert.ok(text.includes(status==='UNKNOWN'?'data-prudential-capacity="true">Не подтверждён':'data-prudential-capacity="true">0 ₽'));}
  }finally{await rt.close();}
 });
-test('conclusion cannot introduce legacy scoring or side effects',()=>{const s=fs.readFileSync('app/components/workspace/credit-conclusion.tsx','utf8');assert.doesNotMatch(s,/analysis\.(score|grade)|estimatedLimit|stressLimit|baseMonthlyPaymentCapacity|UnifiedRiskContext|compareCreditPortfolio|fetch\(|\?\?\s*0|\|\|\s*0/);const client=fs.readFileSync('app/components/workspace/client.tsx','utf8');assert.doesNotMatch(client,/CreditConclusion/);assert.match(client,/view==='home'[\s\S]*?<ExecutiveOverview/);assert.match(client,/view==='analysis'&&<FullCreditAnalysis/);});
+test('conclusion cannot introduce legacy scoring or side effects',()=>{
+ const forbidden=/analysis\.(score|grade)|estimatedLimit|stressLimit|baseMonthlyPaymentCapacity|UnifiedRiskContext|compareCreditPortfolio|fetch\(|\?\?\s*0|\|\|\s*0/;
+ const conclusion=fs.readFileSync('app/components/workspace/credit-conclusion.tsx','utf8');
+ const client=fs.readFileSync('app/components/workspace/client.tsx','utf8');
+ const overview=fs.readFileSync('app/components/workspace/client-launch-overview.tsx','utf8');
+ assert.doesNotMatch(conclusion,forbidden);
+ assert.doesNotMatch(overview,forbidden);
+ assert.doesNotMatch(client,/CreditConclusion/);
+ assert.match(client,/view==='home'[\s\S]*?<ClientOverview/);
+ assert.match(overview,/if\s*\(!props\.model\.full\)\s*return\s*<FreeOverview/);
+ assert.match(overview,/return\s*<ExecutiveOverview/);
+ assert.match(client,/view==='analysis'&&<FullCreditAnalysis/);
+});
 
 test('completed purge and temporary verification removed; ordinary health is read-only',()=>{
  for(const f of ['instrumentation.ts','lib/staging-history-purge.ts','scripts/platform/staging-reset.mjs'])assert.equal(fs.existsSync(f),false);
