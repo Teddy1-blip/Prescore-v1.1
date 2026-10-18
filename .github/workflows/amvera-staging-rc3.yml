@@ -1,0 +1,108 @@
+name: Deliver Prescore RC3 staging to Amvera
+
+on:
+  push:
+    branches: [staging]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prescore-amvera-staging
+  cancel-in-progress: false
+
+env:
+  NEXT_TELEMETRY_DISABLED: '1'
+
+jobs:
+  validate-and-deliver:
+    if: github.repository == 'Teddy1-blip/Prescore-v1.1' && github.ref == 'refs/heads/staging'
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+
+      - name: Authenticated read-only Amvera access check
+        env:
+          AMVERA_USERNAME: ${{ secrets.AMVERA_USERNAME }}
+          AMVERA_PASSWORD: ${{ secrets.AMVERA_PASSWORD }}
+          AMVERA_GIT_URL: ${{ secrets.AMVERA_GIT_URL }}
+        run: python3 scripts/deploy/amvera.py access
+
+      - name: Delivery script tests
+        run: python3 -m unittest discover -s tests/deploy -p 'test_*.py'
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+
+      - name: Full product regression suite
+        run: node --experimental-strip-types --test tests/*.test.mjs
+
+      - name: Canonical business acceptance
+        run: npm run credit-lab:business -- "$RUNNER_TEMP/credit-lab-business-${{ github.run_id }}-${{ github.run_attempt }}"
+
+      - run: npm run lint
+      - run: npm run validate:artifact
+
+      - name: Standalone PDF extraction
+        run: node scripts/platform/pdf-artifact-smoke.mjs
+
+      - name: Install browser and native zoom controls
+        run: |
+          npx --no-install playwright install --with-deps chromium
+          sudo apt-get update
+          sudo apt-get install -y xvfb xdotool imagemagick
+
+      - name: Build canonical presentation harness
+        run: node --experimental-strip-types scripts/qa/client-analysis-v3-harness.mjs "$RUNNER_TEMP/client-v3-browser/harness"
+
+      - name: Full Analysis V3 responsive acceptance
+        run: xvfb-run -a -s "-screen 0 1600x1200x24" node scripts/qa/client-analysis-v3-browser.mjs "$RUNNER_TEMP/client-v3-browser"
+
+      - name: CLIENT product browser regression
+        run: node scripts/qa/client-product-browser.mjs "$RUNNER_TEMP/client-product-browser"
+
+      - name: BROKER canonical consistency regression
+        run: node scripts/qa/broker-product-browser.mjs "$RUNNER_TEMP/broker-product-browser"
+
+      - name: ADMIN product browser regression
+        run: node scripts/qa/admin-product-browser.mjs "$RUNNER_TEMP/admin-product-browser"
+
+      - name: Billing lifecycle regression
+        run: node scripts/qa/billing-browser.mjs "$RUNNER_TEMP/billing-browser"
+
+      - name: Read Amvera history and prepare exact source tree
+        env:
+          AMVERA_USERNAME: ${{ secrets.AMVERA_USERNAME }}
+          AMVERA_PASSWORD: ${{ secrets.AMVERA_PASSWORD }}
+          AMVERA_GIT_URL: ${{ secrets.AMVERA_GIT_URL }}
+          GH_READ_TOKEN: ${{ github.token }}
+        run: python3 scripts/deploy/amvera.py prepare
+
+      - name: Verify local staging rollback bundle
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib
+          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'prescore-delivery' / 'backup'
+          manifest = json.loads((root / 'manifest.json').read_text())
+          if not manifest.get('empty_remote'):
+              assert (root / 'amvera-history.bundle').is_file()
+          print('STAGING_HISTORY_BACKUP_VERIFIED')
+          PY
+
+      - name: Fast-forward Amvera master only
+        env:
+          AMVERA_USERNAME: ${{ secrets.AMVERA_USERNAME }}
+          AMVERA_PASSWORD: ${{ secrets.AMVERA_PASSWORD }}
+          AMVERA_GIT_URL: ${{ secrets.AMVERA_GIT_URL }}
+          GH_READ_TOKEN: ${{ github.token }}
+        run: python3 scripts/deploy/amvera.py push
