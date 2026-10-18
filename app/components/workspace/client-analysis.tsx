@@ -7,6 +7,7 @@ import {ReconciliationDetails,FinancialStatements} from './client-financials';
 import {FullAccessNotice,money,date} from './presentation';
 import {productPurpose,productReason} from './product-copy';
 import {PublishedValue,label} from './credit-depth';
+import {ExplanationLibrary} from './explanation-library';
 
 export function FinancingProducts({model,embedded=false,showHeading=true}:{model:WorkspaceModelV1;embedded?:boolean;showHeading?:boolean}){
  const r=model.full?.report;
@@ -96,6 +97,7 @@ export function FullCreditAnalysis({model,retry,initialSection='conclusion'}:{mo
   {tab==='evidence'&&<>
    <Panel title="Источники и периоды"><SourceSummary model={model}/><div className="pc-table-scroll"><table><thead><tr><th>Источник</th><th>Период</th><th>Дата сведений</th><th>Достоверность</th></tr></thead><tbody>{r.sources.map(s=><tr key={s.id}><th>{s.label}</th><td>{s.period||'Не указан'}</td><td>{date(s.asOf)}</td><td>{s.confidence}</td></tr>)}</tbody></table></div></Panel>
    <Panel title="Ограничения достоверности"><FactorRows model={model} items={[...r.dataQuality,...r.limitations]}/></Panel>
+   <ExplanationLibrary model={model}/>
   </>}
   {tab!=='plan'&&<button className="pc-text-button" onClick={()=>select('plan')} id="plan">Перейти к плану действий →</button>}
  </>;
