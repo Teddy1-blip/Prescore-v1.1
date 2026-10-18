@@ -10,9 +10,9 @@ test('commercial client uses one navigation and separate executive/analysis path
  const rt=await createWorkspaceRuntime();try{
  const shell=rt.load('app/components/workspace/client-shell.tsx'),insights=rt.load('app/components/workspace/client-insights.tsx'),analysis=rt.load('app/components/workspace/client-analysis.tsx'),routing=rt.load('app/components/workspace/client.tsx');
  const {model}=conclusionFixture(),before=JSON.stringify(model),props={model,choose:()=>{},retry:()=>{}};
- assert.deepEqual(shell.CLIENT_NAV.map(i=>i.label),['Обзор','Анализ Prescore','Финансы','Обязательства','Финансирование','Документы','Заявки','Кредитный аналитик']);
+ assert.deepEqual(shell.CLIENT_NAV.map(i=>i.label),['Обзор','Анализ Prescore','Финансы','Обязательства','Финансирование','Документы','Заявки','Кредитный аналитик','Подписка компании']);
  const overview=render(insights.ExecutiveOverview,props);assert.match(overview,/Обзор компании/);assert.doesNotMatch(overview,/av-scenario-grid|pc-memo|CLIENT.*ANALYSIS V3/);
- for(const section of ['conclusion','factors','capacity','financials','reconciliation','plan','evidence'])await t.test(section,()=>{const html=render(analysis.FullCreditAnalysis,{...props,initialSection:section});assert.doesNotMatch(html,/NaN|undefined|Infinity/);assert.match(html,/Анализ Prescore/);});
+ for(const section of ['conclusion','factors','capacity','financials','obligations','financing','reconciliation','plan','evidence'])await t.test(section,()=>{const html=render(analysis.FullCreditAnalysis,{...props,initialSection:section});assert.doesNotMatch(html,/NaN|undefined|Infinity/);assert.match(html,/Анализ Prescore/);});
  for(const C of [analysis.FinancingProducts,analysis.DebtPortfolio])assert.doesNotMatch(render(C,props),/NaN|undefined|Infinity/);
  assert.equal(JSON.stringify(model),before,'presentation must not mutate canonical results');
  const basic=structuredClone(model);delete basic.full;basic.entitlement='BASIC';basic.state='READY_BASIC';basic.fullAvailability='LOCKED';basic.basic.bankingFacts.grossInflow={...basic.basic.bankingFacts.grossInflow,value:0,status:'KNOWN'};basic.basic.bankingFacts.operatingInflow={...basic.basic.bankingFacts.operatingInflow,value:987654321,status:'UNKNOWN'};
@@ -24,3 +24,39 @@ test('commercial client uses one navigation and separate executive/analysis path
  }finally{await rt.close();}
 });
 test('client source contains no credit formulas or retired analytics',()=>{for(const f of ['client.tsx','client-shell.tsx','client-analysis.tsx','client-insights.tsx','client-financials.tsx'])assert.doesNotMatch(fs.readFileSync('app/components/workspace/'+f,'utf8'),/analysis\.(score|grade)|estimatedLimit|stressLimit|baseMonthlyPaymentCapacity|UnifiedRiskContext|compareCreditPortfolio|buildActionPlan|\/api\/offers/);});
+
+test('bank-first overview retains known zero and groups unknown credit outputs without changing the model',async()=>{
+ const rt=await createWorkspaceRuntime();try{
+ const {ExecutiveOverview}=rt.load('app/components/workspace/client-insights.tsx');
+ const {model}=conclusionFixture();
+ model.full.canonical.prescoreIndex.value=null;
+ model.full.canonical.financingReadiness.level='UNKNOWN';
+ model.full.canonical.debtCapacity.headlineCapacity.monthlyIncrementalDebtServiceCapacity.prudential=null;
+ model.basic.bankingFacts.taxPayments={...model.basic.bankingFacts.taxPayments,value:0,status:'KNOWN'};
+ model.basic.bankingFacts.endingBalance={...model.basic.bankingFacts.endingBalance,value:987654321,status:'UNKNOWN'};
+ const before=JSON.stringify(model),html=render(ExecutiveOverview,{model,choose:()=>{},retry:()=>{}});
+ assert.match(html,/Что уже известно по выпискам/);assert.match(html,/Банковский профиль компании рассчитан/);
+ assert.equal((html.match(/class="pc-assessment-limit"/g)||[]).length,1);
+ assert.doesNotMatch(html,/data-credit-index|data-credit-readiness|data-prudential-capacity|987\s*654\s*321/);
+ assert.match(html,/data-banking-fact="taxPayments"[^]*?0 ₽/);
+ assert.equal(JSON.stringify(model),before);
+ model.full.canonical.prescoreIndex.value=0;
+ assert.match(render(ExecutiveOverview,{model,choose:()=>{},retry:()=>{}}),/data-credit-index="true">0/);
+ }finally{await rt.close();}
+});
+
+test('public explanations replace implementation wording and print deduplicates without mutating the report',async()=>{
+ const rt=await createWorkspaceRuntime();try{
+ const {model}=conclusionFixture(),{publicText:clientText}=rt.load('lib/credit-engine/client-report/copy.ts');
+ for(const text of ['Используется исходная причина ограничения.','Контекст требует дополнительной проверки и не является положительным фактором.']){
+  const publicText=clientText(text);assert.notEqual(publicText,text);assert.match(publicText,/проверьте/i);
+ }
+ const {printPresentation}=rt.load('app/dashboard/report-v2/print-report.tsx'),report=structuredClone(model.full.report);
+ const f=report.limitations[0]??report.primaryFactors[0]??report.readiness.constraints[0];assert.ok(f);
+ report.dataQuality=[f];report.limitations=[{...f,id:'duplicate-copy',claimId:'duplicate-claim'}];
+ const before=JSON.stringify(report),printed=printPresentation(report);
+ const rows=[...printed.primaryFactors,...printed.contextHighlights,...printed.capacity.details,...printed.dataQuality,...printed.limitations,...printed.readiness.constraints,...printed.detailedSections.flatMap(s=>s.factors)];
+ assert.equal(rows.filter(x=>x.title===f.title&&x.text===f.text&&x.status.tone===f.status.tone).length,1);
+ assert.equal(JSON.stringify(report),before);
+ }finally{await rt.close();}
+});

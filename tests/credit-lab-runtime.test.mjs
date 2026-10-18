@@ -1,3 +1,4 @@
+import * as releaseSecurity from '../lib/release/security.ts';
 /** Real upload handler + PostgreSQL-compatible disposable DB + protected report service.
  * Only the authentication boundary is a controlled synthetic principal. No runtime DB,
  * production auth changes, actual browser sign-in, PDF extraction or live providers.
@@ -11,10 +12,10 @@ test('Credit Lab isolated HTTP upload → SQL persistence → ownership/FULL →
  const pg=new PGlite();const catalog=JSON.parse(fs.readFileSync('lib/db/catalog.json'));
  const query=async(s,v)=>{const r=await pg.query(s,v);return{rows:r.rows,rowCount:r.affectedRows};};const db=new PortableDatabase({query,connect:async()=>({query,release(){}})},catalog);
  let current={email:'lab-owner@test.invalid',isAdmin:false};const api=load('app/api/api-auth.ts',{'../chatgpt-auth':{getChatGPTUser:async()=>null}});
- const route=load('app/api/analysis/route.ts',{'../../../lib/platform/runtime':{getRuntime:()=>({DB:db})},'../../../lib/prescore':prescore,'../../../lib/credit-engine/source-foundation':sources,'../../../lib/admin-controls':controls,'../api-auth':{requireApiUser:async()=>current,unauthorized:api.unauthorized},'../../../lib/entitlements':entitlements});
+ const route=load('app/api/analysis/route.ts',{'../../../lib/platform/runtime':{getRuntime:()=>({DB:db})},'../../../lib/prescore':prescore,'../../../lib/credit-engine/source-foundation':sources,'../../../lib/admin-controls':controls,'../api-auth':{requireApiUser:async()=>current,unauthorized:api.unauthorized},'../../../lib/entitlements':entitlements,'../../../lib/release/security':releaseSecurity});
  const server=http.createServer(async(req,res)=>{try{const chunks=[];for await(const chunk of req)chunks.push(chunk);const response=await route.POST(new Request('http://127.0.0.1/api/analysis',{method:'POST',headers:{'content-type':'application/json'},body:Buffer.concat(chunks)}));res.writeHead(response.status,{'content-type':'application/json'});res.end(await response.text());}catch{res.writeHead(500);res.end('Isolated harness failure');}});
  try{
-  for(const f of ['0001_product.sql','0003_runtime_indexes.sql'])await pg.exec(fs.readFileSync('lib/db/migrations/'+f,'utf8'));
+  for(const f of ['0001_product.sql','0003_runtime_indexes.sql','0009_analysis_archive.sql'])await pg.exec(fs.readFileSync('lib/db/migrations/'+f,'utf8'));
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const url=`http://127.0.0.1:${server.address().port}/api/analysis`;
   const upload=statements=>fetch(url,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({statements})});
   current=null;assert.equal((await upload([])).status,401);current={email:'lab-owner@test.invalid',isAdmin:false};assert.equal((await upload([])).status,400);

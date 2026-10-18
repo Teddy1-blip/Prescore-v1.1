@@ -73,20 +73,28 @@ export async function resolveAnalysisTier(db: EntitlementDatabase, input: { anal
     if (owned) return "FULL" as const;
   }
   if (!input.readOnly) await ensureFreeEntitlement(db, input.analysisId, input.userEmail, input.companyInn);
-  const row = await db.prepare("SELECT tier FROM analysis_entitlements WHERE analysis_id = ? AND user_email = ? LIMIT 1")
+  const row = await db.prepare("SELECT tier FROM analysis_entitlements WHERE analysis_id = ? AND user_email = ? AND revoked_at = '' LIMIT 1")
     .bind(input.analysisId, input.userEmail.toLowerCase()).first<{ tier?: string }>();
   if (row?.tier === "FULL") return "FULL" as const;
 
-  // Backward compatibility: a previously paid active access opens the matching stored analysis.
+  // Company access is owner+INN scoped and time bounded; never materialize perpetual per-analysis grants.
   try {
-    const legacy = await db.prepare(`SELECT id FROM subscriptions WHERE company_inn = ? AND user_email = ? AND status = 'Активна'
-      AND ? = (SELECT id FROM analyses WHERE company_inn = ? AND owner_email = ? ORDER BY created_at DESC LIMIT 1) LIMIT 1`)
-      .bind(input.companyInn, input.userEmail.toLowerCase(), input.analysisId, input.companyInn, input.userEmail.toLowerCase()).first<{ id?: string }>();
-    if (legacy?.id) {
-      if (!input.readOnly) await grantFullEntitlement(db, { ...input, orderId: legacy.id, grantedBy: "LEGACY_MIGRATION" });
-      return "FULL" as const;
-    }
-  } catch { /* legacy table may not exist */ }
+    const active = await db.prepare(`SELECT s.id FROM billing_subscriptions s
+      JOIN analyses a ON a.company_inn=s.company_inn AND a.owner_email=s.owner_email
+      WHERE a.id=? AND s.owner_email=? AND s.company_inn=? AND s.status='ACTIVE'
+      AND s.access_from<=CURRENT_TIMESTAMP AND s.access_until>CURRENT_TIMESTAMP
+      AND EXISTS(SELECT 1 FROM billing_periods p WHERE p.subscription_id=s.id AND p.status='ACTIVE' AND p.starts_at<=CURRENT_TIMESTAMP AND p.ends_at>CURRENT_TIMESTAMP) LIMIT 1`)
+      .bind(input.analysisId,input.userEmail.toLowerCase(),input.companyInn).first<{id:string}>();
+    if(active?.id)return "FULL" as const;
+  } catch { /* Missing migration fails closed to existing explicit grants/BASIC. */ }
+  // Historical subscription is read-only and only valid when dated access exists. No new legacy writes.
+  try {
+    const legacy=await db.prepare(`SELECT s.id FROM subscriptions s JOIN analyses a ON a.company_inn=s.company_inn AND a.owner_email=s.user_email
+      WHERE a.id=? AND s.company_inn=? AND s.user_email=? AND s.status='Активна'
+      AND s.access_from<>'' AND s.access_until<>'' AND s.access_from<=? AND s.access_until>?
+      LIMIT 1`).bind(input.analysisId,input.companyInn,input.userEmail.toLowerCase(),new Date().toISOString(),new Date().toISOString()).first<{id:string}>();
+    if(legacy?.id)return "FULL" as const;
+  } catch { /* Historical table may not exist. */ }
   return "FREE" as const;
 }
 

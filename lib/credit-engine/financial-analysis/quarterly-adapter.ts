@@ -6,6 +6,10 @@ import { parseFinancialPeriod } from "./periods.ts";
 
 export function adaptQuarterlyReport(report: QuarterlyFinancialReport, source: SourceEnvelope) {
   if (source.sourceType !== "QUARTERLY") throw new Error("QUARTERLY_SOURCE_REQUIRED");
+  return adaptFinancialReport(report, source);
+}
+export function adaptFinancialReport(report: QuarterlyFinancialReport, source: SourceEnvelope) {
+  if (source.sourceType !== "QUARTERLY" && source.sourceType !== "BFO") throw new Error("FINANCIAL_SOURCE_REQUIRED");
   if (report.companyInn && report.companyInn !== source.companyInn) throw new Error("FINANCIAL_COMPANY_MISMATCH");
   const metadata = report.financialMetadataV2;
   const mapped: Record<string, number | null> = {

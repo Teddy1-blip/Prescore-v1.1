@@ -1,3 +1,4 @@
+import {savedCanonicalInput} from "./financing-request.ts";
 import type { AnalysisResult } from "../prescore.ts";
 import type { CompanyProfileData } from "../company-profile.ts";
 import type { AnalysisTier } from "../entitlements.ts";
@@ -67,10 +68,19 @@ export async function loadWorkspaceModelV1(analysisId: string, dependencies: Wor
 
   try {
     const companyProfile = await dependencies.readProfile(analysis.companyInn);
-    const canonical = buildCanonicalCreditAnalysis({ analysis, companyProfile });
+    const canonical = buildCanonicalCreditAnalysis(savedCanonicalInput(analysis,companyProfile));
     const report: ClientReportModelV1 = publicCanonicalModel(canonical.model, canonical);
     return {
       ...base,
+      // Publish the same source set that the canonical calculation actually read,
+      // including cached company BFO. The saved bank-only manifest is not enough.
+      basic: { ...basic, sources: { ...basic.sources, availability:
+        [...new Map(canonical.sourceObservations.map(source => [source.sourceId, source])).values()].map(source => ({
+          source: source.sourceId.startsWith("client-request-") ? "CLIENT_DECLARATION" :
+            ({ BANK_STATEMENT: "BANK_STATEMENTS", BFO: "FINANCIAL_STATEMENTS", QUARTERLY: "QUARTERLY_REPORT", BKI: "CREDIT_HISTORY" } as Record<string,string>)[source.sourceType] ?? "EXTERNAL_SOURCE",
+          status: source.status, periodFrom: source.periodFrom, periodTo: source.periodTo,
+        }))
+      } },
       state: "READY_FULL",
       fullAvailability: "READY",
       full: {
@@ -149,7 +159,11 @@ export async function readWorkspaceOperations(
       }
       const statuses = [...counts].map(([status, count]) => ({ status, count })).sort((a, b) => a.status.localeCompare(b.status, "ru"));
       const count = logical.size;
-      applications = { status: count ? "AVAILABLE" : "NONE", count, activeCount: null, statuses };
+      const activeStatuses=new Set(['Новая','Черновик','Подготовка','Подготовка заявки','Подготовка документов','Требуются документы','Отправлена в банк','На рассмотрении у финансового партнёра','Предварительное решение','Одобрена']);
+      const terminalStatuses=new Set(['Выдана','Отклонена','Закрыта','Отменена клиентом']);
+      const known=[...logical.values()].every(row=>activeStatuses.has(row.status)||terminalStatuses.has(row.status));
+      const activeCount=known?[...logical.values()].filter(row=>activeStatuses.has(row.status)).length:null;
+      applications = { status: count ? "AVAILABLE" : "NONE", count, activeCount, statuses };
     }
   } catch { /* Missing operational schema stays UNKNOWN and never becomes zero. */ }
   return { documents, applications };

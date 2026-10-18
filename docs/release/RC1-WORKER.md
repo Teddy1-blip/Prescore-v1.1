@@ -1,0 +1,7 @@
+# Worker lifecycle
+
+Recommended: `worker:billing` as an independent continuous process using the same immutable image/DB as app. Alternative: `worker:billing:once` for any cron-compatible host. One shot handles one bounded batch, empty queue exits0; infrastructure failure exits non-zero. No HTTP traffic/ADMIN approval is required. Runtime profile verification/holds and provider configuration gates apply before dispatch.
+
+Jobs use SQL row locks/SKIP LOCKED,2-minute leased claim, provider idempotency keys, exponential retry backoff and max5 retryable failures. An unknown response retains reservation and the original idempotency key; recovery never changes an already submitted payout amount. Permanent/exhausted errors enter REQUIRES_REVIEW. Processing provider IDs are polled; only SUCCEEDED posts immutable payout ledger. SIGTERM stops new claims, finishes current bounded batch, records STOPPED and closes the pool. Hard kill recovers via expired lease. Heartbeat every10s during batches; healthcheck accepts <=45s.
+
+RC tests persist provider acceptance before delayed response, kill the actual worker, expire only isolated fixture lease and run two processes. Economic uniqueness and refund/negative-offset regressions remain mandatory. RC response delay is bounded10000ms and exists only within the explicit PostgreSQL-backed Fake provider. It cannot affect live providers. Never use Fake to claim real payment/payout.

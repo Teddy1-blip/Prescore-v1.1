@@ -54,14 +54,16 @@ test('BASIC conclusion keeps direct access to separate banking analysis',async()
 });
 
 
-test('recovery keeps classic CLIENT and BROKER UX on current analytical contracts',()=>{
- const agent=fs.readFileSync('app/agent/page.tsx','utf8');
+test('CLIENT and BROKER routes use the shared canonical presentation contract',()=>{
+ const route=fs.readFileSync('app/agent/page.tsx','utf8');
+ const agent=fs.readFileSync('app/components/workspace/broker.tsx','utf8');
+ const shell=fs.readFileSync('app/components/workspace/client-shell.tsx','utf8');
  const presentation=fs.readFileSync('app/components/workspace/presentation.tsx','utf8');
  const legacy=/analysis\.(?:score|grade|readiness)|estimatedLimit|baseMonthlyPaymentCapacity|stressLimit|analysisView\(/;
- assert.match(agent,/CRM клиентов/);
- assert.match(agent,/Воронка продаж/);
- assert.match(agent,/Куратор/);
- assert.match(agent,/\/dashboard\?client=\$\{lead\.analysisId\}/);
+ assert.match(route,/export \{ default \} from "\.\.\/components\/workspace\/broker"/);
+ for(const title of ['Рабочий стол','Клиенты','Заявки','Воронка','Документы','Партнёрство'])assert.ok(shell.includes(title));
+ for(const name of ['ExecutiveOverview','FullCreditAnalysis','DebtPortfolio','FinancingProducts','BankingLedger','FinancialStatements'])assert.ok(agent.includes(name));
+ assert.doesNotMatch(agent,/<Home\b|agent\/agent\.css/);
  assert.doesNotMatch(agent,legacy);
  assert.match(presentation,/function ClientRecoveryShell/);
  assert.match(presentation,/Новый анализ/);

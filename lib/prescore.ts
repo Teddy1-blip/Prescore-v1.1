@@ -170,6 +170,7 @@ export type StatementInspection = {
 };
 
 export type AnalysisResult = FinancialShadowFields & ReconciliationShadowFields & CreditPortfolioShadowFields & RiskShadowFields & {
+  financingRequestV1?: import("./workspace/financing-request.ts").FinancingRequestV1;
   id: string;
   companyName: string;
   companyInn: string;

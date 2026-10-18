@@ -50,3 +50,5 @@ amvera-staging-upload/
 /.vinext/
 /output/
 /drizzle-postgres-review/
+
+!.env.rc.example

@@ -6,14 +6,13 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 type Message = { id: string; role: "user" | "assistant"; content: string; createdAt: string };
 
 const quickQuestions = [
-  "Почему такой Prescore Index?",
-  "Что сейчас ограничивает финансирование?",
-  "Что сделать первым?",
-  "Насколько профиль готов к подаче?",
-  "Какие сильные стороны подтверждены?",
-  "Что известно о кредитной нагрузке?",
-  "Каков план действий?",
-  "Почему подходит этот тип финансирования?",
+  "Почему такая оценка Prescore?",
+  "Что мешает финансированию?",
+  "Как рассчитана долговая ёмкость?",
+  "Что изменится после добавления БКИ?",
+  "Какой продукт подходит компании?",
+  "Что нужно исправить перед заявкой?",
+  "Какие источники противоречат друг другу?",
 ];
 
 export default function AiAnalyst({ analysisId }: { analysisId: string }) {
@@ -78,8 +77,8 @@ function AnalystConversation({ analysisId }: { analysisId: string }) {
   return <>
     <div className="ps-heading"><div><span>ОБЪЯСНЕНИЕ ГОТОВОГО РЕЗУЛЬТАТА</span><h1>Кредитный аналитик Prescore</h1><p>Задайте вопрос по результатам вашего анализа. Аналитик объясняет готовый результат Prescore, факторы, ограничения, кредитную ёмкость и рекомендации. Сам расчёт он не изменяет.</p></div></div>
     <section className="ps-ai-shell ps-card">
-      <header><MessageSquareText /><span><b>Персональный разбор</b><small>Сырые выписки, БКИ, реквизиты и внутренняя методика не передаются AI‑провайдеру.</small></span><i className={available ? "ready" : "offline"}>{loading ? "Загрузка" : available ? mode === "rules" ? "Локальный разбор" : "Доступен" : "Недоступен"}</i></header>
-      <div className="ps-ai-messages">
+      <header><MessageSquareText /><span><b>Персональный разбор</b><small>Аналитик получает только подготовленный контекст Prescore. Сырые выписки, БКИ, реквизиты и внутренняя методика не передаются AI‑провайдеру.</small></span><i className={available ? "ready" : "offline"}>{loading ? "Загрузка" : available ? mode === "rules" ? "Локальный разбор" : "Доступен" : "Недоступен"}</i></header>
+      <div className={'ps-ai-messages'+((loading||!messages.length)&&!sending?' is-idle':'')}>
         {loading && <div className="ps-ai-state"><LoaderCircle className="spin" /><b>Загружаем диалог…</b></div>}
         {!loading && available && !messages.length && <div className="ps-ai-empty"><MessageSquareText /><h2>Что хотите понять в анализе?</h2><p>Выберите быстрый вопрос или сформулируйте свой. Ответ будет опираться только на ваши рассчитанные показатели и доказательства.</p></div>}
         {messages.map((message) => <article key={message.id} className={message.role}><small>{message.role === "user" ? "Вы" : "Аналитик Prescore"}</small><p style={{overflowWrap:"anywhere"}}>{message.content}</p></article>)}

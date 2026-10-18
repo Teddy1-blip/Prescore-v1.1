@@ -1,0 +1,143 @@
+name: Prescore product QA
+
+on:
+  push:
+    branches: [prescore-product-v1, prescore-polish-v1, prescore-live-product-recovery-v1]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prescore-product-qa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+      - run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Product regression suite
+        # The previous step already built the exact SHA; run the full suite once.
+        run: node --experimental-strip-types --test tests/*.test.mjs
+      - name: Canonical business acceptance
+        run: npm run credit-lab:business -- "$RUNNER_TEMP/credit-lab-product-${{ github.run_id }}-${{ github.run_attempt }}"
+      - name: Lint
+        run: npm run lint
+      - name: Validate deployable artifact
+        run: npm run validate:artifact
+      - name: Standalone PDF extraction
+        run: node scripts/platform/pdf-artifact-smoke.mjs
+      - name: Preserve business acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: product-credit-lab-${{ github.sha }}
+          path: ${{ runner.temp }}/credit-lab-product-${{ github.run_id }}-${{ github.run_attempt }}/
+          if-no-files-found: error
+          retention-days: 30
+
+  presentation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+      - run: npm ci
+      - name: Install browser and native zoom controls
+        run: |
+          npx --no-install playwright install --with-deps chromium
+          sudo apt-get update
+          sudo apt-get install -y xvfb xdotool imagemagick
+      - name: Build canonical presentation harness
+        run: node --experimental-strip-types scripts/qa/client-analysis-v3-harness.mjs "$RUNNER_TEMP/client-v3-browser/harness"
+      - name: Full Analysis V3 responsive acceptance
+        run: xvfb-run -a -s "-screen 0 1600x1200x24" node scripts/qa/client-analysis-v3-browser.mjs "$RUNNER_TEMP/client-v3-browser"
+      - name: CLIENT product routes and responsive regression
+        run: node scripts/qa/client-product-browser.mjs "$RUNNER_TEMP/client-product-browser"
+      - name: BROKER canonical consistency and operational responsive regression
+        run: node scripts/qa/broker-product-browser.mjs "$RUNNER_TEMP/broker-product-browser"
+      - name: Preserve presentation evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: product-presentation-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/client-v3-browser/*.json
+            ${{ runner.temp }}/client-v3-browser/*.png
+            ${{ runner.temp }}/client-v3-browser/*.pdf
+            ${{ runner.temp }}/client-product-browser/*.json
+            ${{ runner.temp }}/client-product-browser/*.png
+            ${{ runner.temp }}/broker-product-browser/*.json
+            ${{ runner.temp }}/broker-product-browser/*.png
+          if-no-files-found: error
+          retention-days: 30
+
+  admin:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+      - run: npm ci
+      - name: Install ADMIN browser
+        run: npx --no-install playwright install --with-deps chromium
+      - name: ADMIN canonical and operational responsive regression
+        run: node scripts/qa/admin-product-browser.mjs "$RUNNER_TEMP/admin-product-browser"
+      - name: Preserve ADMIN evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: product-admin-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/admin-product-browser/*.json
+            ${{ runner.temp }}/admin-product-browser/*.png
+          if-no-files-found: error
+          retention-days: 30
+
+  billing:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: npx --no-install playwright install --with-deps chromium
+      - name: Billing lifecycle and partner settlement responsive QA (isolated Fake only)
+        run: node scripts/qa/billing-browser.mjs "$RUNNER_TEMP/billing-browser"
+      - name: Preserve billing evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: product-billing-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/billing-browser/*.json
+            ${{ runner.temp }}/billing-browser/*.png
+            ${{ runner.temp }}/billing-browser/*.txt
+          if-no-files-found: error
+          retention-days: 30

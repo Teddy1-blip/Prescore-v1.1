@@ -1,0 +1,1 @@
+export function boundedPage(url:string,max=100,defaultLimit=50){const p=new URL(url).searchParams,page=Number(p.get('page')??1),limit=Number(p.get('limit')??defaultLimit);if(!Number.isInteger(page)||page<1||page>100000||!Number.isInteger(limit)||limit<1||limit>max)throw Error('INVALID_PAGINATION');return{page,limit,offset:(page-1)*limit};}

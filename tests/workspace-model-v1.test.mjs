@@ -1,3 +1,4 @@
+import * as releaseSecurity from '../lib/release/security.ts';
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -54,16 +55,18 @@ for (const ownerFull of [false, true]) test(ownerFull
     "../../../lib/admin-controls": controls,
     "../api-auth": { requireApiUser: async () => current, unauthorized: apiAuth.unauthorized },
     "../../../lib/entitlements": entitlements,
+    "../../../lib/release/security": releaseSecurity,
   });
   const workspaceRoute = load("app/api/workspace-model/route.ts", {
     "../../../lib/platform/runtime": { getRuntime: () => ({ DB: db }) },
     "../../../lib/entitlements": entitlements,
+    "../../../lib/release/security": releaseSecurity,
     "../../../lib/workspace/service.ts": workspaceService,
     "../api-auth": { requireApiUser: async () => current, readableAnalysis: apiAuth.readableAnalysis },
   });
 
   try {
-    for (const migration of ["0001_product.sql", "0003_runtime_indexes.sql"]) {
+    for (const migration of ["0001_product.sql", "0003_runtime_indexes.sql", "0009_analysis_archive.sql"]) {
       await pg.exec(fs.readFileSync("lib/db/migrations/" + migration, "utf8"));
     }
 

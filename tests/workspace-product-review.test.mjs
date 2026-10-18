@@ -20,6 +20,9 @@ test('review cases preserve canonical values, warnings and distinct source compl
   assert.equal(model.state,'READY_FULL',suffix);
   assert.deepEqual(model.full.canonical.prescoreIndex,canonical.prescoreIndex,suffix);
   assert.deepEqual(model.full.canonical.debtCapacity,canonical.debtCapacity,suffix);
+  for(const source of canonical.sourceObservations.filter(s=>s.sourceType==='BFO')){
+   assert.ok(model.basic.sources.availability.some(s=>s.source==='FINANCIAL_STATEMENTS'&&s.status===source.status&&s.periodFrom===source.periodFrom&&s.periodTo===source.periodTo),'BFO source matches canonical '+suffix);
+  }
   const html=renderToStaticMarkup(React.createElement(Home,{model})),visible=text(html);
   assert.ok(visible.includes(model.full.report.hero.headline),suffix);
   assert.ok(visible.includes(model.full.report.index.status),suffix);
@@ -48,7 +51,7 @@ test('FULL calculation unavailable retains known banking facts without checkout 
  const unavailable=await(await rt.request('/api/workspace-model?analysisId='+id)).json();
  assert.equal(unavailable.entitlement,'FULL');assert.equal(unavailable.fullAvailability,'UNAVAILABLE');assert.equal(unavailable.state,'READY_BASIC');assert.equal(unavailable.basic.bankingFacts.operatingInflow.status,'KNOWN');
  for(const C of [Home,Financing]){const html=renderToStaticMarkup(React.createElement(C,{model:unavailable}));assert.doesNotMatch(html,/\/checkout\?/);assert.match(html,/Повторная оплата не требуется/);assert.match(html,/Повторить загрузку расчёта/);}
- assert.match(renderToStaticMarkup(React.createElement(EmptyHome,{start(){}})),/Загрузить выписку/);
+ assert.match(renderToStaticMarkup(React.createElement(EmptyHome,{start(){}})),/Загрузить банковскую выписку/);
  }finally{await rt.close();}
 });
 test('real operational handlers: assigned broker status and shared chat, owner document and cancellation',async(t)=>{

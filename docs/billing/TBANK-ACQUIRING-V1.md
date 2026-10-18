@@ -1,0 +1,18 @@
+# T-Bank acquiring contract V1
+
+Official sources verified 2026-10-11 (T-Bank EACQ, not investment/funding API):
+- https://developer.tbank.ru/eacq/api/init — Init: TerminalKey, Amount (integer kopeks), unique OrderId, Token; PayType=O one-stage. Hosted PaymentURL, fixed site NotificationURL/SuccessURL/FailURL. No Recurrent/Charge/Rebill/card fields.
+- https://developer.tbank.ru/eacq/api/get-state — GetState: TerminalKey, PaymentId, Token. Server polling reconciles a stored payment, never browser redirect.
+- https://developer.tbank.ru/eacq/api/cancel and https://developer.tbank.ru/eacq/scenarios/cancel_confirm/ — Cancel, PaymentId and Amount for full/partial cancellation/refund; PARTIAL_REFUNDED/REFUNDED are refund states, REVERSED is pre-capture cancellation.
+- https://developer.tbank.ru/eacq/intro/developer/token and https://developer.tbank.ru/eacq/intro/developer/notification — scalar root fields except Token/nested objects; add Password, lexically sort keys, concatenate values, SHA-256 UTF-8; constant-time notification comparison. Check TerminalKey, stored OrderId/PaymentId/amount and RUB-only contract. Success=true+CONFIRMED grants access; AUTHORIZED does not. Return HTTP 200 with exactly uppercase ASCII OK after committed processing. Never persist Token/Password/PAN/card fields.
+- https://developer.tbank.ru/eacq/api/check-order — CheckOrder for unknown Init outcomes; no blind repeated Init. Unknown result remains UNKNOWN_REVIEW and blocks another checkout until verified reconciliation. A delayed signed callback can bind the missing provider ID.
+- https://developer.tbank.ru/eacq/intro/errors/test-cases — DEMO terminal uses securepay.tinkoff.ru/v2; test cases include failure/cancellation/receipt. Separate https://developer.tbank.ru/eacq/intro/errors/test environment uses rest-api-test.tinkoff.ru/v2 with non-DEMO terminal and bank IP allowlist. Neither environment is called by CI/local tests.
+- https://developer.tbank.ru/eacq/api/priem-platezhei — JSON POST, case-sensitive fields, TLS >=1.2; EACQ RUB only.
+
+Normalized mapping: NEW=CREATED; FORM_SHOWED/AUTHORIZING/3DS_CHECKING/3DS_CHECKED/AUTHORIZED/CONFIRMING=PROCESSING; CONFIRMED=SUCCEEDED; REJECTED/DEADLINE_EXPIRED/AUTH_FAIL=FAILED; CANCELED/REVERSED/PARTIAL_REVERSED=CANCELLED; PARTIAL_REFUNDED=PARTIALLY_REFUNDED; REFUNDED=REFUNDED. Unknown=UNKNOWN_REVIEW, no automatic access.
+
+Local unique checkout/payment/event keys and row/advisory locks own idempotency. Provider Init has unique OrderId; no undocumented provider Idempotency-Key header is assumed. On transport timeout/result loss do not send Init or Cancel blindly again. Persist review state; reconcile signed callback/stored PaymentId. Provider refunds require confirmed cumulative amount before access/commission changes; ambiguous refund notifications are held for review rather than guessing delta from Amount.
+
+Configuration server-only: BILLING_PROVIDER=TBANK, BILLING_LIVE_ENABLED=true, TBANK_TERMINAL_KEY, TBANK_PASSWORD, TBANK_ENV=test|production, BILLING_SITE_ORIGIN (HTTPS origin), BILLING_FISCALIZATION_APPROVED=true only after a confirmed external fiscalization arrangement. Default Disabled. Fake requires isolated-test opt-in outside production. CI forbids T-Bank selection. Fixed host allowlist, no arbitrary URL, redirects rejected, 10s timeout, standard TLS validation. No raw provider response logs.
+
+Receipt contract: status/reference stored; owner must confirm receipt requirement, tax system, VAT, payment method/object, contact and T-Bank cash-register scheme. No guessed live Receipt payload; current adapter requires approved fiscalization outside this request. Pending configuration blocks live checkout.

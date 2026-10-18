@@ -160,7 +160,10 @@
       "readiness",
       "payload",
       "owner_email",
-      "created_at"
+      "created_at",
+      "archive_state",
+      "archived_at",
+      "archive_batch_id"
     ],
     "primaryKey": [
       "id"
@@ -373,6 +376,454 @@
       "amount",
       "created_at",
       "updated_at"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "admin_analysis_observations",
+    "columns": [
+      "analysis_id",
+      "input_fingerprint",
+      "canonical_version",
+      "canonical_state",
+      "source_state",
+      "completeness",
+      "index_value",
+      "readiness",
+      "assessment",
+      "debt_capacity_status",
+      "critical_count",
+      "observed_at"
+    ],
+    "primaryKey": [
+      "analysis_id"
+    ]
+  },
+  {
+    "table": "billing_orders",
+    "columns": [
+      "id",
+      "order_number",
+      "owner_email",
+      "company_inn",
+      "company_name",
+      "analysis_id",
+      "plan_code",
+      "plan_version",
+      "amount_minor",
+      "currency",
+      "status",
+      "source_channel",
+      "attribution_status",
+      "broker_code",
+      "curator_code",
+      "offer_version",
+      "privacy_version",
+      "accepted_at",
+      "created_at",
+      "expires_at",
+      "updated_at",
+      "idempotency_key"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "billing_payments",
+    "columns": [
+      "id",
+      "order_id",
+      "provider",
+      "provider_payment_id",
+      "raw_status",
+      "status",
+      "amount_minor",
+      "currency",
+      "payment_url",
+      "confirmed_at",
+      "failed_at",
+      "created_at",
+      "updated_at",
+      "refunded_minor",
+      "provider_fee_minor",
+      "idempotency_key",
+      "receipt_status",
+      "receipt_reference"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "billing_events",
+    "columns": [
+      "id",
+      "provider",
+      "provider_payment_id",
+      "fingerprint",
+      "raw_status",
+      "safe_payload",
+      "received_at",
+      "processed_at",
+      "result"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "billing_subscriptions",
+    "columns": [
+      "id",
+      "owner_email",
+      "company_inn",
+      "company_name",
+      "plan_code",
+      "status",
+      "access_from",
+      "access_until",
+      "created_at",
+      "updated_at"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "billing_periods",
+    "columns": [
+      "id",
+      "subscription_id",
+      "payment_id",
+      "order_id",
+      "starts_at",
+      "ends_at",
+      "original_ends_at",
+      "status",
+      "refunded_minor",
+      "created_at"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "billing_payout_profiles",
+    "columns": [
+      "beneficiary_code",
+      "beneficiary_type",
+      "recipient_id",
+      "verification_status",
+      "masked_destination",
+      "compliance_hold",
+      "created_at",
+      "updated_at"
+    ],
+    "primaryKey": [
+      "beneficiary_code"
+    ]
+  },
+  {
+    "table": "billing_commissions",
+    "columns": [
+      "id",
+      "payment_id",
+      "order_id",
+      "role",
+      "beneficiary_code",
+      "rate_bps",
+      "gross_basis_minor",
+      "amount_minor",
+      "status",
+      "reversal_minor",
+      "adjustment_minor",
+      "hold_reason",
+      "policy_version",
+      "created_at",
+      "updated_at",
+      "idempotency_key"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "billing_payouts",
+    "columns": [
+      "id",
+      "commission_id",
+      "beneficiary_code",
+      "amount_minor",
+      "currency",
+      "provider",
+      "provider_payout_id",
+      "status",
+      "attempt",
+      "failure_code",
+      "next_retry_at",
+      "created_at",
+      "completed_at",
+      "idempotency_key"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "billing_refunds",
+    "columns": [
+      "id",
+      "payment_id",
+      "amount_minor",
+      "cumulative_minor",
+      "status",
+      "provider_refund_id",
+      "reason",
+      "created_at",
+      "confirmed_at",
+      "idempotency_key"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "billing_ledger",
+    "columns": [
+      "id",
+      "kind",
+      "payment_id",
+      "beneficiary_code",
+      "amount_minor",
+      "currency",
+      "reference_id",
+      "idempotency_key",
+      "created_at"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "billing_outbox",
+    "columns": [
+      "id",
+      "event_type",
+      "aggregate_id",
+      "payload",
+      "status",
+      "attempts",
+      "next_attempt_at",
+      "created_at",
+      "processed_at",
+      "idempotency_key"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "billing_funnel",
+    "columns": [
+      "id",
+      "owner_email",
+      "company_inn",
+      "order_id",
+      "event_type",
+      "created_at",
+      "idempotency_key"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "platform_bootstrap",
+    "columns": [
+      "id",
+      "applied_at",
+      "user_id"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "platform_roles",
+    "columns": [
+      "user_id",
+      "role"
+    ],
+    "primaryKey": [
+      "user_id",
+      "role"
+    ]
+  },
+  {
+    "table": "platform_security_events",
+    "columns": [
+      "id",
+      "user_id",
+      "event",
+      "created_at"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "user",
+    "columns": [
+      "id",
+      "name",
+      "email",
+      "emailVerified",
+      "image",
+      "createdAt",
+      "updatedAt"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "session",
+    "columns": [
+      "id",
+      "userId",
+      "token",
+      "expiresAt",
+      "ipAddress",
+      "userAgent",
+      "createdAt",
+      "updatedAt"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "account",
+    "columns": [
+      "id",
+      "userId",
+      "accountId",
+      "providerId",
+      "accessToken",
+      "refreshToken",
+      "idToken",
+      "accessTokenExpiresAt",
+      "refreshTokenExpiresAt",
+      "scope",
+      "password",
+      "createdAt",
+      "updatedAt"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "verification",
+    "columns": [
+      "id",
+      "identifier",
+      "value",
+      "expiresAt",
+      "createdAt",
+      "updatedAt"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "rateLimit",
+    "columns": [
+      "id",
+      "key",
+      "count",
+      "lastRequest"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "rc_provider_state",
+    "columns": [
+      "provider",
+      "id",
+      "idempotency_key",
+      "state",
+      "created_at"
+    ],
+    "primaryKey": [
+      "provider",
+      "id"
+    ]
+  },
+  {
+    "table": "rc_mailbox",
+    "columns": [
+      "id",
+      "recipient",
+      "subject",
+      "body",
+      "created_at"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "runtime_workers",
+    "columns": [
+      "id",
+      "heartbeat_at",
+      "status",
+      "source_sha",
+      "processed"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "runtime_rate_limits",
+    "columns": [
+      "bucket",
+      "count",
+      "expires_at"
+    ],
+    "primaryKey": [
+      "bucket"
+    ]
+  },
+  {
+    "table": "runtime_operations",
+    "columns": [
+      "id",
+      "event",
+      "result",
+      "created_at"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "analysis_archive_batches",
+    "columns": [
+      "id",
+      "cutover_at",
+      "preview_hash",
+      "record_count",
+      "executed_at",
+      "restored_at"
     ],
     "primaryKey": [
       "id"

@@ -1,3 +1,4 @@
+import {activeFinancialSnapshots, financialSources} from "../financial-analysis/source-selection.ts";
 import {safeReason} from './diagnostics.ts';
 import type { AnalysisResult } from '../../prescore.ts';
 import type { CompanyProfileData } from '../../company-profile.ts';
@@ -36,7 +37,8 @@ export class CanonicalUnavailable extends Error {
 }
 function sourcesOf({analysis: a, companyProfile: p}: CanonicalSavedInput): SourceEnvelope[] {
   return [...(a.sourceManifest?.bankStatements ?? []),
-    ...[a.sourceManifest?.bfo, a.sourceManifest?.quarterly, a.sourceManifest?.bki, p?.sourceManifest?.bfo].filter((s): s is SourceEnvelope => !!s),
+    ...financialSources(a.sourceManifest), ...financialSources(p?.sourceManifest),
+    ...[a.sourceManifest?.bki].filter((s): s is SourceEnvelope => !!s),
     ...(a.sourceManifest?.external ?? []), ...(p?.sourceManifest?.external ?? [])];
 }
 // Knowledge cutoff: latest recorded observation/receipt or period end, never the wall clock.
@@ -63,14 +65,14 @@ export function buildCanonicalCreditAnalysis(input: CanonicalSavedInput) {
     if (!/^\d{10}(\d{2})?$/.test(a.companyInn) || p && p.inn !== a.companyInn || allSources.some(s => s.companyInn !== a.companyInn)) throw new CanonicalUnavailable(stage, 'SOURCE_IDENTITY_MISMATCH');
     if (!a.metricsV2 || !a.sourceManifest?.bankStatements.length) throw new CanonicalUnavailable('BANK_METRICS_REQUIRED', 'BANK_METRICS_MISSING');
     const asOfDate = canonicalAsOf(input);
-    const manifest = {...a.sourceManifest, ...(p?.sourceManifest?.bfo ? {bfo: p.sourceManifest.bfo} : {}), external: [...(a.sourceManifest.external ?? []), ...(p?.sourceManifest?.external ?? [])]};
+    const analysisBfo = a.sourceManifest.bfo;
+    const profileBfo = p?.sourceManifest?.bfo;
+    const authoritativeBfo = analysisBfo?.status === 'READY' ? analysisBfo : profileBfo ?? analysisBfo;
+    const manifest = {...a.sourceManifest, ...(authoritativeBfo ? {bfo: authoritativeBfo} : {}), external: [...(a.sourceManifest.external ?? []), ...(p?.sourceManifest?.external ?? [])]};
     stage = 'FINANCIAL_ANALYSIS';
     const availableSnapshots = [...(a.financialStatementsV2 ?? a.financialAnalysisV2?.history.map(h => h.snapshot) ?? []),
       ...(p?.financialStatementsV2 ?? p?.financialAnalysisV2?.history.map(h => h.snapshot) ?? [])];
-    const snapshots = [...new Map(availableSnapshots.filter(s => {
-      const source = s.sourceType === 'QUARTERLY' ? manifest.quarterly : manifest.bfo;
-      return source?.status === 'READY' && source.sourceId === s.sourceId && (!source.contentHash || source.contentHash === s.source.contentHash);
-    }).map(s => [s.snapshotId, s])).values()];
+    const snapshots = activeFinancialSnapshots(availableSnapshots, [a.sourceManifest, p?.sourceManifest]);
     if (snapshots.some(s => s.companyInn !== a.companyInn)) throw new CanonicalUnavailable(stage, 'SOURCE_IDENTITY_MISMATCH');
     const financialAnalysis = snapshots.length ? buildFinancialAnalysis(snapshots) : undefined;
     stage = 'CREDIT_PORTFOLIO';

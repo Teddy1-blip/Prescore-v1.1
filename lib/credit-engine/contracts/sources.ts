@@ -123,6 +123,8 @@ export type DataIntegritySummary = {
 export type AnalysisSourceManifest = {
   bankStatements: SourceEnvelope[];
   bfo?: SourceEnvelope;
+  /** Active uploaded financial periods; replacement retires only the matching period. */
+  financialUploads?: SourceEnvelope[];
   quarterly?: SourceEnvelope;
   bki?: SourceEnvelope;
   external?: SourceEnvelope[];

@@ -1,3 +1,4 @@
+import {financialSources} from "../credit-engine/financial-analysis/source-selection.ts";
 import type { AnalysisResult } from "../prescore.ts";
 import type { BankStatementMetricsV2, MetricResult } from "../credit-engine/contracts/metrics.ts";
 import type { SourceStatus } from "../credit-engine/contracts/sources.ts";
@@ -27,6 +28,7 @@ export type WorkspaceOperationalStateV1 = {
 };
 
 export type WorkspaceBasicV1 = {
+  financingRequest?: import("./financing-request.ts").FinancingRequestV1;
   analysis: {
     id: string;
     company: { name: string; inn: string };
@@ -46,6 +48,7 @@ export type WorkspaceBasicV1 = {
     operatingInflow: WorkspaceFactV1;
     observedMonthlyOperatingAverage: WorkspaceFactV1;
     fullMonthOperatingAverage: WorkspaceFactV1;
+    seasonality?: {status:string;trend:WorkspaceFactV1;volatility:WorkspaceFactV1;peakToAverage:WorkspaceFactV1};
     loanPrincipalPayments: WorkspaceFactV1;
     interestPayments: WorkspaceFactV1;
     unsplitDebtPayments: WorkspaceFactV1;
@@ -116,10 +119,9 @@ function sourceAvailability(analysis: AnalysisResult): WorkspaceBasicV1["sources
   const manifest = analysis.sourceManifest;
   const sources = [
     ...(Array.isArray(manifest?.bankStatements) ? manifest.bankStatements.map((item) => ({ source: "BANK_STATEMENTS", item })) : []),
-    ...(manifest?.bfo ? [{ source: "FINANCIAL_STATEMENTS", item: manifest.bfo }] : []),
-    ...(manifest?.quarterly ? [{ source: "QUARTERLY_REPORT", item: manifest.quarterly }] : []),
+    ...financialSources(manifest).map(item => ({source: item.sourceType === "BFO" ? "FINANCIAL_STATEMENTS" : "QUARTERLY_REPORT", item})),
     ...(manifest?.bki ? [{ source: "CREDIT_HISTORY", item: manifest.bki }] : []),
-    ...(Array.isArray(manifest?.external) ? manifest.external.map((item) => ({ source: "EXTERNAL_SOURCE", item })) : []),
+    ...(Array.isArray(manifest?.external) ? manifest.external.map((item) => ({ source: item.sourceId.startsWith("client-request-") ? "CLIENT_DECLARATION" : "EXTERNAL_SOURCE", item })) : []),
   ];
   return sources.map(({ source, item }) => ({
     source,
@@ -141,6 +143,7 @@ export function projectWorkspaceBasic(
   const statementPeriodFrom = metrics?.period.from ?? (statements?.length ? statements.map((item) => item.periodFrom).filter((value): value is string => !!value).sort()[0] ?? null : null);
   const statementPeriodTo = metrics?.period.to ?? (statements?.length ? statements.map((item) => item.periodTo).filter((value): value is string => !!value).sort().at(-1) ?? null : null);
   return {
+    financingRequest: analysis.financingRequestV1 ? structuredClone(analysis.financingRequestV1) : undefined,
     analysis: {
       id: analysis.id,
       company: { name: analysis.companyName, inn: analysis.companyInn },
@@ -167,6 +170,7 @@ export function projectWorkspaceBasic(
       operatingInflow: fact(metrics?.operating.operatingCashReceipts),
       observedMonthlyOperatingAverage: fact(metrics?.operating.observedMonthlyOperatingAverage),
       fullMonthOperatingAverage: fact(metrics?.operating.fullMonthOperatingAverage),
+      seasonality: {status:metrics?.operating.seasonalityStatus??'INSUFFICIENT_HISTORY',trend:fact(metrics?.operating.operatingReceiptsTrend,'RATIO'),volatility:fact(metrics?.operating.operatingReceiptsVolatility,'RATIO'),peakToAverage:fact(metrics?.operating.peakToAverageRatio,'RATIO')},
       loanPrincipalPayments: fact(metrics?.debtService.loanPrincipalPaid),
       interestPayments: fact(metrics?.debtService.interestPaid),
       unsplitDebtPayments: fact(metrics?.debtService.unsplitDebtService),

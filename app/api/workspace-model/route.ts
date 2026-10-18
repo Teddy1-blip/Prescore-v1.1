@@ -33,7 +33,7 @@ export async function GET(request: Request) {
       };
     };
     const workspace = await loadWorkspaceModelV1(analysisId, {
-      readAccess: (id) => readableAnalysis(db, id, user),
+      readAccess: (id) => readableAnalysis(db, id, user, user.isAdmin && new URL(request.url).pathname === '/api/admin' && new URL(request.url).searchParams.get('archive') === 'archived'),
       readTier: (id, access) => resolveAnalysisTier(db, {
         analysisId: id,
         userEmail: access.row.ownerEmail ?? user.email,

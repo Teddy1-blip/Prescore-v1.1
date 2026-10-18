@@ -14,7 +14,7 @@ test('unregistered replacement and runtime destructive DDL fail closed',async()=
 });
 test('PostgreSQL schema preserves all legacy column names',()=>{
  const legacy=JSON.parse(fs.readFileSync(new URL('../docs/platform-migration/table-inventory.json',import.meta.url)));
- for(const t of legacy)assert.deepEqual(catalog.find(c=>c.table===t.table).columns,t.columns);
+ for(const t of legacy)assert.deepEqual(catalog.find(c=>c.table===t.table).columns,t.table==='analyses'?[...t.columns,'archive_state','archived_at','archive_batch_id']:t.columns);
 });
 test('PostgreSQL execution: explicit migration, aliases, ignore, batch rollback, schema assertion',async()=>{
  const pg=new PGlite();

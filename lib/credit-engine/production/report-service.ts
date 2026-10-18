@@ -1,3 +1,4 @@
+import {savedCanonicalInput} from "../../workspace/financing-request.ts";
 import {diagnostic, inputSummary} from './diagnostics.ts';
 import { publicCanonicalModel } from './public-model.ts';
 import type { AnalysisResult } from '../../prescore.ts';
@@ -27,7 +28,7 @@ export async function loadCanonicalReport(analysisId: string, dependencies: Repo
     stage = 'PROFILE_READ';
     companyProfile = await dependencies.readProfile(access.row.companyInn);
     stage = 'SOURCES';
-    const result = buildCanonicalCreditAnalysis({analysis, companyProfile});
+    const result = buildCanonicalCreditAnalysis(savedCanonicalInput(analysis,companyProfile));
     // Only the presentation contract leaves this server boundary. Engines, evidence,
     // policy thresholds, raw source fields and the future AI seam stay server-side.
     return {status: 'READY' as const, model: publicCanonicalModel(result.model, result)};

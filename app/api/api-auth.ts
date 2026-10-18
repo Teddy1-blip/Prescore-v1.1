@@ -16,10 +16,11 @@ type AnalysisStatement = { bind: (...values: unknown[]) => AnalysisStatement; fi
 type AnalysisDatabase = { prepare: (query: string) => AnalysisStatement };
 export type AnalysisAccessRow = { payload: string; companyInn: string; ownerEmail?: string };
 
-export async function readableAnalysis<T extends AnalysisAccessRow = AnalysisAccessRow>(database: AnalysisDatabase, analysisId: string, user: { email: string; isAdmin: boolean }) {
+export async function readableAnalysis<T extends AnalysisAccessRow = AnalysisAccessRow>(database: AnalysisDatabase, analysisId: string, user: { email: string; isAdmin: boolean }, includeArchived = false) {
+  const archiveFilter = includeArchived && user.isAdmin ? "1=1" : "archive_state = 'ACTIVE'";
   const ownerQuery = user.isAdmin
-    ? "SELECT payload, company_inn AS companyInn, owner_email AS ownerEmail FROM analyses WHERE id = ? LIMIT 1"
-    : "SELECT payload, company_inn AS companyInn, owner_email AS ownerEmail FROM analyses WHERE id = ? AND owner_email = ? LIMIT 1";
+    ? `SELECT payload, company_inn AS companyInn, owner_email AS ownerEmail FROM analyses WHERE ${archiveFilter} AND id = ? LIMIT 1`
+    : "SELECT payload, company_inn AS companyInn, owner_email AS ownerEmail FROM analyses WHERE archive_state = 'ACTIVE' AND id = ? AND owner_email = ? LIMIT 1";
   const owned = await database.prepare(ownerQuery).bind(...(user.isAdmin ? [analysisId] : [analysisId, user.email])).first<T>();
   if (owned) return { row: owned, access: user.isAdmin && owned.ownerEmail !== user.email ? "admin" as const : "owner" as const };
   try {
@@ -27,7 +28,7 @@ export async function readableAnalysis<T extends AnalysisAccessRow = AnalysisAcc
       FROM analyses a
       JOIN agent_leads l ON l.company_inn = a.company_inn
       JOIN agent_accounts aa ON aa.agent_code = l.agent_code
-      WHERE a.id = ? AND aa.user_email = ?
+      WHERE a.archive_state = 'ACTIVE' AND a.id = ? AND aa.user_email = ?
       ORDER BY l.updated_at DESC LIMIT 1`).bind(analysisId, user.email).first<T>();
     return assigned ? { row: assigned, access: "agent" as const } : null;
   } catch {

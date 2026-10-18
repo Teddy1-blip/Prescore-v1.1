@@ -1,0 +1,3 @@
+// Shared metadata predicate. Analysis alias a; the existing per-analysis grant alias e.
+export const paidCompanyPredicate=`EXISTS(SELECT 1 FROM billing_subscriptions bs WHERE bs.owner_email=a.owner_email AND bs.company_inn=a.company_inn AND bs.status='ACTIVE' AND bs.access_from<=CURRENT_TIMESTAMP AND bs.access_until>CURRENT_TIMESTAMP AND EXISTS(SELECT 1 FROM billing_periods bp WHERE bp.subscription_id=bs.id AND bp.status='ACTIVE' AND bp.starts_at<=CURRENT_TIMESTAMP AND bp.ends_at>CURRENT_TIMESTAMP))`;
+export const fullMetadataPredicate=`((e.tier='FULL' AND e.revoked_at='') OR ${paidCompanyPredicate})`;

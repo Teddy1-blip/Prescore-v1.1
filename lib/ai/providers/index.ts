@@ -59,6 +59,7 @@ export class DeepSeekProvider implements AIProvider {
 }
 
 export function configuredProvider(env: Record<string, string | undefined> = process.env): AIProvider | null {
+ if (['local','disabled'].includes(env.AI_PROVIDER??''))return null;
  if (env.AI_PROVIDER && env.AI_PROVIDER !== 'deepseek') throw Error('AI_PROVIDER_UNSUPPORTED');
  if (!env.DEEPSEEK_API_KEY || !env.DEEPSEEK_MODEL) return null;
  return new DeepSeekProvider({apiKey: env.DEEPSEEK_API_KEY, model: env.DEEPSEEK_MODEL, baseUrl: env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com'});

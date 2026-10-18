@@ -74,8 +74,8 @@ export async function GET(request: Request) {
     const region = String(url.searchParams.get("region") || "").trim().toLowerCase();
     const minGuarantee = Math.max(0, Number(url.searchParams.get("minGuarantee")) || 0);
     const hasContacts = url.searchParams.get("hasContacts") === "1";
-    const limit = Math.min(500, Math.max(20, Number(url.searchParams.get("limit")) || 200));
-    const offset = Math.max(0, Number(url.searchParams.get("offset")) || 0);
+    const limit=Number(url.searchParams.get("limit")??100);if(!Number.isInteger(limit)||limit<1||limit>200)return Response.json({error:"INVALID_PAGINATION"},{status:400});
+    const offset=Number(url.searchParams.get("offset")??0);if(!Number.isInteger(offset)||offset<0||offset>10000000||query.length>120||region.length>120)return Response.json({error:"INVALID_FILTER"},{status:400});
     const clauses = ["agent_code = ?"]; const values: unknown[] = [agentCode];
     if (status !== "all") { clauses.push("status = ?"); values.push(status); }
     if (query) { clauses.push("(lower(company_name) LIKE ? OR company_inn LIKE ? OR notice_number LIKE ? OR lower(data_json) LIKE ?)"); const like = `%${query}%`; values.push(like, like, like, like); }
@@ -84,7 +84,7 @@ export async function GET(request: Request) {
     if (hasContacts) clauses.push("(data_json LIKE '%\"phones\":[\"%' OR data_json LIKE '%\"emails\":[\"%')");
     const where = clauses.join(" AND ");
     const [rowsResult, summaryResult, regionResult] = await db.batch([
-      db.prepare(`SELECT id, status, reject_reason AS rejectReason, lead_id AS leadId, application_id AS applicationId, data_json AS dataJson, updated_at AS updatedAt FROM agent_prospects WHERE ${where} ORDER BY guarantee_amount DESC, updated_at DESC LIMIT ? OFFSET ?`).bind(...values, limit, offset),
+      db.prepare(`SELECT id, status, reject_reason AS rejectReason, lead_id AS leadId, application_id AS applicationId, data_json AS dataJson, updated_at AS updatedAt FROM agent_prospects WHERE ${where} ORDER BY guarantee_amount DESC, updated_at DESC,id DESC LIMIT ? OFFSET ?`).bind(...values, limit, offset),
       db.prepare(`SELECT status, COUNT(*) AS count FROM agent_prospects WHERE agent_code = ? GROUP BY status`).bind(agentCode),
       db.prepare(`SELECT region, COUNT(*) AS count FROM agent_prospects WHERE agent_code = ? AND region <> '' GROUP BY region ORDER BY count DESC LIMIT 50`).bind(agentCode),
     ]);
@@ -110,7 +110,7 @@ export async function POST(request: Request) {
       return Response.json({ ok: true, imported: statements.length });
     }
     if (type === "match") {
-      const matches = await db.batch([db.prepare(`SELECT p.id, p.notice_number AS noticeNumber, p.guarantee_amount AS guaranteeAmount, l.id AS leadId, l.company_name AS companyName, l.consent_at AS consentAt, (SELECT a.id FROM analyses a WHERE a.company_inn = l.company_inn ORDER BY a.created_at DESC LIMIT 1) AS analysisId FROM agent_prospects p JOIN agent_leads l ON l.agent_code = p.agent_code AND l.company_inn = p.company_inn WHERE p.agent_code = ? AND p.status = 'new' LIMIT 200`).bind(agentCode)]);
+      const matches = await db.batch([db.prepare(`SELECT p.id, p.notice_number AS noticeNumber, p.guarantee_amount AS guaranteeAmount, l.id AS leadId, l.company_name AS companyName, l.consent_at AS consentAt, (SELECT a.id FROM analyses a WHERE a.company_inn = l.company_inn AND a.archive_state='ACTIVE' ORDER BY a.created_at DESC LIMIT 1) AS analysisId FROM agent_prospects p JOIN agent_leads l ON l.agent_code = p.agent_code AND l.company_inn = p.company_inn WHERE p.agent_code = ? AND p.status = 'new' LIMIT 200`).bind(agentCode)]);
       let created = 0;
       for (const row of matches[0].results as Array<Record<string, unknown>>) {
         const applicationId = await createGuaranteeDraft(db, agentCode, { id: String(row.leadId), companyName: String(row.companyName), analysisId: String(row.analysisId || ""), consentAt: String(row.consentAt || "") }, { id: String(row.id), guaranteeAmount: Number(row.guaranteeAmount), noticeNumber: String(row.noticeNumber) }, user.email);

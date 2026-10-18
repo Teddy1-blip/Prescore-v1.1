@@ -1,6 +1,6 @@
 {
   "name": "prescore",
-  "version": "0.1.0",
+  "version": "1.0.0-rc.1",
   "private": true,
   "engines": {
     "node": ">=22.13.0"
@@ -21,16 +21,30 @@
     "ai:smoke": "node --experimental-strip-types scripts/platform/ai-smoke.mjs",
     "env:check": "node --experimental-strip-types scripts/platform/env-check.mjs",
     "credit-lab:development": "node --experimental-strip-types scripts/credit-lab-development.mjs",
-    "credit-lab:business": "node --experimental-strip-types scripts/credit-lab-business.mjs"
+    "credit-lab:business": "node --experimental-strip-types scripts/credit-lab-business.mjs",
+    "typecheck": "node scripts/platform/typecheck.mjs",
+    "db:status": "node --experimental-strip-types scripts/platform/db-migrate.mjs --status",
+    "db:verify": "node --experimental-strip-types scripts/platform/db-migrate.mjs --verify",
+    "start:rc": "node --experimental-strip-types scripts/release/start.mjs",
+    "worker:billing": "node --experimental-strip-types scripts/billing/payout-worker.mjs",
+    "worker:billing:once": "node --experimental-strip-types scripts/billing/payout-worker.mjs --once",
+    "worker:ready": "node --experimental-strip-types scripts/release/worker-ready.mjs",
+    "storage:verify": "node --experimental-strip-types scripts/release/storage-verify.mjs",
+    "backup:create": "node --experimental-strip-types scripts/release/backup.mjs create",
+    "backup:verify": "node --experimental-strip-types scripts/release/backup.mjs verify",
+    "backup:restore": "node --experimental-strip-types scripts/release/backup.mjs restore",
+    "storage:backup": "node --experimental-strip-types scripts/release/backup.mjs storage",
+    "storage:backup:verify": "node --experimental-strip-types scripts/release/backup.mjs storage-verify",
+    "analysis:archive": "node --experimental-strip-types scripts/release/analysis-archive.mjs"
   },
   "dependencies": {
     "better-auth": "1.7.5",
     "drizzle-orm": "0.45.2",
-    "fflate": "0.7.4",
-    "lucide-react": "^1.25.0",
-    "next": "16.2.6",
+    "fflate": "0.7.5",
+    "lucide-react": "1.25.0",
+    "next": "16.4.0",
     "nodemailer": "10.0.10",
-    "pdfjs-dist": "^5.4.530",
+    "pdfjs-dist": "5.4.530",
     "pg": "8.23.0",
     "react": "19.2.6",
     "react-dom": "19.2.6"
@@ -45,11 +59,15 @@
     "@types/react-dom": "19.2.3",
     "drizzle-kit": "0.31.10",
     "eslint": "9.39.4",
-    "eslint-config-next": "16.2.6",
+    "eslint-config-next": "16.4.0",
     "playwright": "1.62.1",
     "react-server-dom-webpack": "19.2.6",
     "tailwindcss": "4.2.1",
     "typescript": "5.9.3"
   },
-  "type": "module"
+  "type": "module",
+  "overrides": {
+    "source-map-js": "1.2.2",
+    "baseline-browser-mapping": "2.11.28"
+  }
 }

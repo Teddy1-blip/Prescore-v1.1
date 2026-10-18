@@ -5,7 +5,7 @@ test('actual SQL authorization: owner, assigned agent, unrelated client, admin, 
  const pg=new PGlite();const catalog=JSON.parse(fs.readFileSync(new URL('../lib/db/catalog.json',import.meta.url)));
  const query=async(s,v)=>{const r=await pg.query(s,v);return{rows:r.rows,rowCount:r.affectedRows};};const db=new PortableDatabase({query,connect:async()=>({query,release(){}})},catalog);
  try{
-  for(const f of ['0001_product.sql','0003_runtime_indexes.sql'])await pg.exec(fs.readFileSync(new URL('../lib/db/migrations/'+f,import.meta.url),'utf8'));
+  for(const f of ['0001_product.sql','0003_runtime_indexes.sql','0009_analysis_archive.sql'])await pg.exec(fs.readFileSync(new URL('../lib/db/migrations/'+f,import.meta.url),'utf8'));
   await query(`INSERT INTO analyses(id,company_name,company_inn,file_name,period_from,period_to,score,grade,readiness,payload,owner_email) VALUES('a','Synthetic','7700000000','synthetic','2026-01-01','2026-01-31',1,'A','test','{}','owner@test.invalid')`);
   await query(`INSERT INTO agent_accounts(user_email,agent_code,name) VALUES('agent@test.invalid','agent','Synthetic')`);
   await query(`INSERT INTO agent_leads(id,agent_code,company_name,company_inn,consent_at) VALUES('l','agent','Synthetic','7700000000','2026-01-01')`);

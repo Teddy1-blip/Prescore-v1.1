@@ -1,6 +1,6 @@
 // Portable storage projection. Existing analytical schema semantics retained.
 import { sql } from "drizzle-orm";
-import { bigint, pgTable, text } from "drizzle-orm/pg-core";
+import { bigint, boolean, timestamp, doublePrecision, pgTable, text, integer, check, index } from "drizzle-orm/pg-core";
 
 export const analyses = pgTable("analyses", {
   id: text("id").primaryKey(),
@@ -15,7 +15,19 @@ export const analyses = pgTable("analyses", {
   payload: text("payload").notNull(),
   ownerEmail: text("owner_email").notNull().default(""),
   createdAt: text("created_at").notNull().default(sql`to_char(clock_timestamp() at time zone 'UTC', 'YYYY-MM-DD HH24:MI:SS')`),
-});
+  archiveState: text("archive_state").notNull().default("ACTIVE"),
+  archivedAt: text("archived_at"),
+  archiveBatchId: text("archive_batch_id"),
+}, table=>[
+  check("analyses_archive_state_check",sql`${table.archiveState} IN ('ACTIVE','LEGACY_PREPRODUCTION')`),
+  index("analyses_active_owner_date").on(table.ownerEmail,table.createdAt.desc()).where(sql`${table.archiveState} = 'ACTIVE'`),
+]);
+export const analysisArchiveBatches = pgTable("analysis_archive_batches", {
+ id:text("id").primaryKey(),cutoverAt:timestamp("cutover_at",{withTimezone:true}).notNull(),
+ previewHash:text("preview_hash").notNull(),recordCount:integer("record_count").notNull(),
+ executedAt:timestamp("executed_at",{withTimezone:true}).notNull().defaultNow(),restoredAt:timestamp("restored_at",{withTimezone:true}),
+},table=>[check("analysis_archive_batches_record_count_check",sql`${table.recordCount} >= 0`)]);
+
 
 export const deals = pgTable("deals", {
   id: text("id").primaryKey(),
@@ -275,3 +287,193 @@ export const aiUsage = pgTable("ai_usage", {
   errorType: text("error_type"),
   createdAt: text("created_at").notNull(),
 });
+
+// ADMIN observations cache published outputs; credit math remains in the canonical engine.
+export const adminAnalysisObservations = pgTable("admin_analysis_observations", {
+ analysisId: text("analysis_id").primaryKey().references(()=>analyses.id),
+ inputFingerprint: text("input_fingerprint").notNull(),
+ canonicalVersion: text("canonical_version").notNull(),
+ canonicalState: text("canonical_state").notNull(),
+ sourceState: text("source_state").notNull(),
+ completeness: doublePrecision("completeness"),
+ indexValue: doublePrecision("index_value"),
+ readiness: text("readiness"),
+ assessment: text("assessment"),
+ debtCapacityStatus: text("debt_capacity_status"),
+ criticalCount: bigint("critical_count", {mode:"number"}),
+ observedAt: text("observed_at").notNull(),
+});
+
+// Billing migrations own foreign keys, uniqueness and immutable ledger constraints.
+export const billingOrders = pgTable("billing_orders", {
+ id: text("id").primaryKey(),
+ orderNumber: text("order_number"),
+ ownerEmail: text("owner_email"),
+ companyInn: text("company_inn"),
+ companyName: text("company_name"),
+ analysisId: text("analysis_id"),
+ planCode: text("plan_code"),
+ planVersion: text("plan_version"),
+ amountMinor: bigint("amount_minor", { mode: "number" }),
+ currency: text("currency"),
+ status: text("status"),
+ sourceChannel: text("source_channel"),
+ attributionStatus: text("attribution_status"),
+ brokerCode: text("broker_code"),
+ curatorCode: text("curator_code"),
+ offerVersion: text("offer_version"),
+ privacyVersion: text("privacy_version"),
+ acceptedAt: timestamp("accepted_at", {withTimezone:true,mode:"string"}),
+ createdAt: timestamp("created_at", {withTimezone:true,mode:"string"}),
+ expiresAt: timestamp("expires_at", {withTimezone:true,mode:"string"}),
+ updatedAt: timestamp("updated_at", {withTimezone:true,mode:"string"}),
+ idempotencyKey: text("idempotency_key"),
+});
+export const billingPayments = pgTable("billing_payments", {
+ id: text("id").primaryKey(),
+ orderId: text("order_id"),
+ provider: text("provider"),
+ providerPaymentId: text("provider_payment_id"),
+ rawStatus: text("raw_status"),
+ status: text("status"),
+ amountMinor: bigint("amount_minor", { mode: "number" }),
+ currency: text("currency"),
+ paymentUrl: text("payment_url"),
+ confirmedAt: timestamp("confirmed_at", {withTimezone:true,mode:"string"}),
+ failedAt: timestamp("failed_at", {withTimezone:true,mode:"string"}),
+ createdAt: timestamp("created_at", {withTimezone:true,mode:"string"}),
+ updatedAt: timestamp("updated_at", {withTimezone:true,mode:"string"}),
+ refundedMinor: bigint("refunded_minor", { mode: "number" }),
+ providerFeeMinor: bigint("provider_fee_minor", { mode: "number" }),
+ idempotencyKey: text("idempotency_key"),
+ receiptStatus: text("receipt_status"),
+ receiptReference: text("receipt_reference"),
+});
+export const billingEvents = pgTable("billing_events", {
+ id: text("id").primaryKey(),
+ provider: text("provider"),
+ providerPaymentId: text("provider_payment_id"),
+ fingerprint: text("fingerprint"),
+ rawStatus: text("raw_status"),
+ safePayload: text("safe_payload"),
+ receivedAt: timestamp("received_at", {withTimezone:true,mode:"string"}),
+ processedAt: timestamp("processed_at", {withTimezone:true,mode:"string"}),
+ result: text("result"),
+});
+export const billingSubscriptions = pgTable("billing_subscriptions", {
+ id: text("id").primaryKey(),
+ ownerEmail: text("owner_email"),
+ companyInn: text("company_inn"),
+ companyName: text("company_name"),
+ planCode: text("plan_code"),
+ status: text("status"),
+ accessFrom: timestamp("access_from", {withTimezone:true,mode:"string"}),
+ accessUntil: timestamp("access_until", {withTimezone:true,mode:"string"}),
+ createdAt: timestamp("created_at", {withTimezone:true,mode:"string"}),
+ updatedAt: timestamp("updated_at", {withTimezone:true,mode:"string"}),
+});
+export const billingPeriods = pgTable("billing_periods", {
+ id: text("id").primaryKey(),
+ subscriptionId: text("subscription_id"),
+ paymentId: text("payment_id"),
+ orderId: text("order_id"),
+ startsAt: timestamp("starts_at", {withTimezone:true,mode:"string"}),
+ endsAt: timestamp("ends_at", {withTimezone:true,mode:"string"}),
+ originalEndsAt: timestamp("original_ends_at", {withTimezone:true,mode:"string"}),
+ status: text("status"),
+ refundedMinor: bigint("refunded_minor", { mode: "number" }),
+ createdAt: timestamp("created_at", {withTimezone:true,mode:"string"}),
+});
+export const billingPayoutProfiles = pgTable("billing_payout_profiles", {
+ beneficiaryCode: text("beneficiary_code").primaryKey(),
+ beneficiaryType: text("beneficiary_type"),
+ recipientId: text("recipient_id"),
+ verificationStatus: text("verification_status"),
+ maskedDestination: text("masked_destination"),
+ complianceHold: boolean("compliance_hold"),
+ createdAt: timestamp("created_at", {withTimezone:true,mode:"string"}),
+ updatedAt: timestamp("updated_at", {withTimezone:true,mode:"string"}),
+});
+export const billingCommissions = pgTable("billing_commissions", {
+ id: text("id").primaryKey(),
+ paymentId: text("payment_id"),
+ orderId: text("order_id"),
+ role: text("role"),
+ beneficiaryCode: text("beneficiary_code"),
+ rateBps: bigint("rate_bps", { mode: "number" }),
+ grossBasisMinor: bigint("gross_basis_minor", { mode: "number" }),
+ amountMinor: bigint("amount_minor", { mode: "number" }),
+ status: text("status"),
+ reversalMinor: bigint("reversal_minor", { mode: "number" }),
+ adjustmentMinor: bigint("adjustment_minor", { mode: "number" }),
+ holdReason: text("hold_reason"),
+ policyVersion: text("policy_version"),
+ createdAt: timestamp("created_at", {withTimezone:true,mode:"string"}),
+ updatedAt: timestamp("updated_at", {withTimezone:true,mode:"string"}),
+ idempotencyKey: text("idempotency_key"),
+});
+export const billingPayouts = pgTable("billing_payouts", {
+ id: text("id").primaryKey(),
+ commissionId: text("commission_id"),
+ beneficiaryCode: text("beneficiary_code"),
+ amountMinor: bigint("amount_minor", { mode: "number" }),
+ currency: text("currency"),
+ provider: text("provider"),
+ providerPayoutId: text("provider_payout_id"),
+ status: text("status"),
+ attempt: bigint("attempt", { mode: "number" }),
+ failureCode: text("failure_code"),
+ nextRetryAt: timestamp("next_retry_at", {withTimezone:true,mode:"string"}),
+ createdAt: timestamp("created_at", {withTimezone:true,mode:"string"}),
+ completedAt: timestamp("completed_at", {withTimezone:true,mode:"string"}),
+ idempotencyKey: text("idempotency_key"),
+});
+export const billingRefunds = pgTable("billing_refunds", {
+ id: text("id").primaryKey(),
+ paymentId: text("payment_id"),
+ amountMinor: bigint("amount_minor", { mode: "number" }),
+ cumulativeMinor: bigint("cumulative_minor", { mode: "number" }),
+ status: text("status"),
+ providerRefundId: text("provider_refund_id"),
+ reason: text("reason"),
+ createdAt: timestamp("created_at", {withTimezone:true,mode:"string"}),
+ confirmedAt: timestamp("confirmed_at", {withTimezone:true,mode:"string"}),
+ idempotencyKey: text("idempotency_key"),
+});
+export const billingLedger = pgTable("billing_ledger", {
+ id: text("id").primaryKey(),
+ kind: text("kind"),
+ paymentId: text("payment_id"),
+ beneficiaryCode: text("beneficiary_code"),
+ amountMinor: bigint("amount_minor", { mode: "number" }),
+ currency: text("currency"),
+ referenceId: text("reference_id"),
+ idempotencyKey: text("idempotency_key"),
+ createdAt: timestamp("created_at", {withTimezone:true,mode:"string"}),
+});
+export const billingOutbox = pgTable("billing_outbox", {
+ id: text("id").primaryKey(),
+ eventType: text("event_type"),
+ aggregateId: text("aggregate_id"),
+ payload: text("payload"),
+ status: text("status"),
+ attempts: bigint("attempts", { mode: "number" }),
+ nextAttemptAt: timestamp("next_attempt_at", {withTimezone:true,mode:"string"}),
+ createdAt: timestamp("created_at", {withTimezone:true,mode:"string"}),
+ processedAt: timestamp("processed_at", {withTimezone:true,mode:"string"}),
+ idempotencyKey: text("idempotency_key"),
+});
+export const billingFunnel = pgTable("billing_funnel", {
+ id: text("id").primaryKey(),
+ ownerEmail: text("owner_email"),
+ companyInn: text("company_inn"),
+ orderId: text("order_id"),
+ eventType: text("event_type"),
+ createdAt: timestamp("created_at", {withTimezone:true,mode:"string"}),
+ idempotencyKey: text("idempotency_key"),
+});
+
+// RC1 operational state; SQL migrations own complete constraints/indexes.
+export const rcProviderState=pgTable("rc_provider_state",{provider:text("provider").notNull(),id:text("id").notNull(),idempotencyKey:text("idempotency_key").notNull(),state:text("state").notNull(),createdAt:text("created_at").notNull()});
+export const runtimeWorkers=pgTable("runtime_workers",{id:text("id").primaryKey(),heartbeatAt:text("heartbeat_at").notNull(),status:text("status").notNull(),sourceSha:text("source_sha").notNull(),processed:bigint("processed",{mode:"number"}).notNull()});
+export const runtimeRateLimits=pgTable("runtime_rate_limits",{bucket:text("bucket").primaryKey(),count:bigint("count",{mode:"number"}).notNull(),expiresAt:text("expires_at").notNull()});
