@@ -57,3 +57,13 @@ M3 commit: `2a2e36685b50fc45f075d53b53fb2be0f219f4a3`.
 Recovered the financial and portfolio previews from the existing credit-conclusion presentation into the shared active overview. Latest annual and interim periods remain separate; period-specific quality, assets/equity/debt and ratios are retained. The portfolio distinguishes reported dated principal from unconfirmed current principal, contract payment, limit, overdue, next date and maturity. Existing upload/parser/normalization/persistence contracts remain in use.
 
 Validation: zero type diagnostics; source and shared overview checks 21/21. Actual CSV/XLSX/PDF BFO bytes and corporate BKI PDF pass real API handlers; replacement, missing values, partial status, rejected/foreign upload, concurrent-save conflict, quarterly preservation, CLIENT/BROKER equality, reload and analysis isolation are checked. These isolated API/component checks are not the required fresh live browser acceptance.
+
+M4 commit: `0fa53ec4cda9f0777410efadfd83d27e55b49a6c`.
+
+## M5 — shared BROKER, AI and print snapshot
+
+The actual protected print page now loads WorkspaceModelV1 and passes its full.report directly to the existing PrintReport. The same access and entitlement boundary excludes archived analyses. AI source-enrichment answers explicitly distinguish current facts from unavailable numerical before/after comparisons; no previous score is invented. Context fingerprints continue to isolate conversations after any source change.
+
+Broker filtering also preserves a new post-cutover lead for a company with only archived history, without linking its old dossier. Archive records and new leads are independent.
+
+Validation: zero type diagnostics; AI/archive/client tests 32/32; real source-enrichment tests 10/10 including current-context AI reset, local mode, identical CLIENT/BROKER print output and A/B isolation; updated archive checks 2/2 including fresh same-company lead. PDF rendering is component-level evidence here, not completed live PDF/visual acceptance.

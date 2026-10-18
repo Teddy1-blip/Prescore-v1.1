@@ -64,3 +64,29 @@ test('shared overview shows annual and quarterly enrichment without replacing an
  assert.equal(render(await model(rt,a)),html);
  }finally{await rt.close();}
 });
+
+test('fresh source changes reset AI context and print consumes the same current report',async()=>{
+ const rt=await createWorkspaceRuntime();try{
+ const a=await create(rt),b=await create(rt),baseB=await model(rt,b);
+ const {PrintReport}=rt.load('app/dashboard/report-v2/print-report.tsx');
+ const ai=rt.load('lib/ai-credit-analyst.ts');
+ const ask=question=>rt.request('/api/ai-analyst',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({analysisId:a.id,question})});
+ assert.equal((await ask('Что известно по выписке?')).status,200);
+ for(const [kind,file,question] of [
+  ['BFO',financialFile(a.companyInn),'Что изменилось после добавления БФО?'],
+  ['BKI',corporateBkiFile(a.companyInn),'Что изменилось после добавления кредитной истории?'],
+  ['QUARTERLY',financialFile(a.companyInn,'csv',{period:'Январь - Март 2026 г.'}),'Что известно по отчётности?']
+ ]){
+  assert.equal((await upload(rt,a,kind,file)).status,200);
+  const messages=await(await rt.request('/api/ai-analyst?analysisId='+a.id)).json();assert.deepEqual(messages.messages,[]);
+  const current=await model(rt,a),broker=await model(rt,a,rt.broker);assert.deepEqual(broker.full,current.full);
+  const context=ai.buildSanitizedCreditContext(question,current);
+  if(kind!=='QUARTERLY'){assert.equal(context.enrichment.available,true);assert.match(context.enrichment.comparison,/Предыдущий снимок/);}
+  const response=await ask(question);assert.equal(response.status,200);assert.equal((await response.json()).mode,'rules');
+  const printed=renderToStaticMarkup(React.createElement(PrintReport,{model:current.full.report,realAnalysisId:a.id}));
+  const brokerPrint=renderToStaticMarkup(React.createElement(PrintReport,{model:broker.full.report,realAnalysisId:a.id}));
+  assert.equal(printed,brokerPrint);assert.match(printed,/1[\s\u00a0]*200[\s\u00a0]*000/);
+  assert.deepEqual((await model(rt,a)).full,current.full);assert.deepEqual(await model(rt,b),baseB);
+ }
+ }finally{await rt.close();}
+});
