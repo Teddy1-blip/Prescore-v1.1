@@ -7,3 +7,4 @@ build:
 run:
   containerPort: 3000
   persistenceMount: /data
+# Release candidate marker: PRESCORE-V1-RC3-20261019. Runtime behavior unchanged.
