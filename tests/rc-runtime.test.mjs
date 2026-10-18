@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {verifyStorage} from '../lib/release/readiness.ts';
-import {runtimeVersion} from '../lib/release/version.ts';
+import {PRESCORE_RELEASE_ID,runtimeVersion} from '../lib/release/version.ts';
 
 test('startup storage verifies write/read and rejects symlink escape',async()=>{
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'rc-root-'));
@@ -20,8 +20,10 @@ test('startup storage verifies write/read and rejects symlink escape',async()=>{
  }
 });
 
-test('portable artifact includes PostgreSQL 17 runtime and RC compatibility while public version excludes secrets',()=>{
+test('portable artifact identifies RC3, includes PostgreSQL 17 runtime and excludes secrets',()=>{
  const version=runtimeVersion({DATABASE_URL:'must-not-leak',AUTH_SECRET:'must-not-leak',PRESCORE_SOURCE_SHA:'a'.repeat(40)});
+ assert.equal(PRESCORE_RELEASE_ID,'PRESCORE-V1-RC3-20261019');
+ assert.equal(version.releaseId,PRESCORE_RELEASE_ID);
  assert.equal(version.sourceSha,'a'.repeat(40));
  assert.equal(version.schemaVersion,'0009_analysis_archive.sql');
  assert.ok(!JSON.stringify(version).includes('must-not-leak'));
@@ -29,6 +31,7 @@ test('portable artifact includes PostgreSQL 17 runtime and RC compatibility whil
  assert.match(docker,/USER node/);
  assert.match(docker,/npm ci/);
  assert.match(docker,/package-runtime/);
+ assert.match(docker,/PRESCORE-V1-RC3-20261019/);
  assert.match(docker,/postgresql-client-17/);
  assert.match(docker,/pg_dump --version/);
  assert.match(docker,/prescore\.schema="0009_analysis_archive\.sql"/);

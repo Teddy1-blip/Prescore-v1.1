@@ -3,7 +3,6 @@ name: Deliver staging to Amvera
 on:
   push:
     branches: [staging]
-  workflow_dispatch:
 
 permissions:
   contents: read
