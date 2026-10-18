@@ -89,8 +89,8 @@ export async function POST(request: Request) {
     // Every supplied relationship must belong to the same company and be accessible.
     if (analysisId) {
       const query = user.isAdmin
-        ? db.prepare("SELECT id FROM analyses WHERE id = ? AND company_inn = ?").bind(analysisId, companyInn)
-        : db.prepare("SELECT id FROM analyses WHERE id = ? AND company_inn = ? AND owner_email = ?").bind(analysisId, companyInn, user.email);
+        ? db.prepare("SELECT id FROM analyses WHERE archive_state = 'ACTIVE' AND id = ? AND company_inn = ?").bind(analysisId, companyInn)
+        : db.prepare("SELECT id FROM analyses WHERE archive_state = 'ACTIVE' AND id = ? AND company_inn = ? AND owner_email = ?").bind(analysisId, companyInn, user.email);
       if (!(await db.batch([query]))[0]?.results?.length) return Response.json({error:"Нет доступа к досье"},{status:403});
     }
     if (applicationId) {

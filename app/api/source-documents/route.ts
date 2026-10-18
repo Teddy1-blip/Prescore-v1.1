@@ -91,7 +91,7 @@ export async function POST(request: Request) {
     if (sourceType !== "BKI" && !/\.(pdf|xlsx|csv)$/.test(lowerName)) return Response.json({ error: "Поддерживаются PDF, XLSX и CSV" }, { status: 415 });
 
     const db = await database();
-    const row = await db.prepare("SELECT payload, owner_email AS ownerEmail FROM analyses WHERE id = ? LIMIT 1")
+    const row = await db.prepare("SELECT payload, owner_email AS ownerEmail FROM analyses WHERE archive_state = 'ACTIVE' AND id = ? LIMIT 1")
       .bind(analysisId).first<{ payload?: string; ownerEmail?: string }>();
     if (!row?.payload || (row.ownerEmail !== user.email && !user.isAdmin)) return Response.json({ error: "Анализ не найден в вашем кабинете" }, { status: 404 });
     const analysis = safeJson<AnalysisResult>(row.payload);

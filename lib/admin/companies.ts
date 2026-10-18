@@ -18,7 +18,7 @@ const companyBase=`WITH company_ids AS (SELECT company_inn FROM analyses UNION S
  (SELECT COUNT(*) FROM apps ap WHERE ap.company_inn=c.company_inn) AS applicationCount,
  ${observationColumns}
  FROM company_ids c LEFT JOIN latest a ON a.company_inn=c.company_inn AND a.rn=1 LEFT JOIN analysis_entitlements e ON e.analysis_id=a.id ${observationJoin} WHERE c.company_inn<>''`;
-const analysisBase=`SELECT a.id AS analysisId,a.company_name AS name,a.company_inn AS inn,a.owner_email AS ownerEmail,a.created_at AS createdAt,a.period_from AS periodFrom,a.period_to AS periodTo,
+const analysisBase=`SELECT a.archive_state AS archiveState,a.archived_at AS archivedAt,a.id AS analysisId,a.company_name AS name,a.company_inn AS inn,a.owner_email AS ownerEmail,a.created_at AS createdAt,a.period_from AS periodFrom,a.period_to AS periodTo,
  CASE WHEN ${fullMetadataPredicate} THEN 'FULL' ELSE 'BASIC' END AS tier,
  (SELECT string_agg(DISTINCT l.agent_code,', ') FROM agent_leads l WHERE l.company_inn=a.company_inn) AS broker,${observationColumns}
  FROM analyses a LEFT JOIN analysis_entitlements e ON e.analysis_id=a.id ${observationJoin}`;
@@ -35,7 +35,7 @@ export async function companyList(db:PortableDatabase,q:AdminQuery){
  return pageRows(db,`SELECT * FROM (${companyBase}) AS company ${where.length?'WHERE '+where.join(' AND '):''}`,values,q,order);
 }
 export async function analysisList(db:PortableDatabase,q:AdminQuery){
- const where:string[]=[];const values:unknown[]=[];
+ const where:string[]=q.archive==='all'?[]:[q.archive==='archived'?`"archiveState"='LEGACY_PREPRODUCTION'`:`"archiveState"='ACTIVE'`];const values:unknown[]=[];
  if(q.search){where.push('(name ILIKE ? OR inn ILIKE ? OR "ownerEmail" ILIKE ? OR "analysisId" ILIKE ?)');values.push(...Array(4).fill('%'+q.search+'%'));}
  if(q.company){where.push('inn=?');values.push(q.company);}
  if(q.tier){where.push('tier=?');values.push(q.tier);}

@@ -34,7 +34,8 @@
     "backup:verify": "node --experimental-strip-types scripts/release/backup.mjs verify",
     "backup:restore": "node --experimental-strip-types scripts/release/backup.mjs restore",
     "storage:backup": "node --experimental-strip-types scripts/release/backup.mjs storage",
-    "storage:backup:verify": "node --experimental-strip-types scripts/release/backup.mjs storage-verify"
+    "storage:backup:verify": "node --experimental-strip-types scripts/release/backup.mjs storage-verify",
+    "analysis:archive": "node --experimental-strip-types scripts/release/analysis-archive.mjs"
   },
   "dependencies": {
     "better-auth": "1.7.5",

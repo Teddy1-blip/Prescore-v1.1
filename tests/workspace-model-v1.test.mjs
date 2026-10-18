@@ -66,7 +66,7 @@ for (const ownerFull of [false, true]) test(ownerFull
   });
 
   try {
-    for (const migration of ["0001_product.sql", "0003_runtime_indexes.sql"]) {
+    for (const migration of ["0001_product.sql", "0003_runtime_indexes.sql", "0009_analysis_archive.sql"]) {
       await pg.exec(fs.readFileSync("lib/db/migrations/" + migration, "utf8"));
     }
 

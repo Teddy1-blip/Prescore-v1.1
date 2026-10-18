@@ -160,7 +160,10 @@
       "readiness",
       "payload",
       "owner_email",
-      "created_at"
+      "created_at",
+      "archive_state",
+      "archived_at",
+      "archive_batch_id"
     ],
     "primaryKey": [
       "id"
@@ -807,6 +810,20 @@
       "event",
       "result",
       "created_at"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "analysis_archive_batches",
+    "columns": [
+      "id",
+      "cutover_at",
+      "preview_hash",
+      "record_count",
+      "executed_at",
+      "restored_at"
     ],
     "primaryKey": [
       "id"

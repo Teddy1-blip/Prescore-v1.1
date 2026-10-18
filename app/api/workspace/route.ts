@@ -146,12 +146,12 @@ export async function GET(request: Request) {
       return Response.json({ analyses: [analysisView(applyAnalysisControls(parsed, controls), tier)], deals, readOnly: access.access === "agent", accessRole: access.access });
     }
     const [analysisResult, dealResult, historyResult] = await db.batch([
-      db.prepare("SELECT payload FROM analyses WHERE owner_email = ? ORDER BY created_at DESC LIMIT 50").bind(user.email),
-      db.prepare("SELECT id, analysis_id AS analysisId, company_name AS companyName, product, amount, status, owner, next_action AS nextAction, bank, application_group_id AS applicationGroupId, consent_at AS consentAt, created_at AS createdAt, updated_at AS updatedAt FROM deals WHERE owner_email = ? ORDER BY updated_at DESC LIMIT 100").bind(user.email),
+      db.prepare("SELECT payload FROM analyses WHERE archive_state = 'ACTIVE' AND owner_email = ? ORDER BY created_at DESC LIMIT 50").bind(user.email),
+      db.prepare("SELECT id, analysis_id AS analysisId, company_name AS companyName, product, amount, status, owner, next_action AS nextAction, bank, application_group_id AS applicationGroupId, consent_at AS consentAt, created_at AS createdAt, updated_at AS updatedAt FROM deals WHERE NOT EXISTS (SELECT 1 FROM analyses archived WHERE archived.id=deals.analysis_id AND archived.archive_state<>'ACTIVE') AND owner_email = ? ORDER BY updated_at DESC LIMIT 100").bind(user.email),
       db.prepare(`SELECT h.id, h.application_id AS applicationId, h.from_status AS fromStatus, h.to_status AS toStatus,
         h.actor_role AS actorRole, h.public_comment AS publicComment, h.created_at AS createdAt
         FROM application_status_history h JOIN deals d ON d.id = h.application_id
-        WHERE d.owner_email = ? ORDER BY h.created_at ASC LIMIT 1000`).bind(user.email),
+        WHERE NOT EXISTS (SELECT 1 FROM analyses archived WHERE archived.id=d.analysis_id AND archived.archive_state<>'ACTIVE') AND d.owner_email = ? ORDER BY h.created_at ASC LIMIT 1000`).bind(user.email),
     ]);
     const storedAnalyses = (analysisResult.results as Array<{ payload: string }>).map((row) => safeJson(row.payload) as AnalysisResult | null).filter((item): item is AnalysisResult => Boolean(item));
     const analyses = await Promise.all(storedAnalyses.map(async (item) => {
@@ -180,7 +180,7 @@ export async function POST(request: Request) {
       return Response.json({ error: "Готовые значения БКИ и квартальной отчётности не принимаются. Передайте исходный файл в /api/source-documents для серверной проверки." }, { status: 409 });
     }
     if ((body.type === "credit-history" || body.type === "quarterly-report") && body.analysisId) {
-      const rows = await db.batch([db.prepare("SELECT payload, owner_email AS ownerEmail FROM analyses WHERE id = ? LIMIT 1").bind(body.analysisId)]);
+      const rows = await db.batch([db.prepare("SELECT payload, owner_email AS ownerEmail FROM analyses WHERE archive_state = 'ACTIVE' AND id = ? LIMIT 1").bind(body.analysisId)]);
       const row = (rows[0]?.results as Array<{ payload?: string; ownerEmail?: string }>)[0];
       if (!row?.payload || (row.ownerEmail !== user.email && !user.isAdmin)) return Response.json({ error: "Анализ не найден в вашем кабинете" }, { status: 404 });
       const analysis = safeJson(row.payload) as AnalysisResult | null;
@@ -205,7 +205,7 @@ export async function POST(request: Request) {
       return Response.json({ analysis: analysisView(applyAnalysisControls(stored, controls), tier) });
     }
     if(body.type==='financing-request'&&body.analysisId){
-      const row=await db.prepare("SELECT payload, owner_email AS ownerEmail FROM analyses WHERE id = ? LIMIT 1").bind(body.analysisId).first<{payload:string;ownerEmail:string}>();
+      const row=await db.prepare("SELECT payload, owner_email AS ownerEmail FROM analyses WHERE archive_state = 'ACTIVE' AND id = ? LIMIT 1").bind(body.analysisId).first<{payload:string;ownerEmail:string}>();
       if(!row||row.ownerEmail!==user.email&&!user.isAdmin)return Response.json({error:"Анализ не найден в вашем кабинете"},{status:404});
       const analysis=safeJson(row.payload) as AnalysisResult|null;if(!analysis?.sourceManifest)return Response.json({error:"Источники сохранённого анализа недоступны. Создайте новый анализ по выпискам."},{status:409});
       let financingRequest;try{financingRequest=parseFinancingRequest(body.financingRequest,new Date().toISOString());}catch(error){return Response.json({error:error instanceof Error?error.message:'Проверьте параметры'},{status:400});}
@@ -222,7 +222,7 @@ export async function POST(request: Request) {
       const companyName = String(item.companyName || "").trim();
       const product = String(item.product || "").trim();
       if (!analysisId || !companyName || !product) return Response.json({ error: "Заполните компанию и продукт" }, { status: 400 });
-      const ownership = await db.batch([db.prepare("SELECT owner_email AS ownerEmail FROM analyses WHERE id = ? LIMIT 1").bind(analysisId)]);
+      const ownership = await db.batch([db.prepare("SELECT owner_email AS ownerEmail FROM analyses WHERE archive_state = 'ACTIVE' AND id = ? LIMIT 1").bind(analysisId)]);
       if (String((ownership[0]?.results as Array<{ ownerEmail?: string }>)[0]?.ownerEmail || "") !== user.email && !user.isAdmin) return Response.json({ error: "Нет доступа к анализу" }, { status: 403 });
       const findSaved=async()=>{
         const saved=await db.prepare("SELECT id, analysis_id AS analysisId, product, amount, bank, owner_email AS ownerEmail FROM deals WHERE id = ? LIMIT 1").bind(id).first<{id:string;analysisId:string;product:string;amount:number;bank:string;ownerEmail:string}>();
@@ -240,7 +240,7 @@ export async function POST(request: Request) {
         db.prepare("INSERT INTO audit_log (id, entity_type, entity_id, action, actor_role, actor_email, metadata, created_at) VALUES (?, 'APPLICATION', ?, 'CREATE', 'CLIENT', ?, ?, ?)").bind(crypto.randomUUID(), id, user.email, JSON.stringify({ product, bank: String(item.bank || "") }), new Date().toISOString()),
       ]);}catch(error){const replay=await findSaved();if(replay)return replay;throw error;}
       try {
-        const rows = await db.batch([db.prepare("SELECT company_inn AS companyInn FROM analyses WHERE id = ? LIMIT 1").bind(analysisId)]);
+        const rows = await db.batch([db.prepare("SELECT company_inn AS companyInn FROM analyses WHERE archive_state = 'ACTIVE' AND id = ? LIMIT 1").bind(analysisId)]);
         const companyInn = String((rows[0]?.results as Array<{ companyInn?: string }> | undefined)?.[0]?.companyInn || "");
         if (companyInn) {
           const leadRows = await db.batch([db.prepare("SELECT id, agent_code AS agentCode FROM agent_leads WHERE company_inn = ? ORDER BY updated_at DESC LIMIT 1").bind(companyInn)]);
@@ -263,7 +263,7 @@ export async function POST(request: Request) {
       const companyInn = String(body.companyInn || "").replace(/\D/g, "");
       const consentAt = String(body.consentAt || "");
       if (!analysisId || !companyName || !/^(?:\d{10}|\d{12})$/.test(companyInn) || !consentAt || body.applications.length > 12) return Response.json({ error: "Проверьте компанию, согласие и список получателей" }, { status: 400 });
-      const ownership = await db.batch([db.prepare("SELECT owner_email AS ownerEmail FROM analyses WHERE id = ? LIMIT 1").bind(analysisId)]);
+      const ownership = await db.batch([db.prepare("SELECT owner_email AS ownerEmail FROM analyses WHERE archive_state = 'ACTIVE' AND id = ? LIMIT 1").bind(analysisId)]);
       if (String((ownership[0]?.results as Array<{ ownerEmail?: string }>)[0]?.ownerEmail || "") !== user.email && !user.isAdmin) return Response.json({ error: "Нет доступа к анализу" }, { status: 403 });
       const groupId = body.requestId || crypto.randomUUID();
       if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(groupId))return Response.json({error:"Некорректный идентификатор запроса"},{status:400});

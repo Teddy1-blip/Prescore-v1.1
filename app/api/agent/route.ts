@@ -147,13 +147,13 @@ export async function GET(request: Request) {
         l.subscription_status AS subscriptionStatus, l.consent_at AS consentAt,
         l.created_at AS createdAt, l.updated_at AS updatedAt,
         (SELECT COUNT(*) FROM payment_orders po WHERE po.company_inn = l.company_inn AND po.status = 'Оплачен') AS paidFullOrders,
-        (SELECT a.id FROM analyses a WHERE a.company_inn = l.company_inn ORDER BY a.created_at DESC LIMIT 1) AS analysisId
-        FROM agent_leads l WHERE l.agent_code = ? ORDER BY l.updated_at DESC,l.id DESC LIMIT ? OFFSET ?`).bind(code,paging.limit,paging.offset),
+        (SELECT a.id FROM analyses a WHERE a.company_inn = l.company_inn AND a.archive_state='ACTIVE' ORDER BY a.created_at DESC LIMIT 1) AS analysisId
+        FROM agent_leads l WHERE (NOT EXISTS (SELECT 1 FROM analyses ax WHERE ax.company_inn=l.company_inn) OR EXISTS (SELECT 1 FROM analyses ax WHERE ax.company_inn=l.company_inn AND ax.archive_state='ACTIVE')) AND l.agent_code = ? ORDER BY l.updated_at DESC,l.id DESC LIMIT ? OFFSET ?`).bind(code,paging.limit,paging.offset),
       db.prepare(`SELECT id, lead_id AS leadId, analysis_id AS analysisId, company_name AS companyName,
         bank, product, requested_amount AS requestedAmount, calculated_limit AS calculatedLimit,
         COALESCE((SELECT d.status FROM deals d WHERE d.id = agent_applications.id), status) AS status, next_action AS nextAction,
         created_at AS createdAt, updated_at AS updatedAt
-        FROM agent_applications WHERE agent_code = ? ORDER BY updated_at DESC,id DESC LIMIT ? OFFSET ?`).bind(code,paging.limit,paging.offset),
+        FROM agent_applications WHERE NOT EXISTS (SELECT 1 FROM analyses ax WHERE ax.id=agent_applications.analysis_id AND ax.archive_state<>'ACTIVE') AND agent_code = ? ORDER BY updated_at DESC,id DESC LIMIT ? OFFSET ?`).bind(code,paging.limit,paging.offset),
       db.prepare(`SELECT p.agent_code AS agentCode, p.name, p.agency, p.city, p.status, p.created_at AS createdAt,
         COUNT(l.id) AS clientsCount,
         COALESCE(SUM((SELECT COUNT(*) FROM payment_orders po WHERE po.company_inn = l.company_inn AND po.status = 'Оплачен')), 0) AS activeSubscriptions
