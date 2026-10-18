@@ -65,7 +65,10 @@ export function buildCanonicalCreditAnalysis(input: CanonicalSavedInput) {
     if (!/^\d{10}(\d{2})?$/.test(a.companyInn) || p && p.inn !== a.companyInn || allSources.some(s => s.companyInn !== a.companyInn)) throw new CanonicalUnavailable(stage, 'SOURCE_IDENTITY_MISMATCH');
     if (!a.metricsV2 || !a.sourceManifest?.bankStatements.length) throw new CanonicalUnavailable('BANK_METRICS_REQUIRED', 'BANK_METRICS_MISSING');
     const asOfDate = canonicalAsOf(input);
-    const manifest = {...a.sourceManifest, ...(p?.sourceManifest?.bfo ? {bfo: p.sourceManifest.bfo} : {}), external: [...(a.sourceManifest.external ?? []), ...(p?.sourceManifest?.external ?? [])]};
+    const analysisBfo = a.sourceManifest.bfo;
+    const profileBfo = p?.sourceManifest?.bfo;
+    const authoritativeBfo = analysisBfo?.status === 'READY' ? analysisBfo : profileBfo ?? analysisBfo;
+    const manifest = {...a.sourceManifest, ...(authoritativeBfo ? {bfo: authoritativeBfo} : {}), external: [...(a.sourceManifest.external ?? []), ...(p?.sourceManifest?.external ?? [])]};
     stage = 'FINANCIAL_ANALYSIS';
     const availableSnapshots = [...(a.financialStatementsV2 ?? a.financialAnalysisV2?.history.map(h => h.snapshot) ?? []),
       ...(p?.financialStatementsV2 ?? p?.financialAnalysisV2?.history.map(h => h.snapshot) ?? [])];
