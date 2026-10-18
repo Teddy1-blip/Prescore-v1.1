@@ -4,6 +4,7 @@ import type {WorkspaceModelV1} from "../../../lib/workspace/model";
 import {BankingSnapshot} from "./banking-ledger";
 import {concentrationPercent, factValue} from "./data-panel";
 import {CashTrend, ExecutiveOverview, Panel} from "./client-insights";
+import {ClientDecisionRoute} from "./client-decision-route";
 import {date, money} from "./presentation";
 import {sourceState} from "./credit-depth";
 
@@ -147,5 +148,8 @@ function FreeOverview({model, retry}: Pick<Props, "model" | "retry">) {
 
 export function ClientOverview(props: Props) {
   if (!props.model.full) return <FreeOverview model={props.model} retry={props.retry}/>;
-  return <ExecutiveOverview {...props}/>;
+  return <>
+    <ExecutiveOverview {...props}/>
+    <ClientDecisionRoute model={props.model} choose={props.choose}/>
+  </>;
 }
