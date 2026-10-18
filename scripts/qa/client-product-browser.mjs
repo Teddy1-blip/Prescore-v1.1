@@ -52,6 +52,7 @@ try{
 
  await page.goto(origin+'/dashboard?analysisId='+seed.id+'&view=analysis&section=factors');await page.getByRole('heading',{name:'Анализ Prescore',exact:true}).waitFor();
  await page.getByRole('button',{name:'Почему?',exact:true}).first().click();await page.getByRole('dialog',{name:'Основания вывода'}).waitFor();await page.keyboard.press('Escape');assert.equal(await page.locator('dialog[open]').count(),0);checks.push('evidence modal keyboard');
+ await page.goto(origin+'/dashboard?analysisId='+seed.id+'&view=home');await page.getByRole('heading',{name:'Обзор компании',exact:true}).waitFor();
  const unknown=await(await page.request.get(origin+'/__qa/seed?case=CL-RU-BUS-011')).json();await page.reload();await page.getByLabel('Сохранённый анализ').selectOption(unknown.id);await page.getByRole('heading',{name:'Обзор компании',exact:true}).waitFor();await page.reload();await page.getByRole('heading',{name:'Обзор компании',exact:true}).waitFor();assert.equal(await page.getByLabel('Сохранённый анализ').inputValue(),unknown.id);checks.push('selection and reload');
  await page.setViewportSize({width:390,height:900});await page.getByRole('button',{name:'Открыть меню',exact:true}).click();await page.getByRole('navigation',{name:'Разделы кабинета'}).getByRole('button',{name:'Документы',exact:true}).click();assert.equal(await page.getByRole('button',{name:'Открыть меню'}).getAttribute('aria-expanded'),'false');checks.push('mobile navigation');
 
