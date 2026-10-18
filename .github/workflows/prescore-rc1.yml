@@ -1,7 +1,7 @@
 name: Prescore RC1
 on:
   push:
-    branches: [prescore-product-v1, prescore-polish-v1]
+    branches: [prescore-product-v1, prescore-polish-v1, prescore-live-product-recovery-v1]
   workflow_dispatch:
 permissions:
   contents: read

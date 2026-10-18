@@ -75,3 +75,15 @@ M5 commit: `e9492ac9727d8f4f02ea3f0216568eb41f976c32`.
 Confirmed facts precede detailed conclusions in the active analysis. Unknown primary report metrics are compact explanations with preserved anchors, not dominant cards. The existing responsive fact grid collapses to one column below 768px. Evidence and source text use final public wording; canonical report generation and all 24 pre-UI canonical fingerprints remain unchanged. Semantic duplicate factor cards combine evidence/action links. Print makes a separate presentation copy and removes repeated factor prose; the source model is not modified. BROKER no longer exposes internal entitlement terminology.
 
 Validation: zero type diagnostics; report contract 110/110; canonical and active component checks 132/132, including all 24 unchanged engine/output baseline hashes and immutable print deduplication. Initial regressions caught missing PDF disclaimer/anchors; both were restored rather than weakening the assertions. Full browser widths/native 200% and live PDF visual acceptance remain required; this commit does not assert visual PASS.
+
+M6 commit: `16c7b83d52af8585b3944b41865e77a36bc2fb07`.
+
+## M7 — acceptance candidate, gates pending
+
+The existing source-browser acceptance now records clean start and every fresh bank/BFO/BKI/quarterly stage at 1440, 1280, 1024, 768, 390 and 360, plus native 200% zoom; assigned BROKER overview has the same matrix. Real production file controls and API handlers remain mandatory. No screenshot-only fixture replaces the upload flow.
+
+Recovery branch was added to the existing Product, Polish and RC1 trigger allowlists. Their artifact retention, database restore, container and release gates are preserved. An exhausted artifact quota must be reported as a gate blocker, not bypassed under the earlier first-delivery Git-history exception.
+
+Final review also synchronized Drizzle's schema with migration 0009 and exposed existing seasonality/trend observations in BankingLedger without introducing calculations. Additive archive columns and the new onboarding action are reflected in regression expectations; all original legacy columns remain required. Targeted checks: 18/18. Credit Lab business: 24/24. Full suite/build/CI/visual review are still pending at this candidate commit.
+
+Production observation: prescore-prod Moscow-1 1/1, prescore-staging frozen 0/0; balance 375.24 RUB. No production mutations, archive execution, DNS change or new resources in this recovery task. Rollback to RC2 after migration 0009 requires the reviewed database rollback as well as the previous application tree; old runtime schema checks must not be bypassed.

@@ -1,7 +1,7 @@
 name: Prescore Product Polish QA
 on:
   push:
-    branches: [prescore-polish-v1]
+    branches: [prescore-polish-v1, prescore-live-product-recovery-v1]
   workflow_dispatch:
 permissions:
   contents: read

@@ -48,6 +48,7 @@ export type WorkspaceBasicV1 = {
     operatingInflow: WorkspaceFactV1;
     observedMonthlyOperatingAverage: WorkspaceFactV1;
     fullMonthOperatingAverage: WorkspaceFactV1;
+    seasonality?: {status:string;trend:WorkspaceFactV1;volatility:WorkspaceFactV1;peakToAverage:WorkspaceFactV1};
     loanPrincipalPayments: WorkspaceFactV1;
     interestPayments: WorkspaceFactV1;
     unsplitDebtPayments: WorkspaceFactV1;
@@ -169,6 +170,7 @@ export function projectWorkspaceBasic(
       operatingInflow: fact(metrics?.operating.operatingCashReceipts),
       observedMonthlyOperatingAverage: fact(metrics?.operating.observedMonthlyOperatingAverage),
       fullMonthOperatingAverage: fact(metrics?.operating.fullMonthOperatingAverage),
+      seasonality: {status:metrics?.operating.seasonalityStatus??'INSUFFICIENT_HISTORY',trend:fact(metrics?.operating.operatingReceiptsTrend,'RATIO'),volatility:fact(metrics?.operating.operatingReceiptsVolatility,'RATIO'),peakToAverage:fact(metrics?.operating.peakToAverageRatio,'RATIO')},
       loanPrincipalPayments: fact(metrics?.debtService.loanPrincipalPaid),
       interestPayments: fact(metrics?.debtService.interestPaid),
       unsplitDebtPayments: fact(metrics?.debtService.unsplitDebtService),

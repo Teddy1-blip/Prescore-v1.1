@@ -1,6 +1,6 @@
 // Portable storage projection. Existing analytical schema semantics retained.
 import { sql } from "drizzle-orm";
-import { bigint, boolean, timestamp, doublePrecision, pgTable, text } from "drizzle-orm/pg-core";
+import { bigint, boolean, timestamp, doublePrecision, pgTable, text, integer, check, index } from "drizzle-orm/pg-core";
 
 export const analyses = pgTable("analyses", {
   id: text("id").primaryKey(),
@@ -15,7 +15,19 @@ export const analyses = pgTable("analyses", {
   payload: text("payload").notNull(),
   ownerEmail: text("owner_email").notNull().default(""),
   createdAt: text("created_at").notNull().default(sql`to_char(clock_timestamp() at time zone 'UTC', 'YYYY-MM-DD HH24:MI:SS')`),
-});
+  archiveState: text("archive_state").notNull().default("ACTIVE"),
+  archivedAt: text("archived_at"),
+  archiveBatchId: text("archive_batch_id"),
+}, table=>[
+  check("analyses_archive_state_check",sql`${table.archiveState} IN ('ACTIVE','LEGACY_PREPRODUCTION')`),
+  index("analyses_active_owner_date").on(table.ownerEmail,table.createdAt.desc()).where(sql`${table.archiveState} = 'ACTIVE'`),
+]);
+export const analysisArchiveBatches = pgTable("analysis_archive_batches", {
+ id:text("id").primaryKey(),cutoverAt:timestamp("cutover_at",{withTimezone:true}).notNull(),
+ previewHash:text("preview_hash").notNull(),recordCount:integer("record_count").notNull(),
+ executedAt:timestamp("executed_at",{withTimezone:true}).notNull().defaultNow(),restoredAt:timestamp("restored_at",{withTimezone:true}),
+},table=>[check("analysis_archive_batches_record_count_check",sql`${table.recordCount} >= 0`)]);
+
 
 export const deals = pgTable("deals", {
   id: text("id").primaryKey(),
