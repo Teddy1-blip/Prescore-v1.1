@@ -4,7 +4,8 @@ import type {WorkspaceModelV1} from '../../../lib/workspace/model';
 import type {PresentationFactorV1,PresentationActionV1} from '../../../lib/credit-engine/contracts/client-report';
 import {money,date,FullAccessNotice} from './presentation';
 import {clientText} from '../../../lib/credit-engine/client-report/copy';
-import {sourceLabel,sourceState,label} from './credit-depth';
+import {sourceLabel,sourceState,label,PortfolioSnapshot} from './credit-depth';
+import {FinancialSnapshot} from './client-financials';
 import {BankingSnapshot} from './banking-ledger';
 export function Panel({title,action,children,id}:{title:string;action?:ReactNode;children:ReactNode;id?:string}){return <section className="pc-panel" id={id}><header><h2>{title}</h2>{action}</header>{children}</section>;}
 export function Why({model,ids}:{model:WorkspaceModelV1;ids:string[]}){const dialog=useRef<HTMLDialogElement>(null),e=model.full?.canonical.explainability;const claims=e?.claims.filter(c=>ids.includes(c.claimId))??[];return <><button className="pc-text-button" onClick={()=>dialog.current?.showModal()}>Почему?</button><dialog className="pc-evidence" ref={dialog} onClick={event=>{if(event.target===event.currentTarget)dialog.current?.close();}} aria-label="Основания вывода"><header><h2>Основания вывода</h2><button onClick={()=>dialog.current?.close()} autoFocus>Закрыть</button></header>{claims.length?claims.map(c=><section key={c.claimId}><h3>{clientText(c.titleRu)}</h3><p>{clientText(c.textRu)}</p><small>Достоверность: {label(c.confidence)}</small><ul>{c.valueBindings.filter(v=>!/penalty|modifier|weight|threshold/i.test(v.bindingCode)).map((v,i)=><li key={i}>{label(v.formattedValueRu)}</li>)}</ul>{e?.sourceReferences.filter(s=>c.sourceReferenceIds.includes(s.sourceReferenceId)).map(s=><p key={s.sourceReferenceId}><b>{sourceLabel(s.sourceKind)}</b><br/>{date(s.periodFrom)} — {date(s.periodTo)}{s.asOf?' · На '+date(s.asOf):''}</p>)}</section>):<p>Подробные основания этого вывода в текущей версии не раскрыты. Проверьте комплект документов.</p>}</dialog></>;}
@@ -49,6 +50,7 @@ export function ExecutiveOverview({model,choose,retry}:{model:WorkspaceModelV1;c
   <div className="pc-page-title"><div><h1>Обзор компании</h1><p>Единый кредитный профиль и следующие шаги</p></div><small>Расчёт: {date(model.basic.analysis.createdAt)}</small></div>
   <section className="pc-verdict"><span>КРЕДИТНОЕ ЗАКЛЮЧЕНИЕ</span><h2>{hasCredit?r!.hero.headline:'Банковский профиль компании рассчитан'}</h2><p>{hasCredit?r!.hero.summary:'Выписки показывают движение денег, остатки и наблюдаемые платежи. Финансовая отчётность и кредитная история дополняют эти факты оценкой устойчивости и обязательств.'}</p>{r?.hero.globalStop&&<p className="pc-badge critical">Есть критичное ограничение — проверьте его до подачи заявки.</p>}{r&&<button className="pc-text-button" onClick={()=>choose('analysis')}>Открыть анализ Prescore →</button>}</section>
   <BankingSnapshot model={model}/>
+  <FinancialSnapshot model={model} choose={choose}/><PortfolioSnapshot model={model} choose={choose}/>
   <CreditSummary model={model}/><AssessmentLimits model={model} choose={choose}/>
   {!r&&<FullAccessNotice model={model} retry={retry}/>}
   {(strengths.length>0||risks.length>0)&&<div className="pc-columns">{strengths.length>0&&<Panel title="Что помогает получить финансирование"><FactorRows model={model} items={strengths} limit={3}/></Panel>}{risks.length>0&&<Panel title="Риски и стоп-факторы"><FactorRows model={model} items={risks} limit={3}/></Panel>}</div>}

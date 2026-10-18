@@ -45,6 +45,15 @@ function MetricTable({metrics}:{metrics:PublicFinancialMetric[]}){
  return <div className="pc-table-scroll" tabIndex={0} aria-label="Финансовые показатели"><table><thead><tr><th>Показатель</th><th>Значение</th><th>Качество и период</th></tr></thead><tbody>{metrics.map(m=><tr key={m.key}><th scope="row">{m.label}</th><td>{numeric(m.value,m.status,m.unit)}</td><td>{label(m.status)} · {label(m.confidence)} · {label(m.origin)}<small>{m.periodFrom||m.periodTo?date(m.periodFrom)+' — '+date(m.periodTo):date(m.asOf)}</small><Warnings items={m.warnings}/></td></tr>)}</tbody></table></div>;
 }
 
+// Reuses the retired conclusion's preview, keeping annual and interim periods separate.
+export function FinancialSnapshot({model,choose}:{model:WorkspaceModelV1;choose:(view:string)=>void}){
+ const history=model.full?.report.financialAnalysis?.history??[];
+ const periods=['ANNUAL','INTERIM'].map(kind=>[...history].filter(p=>p.period.kind===kind).sort((a,b)=>(b.period.asOf??b.period.to??'').localeCompare(a.period.asOf??a.period.to??''))[0]).filter(Boolean);
+ if(!periods.length)return null;
+ const keys=['REVENUE','NET_PROFIT','ASSETS_TOTAL','EQUITY','TOTAL_BORROWINGS','currentRatio','equityRatio','debtToEquity','netMargin'];
+ return <Panel title="Финансовое состояние" action={<button className="pc-text-button" onClick={()=>choose('banking')}>Отчётность и динамика →</button>}>{periods.map(p=><section key={p.id}><h3>{p.period.kind==='ANNUAL'?'Годовая отчётность':'Промежуточная отчётность'}</h3><p>{date(p.period.from)} — {date(p.period.to)} · Достоверность: {label(p.quality.confidence)}</p><dl className="pc-definition pc-bank-summary">{p.groups.flatMap(g=>g.metrics).filter(m=>keys.includes(m.key)).map(m=><div key={m.key}><dt>{m.label}</dt><dd>{numeric(m.value,m.status,m.unit)}<small>{label(m.status)}</small></dd></div>)}</dl><p className="pc-muted">{p.period.kind==='INTERIM'?'Промежуточные показатели не пересчитаны в годовые.':'Годовые показатели не заменяются более поздним кварталом.'} Баланс: {p.quality.balanceReconciled===true?'сходится':p.quality.balanceReconciled===false?'требует сверки':'сверка не подтверждена'}.</p></section>)}</Panel>;
+}
+
 export function FinancialStatements({model}:{model:WorkspaceModelV1}){
  const r=model.full?.report;
  if(!r)return <FullAccessNotice model={model}/>;

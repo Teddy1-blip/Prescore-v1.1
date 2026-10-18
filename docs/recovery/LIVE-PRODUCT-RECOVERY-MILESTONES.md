@@ -49,3 +49,11 @@ M2 commit: `8071b7541feb14262ef4f2c92ef8ff2c303efbe5`.
 The existing BankingLedger formatting now serves the executive overview as BankingSnapshot: confirmed period, banks/accounts, receipts/payments, balances, liquidity, taxes, debt payments and concentration. Unknown facts remain available in a closed disclosure, never converted to zero. Existing monthly series remains visible. CLIENT and BROKER reuse ExecutiveOverview.
 
 CreditSummary renders only available canonical outputs, including known zero. One compact assessment explanation links to the missing accounting/credit source or to the existing analysis evidence. No formulas or entitlement rules changed. Validation: typecheck zero diagnostics; client presentation tests 12/12, including unknown-value suppression, known zero and canonical immutability. Live visual/source acceptance remains pending.
+
+M3 commit: `2a2e36685b50fc45f075d53b53fb2be0f219f4a3`.
+
+## M4 — progressive source enrichment
+
+Recovered the financial and portfolio previews from the existing credit-conclusion presentation into the shared active overview. Latest annual and interim periods remain separate; period-specific quality, assets/equity/debt and ratios are retained. The portfolio distinguishes reported dated principal from unconfirmed current principal, contract payment, limit, overdue, next date and maturity. Existing upload/parser/normalization/persistence contracts remain in use.
+
+Validation: zero type diagnostics; source and shared overview checks 21/21. Actual CSV/XLSX/PDF BFO bytes and corporate BKI PDF pass real API handlers; replacement, missing values, partial status, rejected/foreign upload, concurrent-save conflict, quarterly preservation, CLIENT/BROKER equality, reload and analysis isolation are checked. These isolated API/component checks are not the required fresh live browser acceptance.

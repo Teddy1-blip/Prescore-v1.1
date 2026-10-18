@@ -48,3 +48,19 @@ test('current FAILED financial envelope supersedes READY upload history without 
   assert.equal(before.sourceManifest.financialUploads.length,2);assert.deepEqual((await model(rt,a,rt.broker)).full,current.full);assert.deepEqual(await model(rt,a),current);
  }finally{await rt.close();}
 });
+
+
+test('shared overview shows annual and quarterly enrichment without replacing annual figures',async()=>{
+ const rt=await createWorkspaceRuntime();try{
+ const a=await create(rt),{ExecutiveOverview}=rt.load('app/components/workspace/client-insights.tsx');
+ const render=m=>renderToStaticMarkup(React.createElement(ExecutiveOverview,{model:m,choose:()=>{},retry:()=>{}}));
+ assert.doesNotMatch(render(await model(rt,a)),/Годовая отчётность/);
+ assert.equal((await upload(rt,a,'BFO',financialFile(a.companyInn,'csv',{period:'2025 год',revenue:1300}))).status,200);
+ assert.equal((await upload(rt,a,'QUARTERLY',financialFile(a.companyInn,'csv',{period:'Январь - Март 2026 г.',revenue:300}))).status,200);
+ const current=await model(rt,a),html=render(current);
+ assert.match(html,/Годовая отчётность/);assert.match(html,/Промежуточная отчётность/);
+ assert.match(html,/1[\s\u00a0]*300[\s\u00a0]*000/);assert.match(html,/300[\s\u00a0]*000/);
+ assert.equal(render(await model(rt,a,rt.broker)),html);
+ assert.equal(render(await model(rt,a)),html);
+ }finally{await rt.close();}
+});
