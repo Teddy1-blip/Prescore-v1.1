@@ -114,7 +114,7 @@ try{
  checks.push('failed refresh retains application table and recovers');
  // No saved analyses and initial API errors.
  await page.route('**/api/workspace',route=>route.fulfill({json:{analyses:[],deals:[],readOnly:false}}));
- await page.goto(origin+'/dashboard');await page.getByRole('button',{name:'Загрузить выписку'}).waitFor();
+ await page.goto(origin+'/dashboard');await page.getByRole('button',{name:'Загрузить банковскую выписку'}).waitFor();
  assert.equal(await page.locator('[data-credit-index]').count(),0);checks.push('no analysis actionable state');
  await page.unroute('**/api/workspace');
  await page.route('**/api/workspace',route=>route.fulfill({status:503,json:{error:'QA unavailable'}}));

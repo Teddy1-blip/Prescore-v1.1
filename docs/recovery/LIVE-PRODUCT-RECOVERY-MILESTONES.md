@@ -87,3 +87,9 @@ Recovery branch was added to the existing Product, Polish and RC1 trigger allowl
 Final review also synchronized Drizzle's schema with migration 0009 and exposed existing seasonality/trend observations in BankingLedger without introducing calculations. Additive archive columns and the new onboarding action are reflected in regression expectations; all original legacy columns remain required. Targeted checks: 18/18. Credit Lab business: 24/24. Full suite/build/CI/visual review are still pending at this candidate commit.
 
 Production observation: prescore-prod Moscow-1 1/1, prescore-staging frozen 0/0; balance 375.24 RUB. No production mutations, archive execution, DNS change or new resources in this recovery task. Rollback to RC2 after migration 0009 requires the reviewed database rollback as well as the previous application tree; old runtime schema checks must not be bypassed.
+
+M7 acceptance candidate commit: `15928d45ff67d1d856976b3865cd9ee6e9461aca` (not an acceptance PASS).
+
+CI on that candidate: Product QA run 39115615761; Polish run 39115615769; RC1 run 39115615783. The RC1 postgres-worker job passed actual migrations, schema verification and worker/crash checks, then failed artifact upload with `Artifact storage quota has been hit`. No guard was removed. A local PDF packaging smoke detects the local shared-node_modules symlink escaping standalone; the clean npm-ci CI build remains the authoritative packaging gate.
+
+M7 gate corrections: the legacy upgrade scenario now asserts every existing row unchanged plus exactly the new ACTIVE/null/null archive defaults; migration does not archive records automatically. The banking field-coverage test explicitly classifies seasonality, and browser onboarding expects the new user-facing upload action. Complete-client regression after that correction: 32/32. The required 19-block active mapping is in LIVE-RECOVERY-BLOCK-COVERAGE.md.
