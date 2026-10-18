@@ -24,3 +24,23 @@ test('commercial client uses one navigation and separate executive/analysis path
  }finally{await rt.close();}
 });
 test('client source contains no credit formulas or retired analytics',()=>{for(const f of ['client.tsx','client-shell.tsx','client-analysis.tsx','client-insights.tsx','client-financials.tsx'])assert.doesNotMatch(fs.readFileSync('app/components/workspace/'+f,'utf8'),/analysis\.(score|grade)|estimatedLimit|stressLimit|baseMonthlyPaymentCapacity|UnifiedRiskContext|compareCreditPortfolio|buildActionPlan|\/api\/offers/);});
+
+test('bank-first overview retains known zero and groups unknown credit outputs without changing the model',async()=>{
+ const rt=await createWorkspaceRuntime();try{
+ const {ExecutiveOverview}=rt.load('app/components/workspace/client-insights.tsx');
+ const {model}=conclusionFixture();
+ model.full.canonical.prescoreIndex.value=null;
+ model.full.canonical.financingReadiness.level='UNKNOWN';
+ model.full.canonical.debtCapacity.headlineCapacity.monthlyIncrementalDebtServiceCapacity.prudential=null;
+ model.basic.bankingFacts.taxPayments={...model.basic.bankingFacts.taxPayments,value:0,status:'KNOWN'};
+ model.basic.bankingFacts.endingBalance={...model.basic.bankingFacts.endingBalance,value:987654321,status:'UNKNOWN'};
+ const before=JSON.stringify(model),html=render(ExecutiveOverview,{model,choose:()=>{},retry:()=>{}});
+ assert.match(html,/Что уже известно по выпискам/);assert.match(html,/Банковский профиль компании рассчитан/);
+ assert.equal((html.match(/class="pc-assessment-limit"/g)||[]).length,1);
+ assert.doesNotMatch(html,/data-credit-index|data-credit-readiness|data-prudential-capacity|987\s*654\s*321/);
+ assert.match(html,/data-banking-fact="taxPayments"[^]*?0 ₽/);
+ assert.equal(JSON.stringify(model),before);
+ model.full.canonical.prescoreIndex.value=0;
+ assert.match(render(ExecutiveOverview,{model,choose:()=>{},retry:()=>{}}),/data-credit-index="true">0/);
+ }finally{await rt.close();}
+});

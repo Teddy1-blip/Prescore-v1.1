@@ -35,7 +35,7 @@ const groups:Array<{title:string;hint:string;fields:BankingField[]}>= [
  {title:'Концентрация покупателей',hint:'Доля прямых покупателей в операционных поступлениях.',fields:['directCustomerTop1','directCustomerTop3']}
 ];
 
-function display(f:WorkspaceFactV1){
+export function displayBankingFact(f:WorkspaceFactV1){
  if(f.status==='NOT_APPLICABLE')return 'Не применимо';
  const v=factValue(f);
  if(v===null)return 'Не определено';
@@ -46,6 +46,15 @@ function display(f:WorkspaceFactV1){
  }
  if(f.unit==='DAYS')return new Intl.NumberFormat('ru-RU',{maximumFractionDigits:0}).format(v)+' дн.';
  return new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(v);
+}
+const display=displayBankingFact;
+
+// The same published banking facts serve the executive summary and the detailed ledger.
+export function BankingSnapshot({model}:{model:WorkspaceModelV1}){
+ const b=model.basic.bankingFacts,s=model.basic.sources.statements;
+ const keys:BankingField[]=['operatingInflow','grossInflow','grossOutflow','netCashFlow','endingBalance','averageDailyBalance','minimumDailyBalance','lowLiquidityDays','taxPayments','socialContributions','loanPrincipalPayments','interestPayments','leasingPayments','unsplitDebtPayments','transfersToIndividuals','directCustomerTop1','directCustomerTop3'];
+ const known=keys.filter(k=>factValue(b[k])!==null&&b[k].status!=='NOT_APPLICABLE'),missing=keys.filter(k=>!known.includes(k));
+ return <section className="pc-panel pc-banking-snapshot"><header><div><h2>Что уже известно по выпискам</h2><p>{date(model.basic.analysis.period.from)} — {date(model.basic.analysis.period.to)} · {s.bankNames?.join(' · ')||'Банк не указан'} · Счетов: {s.accountCount??'не подтверждено'}</p></div></header><dl className="pc-definition pc-bank-summary">{known.map(k=><Fact key={k} name={k} fact={b[k]}/>)}</dl>{!known.length&&<p>Выписка сохранена, но её поля не позволяют подтвердить денежные показатели. Проверьте формат и полноту операций.</p>}{missing.length>0&&<details><summary>Показатели, требующие уточнения ({missing.length})</summary><p>Эти значения не заменены нулями. Проверьте остатки, даты и состав операций в исходной выписке.</p><dl className="pc-definition">{missing.map(k=><Fact key={k} name={k} fact={b[k]}/>)}</dl></details>}<p className="pc-muted">Поступления по счёту не равны бухгалтерской выручке. Наблюдаемые долговые платежи не заменяют договорный график.</p></section>;
 }
 
 function Fact({name,fact}:{name:BankingField;fact:WorkspaceFactV1}){

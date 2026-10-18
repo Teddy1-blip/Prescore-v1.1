@@ -41,3 +41,11 @@ No cutover is inferred or executed in production by this milestone. Preview and 
 CLIENT now opens the start screen without an explicit ID, offers recent active versions for explicit selection, and describes the useful first statement result, supported BFO/BKI formats and privacy. Invalid/archived links do not fall back to another company.
 
 Validation: typecheck zero diagnostics; targeted model/authorization/ADMIN/CLIENT tests 22/22; archive/source/CLIENT checks 14/14. Archive integration proves boundary exclusion, idempotence, unchanged payload and entitlements, ADMIN-only archived reading, active broker filtering, changed-preview rollback and reversible restore. These are isolated tests, not live acceptance.
+
+M2 commit: `8071b7541feb14262ef4f2c92ef8ff2c303efbe5`.
+
+## M3 — useful bank-first conclusion
+
+The existing BankingLedger formatting now serves the executive overview as BankingSnapshot: confirmed period, banks/accounts, receipts/payments, balances, liquidity, taxes, debt payments and concentration. Unknown facts remain available in a closed disclosure, never converted to zero. Existing monthly series remains visible. CLIENT and BROKER reuse ExecutiveOverview.
+
+CreditSummary renders only available canonical outputs, including known zero. One compact assessment explanation links to the missing accounting/credit source or to the existing analysis evidence. No formulas or entitlement rules changed. Validation: typecheck zero diagnostics; client presentation tests 12/12, including unknown-value suppression, known zero and canonical immutability. Live visual/source acceptance remains pending.
