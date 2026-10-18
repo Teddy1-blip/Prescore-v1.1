@@ -59,7 +59,7 @@ jobs:
       matrix: {scenario: [clean-e2e-restore, upgrade, worker]}
     services:
       postgres:
-        image: postgres:15-bookworm
+        image: postgres:17-bookworm
         env:
           POSTGRES_USER: rc
           POSTGRES_PASSWORD: synthetic-ci-only-password
@@ -88,11 +88,15 @@ jobs:
       - name: Production standalone build
         if: matrix.scenario != 'worker'
         run: npm run build && node scripts/release/package-runtime.mjs
-      - name: Native PostgreSQL backup tools and Chromium
+      - name: PostgreSQL 17 backup tools and Chromium
         if: matrix.scenario != 'worker'
         run: |
+          sudo install -d -m 0755 /usr/share/postgresql-common/pgdg
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo tee /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc >/dev/null
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
           sudo apt-get update
-          sudo apt-get install -y postgresql-client
+          sudo apt-get install -y postgresql-client-17
+          pg_dump --version | grep -Eq ' 17\.'
           npx --no-install playwright install --with-deps chromium
       - name: Real HTTP E2E / restart / clean restore / post-restore E2E
         if: matrix.scenario != 'worker'

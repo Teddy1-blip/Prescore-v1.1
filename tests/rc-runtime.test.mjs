@@ -20,7 +20,7 @@ test('startup storage verifies write/read and rejects symlink escape',async()=>{
  }
 });
 
-test('portable artifact includes one app/worker image, PostgreSQL 17 backup tools and public version excludes secrets',()=>{
+test('portable artifact includes PostgreSQL 17 runtime and RC compatibility while public version excludes secrets',()=>{
  const version=runtimeVersion({DATABASE_URL:'must-not-leak',AUTH_SECRET:'must-not-leak',PRESCORE_SOURCE_SHA:'a'.repeat(40)});
  assert.equal(version.sourceSha,'a'.repeat(40));
  assert.equal(version.schemaVersion,'0009_analysis_archive.sql');
@@ -33,7 +33,12 @@ test('portable artifact includes one app/worker image, PostgreSQL 17 backup tool
  assert.match(docker,/pg_dump --version/);
  assert.match(docker,/prescore\.schema="0009_analysis_archive\.sql"/);
  assert.doesNotMatch(docker,/COPY.*\.env|AUTH_SECRET=/);
- assert.match(fs.readFileSync('docker-compose.rc.yml','utf8'),/prescore-worker:/);
+ const compose=fs.readFileSync('docker-compose.rc.yml','utf8');
+ assert.match(compose,/prescore-worker:/);
+ assert.match(compose,/image: postgres:17-bookworm/);
+ const rcWorkflow=fs.readFileSync('.github/workflows/prescore-rc1.yml','utf8');
+ assert.match(rcWorkflow,/image: postgres:17-bookworm/);
+ assert.match(rcWorkflow,/postgresql-client-17/);
 });
 
 test('app and worker apply pending migrations before readiness',()=>{

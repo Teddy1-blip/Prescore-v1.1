@@ -16,7 +16,7 @@ x-runtime: &runtime
     - documents:/data/prescore
 services:
   postgres:
-    image: postgres:15-bookworm
+    image: postgres:17-bookworm
     environment:
       POSTGRES_DB: prescore_rc
       POSTGRES_USER: prescore_rc
