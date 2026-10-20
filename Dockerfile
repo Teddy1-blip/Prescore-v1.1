@@ -27,5 +27,5 @@ COPY --from=build --chown=node:node /app/public ./public
 RUN mkdir -p /data/prescore /data/backup && chown -R node:node /data
 USER node
 EXPOSE 3000
-HEALTHCHECK --interval=20s --timeout=5s --start-period=40s CMD node -e "fetch('http://127.0.0.1:3000/api/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+HEALTHCHECK --interval=20s --timeout=5s --start-period=40s CMD node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["node","--experimental-strip-types","scripts/release/start.mjs"]

@@ -5,6 +5,7 @@ const required=[
  '.next/server/app-paths-manifest.json',
  '.next/standalone/server.js',
  '.next/standalone/scripts/release/start.mjs',
+ '.next/standalone/scripts/release/startup-diagnostic.mjs',
  '.next/standalone/scripts/platform/db-migrate.mjs',
  '.next/standalone/scripts/billing/payout-worker.mjs',
  '.next/standalone/scripts/release/backup.mjs',
