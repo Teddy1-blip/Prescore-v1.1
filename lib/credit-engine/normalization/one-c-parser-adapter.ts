@@ -1,4 +1,7 @@
 import type { RawBankTransactionInput } from "./transaction-normalizer.ts";
+import { determineDirection } from "./direction.ts";
+import { normalizeAccountValue } from "./value-normalizers.ts";
+import { normalizeInnValue } from "./counterparty-normalizer.ts";
 
 type OneCRecord = Record<string, string> & { __account?: string };
 
@@ -8,14 +11,31 @@ function field(record: OneCRecord, ...names: string[]) {
 }
 
 export type OneCAdapterContext = Omit<RawBankTransactionInput,
-  "bankDocumentId" | "date" | "amount" | "currency" | "payerName" | "payerInn" | "payerAccount" |
+  "bankDocumentId" | "date" | "documentDate" | "amount" | "currency" | "payerName" | "payerInn" | "payerAccount" |
   "recipientName" | "recipientInn" | "recipientAccount" | "purpose" | "statementAccount">;
 
 export function adaptOneCDocument(document: OneCRecord, context: OneCAdapterContext): RawBankTransactionInput {
+  const statementAccount = document.__account || context.companyAccounts[0] || null;
+  const companyAccounts = new Set([...context.companyAccounts, statementAccount]
+    .map(value => normalizeAccountValue(value).value).filter((value): value is string => Boolean(value)));
+  // Use the same side-selection rules as normalization. The counterparty's
+  // posting date must not move this account's cash to a different day/month.
+  const { direction } = determineDirection({
+    companyInn: normalizeInnValue(context.companyInn).value,
+    companyAccounts,
+    payerInn: normalizeInnValue(field(document, "ПлательщикИНН", "ИННПлательщика")).value,
+    recipientInn: normalizeInnValue(field(document, "ПолучательИНН", "ИННПолучателя")).value,
+    payerAccount: normalizeAccountValue(field(document, "ПлательщикСчет", "СчетПлательщика")).value,
+    recipientAccount: normalizeAccountValue(field(document, "ПолучательСчет", "СчетПолучателя")).value,
+  });
+  const documentDate = field(document, "Дата") || null;
+  const postingDate = direction === "IN" ? field(document, "ДатаПоступило")
+    : direction === "OUT" ? field(document, "ДатаСписано") : "";
   return {
     ...context,
     bankDocumentId: field(document, "Номер") || null,
-    date: field(document, "Дата") || null,
+    date: postingDate || documentDate,
+    ...(postingDate ? { documentDate } : {}),
     amount: field(document, "Сумма") || null,
     currency: field(document, "Валюта", "КодВалюты") || null,
     payerName: field(document, "Плательщик", "Плательщик1", "НаименованиеПлательщика", "ПлательщикНаименование") || null,
@@ -25,6 +45,6 @@ export function adaptOneCDocument(document: OneCRecord, context: OneCAdapterCont
     recipientInn: field(document, "ПолучательИНН", "ИННПолучателя") || null,
     recipientAccount: field(document, "ПолучательСчет", "СчетПолучателя") || null,
     purpose: field(document, "НазначениеПлатежа", "Назначение") || null,
-    statementAccount: document.__account || context.companyAccounts[0] || null,
+    statementAccount,
   };
 }

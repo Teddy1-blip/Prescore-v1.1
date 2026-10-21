@@ -36,6 +36,8 @@ export type CanonicalTransactionQuality = {
 
 export type RawTransactionValues = {
   date: string | null;
+  /** Original document date when a separate bank posting date was selected. */
+  documentDate?: string | null;
   amount: string | null;
   currency: string | null;
   payerName: string | null;
