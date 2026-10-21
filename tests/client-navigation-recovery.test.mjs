@@ -29,12 +29,12 @@ function component(name) {
  if (!names.has(name)) {const f=()=>null; f.displayName=name; names.set(name,f);}
  return names.get(name);
 }
-function harness({view='home',selectedId='',analyses=[company],model=null,modelError='',modelLoading=false,readOnly=false,modules={},workspaceError=''}={}) {
+function harness({view='home',selectedId='',analyses=[company],model=null,modelError='',modelLoading=false,readOnly=false,modules={},workspaceError='',diagnostic=''}={}) {
  const values=[analyses,[],selectedId,view,false,workspaceError,'',readOnly,0,modules,false,'',false,null];
  let hook=0;
  const location={href:'https://prescore.test/dashboard'};
  const window={location,history:{replaceState(_state,_title,url){location.href=String(url);}}};
- const modelState={model,error:modelError,refreshError:'',loading:modelLoading,refreshing:false,refresh:async()=>true};
+ const modelState={model,diagnostic,error:modelError,refreshError:'',loading:modelLoading,refreshing:false,refresh:async()=>true};
  const react={
   useState(initial){const index=hook++;if(!(index in values))values[index]=typeof initial==='function'?initial():initial;return [values[index],next=>{values[index]=typeof next==='function'?next(values[index]):next;}];},
   useRef:value=>({current:value}),useCallback:fn=>fn,useEffect(){},
@@ -196,4 +196,25 @@ test('model-provided read-only access is still enforced in operational sections'
  assert.equal(named(tree,'SourceUpload').length,0);
  assert.equal(named(tree,'CompanyData').length,0);
  assert.equal(named(tree,'documents-hub')[0]?.props.readOnly,true);
+});
+
+
+test('diagnostic is visible in Documents without hiding the three analytical upload forms',()=>{
+ const h=harness({view:'documents',selectedId:company.id,modelError:'Model unavailable',diagnostic:'Safe processing diagnostic'}),tree=h.render();
+ assert.equal(nodes(tree).filter(n=>n.props?.['data-workspace-diagnostic']).length,1);
+ assert.match(text(tree),/Safe processing diagnostic/);
+ assert.deepEqual(named(tree,'SourceUpload').map(n=>n.props.kind).sort(),['BFO','BKI','QUARTERLY']);
+});
+test('no diagnostic is shown for an unselected or inaccessible analysis',()=>{
+ for(const selectedId of ['', 'not-owned']){
+  const tree=harness({view:'documents',selectedId,diagnostic:'Previous analysis diagnostic'}).render();
+  assert.equal(nodes(tree).filter(n=>n.props?.['data-workspace-diagnostic']).length,0);
+  assert.doesNotMatch(text(tree),/Previous analysis diagnostic/);
+ }
+});
+test('read-only diagnostic does not expose mutation controls',()=>{
+ const tree=harness({view:'documents',selectedId:company.id,readOnly:true,modelError:'Model unavailable',diagnostic:'Safe processing diagnostic'}).render();
+ assert.match(text(tree),/Safe processing diagnostic/);
+ assert.equal(named(tree,'SourceUpload').length,0);
+ assert.equal(named(tree,'CompanyData').length,0);
 });

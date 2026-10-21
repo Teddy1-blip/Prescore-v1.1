@@ -99,6 +99,8 @@ export type WorkspaceModelV1 = {
     };
   };
   limitations?: { code: "CANONICAL_REPORT_UNAVAILABLE" };
+  /** Safe operational status, not an analytical result or an entitlement grant. */
+  diagnostic?: import("../credit-engine/production/diagnostics.ts").CanonicalDiagnosticV1;
 };
 
 export type WorkspaceOperationalInput = WorkspaceOperationalStateV1;

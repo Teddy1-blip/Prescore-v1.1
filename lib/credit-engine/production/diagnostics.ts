@@ -1,6 +1,6 @@
 import {randomUUID} from 'node:crypto';
 import {validDate} from '../credit-portfolio/common.ts';
-export const DIAGNOSTIC_VERSION = 'PRESCORE-CANONICAL-DIAGNOSTICS-1.0.1';
+export const DIAGNOSTIC_VERSION = 'PRESCORE-CANONICAL-DIAGNOSTICS-1.0.2';
 // Exact matches only. Never publish a thrown message, even a validator's dynamic suffix.
 const capacityReasons = ['BANK_VERSION_OR_SHAPE','BANK_PERIOD_ORDER','MONTH_SHAPE','FUTURE_BANK_MONTH','MONTH_OUTSIDE_BANK_PERIOD','FULL_MONTH_OUTSIDE_BANK_PERIOD','NEGATIVE_OR_MISSING_MONTH_AMOUNT','BANK_MONTH_COUNTS','BANK_METRIC_STATE','BANK_METRIC_CONCEPT','CANONICAL_AVERAGE_MONTH_LINEAGE','BANK_QUALITY','FUTURE_OR_INVALID_AVAILABILITY','PORTFOLIO_IDENTITY'] as const;
 const inputReasons = ['FINANCIAL_COMPANY_MISMATCH','DUPLICATE_FINANCIAL_SNAPSHOT','DUPLICATE_ID_CONFLICT','INVALID_RISK_SUBJECT_OR_DATE','INVALID_RISK_FACT','RISK_FACT_ID_CONFLICT','CONTEXT_RISK_INPUT_UNAVAILABLE','CONTEXT_INPUT_MISMATCH'] as const;
@@ -10,13 +10,14 @@ export function safeReason(error: unknown): string {
  for (const code of inputReasons) if (message === code) return code;
  return 'UNEXPECTED_FAILURE';
 }
-const stages = ['SOURCES','SOURCE_DATES','BANK_METRICS_REQUIRED','SAVED_IDENTITY','SAVED_INPUT','PROFILE_READ','FINANCIAL_ANALYSIS','CREDIT_PORTFOLIO','RECONCILIATION','RISK','CONTEXT','INDEX','READINESS','ASSESSMENT','CAPACITY','PRODUCTS','RECOMMENDATIONS','ACTION_PLAN','EXPLAINABILITY','CLIENT_REPORT'];
-const reasons = ['UNEXPECTED_FAILURE','INVALID_SOURCE_DATES','SOURCE_IDENTITY_MISMATCH','BANK_METRICS_MISSING','SAVED_IDENTITY_MISMATCH','INVALID_SAVED_JSON',...capacityReasons,...inputReasons];
+const stages = ['ENTITLEMENT_READ','BASIC_PROJECTION','PUBLIC_MODEL','SOURCES','SOURCE_DATES','BANK_METRICS_REQUIRED','SAVED_IDENTITY','SAVED_INPUT','PROFILE_READ','FINANCIAL_ANALYSIS','CREDIT_PORTFOLIO','RECONCILIATION','RISK','CONTEXT','INDEX','READINESS','ASSESSMENT','CAPACITY','PRODUCTS','RECOMMENDATIONS','ACTION_PLAN','EXPLAINABILITY','CLIENT_REPORT'];
+const reasons = ['INVALID_SAVED_SHAPE','UNEXPECTED_FAILURE','INVALID_SOURCE_DATES','SOURCE_IDENTITY_MISMATCH','BANK_METRICS_MISSING','SAVED_IDENTITY_MISMATCH','INVALID_SAVED_JSON',...capacityReasons,...inputReasons];
 export function diagnostic(stage: string, reason: string) {
  const code = reasons.includes(reason) ? reason : 'UNEXPECTED_FAILURE';
  return {id: randomUUID(), version: DIAGNOSTIC_VERSION, stage: stages.includes(stage) ? stage : 'SAVED_INPUT', reason: code,
   category: code === 'UNEXPECTED_FAILURE' ? 'PROGRAMMING_OR_RUNTIME_ERROR' : code === 'BANK_METRICS_MISSING' ? 'MISSING_REQUIRED_INPUT' : 'INCOMPATIBLE_INPUT'};
 }
+export type CanonicalDiagnosticV1 = ReturnType<typeof diagnostic>;
 type RecordValue = Record<string, unknown>;
 const record = (v: unknown): RecordValue => v !== null && typeof v === 'object' && !Array.isArray(v) ? v as RecordValue : {};
 const array = (v: unknown): unknown[] => Array.isArray(v) ? v : [];
