@@ -145,11 +145,29 @@ function moneyTokens(value: string) {
   return [...value.matchAll(/(-|[\d][\d\s]*(?:[.,]\d{1,2})?)\s*₽/g)].map((match) => numberValue(match[1]));
 }
 
+// Keep each labelled SB servicing field separate. A missing value in one
+// field must never borrow the amount, date or "нет данных" from its neighbour.
+function sbServicingField(block: string, label: string) {
+  const start = block.match(new RegExp(`(?:^|\\n)[ \\t]*(?:${label})[ \\t]*:?[ \\t]*`, "i"));
+  if (!start) return "";
+  const value = block.slice((start.index ?? 0) + start[0].length);
+  return value.split(/\n[ \t]*(?:Текущая просрочка|(?:Следующий|Ближайший) плат[её]ж|Дата (?:следующего|ближайшего) платежа|Своевременность платежей|Уникальный идентификатор договора|Сведения об изменениях|Обеспечение|Закрытые кредиты|Отч[её]т от|ИНН)(?=[\s:]|$)/i)[0].trim();
+}
+
+function sbServicingAmount(value: string, absenceMeansZero = false): number | null {
+  const firstLine = value.split("\n")[0].trim();
+  if (absenceMeansZero && /^(?:нет|отсутствует|отсутствуют)[.!]?$/i.test(firstLine)) return 0;
+  // Only the first value line is authoritative. Unknown text, a dash, a date,
+  // a following heading or another field's number must remain unknown.
+  const amount = firstLine.match(/^(\d[\d \u00a0\u202f\u2009]*(?:[.,]\d{1,2})?)\s*(?:₽|руб\.?|RUB)\s*$/i)?.[1];
+  return amount === undefined ? null : numberValue(amount);
+}
+
 function delinquencyQuality(days: number | null, overdue: number | null): DebtServiceQuality {
   if ((overdue ?? 0) > 0 || (days ?? 0) >= 60) return "Негативное обслуживание";
   if ((days ?? 0) >= 30) return "Есть существенная просрочка";
   if ((days ?? 0) > 0) return "Есть краткая просрочка";
-  if (days === 0 || overdue === 0) return "Без просрочек";
+  if (days === 0 && overdue === 0) return "Без просрочек";
   return "Недостаточно данных";
 }
 
@@ -191,12 +209,13 @@ function parseSbObligation(block: string, index: number): CreditObligation | nul
   const rate = numberValue(costSection.match(/([\d]+[.,]\d+)\s*%\s*годовых/i)?.[1]);
   const costAmounts = moneyTokens(costSection);
   const monthlyPayment = /Среднемесячный платёж|Минимальный платеж/i.test(costSection) && costAmounts.length >= 2 ? costAmounts[costAmounts.length - 1] : null;
-  const nextSection = block.match(/Текущая просрочка[\s\S]*?Своевременность платежей/i)?.[0] ?? "";
-  const nextAmounts = moneyTokens(nextSection);
-  const nextPayment = nextAmounts.length ? nextAmounts[nextAmounts.length - 1] : null;
-  const nextDate = nextSection.match(/(\d{2}\.\d{2}\.\d{4})/)?.[1] ?? "";
-  const hasNoCurrentOverdue = /Текущая просрочка[\s\S]{0,350}?нет/i.test(nextSection);
-  const overdue = hasNoCurrentOverdue ? 0 : nextAmounts[0] ?? null;
+  const overdueField = sbServicingField(block, "Текущая просрочка");
+  const nextField = sbServicingField(block, "(?:Следующий|Ближайший) плат[её]ж");
+  const nextDateField = sbServicingField(block, "Дата (?:следующего|ближайшего) платежа");
+  const overdue = sbServicingAmount(overdueField, true);
+  const nextPayment = sbServicingAmount(nextField);
+  const nextDate = nextDateField.match(/^(\d{2}\.\d{2}\.\d{4})(?:\s|$)/)?.[1]
+    ?? nextField.match(/(?:^|\n)\s*(?:до\s+)?(\d{2}\.\d{2}\.\d{4})(?:\s|$)/i)?.[1] ?? "";
   const maxDays = maxDelinquencyFromSbBlock(block);
   const originalAmount = numberValue(conditions?.[1]);
   const isLine = /линия|карта|овердрафт/i.test(product);
@@ -222,7 +241,11 @@ function parseSbObligation(block: string, index: number): CreditObligation | nul
     rateLabel: rate === null ? "Ставка не указана" : "Полная стоимость кредита",
     overdueAmount: overdue,
     maxDelinquencyDays: maxDays,
-    fieldProvenance: maxDays === 0 ? {maxDelinquencyDays:{origin:"REPORTED",value:0,reference:"Explicit bureau payment-history codes/count"}} : {},
+    fieldProvenance: {
+      ...(maxDays === 0 ? {maxDelinquencyDays:{origin:"REPORTED" as const,value:0,reference:"Explicit bureau payment-history codes/count"}} : {}),
+      ...(overdue === 0 ? {overdueAmount:{origin:"REPORTED" as const,value:0,reference:"SB Текущая просрочка: explicit absence or zero"}} : {}),
+      ...(nextPayment === 0 ? {nextPaymentAmount:{origin:"REPORTED" as const,value:0,reference:"SB next-payment field: explicit zero"}} : {}),
+    },
     paymentQuality: delinquencyQuality(maxDays, overdue),
     collateral,
     guaranteeAmount: null,
@@ -407,7 +430,7 @@ function finishReport(input: FinishInput): CreditHistoryReport {
       ? "Есть существенная просрочка"
       : qualities.includes("Есть краткая просрочка")
         ? "Есть краткая просрочка"
-        : qualities.includes("Без просрочек")
+        : qualities.length > 0 && qualities.every((quality) => quality === "Без просрочек")
           ? "Без просрочек"
           : "Недостаточно данных";
   const base: CreditHistorySummary = {
@@ -477,6 +500,9 @@ export function compareCreditPortfolio(input: {
     adjustedLimitMax: Math.round(adjustedLimit / 1000) * 1000,
     confidence: Math.min(99, Math.round((input.limitConfidence + input.report.parserConfidence) / 2)),
   };
+  const activeObligations = input.report.obligations.filter((item) => !/закрыт|погашен|прекращ/i.test(item.status));
+  const currentOverdueKnown = activeObligations.length > 0 && activeObligations.every((item) => item.overdueAmount !== null);
+  const hasReportedOverdue = input.report.summary.overdueAmount > 0;
   const insights: CreditHistoryInsight[] = [];
   if (!affectsCompanyDebt) insights.push({
     tone: "neutral",
@@ -495,9 +521,9 @@ export function compareCreditPortfolio(input: {
   insights.push({
     tone: input.report.summary.debtServiceQuality === "Без просрочек" ? "positive" : input.report.summary.debtServiceQuality === "Недостаточно данных" ? "neutral" : "critical",
     title: `Качество обслуживания долга: ${input.report.summary.debtServiceQuality.toLowerCase()}`,
-    facts: `Текущая просрочка: ${Math.round(input.report.summary.overdueAmount).toLocaleString("ru-RU")} ₽; обязательств распознано: ${input.report.obligations.length}.`,
-    impact: input.report.summary.overdueAmount > 0 ? "Просрочка может стать стоп-фактором до её погашения и обновления данных в БКИ." : "Отсутствие просрочки поддерживает кредитный профиль, но не гарантирует одобрение.",
-    action: input.report.summary.overdueAmount > 0 ? "Погасить просрочку и запросить обновлённый отчёт БКИ." : "Сверить актуальность открытых договоров и сохранить отчёт в кредитном досье.",
+    facts: `Текущая просрочка: ${currentOverdueKnown ? Math.round(input.report.summary.overdueAmount).toLocaleString("ru-RU") + " ₽" : hasReportedOverdue ? "не менее " + Math.round(input.report.summary.overdueAmount).toLocaleString("ru-RU") + " ₽ по раскрытым обязательствам" : "недостаточно данных"}; обязательств распознано: ${input.report.obligations.length}.`,
+    impact: hasReportedOverdue ? "Просрочка может стать стоп-фактором до её погашения и обновления данных в БКИ." : currentOverdueKnown ? "Отсутствие просрочки поддерживает кредитный профиль, но не гарантирует одобрение." : "Неполные сведения не подтверждают отсутствие текущей просрочки.",
+    action: hasReportedOverdue ? "Погасить просрочку и запросить обновлённый отчёт БКИ." : "Сверить актуальность открытых договоров и сохранить отчёт в кредитном досье.",
   });
   if (affectsCompanyDebt) insights.push({
     tone: unseen > 0 ? "warning" : "positive",
