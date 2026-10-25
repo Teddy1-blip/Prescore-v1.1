@@ -6,6 +6,13 @@ RUN npm ci
 COPY . .
 RUN npm run build && node scripts/release/package-runtime.mjs
 
+# Verify the packaged application in the build container, never at runtime.
+# These native libraries are also present in the existing runtime stage.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libfontconfig1 libfreetype6 libstdc++6 libgcc-s1 libuuid1 \
+ && rm -rf /var/lib/apt/lists/* \
+ && node scripts/qa/recovery-build-gate.mjs --build-only
+
 FROM node:22-bookworm-slim AS runtime
 ARG SOURCE_SHA=UNKNOWN
 ARG BUILD_TIMESTAMP=UNKNOWN
