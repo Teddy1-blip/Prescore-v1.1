@@ -1,0 +1,65 @@
+{
+  "version": "PRESCORE-PROVENANCE-BASELINE-REVIEW-20261026",
+  "sourceRepairCommit": "f358ee85af79a6cbc00ac7de67fd68ac6ff6c120",
+  "failedStagingCommit": "7963e6c0663c84af6f3ca3998a4b2287a5eb9348",
+  "scope": "Exact allowlist of non-economic output changes. Restore only these fields to reproduce the old complete-output hashes; every unlisted field remains guarded.",
+  "entries": [
+    {
+      "caseId": "CL-RU-BUS-010",
+      "reason": "Supplied-account balance provenance now includes internal transfers; amounts, decisions and the complete client report are unchanged. Balanced observed legs cancel in this fixture.",
+      "previousOutputHash": "baa18d9a91f1879db6b2f6c1ca32725f9e533874f7cb95d16414334a3dfe5b7e",
+      "reviewedOutputHash": "74d07dd7ee6e18dbf6d3486da62e90f53cf6c863ec9f840a8f2e156f6c019305",
+      "unchangedClientReportHash": "03d20cb736116a97976ce355b54343287139dd2fc814264348f45d98d3a802dc",
+      "changes": [
+        {"path":["inputFingerprint"],"before":"canonical-input:2f7ad49d9696c8ca7c4e5c33a6ee08ac","after":"canonical-input:e383d5f25cd4fa8b88515854fc365731"},
+        {"path":["contextAssessment","facts",17,"evidence",0,"calculationBasis"],"before":"Daily company balance reconstructed forward from confirmed opening balance using external cash movements and reconciled against confirmed ending balance.","after":"Daily balance of supplied accounts reconstructed from confirmed opening balance and all retained account cash movements, including internal transfers, and reconciled against confirmed ending balance."},
+        {"path":["contextAssessment","facts",17,"evidence",1,"calculationBasis"],"before":"Daily company balance reconstructed forward from confirmed opening balance using external cash movements and reconciled against confirmed ending balance.","after":"Daily balance of supplied accounts reconstructed from confirmed opening balance and all retained account cash movements, including internal transfers, and reconciled against confirmed ending balance."},
+        {"path":["contextAssessment","facts",17,"calculationBasis"],"before":"Daily company balance reconstructed forward from confirmed opening balance using external cash movements and reconciled against confirmed ending balance.","after":"Daily balance of supplied accounts reconstructed from confirmed opening balance and all retained account cash movements, including internal transfers, and reconciled against confirmed ending balance."},
+        {"path":["debtCapacity","liquidityDiagnostics","averageDailyBalance","calculationBasis"],"before":"Daily company balance reconstructed forward from confirmed opening balance using external cash movements and reconciled against confirmed ending balance.","after":"Daily balance of supplied accounts reconstructed from confirmed opening balance and all retained account cash movements, including internal transfers, and reconciled against confirmed ending balance."},
+        {"path":["debtCapacity","liquidityDiagnostics","averageDailyBalance","excludedCategories"],"before":["INTERNAL_TRANSFER"],"after":[]},
+        {"path":["debtCapacity","liquidityDiagnostics","averageDailyBalance","includedCategories"],"before":["INTEREST_PAYMENT","LOAN_PRINCIPAL_PAYMENT","PAYROLL","RENT_PAYMENT","SALE_PROCEEDS","SUPPLIER_PAYMENT","TAX_PAYMENT"],"after":["INTEREST_PAYMENT","INTERNAL_TRANSFER","LOAN_PRINCIPAL_PAYMENT","PAYROLL","RENT_PAYMENT","SALE_PROCEEDS","SUPPLIER_PAYMENT","TAX_PAYMENT"]},
+        {"path":["debtCapacity","liquidityDiagnostics","endingBalance","excludedCategories"],"before":["INTERNAL_TRANSFER"],"after":[]},
+        {"path":["debtCapacity","liquidityDiagnostics","endingBalance","includedCategories"],"before":["INTEREST_PAYMENT","LOAN_PRINCIPAL_PAYMENT","PAYROLL","RENT_PAYMENT","SALE_PROCEEDS","SUPPLIER_PAYMENT","TAX_PAYMENT"],"after":["INTEREST_PAYMENT","INTERNAL_TRANSFER","LOAN_PRINCIPAL_PAYMENT","PAYROLL","RENT_PAYMENT","SALE_PROCEEDS","SUPPLIER_PAYMENT","TAX_PAYMENT"]},
+        {"path":["debtCapacity","liquidityDiagnostics","lowLiquidityDays","excludedCategories"],"before":["INTERNAL_TRANSFER"],"after":[]},
+        {"path":["debtCapacity","liquidityDiagnostics","lowLiquidityDays","includedCategories"],"before":["INTEREST_PAYMENT","LOAN_PRINCIPAL_PAYMENT","PAYROLL","RENT_PAYMENT","SALE_PROCEEDS","SUPPLIER_PAYMENT","TAX_PAYMENT"],"after":["INTEREST_PAYMENT","INTERNAL_TRANSFER","LOAN_PRINCIPAL_PAYMENT","PAYROLL","RENT_PAYMENT","SALE_PROCEEDS","SUPPLIER_PAYMENT","TAX_PAYMENT"]},
+        {"path":["debtCapacity","liquidityDiagnostics","minimumDailyBalance","excludedCategories"],"before":["INTERNAL_TRANSFER"],"after":[]},
+        {"path":["debtCapacity","liquidityDiagnostics","minimumDailyBalance","includedCategories"],"before":["INTEREST_PAYMENT","LOAN_PRINCIPAL_PAYMENT","PAYROLL","RENT_PAYMENT","SALE_PROCEEDS","SUPPLIER_PAYMENT","TAX_PAYMENT"],"after":["INTEREST_PAYMENT","INTERNAL_TRANSFER","LOAN_PRINCIPAL_PAYMENT","PAYROLL","RENT_PAYMENT","SALE_PROCEEDS","SUPPLIER_PAYMENT","TAX_PAYMENT"]},
+        {"path":["debtCapacity","liquidityDiagnostics","nearZeroBalanceDays","excludedCategories"],"before":["INTERNAL_TRANSFER"],"after":[]},
+        {"path":["debtCapacity","liquidityDiagnostics","nearZeroBalanceDays","includedCategories"],"before":["INTEREST_PAYMENT","LOAN_PRINCIPAL_PAYMENT","PAYROLL","RENT_PAYMENT","SALE_PROCEEDS","SUPPLIER_PAYMENT","TAX_PAYMENT"],"after":["INTEREST_PAYMENT","INTERNAL_TRANSFER","LOAN_PRINCIPAL_PAYMENT","PAYROLL","RENT_PAYMENT","SALE_PROCEEDS","SUPPLIER_PAYMENT","TAX_PAYMENT"]},
+        {"path":["debtCapacity","liquidityDiagnostics","negativeReconstructedBalanceDays","excludedCategories"],"before":["INTERNAL_TRANSFER"],"after":[]},
+        {"path":["debtCapacity","liquidityDiagnostics","negativeReconstructedBalanceDays","includedCategories"],"before":["INTEREST_PAYMENT","LOAN_PRINCIPAL_PAYMENT","PAYROLL","RENT_PAYMENT","SALE_PROCEEDS","SUPPLIER_PAYMENT","TAX_PAYMENT"],"after":["INTEREST_PAYMENT","INTERNAL_TRANSFER","LOAN_PRINCIPAL_PAYMENT","PAYROLL","RENT_PAYMENT","SALE_PROCEEDS","SUPPLIER_PAYMENT","TAX_PAYMENT"]},
+        {"path":["productSelection","upstreamFingerprints","contextAssessment"],"before":"product-upstream:2f3e4a8b27aaa65d5f281877dfb89fb1","after":"product-upstream:33530c9c4b1142723f0915a880987256"},
+        {"path":["productSelection","upstreamFingerprints","debtCapacity"],"before":"product-upstream:e5bc4e82bea3c73f1e65ab84f0dbfe8d","after":"product-upstream:70bc61850e2ac8124243e0033496f14c"},
+        {"path":["recommendationSet","upstreamReferences","contextAssessment","fingerprint"],"before":"recommendation-upstream:2f3e4a8b27aaa65d5f281877dfb89fb1","after":"recommendation-upstream:33530c9c4b1142723f0915a880987256"},
+        {"path":["recommendationSet","upstreamReferences","debtCapacity","fingerprint"],"before":"recommendation-upstream:e5bc4e82bea3c73f1e65ab84f0dbfe8d","after":"recommendation-upstream:70bc61850e2ac8124243e0033496f14c"},
+        {"path":["recommendationSet","upstreamReferences","productSelection","fingerprint"],"before":"recommendation-upstream:dcb188b16d7087bfdfad1aa9c6884937","after":"recommendation-upstream:28f6535daec96f7b04b8b5d92ef9ae3f"},
+        {"path":["actionPlan","recommendationSetReference","fingerprint"],"before":"action-plan-recommendations:592321ee6f291b3f1d29e32c492adf09","after":"action-plan-recommendations:6f4034abe4eb665cd0f9f54de1d66852"},
+        {"path":["actionPlan","debtCapacityReference","fingerprint"],"before":"recommendation-upstream:e5bc4e82bea3c73f1e65ab84f0dbfe8d","after":"recommendation-upstream:70bc61850e2ac8124243e0033496f14c"},
+        {"path":["actionPlan","productSelectionReference","fingerprint"],"before":"recommendation-upstream:dcb188b16d7087bfdfad1aa9c6884937","after":"recommendation-upstream:28f6535daec96f7b04b8b5d92ef9ae3f"},
+        {"path":["actionPlan","upstreamFingerprint"],"before":"action-plan-upstream:3e0b5288cfc2fb4488f38d6414bf67dc","after":"action-plan-upstream:59730695878b8b3b511cdfb10bad0c57"},
+        {"path":["explainability","upstreamReferences","contextAssessment","fingerprint"],"before":"explainability-upstream:2f3e4a8b27aaa65d5f281877dfb89fb1","after":"explainability-upstream:33530c9c4b1142723f0915a880987256"},
+        {"path":["explainability","upstreamReferences","debtCapacity","fingerprint"],"before":"explainability-upstream:e5bc4e82bea3c73f1e65ab84f0dbfe8d","after":"explainability-upstream:70bc61850e2ac8124243e0033496f14c"},
+        {"path":["explainability","upstreamReferences","productSelection","fingerprint"],"before":"explainability-upstream:dcb188b16d7087bfdfad1aa9c6884937","after":"explainability-upstream:28f6535daec96f7b04b8b5d92ef9ae3f"},
+        {"path":["explainability","upstreamReferences","recommendationSet","fingerprint"],"before":"explainability-upstream:592321ee6f291b3f1d29e32c492adf09","after":"explainability-upstream:6f4034abe4eb665cd0f9f54de1d66852"},
+        {"path":["explainability","upstreamReferences","actionPlan","fingerprint"],"before":"explainability-upstream:eba6f441f615fbd6c24d548b9cc710a4","after":"explainability-upstream:7de60c1883bbc6f14a0f014ad92d05f7"},
+        {"path":["explainability","upstreamFingerprint"],"before":"explainability-upstream-set:8555253a6636185b50f25068f28d0a2d","after":"explainability-upstream-set:12e0c11b991327c8c72f01bd485e2446"}
+      ]
+    },
+    {
+      "caseId": "CL-RU-BUS-022",
+      "reason": "Original document date is preserved on conflicting observations and liquidity warnings are reordered. Conflict remains unresolved; amounts, decisions and the complete client report are unchanged.",
+      "previousOutputHash": "fba465aec9415fdf89ebcab9341ea049924928c537749082e7717e0c3f14fd5b",
+      "reviewedOutputHash": "a9b61d5a8b28a1bfc56d160f7c7dd4fff76986525bd8da908c762322da28635f",
+      "unchangedClientReportHash": "faa9ebe8e52d020f20441e2ed33e653ca5f7e022e4ed9a7f5e3dc7a2f6834edc",
+      "changes": [
+        {"path":["inputFingerprint"],"before":"canonical-input:3948a5867668dbfb205dad389ecce359","after":"canonical-input:2728e8969a9e59ab5ad36f78dedccf41"},
+        {"path":["riskAssessment","facts",28,"warnings",0],"before":"ACCOUNT_COVERAGE_NOT_PROVEN","after":"BALANCE_RECONCILIATION_MISMATCH"},
+        {"path":["riskAssessment","facts",28,"warnings",1],"before":"BALANCE_RECONCILIATION_MISMATCH","after":"ACCOUNT_COVERAGE_NOT_PROVEN"},
+        {"path":["riskAssessment","facts",28,"warnings",3],"before":"ACCOUNT_COVERAGE_NOT_PROVEN","after":"BALANCE_RECONCILIATION_MISMATCH"},
+        {"path":["riskAssessment","facts",28,"warnings",4],"before":"BALANCE_RECONCILIATION_MISMATCH","after":"ACCOUNT_COVERAGE_NOT_PROVEN"},
+        {"path":["riskAssessment","facts",39,"warnings",0],"before":"ACCOUNT_COVERAGE_NOT_PROVEN","after":"BALANCE_RECONCILIATION_MISMATCH"},
+        {"path":["riskAssessment","facts",39,"warnings",1],"before":"BALANCE_RECONCILIATION_MISMATCH","after":"ACCOUNT_COVERAGE_NOT_PROVEN"}
+      ]
+    }
+  ]
+}
