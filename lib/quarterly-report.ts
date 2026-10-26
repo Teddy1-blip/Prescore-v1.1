@@ -82,8 +82,19 @@ function parseNumber(token: string) {
 function firstFinancialValue(value: string) {
   const dash = value.match(/^\s*[-–—](?=\s|$)/);
   if (dash) return 0;
-  const token = value.match(/\(\s*\d{1,3}(?:[ \u00a0]\d{3})*(?:[,.]\d+)?\s*\)|-?\d{1,3}(?:[ \u00a0]\d{3})+(?:[,.]\d+)?|-?\d+(?:[,.]\d+)?/)?.[0];
-  return token ? parseNumber(token) : null;
+  const match = value.match(/\(\s*-?\d+(?:[ \u00a0]\d{3})*(?:[,.]\d+)?\s*\)|-?\d{1,3}(?:[ \u00a0]\d{3})+(?:[,.]\d+)?|-?\d+(?:[,.]\d+)?/);
+  if (!match) return null;
+  const token = match[0];
+  // An incomplete accounting-negative token must not become positive profit.
+  if (!token.startsWith("(") && (/\(\s*$/.test(value.slice(0, match.index))
+    || /^\s*\)/.test(value.slice((match.index ?? 0) + token.length)))) return null;
+  return parseNumber(token);
+}
+
+// A wrapped value may occupy the next line. A different labelled financial
+// row is never a substitute for a missing value in the current row.
+function standaloneFinancialLine(value: string) {
+  return /^[\s()\d.,+\-–—₽]+(?:\s*(?:руб(?:лей|ля|ль)?\.?|RUB))?\s*$/iu.test(value);
 }
 
 function valueAfterCode(lines: string[], code: string) {
@@ -97,20 +108,25 @@ function valueAfterCode(lines: string[], code: string) {
   if (sameLine !== null) return sameLine;
   for (let offset = 1; offset <= 2; offset += 1) {
     const nextLine = lines[index + offset] ?? "";
-    if (/\b(?:1[1-7]|2[1-4])\d{2}\b/.test(nextLine)) break;
+    if (!standaloneFinancialLine(nextLine)) break;
     const next = firstFinancialValue(nextLine);
     if (next !== null) return next;
   }
   return null;
 }
 
-function valueAfterLabel(lines: string[], patterns: RegExp[]) {
+function valueAfterLabel(lines: string[], patterns: RegExp[], expectedCode?: string) {
   const index = lines.findIndex((line) => patterns.some((pattern) => pattern.test(line.trim())));
   if (index < 0) return null;
   const candidates = [lines[index], lines[index + 1] ?? ""];
-  for (const candidate of candidates) {
-    const withoutCode = candidate.replace(/\b(?:1[1-7]|2[1-4])\d{2}\b/, "");
-    const value = firstFinancialValue(withoutCode.replace(/^.*?(?=\(?-?\d|[-–—])/u, ""));
+  for (const [offset, candidate] of candidates.entries()) {
+    if (offset > 0 && !standaloneFinancialLine(candidate)) break;
+    // Remove only this row's expected standalone code, not an amount such as
+    // (1234), nor a code-shaped number in a label-only net-assets disclosure.
+    const withoutCode = expectedCode && offset === 0
+      ? candidate.replace(new RegExp(`(?:^|\\s)${expectedCode}(?=\\s|$)`), " ")
+      : candidate;
+    const value = firstFinancialValue(withoutCode.replace(/^.*?(?=\(\s*-?\d|-?\d|[-–—])/u, ""));
     if (value !== null) return value;
   }
   return null;
@@ -145,7 +161,12 @@ function money(value: number | null) {
 }
 
 export function parseQuarterlyReportText(text: string, fileName: string): QuarterlyFinancialReport {
-  const normalized = text.replace(/\u00a0/g, " ").replace(/\r/g, "");
+  // PDF/Excel text can use thin grouping spaces and typographic minus signs.
+  // Only a sign attached to a numeric amount is normalized; bare dash cells
+  // retain their existing meaning. Parentheses are handled as a signed token.
+  const normalized = text.replace(/[\u00a0\u202f\u2009]/g, " ")
+    .replace(/[\u2212\ufe63\uff0d][ \t]*(?=\d)|[\u2012\u2013\u2014](?=\d)/g, "-")
+    .replace(/\r/g, "");
   const lines = normalized.split("\n").map((line) => line.replace(/\t/g, "    ").trim()).filter(Boolean);
   const markerCount = ["баланс", "актив", "выруч", "прибыл", "дебитор", "кредитор"].filter((marker) => normalized.toLowerCase().includes(marker)).length;
   if (normalized.replace(/\s/g, "").length < 180 || markerCount < 2) {
@@ -158,7 +179,7 @@ export function parseQuarterlyReportText(text: string, fileName: string): Quarte
   const values = {} as QuarterlyFinancialReport["values"];
   for (const key of Object.keys(labels) as Array<keyof typeof labels>) {
     const raw = codes[key] ? valueAfterCode(lines, codes[key] as string) : null;
-    const fallback = raw ?? valueAfterLabel(lines, labels[key]);
+    const fallback = raw ?? valueAfterLabel(lines, labels[key], codes[key]);
     values[key] = fallback == null ? null : fallback * unitScale;
   }
   if (values.netAssets == null && values.equity != null) values.netAssets = values.equity;
@@ -262,7 +283,7 @@ export function parseQuarterlyReportText(text: string, fileName: string): Quarte
         const patterns = key === "revenue" ? [/^выручка(?=\s|$|\()/i, ...labels.revenue]
           : key === "currentAssets" ? [/^оборотные активы/i]
           : labels[key as keyof typeof labels];
-        const rawValue = valueAfterLabel(lines, patterns);
+        const rawValue = valueAfterLabel(lines, patterns, code);
         const line = lines.find((line) => patterns.some((pattern) => pattern.test(line.trim())));
         const rawLabel = line?.trim().match(patterns.find((pattern) => pattern.test(line.trim()))!)?.[0];
         return rawValue !== null && rawLabel ? [[code, { rawValue, rawLabel }]] : [];

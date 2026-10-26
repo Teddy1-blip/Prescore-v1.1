@@ -6,6 +6,7 @@ import { normalizeAccountValue, normalizeAmount, normalizeCurrency, normalizePur
 export type RawBankTransactionInput = {
   bankDocumentId?: string | null;
   date?: string | null;
+  documentDate?: string | null;
   amount?: string | number | null;
   currency?: string | null;
   payerName?: string | null;
@@ -111,6 +112,7 @@ export function normalizeTransaction(input: RawBankTransactionInput): CanonicalT
     quality: { level: qualityLevel, warnings: [...new Set(warnings)], knownFields: known, totalFields: 6 },
     rawValues: {
       date: input.date?.toString().trim() || null,
+      ...(input.documentDate !== undefined ? { documentDate: input.documentDate?.trim() || null } : {}),
       amount: input.amount === null || input.amount === undefined ? null : String(input.amount),
       currency: input.currency?.trim() || null,
       payerName: input.payerName?.trim() || null,

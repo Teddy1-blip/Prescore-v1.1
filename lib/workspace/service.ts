@@ -1,3 +1,4 @@
+import {diagnostic, safeReason, type CanonicalDiagnosticV1} from "../credit-engine/production/diagnostics.ts";
 import {savedCanonicalInput} from "./financing-request.ts";
 import type { AnalysisResult } from "../prescore.ts";
 import type { CompanyProfileData } from "../company-profile.ts";
@@ -21,15 +22,30 @@ function accessRole(access: ReportAccess["access"]): WorkspaceAccessRoleV1 {
   return "OWNER";
 }
 
-function parseSavedAnalysis(access: ReportAccess, analysisId: string): AnalysisResult | null {
+function parseSavedAnalysis(access: ReportAccess, analysisId: string): AnalysisResult {
   let value: unknown;
-  try { value = JSON.parse(access.row.payload); } catch { return null; }
-  if (!value || typeof value !== "object") return null;
+  try { value = JSON.parse(access.row.payload); }
+  catch { throw new CanonicalUnavailable("SAVED_INPUT", "INVALID_SAVED_JSON"); }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new CanonicalUnavailable("SAVED_INPUT", "INVALID_SAVED_SHAPE");
+  }
   const analysis = value as Partial<AnalysisResult>;
-  if (analysis.id !== analysisId || analysis.companyInn !== access.row.companyInn ||
-      typeof analysis.companyName !== "string" || typeof analysis.periodFrom !== "string" ||
-      typeof analysis.periodTo !== "string" || typeof analysis.createdAt !== "string") return null;
+  if (analysis.id !== analysisId || analysis.companyInn !== access.row.companyInn) {
+    throw new CanonicalUnavailable("SAVED_IDENTITY", "SAVED_IDENTITY_MISMATCH");
+  }
+  if (typeof analysis.companyName !== "string" || typeof analysis.periodFrom !== "string" ||
+      typeof analysis.periodTo !== "string" || typeof analysis.createdAt !== "string") {
+    throw new CanonicalUnavailable("SAVED_INPUT", "INVALID_SAVED_SHAPE");
+  }
   return analysis as AnalysisResult;
+}
+
+function failureDiagnostic(stage: string, error: unknown): CanonicalDiagnosticV1 {
+  const details = diagnostic(error instanceof CanonicalUnavailable ? error.stage : stage,
+    error instanceof CanonicalUnavailable ? error.reason : safeReason(error));
+  // Log only allowlisted metadata. Never log payloads, thrown messages or stacks.
+  console.error("workspace_model_unavailable", details);
+  return details;
 }
 
 function unknownOperations(): WorkspaceOperationalInput {
@@ -39,20 +55,29 @@ function unknownOperations(): WorkspaceOperationalInput {
   };
 }
 
-export async function loadWorkspaceModelV1(analysisId: string, dependencies: WorkspaceServiceDependencies): Promise<WorkspaceModelV1 | { version: typeof WORKSPACE_MODEL_V1; state: "NOT_FOUND" | "UNAVAILABLE"; analysisId: string }> {
+export async function loadWorkspaceModelV1(analysisId: string, dependencies: WorkspaceServiceDependencies): Promise<WorkspaceModelV1 | { version: typeof WORKSPACE_MODEL_V1; state: "NOT_FOUND" | "UNAVAILABLE"; analysisId: string; diagnostic?: CanonicalDiagnosticV1 }> {
   const access = await dependencies.readAccess(analysisId);
   if (!access) return { version: WORKSPACE_MODEL_V1, state: "NOT_FOUND", analysisId };
-  const analysis = parseSavedAnalysis(access, analysisId);
-  if (!analysis) return { version: WORKSPACE_MODEL_V1, state: "UNAVAILABLE", analysisId };
+  let analysis: AnalysisResult;
+  try { analysis = parseSavedAnalysis(access, analysisId); }
+  catch (error) {
+    return { version: WORKSPACE_MODEL_V1, state: "UNAVAILABLE", analysisId,
+      diagnostic: failureDiagnostic("SAVED_INPUT", error) };
+  }
 
   let tier: AnalysisTier = "FREE";
-  let entitlementReadable = true;
+  let entitlementDiagnostic: CanonicalDiagnosticV1 | undefined;
   try { tier = await dependencies.readTier(analysisId, access); }
-  catch { entitlementReadable = false; }
+  catch (error) { entitlementDiagnostic = failureDiagnostic("ENTITLEMENT_READ", error); }
 
   let operations = unknownOperations();
   try { operations = await dependencies.readOperations(analysisId, access); } catch { /* Unknown operational state is not an empty state. */ }
-  const basic = projectWorkspaceBasic(analysis, operations);
+  let basic: ReturnType<typeof projectWorkspaceBasic>;
+  try { basic = projectWorkspaceBasic(analysis, operations); }
+  catch (error) {
+    return { version: WORKSPACE_MODEL_V1, state: "UNAVAILABLE", analysisId,
+      diagnostic: failureDiagnostic("BASIC_PROJECTION", error) };
+  }
   const base = {
     version: WORKSPACE_MODEL_V1 as typeof WORKSPACE_MODEL_V1,
     analysisId,
@@ -61,14 +86,24 @@ export async function loadWorkspaceModelV1(analysisId: string, dependencies: Wor
     basic,
   };
 
-  if (!entitlementReadable) {
-    return { ...base, state: "READY_BASIC", fullAvailability: "UNAVAILABLE", limitations: { code: "CANONICAL_REPORT_UNAVAILABLE" } };
+  if (entitlementDiagnostic) {
+    return { ...base, state: "READY_BASIC", fullAvailability: "UNAVAILABLE",
+      limitations: { code: "CANONICAL_REPORT_UNAVAILABLE" }, diagnostic: entitlementDiagnostic };
   }
-  if (tier !== "FULL") return { ...base, state: "READY_BASIC", fullAvailability: "LOCKED" };
+  if (tier !== "FULL") {
+    // A saved bank analysis without metrics is a processing problem, not a paid feature.
+    // No FULL engine or provider is invoked to diagnose this structural BASIC input.
+    const missingBankMetrics = !analysis.metricsV2;
+    return { ...base, state: "READY_BASIC", fullAvailability: "LOCKED",
+      ...(missingBankMetrics ? { diagnostic: diagnostic("BANK_METRICS_REQUIRED", "BANK_METRICS_MISSING") } : {}) };
+  }
 
+  let stage = "PROFILE_READ";
   try {
     const companyProfile = await dependencies.readProfile(analysis.companyInn);
+    stage = "SOURCES";
     const canonical = buildCanonicalCreditAnalysis(savedCanonicalInput(analysis,companyProfile));
+    stage = "PUBLIC_MODEL";
     const report: ClientReportModelV1 = publicCanonicalModel(canonical.model, canonical);
     return {
       ...base,
@@ -99,8 +134,8 @@ export async function loadWorkspaceModelV1(analysisId: string, dependencies: Wor
       },
     };
   } catch (error) {
-    if (!(error instanceof CanonicalUnavailable)) console.error("workspace_full_projection_unavailable");
-    return { ...base, state: "READY_BASIC", fullAvailability: "UNAVAILABLE", limitations: { code: "CANONICAL_REPORT_UNAVAILABLE" } };
+    return { ...base, state: "READY_BASIC", fullAvailability: "UNAVAILABLE",
+      limitations: { code: "CANONICAL_REPORT_UNAVAILABLE" }, diagnostic: failureDiagnostic(stage, error) };
   }
 }
 

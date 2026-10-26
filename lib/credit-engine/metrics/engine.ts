@@ -126,7 +126,7 @@ type MetricOptions = {
   value?: number | null;
   unit?: MetricResult["unit"];
   status?: MetricResult["status"];
-  confidence?: MetricConfidence;
+  confidence?: MetricResult["confidence"];
   basis: string;
   included: EconomicCategory[];
   excluded?: EconomicCategory[];
@@ -346,34 +346,49 @@ function buildSuppliers(items: ClassifiedTransaction[], input: MetricsEngineInpu
 }
 
 function buildLiquidity(items: ClassifiedTransaction[], input: MetricsEngineInput, qualityWarnings: string[]) {
-  const endingBalance = input.legacyMetrics?.endingBalance ?? null;
-  const openingBalance = input.openingBalance ?? null;
+  const finiteBalance = (value: number | null | undefined) => typeof value === "number" && Number.isFinite(value) ? value : null;
+  const endingBalance = finiteBalance(input.legacyMetrics?.endingBalance);
+  const openingBalance = finiteBalance(input.openingBalance);
   const external = items.filter((item) => item.economicCategory !== "INTERNAL_TRANSFER");
   const outgoing = external.filter((item) => item.direction === "out");
-  const allEndingBalancesKnown = Boolean(input.sourceManifest?.bankStatements.length)
-    && input.sourceManifest!.bankStatements.every((source) => source.fieldAvailability?.endingBalance === "KNOWN");
-  const complete = openingBalance !== null && endingBalance !== null && input.periodFrom && input.periodTo && allEndingBalancesKnown;
-  const confidence: MetricConfidence = !complete ? "UNKNOWN" : qualityWarnings.includes("INCOMPLETE_BALANCE_COVERAGE") ? "LOW" : "MEDIUM";
+  const sources = input.sourceManifest?.bankStatements ?? [];
+  const allBalancesKnown = sources.length > 0 && sources.every((source) =>
+    source.fieldAvailability?.openingBalance === "KNOWN" && source.fieldAvailability?.endingBalance === "KNOWN");
+  const dateMillis = (date: string | null | undefined) => {
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+    const ms = Date.parse(date + "T00:00:00Z");
+    return Number.isFinite(ms) && new Date(ms).toISOString().slice(0, 10) === date ? ms : null;
+  };
+  const from = dateMillis(input.periodFrom), to = dateMillis(input.periodTo);
+  const periodDays = from !== null && to !== null && to >= from ? (to - from) / 86400000 + 1 : null;
+  const complete = openingBalance !== null && endingBalance !== null && periodDays !== null && allBalancesKnown;
+  const periodTooLong = periodDays !== null && periodDays > 740;
+  const movementsIncomplete = items.some((item) => {
+    const date = dateMillis(item.date);
+    return date === null || from === null || to === null || date < from || date > to
+      || !["in", "out"].includes(item.direction) || !Number.isFinite(item.amount) || item.amount < 0;
+  });
   const dailyBalances: number[] = [];
   let balanceReconciliationMismatch = false;
-  if (complete) {
+  if (complete && !periodTooLong && !movementsIncomplete) {
     const netByDay = new Map<string, number>();
-    for (const item of external) {
-      const date = item.date;
-      if (!date) continue;
-      const signed = item.direction === "in" ? item.amount : item.direction === "out" ? -item.amount : 0;
-      netByDay.set(date, (netByDay.get(date) ?? 0) + signed);
+    // Balances cover supplied accounts, not just company-external cash flow.
+    // Retain both observed internal-transfer legs: they cancel only when both
+    // are in this perimeter on the same posting day. Revenue still excludes them.
+    for (const item of items) {
+      const signed = item.direction === "in" ? item.amount : -item.amount;
+      netByDay.set(item.date, (netByDay.get(item.date) ?? 0) + signed);
     }
     let balance = openingBalance;
-    const cursor = new Date(`${input.periodFrom}T00:00:00Z`);
-    const end = new Date(`${input.periodTo}T00:00:00Z`);
-    while (cursor <= end && dailyBalances.length < 740) {
-      const key = cursor.toISOString().slice(0, 10);
-      balance += netByDay.get(key) ?? 0;
+    for (let day = 0; day < periodDays; day++) {
+      const key = new Date(from! + day * 86400000).toISOString().slice(0, 10);
+      balance = round(balance + (netByDay.get(key) ?? 0), 2);
       dailyBalances.push(balance);
-      cursor.setUTCDate(cursor.getUTCDate() + 1);
     }
     balanceReconciliationMismatch = Math.abs(balance - endingBalance) > Math.max(1, Math.abs(endingBalance) * 0.0001);
+    // A failed conservation check is not a measured negative balance or cash gap.
+    // Preserve the reported endpoint, but publish no unsupported daily statistics.
+    if (balanceReconciliationMismatch) dailyBalances.length = 0;
   }
   const average = dailyBalances.length ? dailyBalances.reduce((sum, value) => sum + value, 0) / dailyBalances.length : null;
   const minimum = dailyBalances.length ? Math.min(...dailyBalances) : null;
@@ -381,20 +396,27 @@ function buildLiquidity(items: ClassifiedTransaction[], input: MetricsEngineInpu
   const averageDailyOutflow = days ? outgoing.reduce((sum, item) => sum + item.amount, 0) / days : 0;
   const lowThreshold = averageDailyOutflow * 3;
   const nearZeroThreshold = Math.max(1, averageDailyOutflow * 0.25);
-  const commonWarnings = complete ? [] : ["ENDING_BALANCE_OR_PERIOD_NOT_CONFIRMED"];
+  const commonWarnings = [
+    ...(!complete ? ["ENDING_BALANCE_OR_PERIOD_NOT_CONFIRMED"] : []),
+    ...(complete && periodTooLong ? ["BALANCE_PERIOD_TOO_LONG"] : []),
+    ...(complete && movementsIncomplete ? ["BALANCE_MOVEMENTS_INCOMPLETE"] : []),
+    ...(balanceReconciliationMismatch ? ["BALANCE_RECONCILIATION_MISMATCH"] : []),
+  ];
   const factualMetric = (code: string, value: number | null, basis: string, unit: MetricResult["unit"] = "RUB") => metric(code, input, {
     value,
     unit,
     status: value === null ? "UNKNOWN" : "KNOWN",
-    confidence,
+    confidence: value === null || !complete ? "UNKNOWN" : qualityWarnings.includes("INCOMPLETE_BALANCE_COVERAGE") ? "LOW" : "MEDIUM",
     basis,
-    included: [...new Set(external.map((item) => item.economicCategory))],
-    excluded: ["INTERNAL_TRANSFER"],
-    warnings: [...commonWarnings, "ACCOUNT_COVERAGE_NOT_PROVEN", ...(balanceReconciliationMismatch ? ["BALANCE_RECONCILIATION_MISMATCH"] : []), ...(qualityWarnings.includes("INCOMPLETE_BALANCE_COVERAGE") ? ["INCOMPLETE_ACCOUNT_OR_BALANCE_COVERAGE"] : [])],
+    included: [...new Set(items.map((item) => item.economicCategory))],
+    excluded: items.some((item) => item.economicCategory === "INTERNAL_TRANSFER") ? [] : ["INTERNAL_TRANSFER"],
+    warnings: [...commonWarnings, "ACCOUNT_COVERAGE_NOT_PROVEN", ...(qualityWarnings.includes("INCOMPLETE_BALANCE_COVERAGE") ? ["INCOMPLETE_ACCOUNT_OR_BALANCE_COVERAGE"] : [])],
   });
   return {
     endingBalance: factualMetric("BSM-LIQ-001", endingBalance, "Aggregate confirmed ending balance across supplied statements"),
-    averageDailyBalance: factualMetric("BSM-LIQ-002", average, "Daily company balance reconstructed forward from confirmed opening balance using external cash movements and reconciled against confirmed ending balance."),
+    averageDailyBalance: factualMetric("BSM-LIQ-002", average, items.some((item) => item.economicCategory === "INTERNAL_TRANSFER")
+      ? "Daily balance of supplied accounts reconstructed from confirmed opening balance and all retained account cash movements, including internal transfers, and reconciled against confirmed ending balance."
+      : "Daily company balance reconstructed forward from confirmed opening balance using external cash movements and reconciled against confirmed ending balance."),
     minimumDailyBalance: factualMetric("BSM-LIQ-003", minimum, "Minimum reconstructed aggregate daily balance"),
     lowLiquidityDays: factualMetric("BSM-LIQ-004", dailyBalances.length ? dailyBalances.filter((value) => value < lowThreshold).length : null, "Days with reconstructed balance below three days of average external outflow", "DAYS"),
     nearZeroBalanceDays: factualMetric("BSM-LIQ-005", dailyBalances.length ? dailyBalances.filter((value) => value <= nearZeroThreshold).length : null, "Days with reconstructed balance at or below 25% of average daily external outflow", "DAYS"),
