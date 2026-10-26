@@ -14,7 +14,7 @@ function loader(overrides={}, context={}) {
   const file=path.join(root,name),source=fs.readFileSync(file,'utf8');
   const result=ts.transpileModule(source,{fileName:file,reportDiagnostics:true,compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}});
   assert.deepEqual((result.diagnostics??[]).filter(d=>d.category===ts.DiagnosticCategory.Error),[]);
-  const module={exports:{}};cache.set(name,module.exports);
+  const loadedModule={exports:{}};cache.set(name,loadedModule.exports);
   const localRequire=id=>{
    if(Object.hasOwn(overrides,id))return overrides[id];
    if(!id.startsWith('.'))return require(id);
@@ -22,8 +22,8 @@ function loader(overrides={}, context={}) {
    if(!path.extname(relative))relative+='.ts';
    return load(relative);
   };
-  new Function('require','module','exports','console','fetch',result.outputText)(localRequire,module,module.exports,context.console??console,context.fetch??globalThis.fetch);
-  return module.exports;
+  new Function('require','module','exports','console','fetch',result.outputText)(localRequire,loadedModule,loadedModule.exports,context.console??console,context.fetch??globalThis.fetch);
+  return loadedModule.exports;
  }
  return load;
 }
@@ -44,7 +44,7 @@ function fixture(options={}) {
  const canonical={model:report,sourceObservations:[],prescoreIndex:{value:123},financingReadiness:{level:'UNKNOWN'},creditAssessment:{},debtCapacity:{},productSelection:{},recommendationSet:{},actionPlan:{},explainability:{}};
  const overrides={
   './financing-request.ts':{savedCanonicalInput:(analysis,companyProfile)=>({analysis,companyProfile})},
-  '../credit-engine/production/orchestrator.ts':{CanonicalUnavailable,buildCanonicalCreditAnalysis(input){calls.push('engine');if(options.engineError)throw options.engineError;return canonical;}},
+  '../credit-engine/production/orchestrator.ts':{CanonicalUnavailable,buildCanonicalCreditAnalysis(){calls.push('engine');if(options.engineError)throw options.engineError;return canonical;}},
   '../credit-engine/production/public-model.ts':{publicCanonicalModel(model){calls.push('public-model');if(options.publicError)throw options.publicError;return model;}},
   '../credit-engine/financial-analysis/source-selection.ts':{financialSources:manifest=>[manifest?.bfo,manifest?.quarterly].filter(Boolean)},
  };
@@ -109,7 +109,7 @@ function hookHarness() {
  };
  const load=loader({'react':react},{fetch:async(url,options)=>{const next=responses.shift();assert.ok(next,'Unexpected extra fetch');return typeof next==='function'?next(url,options):next;}});
  const {useWorkspaceModel}=load('app/components/workspace/use-model.ts');
- return {responses,render(id=currentId,revision=currentRevision){currentId=id;currentRevision=revision;index=0;const result=useWorkspaceModel(id,revision);while(effects.length)effects.shift()();return result;},async tick(){await new Promise(resolve=>setImmediate(resolve));}};
+ return {responses,render: function useHarnessRender(id=currentId,revision=currentRevision){currentId=id;currentRevision=revision;index=0;const result=useWorkspaceModel(id,revision);while(effects.length)effects.shift()();return result;},async tick(){await new Promise(resolve=>setImmediate(resolve));}};
 }
 const response=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}});
 const valid=(id,extra={})=>({analysisId:id,state:'READY_BASIC',fullAvailability:'LOCKED',...extra});
