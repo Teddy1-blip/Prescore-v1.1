@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import {assertClientOverviewRouting} from './fixtures/client-overview-contract.mjs';
 import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {createWorkspaceRuntime} from './fixtures/workspace-runtime.mjs';
@@ -26,8 +27,8 @@ test('conclusion cannot introduce legacy scoring or side effects',()=>{
  assert.doesNotMatch(overview,forbidden);
  assert.doesNotMatch(client,/CreditConclusion/);
  assert.match(client,/view==='home'[\s\S]*?<ClientOverview/);
- assert.match(overview,/if\s*\(!props\.model\.full\)\s*return\s*<FreeOverview/);
- assert.match(overview,/return\s*<ExecutiveOverview/);
+ // Verify the actual FREE/FULL branches and props, independent of JSX wrappers.
+ assertClientOverviewRouting(overview);
  // Keep the model-presence guard; runtime branches are covered by client-navigation-recovery.
  assert.match(client,/view\s*===\s*['"]analysis['"]\s*&&\s*model\s*&&\s*<FullCreditAnalysis\b/);
 });
