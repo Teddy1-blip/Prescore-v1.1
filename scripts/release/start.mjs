@@ -1,32 +1,44 @@
 import {spawn} from 'node:child_process';
-import {classifyStartupFailure,safeStartupReport,startStartupDiagnosticServer} from './startup-diagnostic.mjs';
+import {classifyStartupFailure,startupFailureDetails,safeStartupReport,startStartupDiagnosticServer} from './startup-diagnostic.mjs';
 
 const isStaging=process.env.PRESCORE_RUNTIME_MODE==='release-candidate';
 const address={host:process.env.HOSTNAME??'0.0.0.0',port:Number(process.env.PORT??'3000')};
 
 async function preflight(){
- let pool,stage='BOOTSTRAP';
+ let pool,stage='BOOTSTRAP',step;
  try{
   stage='CONFIGURATION';
+  step='ENVIRONMENT_IMPORT';
   const {validateEnvironment}=await import('../../lib/platform/environment.ts');
+  step='ENVIRONMENT_VALIDATE';
   const issues=validateEnvironment(process.env);
-  if(issues.length)return {ready:false,stage,code:'CONFIGURATION_INVALID',issues};
+  if(issues.length)return {ready:false,stage,step,code:'CONFIGURATION_INVALID',issues};
   stage='DATABASE_MIGRATION';
-  const [{getPool},{migrate,migrationRegistry},{readiness}]=await Promise.all([
-   import('../../lib/db/client.ts'),
-   import('../../lib/release/migrations.ts'),
-   import('../../lib/release/readiness.ts'),
-  ]);
+  step='DB_CLIENT_IMPORT';
+  const {getPool}=await import('../../lib/db/client.ts');
+  step='MIGRATIONS_IMPORT';
+  const {migrate,migrationRegistry:readMigrationRegistry}=await import('../../lib/release/migrations.ts');
+  step='READINESS_IMPORT';
+  const {readiness}=await import('../../lib/release/readiness.ts');
+  step='POOL_CREATE';
   pool=getPool();
+  // Keep the canonical migration call intact; label registry errors separately.
+  const migrationRegistry=async()=>{
+   step='MIGRATION_REGISTRY';
+   const registry=await readMigrationRegistry();
+   step='MIGRATION_APPLY';
+   return registry;
+  };
   await migrate(pool,await migrationRegistry());
   stage='READINESS';
+  step='READINESS_CHECK';
   const check=await readiness(pool);
-  if(!check.ready)return {ready:false,stage,code:check.code};
+  if(!check.ready)return {ready:false,stage,step,code:check.code};
   return {ready:true};
  }catch(error){
   let fallback='OPERATION_FAILED';
   try{const {safeOperationalCode}=await import('../../lib/release/migrations.ts');fallback=safeOperationalCode(error);}catch{}
-  return {ready:false,stage,code:classifyStartupFailure(error,fallback)};
+  return {ready:false,stage,step,code:classifyStartupFailure(error,fallback),...startupFailureDetails(error)};
  }finally{
   if(pool){try{await pool.end();}catch{console.error('STARTUP_POOL_CLOSE_FAILED');}}
  }
