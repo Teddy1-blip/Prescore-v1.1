@@ -3,6 +3,7 @@ import * as releaseSecurity from '../lib/release/security.ts';
  * Only the authentication boundary is a controlled synthetic principal. No runtime DB,
  * production auth changes, actual browser sign-in, PDF extraction or live providers.
  */
+import {postLoopbackJson} from './fixtures/loopback-json.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import ts from 'typescript';import http from 'node:http';
 import {PGlite} from '@electric-sql/pglite';import {PortableDatabase} from '../lib/db/compatibility.ts';
 import * as prescore from '../lib/prescore.ts';import * as sources from '../lib/credit-engine/source-foundation.ts';import * as controls from '../lib/admin-controls.ts';import * as entitlements from '../lib/entitlements.ts';
@@ -17,10 +18,10 @@ test('Credit Lab isolated HTTP upload → SQL persistence → ownership/FULL →
  try{
   for(const f of ['0001_product.sql','0003_runtime_indexes.sql','0009_analysis_archive.sql'])await pg.exec(fs.readFileSync('lib/db/migrations/'+f,'utf8'));
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const url=`http://127.0.0.1:${server.address().port}/api/analysis`;
-  const upload=statements=>fetch(url,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({statements})});
-  current=null;assert.equal((await upload([])).status,401);current={email:'lab-owner@test.invalid',isAdmin:false};assert.equal((await upload([])).status,400);
+  const upload=(statements,label)=>postLoopbackJson(url,{statements},label);
+  current=null;assert.equal((await upload([],'PRECHECK_UNAUTHORIZED')).status,401);current={email:'lab-owner@test.invalid',isAdmin:false};assert.equal((await upload([],'PRECHECK_EMPTY')).status,400);
   for(const c of businessCatalog())await t.test(c.caseId,async()=>{
-   const b=loadBusiness(c.caseId);const response=await upload(b.statements);const body=await response.json();assert.equal(response.status,200,JSON.stringify(body));
+   const b=loadBusiness(c.caseId);const response=await upload(b.statements,c.caseId);const body=response.body;assert.equal(response.status,200,JSON.stringify(body));
    const id=body.analysis.id;assert.ok(id);const access=await api.readableAnalysis(db,id,current);assert.ok(access);const saved=JSON.parse(access.row.payload);
    assert.deepEqual(saved.metricsV2,b.full.metricsV2);assert.equal(saved.companyInn,c.companyInn);assert.ok(saved.transactions.length<=10000);
    if(c.caseId==='CL-RU-BUS-024'){assert.equal(saved.transactionsTruncated,true);assert.equal(saved.transactions.length,10000);}
