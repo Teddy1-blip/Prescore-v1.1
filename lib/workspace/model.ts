@@ -39,7 +39,7 @@ export type WorkspaceBasicV1 = {
     statements: { status: SourceStatus | "UNKNOWN"; count: number | null; bankNames: string[] | null; accountCount: number | null; periodFrom: string | null; periodTo: string | null };
     completeness: number | null;
     missingSources: string[] | null;
-    availability: Array<{ source: string; status: SourceStatus | "UNKNOWN"; periodFrom: string | null; periodTo: string | null }>;
+    availability: Array<{ source: string; status: SourceStatus | "UNKNOWN"; periodFrom: string | null; periodTo: string | null; reportDate?: string | null }>;
   };
   bankingFacts: {
     grossInflow: WorkspaceFactV1;
@@ -125,11 +125,18 @@ function sourceAvailability(analysis: AnalysisResult): WorkspaceBasicV1["sources
     ...(manifest?.bki ? [{ source: "CREDIT_HISTORY", item: manifest.bki }] : []),
     ...(Array.isArray(manifest?.external) ? manifest.external.map((item) => ({ source: item.sourceId.startsWith("client-request-") ? "CLIENT_DECLARATION" : "EXTERNAL_SOURCE", item })) : []),
   ];
+  // Report date is source evidence, never the upload timestamp or a contractual due date.
+  const reported = analysis.creditHistory?.reportDate;
+  const reportDate = analysis.creditHistory?.subjectInn === analysis.companyInn
+    && typeof reported === "string" && /^\d{4}-\d{2}-\d{2}$/.test(reported)
+    && Number.isFinite(Date.parse(reported)) && new Date(reported).toISOString().slice(0, 10) === reported
+      ? reported : null;
   return sources.map(({ source, item }) => ({
     source,
     status: item.status,
     periodFrom: item.periodFrom ?? null,
     periodTo: item.periodTo ?? null,
+    ...(source === "CREDIT_HISTORY" ? { reportDate } : {}),
   }));
 }
 
