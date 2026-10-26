@@ -28,7 +28,8 @@ test('conclusion cannot introduce legacy scoring or side effects',()=>{
  assert.match(client,/view==='home'[\s\S]*?<ClientOverview/);
  assert.match(overview,/if\s*\(!props\.model\.full\)\s*return\s*<FreeOverview/);
  assert.match(overview,/return\s*<ExecutiveOverview/);
- assert.match(client,/view==='analysis'&&<FullCreditAnalysis/);
+ // Keep the model-presence guard; runtime branches are covered by client-navigation-recovery.
+ assert.match(client,/view\s*===\s*['"]analysis['"]\s*&&\s*model\s*&&\s*<FullCreditAnalysis\b/);
 });
 
 test('completed purge and temporary verification removed; ordinary health is read-only',()=>{
