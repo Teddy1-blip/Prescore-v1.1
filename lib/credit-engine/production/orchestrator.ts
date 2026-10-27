@@ -1,4 +1,4 @@
-import {activeFinancialSnapshots, financialSources} from "../financial-analysis/source-selection.ts";
+import {activeFinancialSnapshots, currentFinancialSnapshots, financialSources} from "../financial-analysis/source-selection.ts";
 import {safeReason} from './diagnostics.ts';
 import type { AnalysisResult } from '../../prescore.ts';
 import type { CompanyProfileData } from '../../company-profile.ts';
@@ -72,8 +72,9 @@ export function buildCanonicalCreditAnalysis(input: CanonicalSavedInput) {
     stage = 'FINANCIAL_ANALYSIS';
     const availableSnapshots = [...(a.financialStatementsV2 ?? a.financialAnalysisV2?.history.map(h => h.snapshot) ?? []),
       ...(p?.financialStatementsV2 ?? p?.financialAnalysisV2?.history.map(h => h.snapshot) ?? [])];
-    const snapshots = activeFinancialSnapshots(availableSnapshots, [a.sourceManifest, p?.sourceManifest]);
-    if (snapshots.some(s => s.companyInn !== a.companyInn)) throw new CanonicalUnavailable(stage, 'SOURCE_IDENTITY_MISMATCH');
+    const currentSnapshots = currentFinancialSnapshots(availableSnapshots, [a.sourceManifest, p?.sourceManifest]);
+    const snapshots = activeFinancialSnapshots(currentSnapshots, [a.sourceManifest, p?.sourceManifest]);
+    if (currentSnapshots.some(s => s.companyInn !== a.companyInn)) throw new CanonicalUnavailable(stage, 'SOURCE_IDENTITY_MISMATCH');
     const financialAnalysis = snapshots.length ? buildFinancialAnalysis(snapshots) : undefined;
     stage = 'CREDIT_PORTFOLIO';
     const source = manifest.bki;
@@ -82,7 +83,9 @@ export function buildCanonicalCreditAnalysis(input: CanonicalSavedInput) {
       previousPortfolio: a.creditPortfolioV1, creditHistorySnapshots: bki ? [bki] : [], paymentObservations: a.debtPaymentObservationsV1});
     stage = 'RECONCILIATION';
     const reconciliation = buildReconciliation({companyInn: a.companyInn, bank: a.metricsV2, manifest, integrity: a.integrity,
-      snapshots, financialAnalysis, bki: source?.status === 'READY' ? a.creditHistory : undefined});
+      // Authority chooses calculation inputs, not which current evidence may be compared.
+      // Keep competing source facts for reconciliation without duplicating financial history.
+      snapshots: currentSnapshots, financialAnalysis, bki: source?.status === 'READY' ? a.creditHistory : undefined});
     const analysis = {...a, sourceManifest: manifest, financialStatementsV2: snapshots, financialAnalysisV2: financialAnalysis, creditPortfolioV1: creditPortfolio, reconciliationV1: reconciliation};
     // The combined financial history is supplied exactly once. No legacy BFO ratios.
     const companyProfile = p ? {...p, financialStatementsV2: undefined, financialAnalysisV2: undefined} : undefined;

@@ -1,0 +1,118 @@
+{
+  "inn": "9900002906",
+  "fetchedAt": "2026-06-30",
+  "failedMethods": [],
+  "company": {
+    "name": "Синтетическая компания «Интеграция Б»",
+    "status": "Действующее",
+    "addressUnreliable": false
+  },
+  "legal": {
+    "bankruptcyMessages": 0
+  },
+  "signals": [],
+  "sourceManifest": {
+    "external": [
+      {
+        "sourceId": "external:company:synthetic:INTEGRATION-B-12M",
+        "sourceType": "OTHER",
+        "status": "READY",
+        "companyInn": "9900002906",
+        "receivedAt": "2026-06-30",
+        "confidence": 98,
+        "warnings": [
+          "SYNTHETIC_OFFLINE_REGISTRY_FIXTURE_NOT_EXTERNAL_VERIFICATION"
+        ],
+        "rawReference": "external:/company:2026-06-30:integration-b-offline",
+        "fieldAvailability": {
+          "addressUnreliable": "KNOWN"
+        },
+        "sourceName": "Synthetic independent registry boundary; no network provider"
+      },
+      {
+        "sourceId": "external:enforcements:synthetic:INTEGRATION-B-12M",
+        "sourceType": "OTHER",
+        "status": "READY",
+        "companyInn": "9900002906",
+        "receivedAt": "2026-06-30",
+        "confidence": 98,
+        "warnings": [
+          "SYNTHETIC_OFFLINE_REGISTRY_FIXTURE_NOT_EXTERNAL_VERIFICATION"
+        ],
+        "rawReference": "external:/enforcements:2026-06-30:integration-b-offline",
+        "fieldAvailability": {
+          "addressUnreliable": "KNOWN"
+        },
+        "sourceName": "Synthetic independent registry boundary; no network provider"
+      },
+      {
+        "sourceId": "external:legal-cases:synthetic:INTEGRATION-B-12M",
+        "sourceType": "OTHER",
+        "status": "READY",
+        "companyInn": "9900002906",
+        "receivedAt": "2026-06-30",
+        "confidence": 98,
+        "warnings": [
+          "SYNTHETIC_OFFLINE_REGISTRY_FIXTURE_NOT_EXTERNAL_VERIFICATION"
+        ],
+        "rawReference": "external:/legal-cases:2026-06-30:integration-b-offline",
+        "fieldAvailability": {
+          "addressUnreliable": "KNOWN"
+        },
+        "sourceName": "Synthetic independent registry boundary; no network provider"
+      },
+      {
+        "sourceId": "external:inspections:synthetic:INTEGRATION-B-12M",
+        "sourceType": "OTHER",
+        "status": "READY",
+        "companyInn": "9900002906",
+        "receivedAt": "2026-06-30",
+        "confidence": 98,
+        "warnings": [
+          "SYNTHETIC_OFFLINE_REGISTRY_FIXTURE_NOT_EXTERNAL_VERIFICATION"
+        ],
+        "rawReference": "external:/inspections:2026-06-30:integration-b-offline",
+        "fieldAvailability": {
+          "addressUnreliable": "KNOWN"
+        },
+        "sourceName": "Synthetic independent registry boundary; no network provider"
+      },
+      {
+        "sourceId": "external:fedresurs:synthetic:INTEGRATION-B-12M",
+        "sourceType": "OTHER",
+        "status": "READY",
+        "companyInn": "9900002906",
+        "receivedAt": "2026-06-30",
+        "confidence": 98,
+        "warnings": [
+          "SYNTHETIC_OFFLINE_REGISTRY_FIXTURE_NOT_EXTERNAL_VERIFICATION"
+        ],
+        "rawReference": "external:/fedresurs:2026-06-30:integration-b-offline",
+        "fieldAvailability": {
+          "addressUnreliable": "KNOWN"
+        },
+        "sourceName": "Synthetic independent registry boundary; no network provider"
+      },
+      {
+        "sourceId": "external:bankruptcy-messages:synthetic:INTEGRATION-B-12M",
+        "sourceType": "OTHER",
+        "status": "READY",
+        "companyInn": "9900002906",
+        "receivedAt": "2026-06-30",
+        "confidence": 98,
+        "warnings": [
+          "SYNTHETIC_OFFLINE_REGISTRY_FIXTURE_NOT_EXTERNAL_VERIFICATION"
+        ],
+        "rawReference": "external:/bankruptcy-messages:2026-06-30:integration-b-offline",
+        "fieldAvailability": {
+          "addressUnreliable": "KNOWN"
+        },
+        "sourceName": "Synthetic independent registry boundary; no network provider"
+      }
+    ]
+  },
+  "enforcementItems": [],
+  "legalCaseItems": [],
+  "inspectionItems": [],
+  "registryMessages": []
+}
