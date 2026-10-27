@@ -114,6 +114,12 @@ export async function loadWorkspaceModelV1(analysisId: string, dependencies: Wor
           source: source.sourceId.startsWith("client-request-") ? "CLIENT_DECLARATION" :
             ({ BANK_STATEMENT: "BANK_STATEMENTS", BFO: "FINANCIAL_STATEMENTS", QUARTERLY: "QUARTERLY_REPORT", BKI: "CREDIT_HISTORY" } as Record<string,string>)[source.sourceType] ?? "EXTERNAL_SOURCE",
           status: source.status, periodFrom: source.periodFrom, periodTo: source.periodTo,
+          // FULL rebuilds this list; retain validated metadata only for the same saved BKI source.
+          ...(source.sourceType === "BKI" ? { reportDate:
+            source.sourceId === analysis.sourceManifest?.bki?.sourceId
+              ? basic.sources.availability.find(item => item.source === "CREDIT_HISTORY")?.reportDate ?? null
+              : null,
+          } : {}),
         }))
       } },
       state: "READY_FULL",
