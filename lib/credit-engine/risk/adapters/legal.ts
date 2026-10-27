@@ -1,3 +1,4 @@
+import {activeLegalReceipt, legalReceiptCurrent} from "../../../legal-registry.ts";
 import type { EntityLifecycleState, RiskFact, RiskShadowInput } from "../../contracts/risk.ts";
 import { fact, freshness, sourceConfidence, usable, weakest, validDate, RISK_SOURCE_FRESHNESS_DAYS as age } from "../common.ts";
 export function normalizeLifecycle(raw: string): EntityLifecycleState {
@@ -8,7 +9,7 @@ export function normalizeLifecycle(raw: string): EntityLifecycleState {
   if (["банкротство: действующая процедура", "действующая процедура банкротства", "bankruptcy_active"].includes(s)) return "BANKRUPTCY_ACTIVE";
   return s ? "OTHER" : "UNKNOWN";
 }
-export function legalFacts(input: RiskShadowInput, financial: RiskFact[]): RiskFact[] {
+function profileLegalFacts(input: RiskShadowInput, financial: RiskFact[]): RiskFact[] {
   const { analysis: a, companyProfile: p, asOfDate } = input; if (!p || p.inn !== a.companyInn) return [];
   const date = p.fetchedAt?.slice(0, 10), sources = p.sourceManifest?.external ?? [];
   const source = (endpoint: string) => sources.find(s => s.rawReference?.startsWith(`external:/${endpoint}:`) || s.sourceId.startsWith(`external:${endpoint}:`));
@@ -29,4 +30,27 @@ export function legalFacts(input: RiskShadowInput, financial: RiskFact[]): RiskF
   out.push(read("LEGAL_REGISTRY_REVIEW", p.legal.bankruptcyMessages > 0 ? Math.max(p.legal.bankruptcyMessages, p.registryMessages?.filter(m => m.date.slice(0, 10) <= asOfDate && (m.classification !== "INFORMATIONAL" || /банкрот/i.test(m.title))).length ?? 0) : p.registryMessages?.filter(m => m.date.slice(0, 10) <= asOfDate && (m.classification !== "INFORMATIONAL" || /банкрот/i.test(m.title))).length ?? null, source("fedresurs") ? "fedresurs" : "bankruptcy-messages", `Registry messages do not prove active bankruptcy; ${p.registryMessages?.map(m => `${m.sourceId}@${m.date}: ${m.title}`).join("; ") ?? "aggregate message count only"}`));
   out.push(read("LEGAL_VIOLATIONS_REPORTED", p.inspectionItems?.filter(e => e.date.slice(0, 10) <= asOfDate && e.violations.trim() && !/^(нет|не выявлено|отсутствуют)$/i.test(e.violations.trim())).length ?? null, "inspections"));
   return out;
+}
+
+// The existing legal adapter is the sole path into canonical lifecycle coverage.
+// A registry extract provides lifecycle only; it says nothing about claims/debt/address.
+export function legalFacts(input: RiskShadowInput, financial: RiskFact[]): RiskFact[] {
+  const out = profileLegalFacts(input, financial), r = activeLegalReceipt(input.analysis);
+  const conflict = !r && input.analysis.legalRegistryV1?.history.some(h => h.reasons.includes('SAME_DATE_LIFECYCLE_CONFLICT'));
+  if (!r && !conflict) return out;
+  const current = r && legalReceiptCurrent(r, input.asOfDate);
+  const registry = fact(input.analysis.companyInn, 'LEGAL_LIFECYCLE', 'LEGAL', current ? r.lifecycle : null, {
+    confidence: current ? 'HIGH' : 'UNKNOWN', sourceTypes:r?['OTHER']:[], sourceIds:r?[r.id]:[],
+    period:{from:null,to:null,asOf:r?.informationDate??null},
+    calculationBasis:'Explicit EGRUL status; PDF hash matched independently retrieved FNS HTTPS bytes. Signature NOT cryptographically verified. Other legal risks remain separate.',
+    warnings:conflict?['SAME_DATE_LIFECYCLE_CONFLICT']:current?[]:['LEGAL_SOURCE_NOT_CURRENT_OR_AVAILABLE']
+  });
+  const previous = out.find(f => f.semanticCode === 'LEGAL_LIFECYCLE');
+  if (previous?.status === 'KNOWN' && current && previous.period.asOf === r.informationDate && previous.value !== registry.value) {
+    return [...out.filter(f => f.semanticCode !== 'LEGAL_LIFECYCLE'), fact(input.analysis.companyInn, 'LEGAL_LIFECYCLE', 'LEGAL', null, {
+      confidence:'UNKNOWN', period:registry.period, sourceTypes:[...registry.sourceTypes,...previous.sourceTypes], sourceIds:[...registry.sourceIds,...previous.sourceIds],
+      evidence:[...registry.evidence,...previous.evidence], warnings:['LEGAL_LIFECYCLE_SOURCE_CONFLICT'], calculationBasis:'Verified current sources disagree; neither status selected'
+    })];
+  } else if (!conflict && previous?.status === 'KNOWN' && (!current || previous.period.asOf! > r.informationDate!)) return out;
+  return [...out.filter(f => f.semanticCode !== 'LEGAL_LIFECYCLE'), registry];
 }
