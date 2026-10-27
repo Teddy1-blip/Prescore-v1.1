@@ -9,6 +9,14 @@ import { readableAnalysis, requireApiUser, unauthorized } from "../api-auth";
 import { analysisView, resolveAnalysisTier } from "../../../lib/entitlements";
 import { structuredAttachmentIsUntrusted } from "../../../lib/credit-engine/source-foundation";
 
+// Batch consumers (including admin controls) require only the common statement methods.
+// Keep all() on prepared statements used for lightweight summary queries.
+type BatchStatement = {
+  bind: (...values: unknown[]) => BatchStatement;
+  run: () => Promise<unknown>;
+  first: <T = unknown>() => Promise<T | null>;
+};
+
 type PreparedStatement = {
   bind: (...values: unknown[]) => PreparedStatement;
   run: () => Promise<unknown>;
@@ -18,7 +26,7 @@ type PreparedStatement = {
 
 type RuntimeDatabase = {
   prepare: (query: string) => PreparedStatement;
-  batch: (statements: PreparedStatement[]) => Promise<Array<{ results: unknown[] }>>;
+  batch: (statements: BatchStatement[]) => Promise<Array<{ results: unknown[] }>>;
 };
 
 async function getDatabase() {
