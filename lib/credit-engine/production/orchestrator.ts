@@ -46,6 +46,9 @@ function sourcesOf({analysis: a, companyProfile: p}: CanonicalSavedInput): Sourc
 export function canonicalAsOf(input: CanonicalSavedInput): string {
   const a = input.analysis, p = input.companyProfile;
   const dates = [a.periodTo, a.metricsV2?.period.to, a.creditHistory?.reportDate, p?.fetchedAt,
+    // A saved client declaration is a recorded observation, not a wall-clock refresh.
+    // Advancing knowledge does not advance the effective dates of source balances.
+    a.financingRequestV1?.receivedAt,
     ...sourcesOf(input).flatMap(s => [s.periodFrom, s.periodTo, s.receivedAt]),
     ...(a.financialStatementsV2 ?? []).map(s => s.period.asOf),
     ...(p?.financialStatementsV2 ?? []).map(s => s.period.asOf)];

@@ -86,3 +86,18 @@ test('integration B: Workspace FULL and report use the same saved financing case
  assert.equal(workspace.basic.financingRequest.urgency,'WITHIN_30_DAYS');assert.equal(JSON.stringify(b.analysis),payload);
  assert.equal((await loadWorkspaceModelV1(b.analysis.id,{...deps,readAccess:async()=>null,readProfile:async()=>{throw Error('MUST_NOT_READ');}})).state,'NOT_FOUND');
 });
+
+test('integration B: later saved declaration advances knowledge without refreshing historical debt',()=>{
+ const b=integrationB();
+ b.analysis.financingRequestV1=parseFinancingRequest({purpose:'WORKING_CAPITAL',product:'TERM_LOAN',amount:1000000,termMonths:12,annualRatePercent:0,urgency:'WITHIN_30_DAYS'},'2026-07-02T12:00:00.000Z');
+ const input=savedCanonicalInput(b.analysis,b.companyProfile),before=JSON.stringify(input),r=build(input);
+ assert.equal(r.asOfDate,'2026-07-02');assert.equal(r.financingReadiness.caseDefinition.status,'DEFINED');
+ assert.ok(r.financingReadiness.caseDefinition.facts.every(f=>f.sourceClass==='CLIENT_DECLARED'&&f.evidence.every(e=>e.asOf==='2026-07-02')));
+ const principal=r.creditPortfolio.obligations[0].currentPosition.principalOutstanding;
+ assert.equal(principal.value,null);assert.equal(principal.knowledge,'UNKNOWN');
+ assert.ok(principal.evidence.some(e=>e.rawValue===1500000&&e.observedAt==='2026-06-30'));
+ assert.equal(r.debtCapacity.operatingBasis.fullMonthCount,12);assert.equal(r.debtCapacity.portfolioScheduledDebtService30d.value,100000);
+ assert.equal(JSON.stringify(input),before);assert.deepEqual(build(input),r);
+ const corrupt=structuredClone(b.analysis);corrupt.financingRequestV1.receivedAt='invalid';
+ assert.throws(()=>savedCanonicalInput(corrupt,b.companyProfile),e=>e.stage==='SOURCE_DATES'&&e.reason==='INVALID_SOURCE_DATES');
+});

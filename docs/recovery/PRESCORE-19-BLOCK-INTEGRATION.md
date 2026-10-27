@@ -14,7 +14,7 @@ Updated 2026-10-27. Scope: existing recovery branch; no production, database, DN
 - All five failures reproduced locally in `tests/live-source-full-response.test.mjs`: `TypeError: Cannot read properties of undefined (reading 'components')` at `IndexEvidenceGaps`. The isolated service stub supplied only `prescoreIndex: {value:null}`; the real required Index contract includes coverage. Fixture now supplies legal/operating missing facts; assertions additionally require both explanations. No production fallback, scoring change, skip, or Golden update.
 - Node 24.22.1, npm 11.9.0: clean `npm ci` PASS (473 packages); `npm run typecheck` PASS (0 diagnostics).
 - Targeted packet checks: 30 PASS / 0 FAIL / 0 skipped across full-source-response, quick-entry authorization, coverage guidance and preserved public financing.
-- Initial full regression was superseded by the reproduced defects below; no complete PASS is claimed. A new unchanged recovery build gate is running on packet 2.
+- Initial full regression was superseded by the reproduced defects below; no complete PASS is claimed. The packet 2 full run was locally stopped after another reproduced defect; no Amvera build was cancelled. A clean build and the unchanged full gate were then started for packet 3.
 - Local Next build compiled and generated routes but returned exit 1 with `SecurityFatalError` for Next 16.4.0. This is NOT build PASS; dependency advisory was subsequently verified and addressed in packet 2. Docker executable is unavailable locally. Required Docker/recovery gates are unchanged.
 
 ## Status rules
@@ -53,7 +53,7 @@ All BLOCKED engine/canonical/test cells below require the current serial suite p
 | 01–04 | `lib/prescore.ts`, `lib/credit-engine/source-foundation.ts`, `normalization/`, `classification/`, `metrics/`; `app/api/analysis/route.ts`; `lib/workspace/model.ts`; `banking-ledger.tsx`. Verify actual statement bytes → screening → full-population canonical metrics → saved analysis → API and screen; matching independent monthly totals, known zero vs missing, wrong INN and period rejection. |
 | 05–06 | `financial-analysis/source-selection.ts`, `financial-analysis/engine.ts`, `reconciliation/engine.ts`; `app/api/source-documents/route.ts`; `client-financials.tsx`. Verify annual/interim units/dates, precedence, conflicts and replacement through real upload handlers; no quarterly annualization. |
 | 6.5, 13 | `credit-portfolio/resolver.ts`, `credit-portfolio/bki-adapter.ts`, `debt-capacity/portfolio.ts`, `debt-capacity/engine.ts`; `client-analysis.tsx`, `credit-coverage-guidance.ts`. Per-obligation canonical exclusion copy added and tested offline; live QA A 9,000/date/unknown-principal parity and responsive rendering remain outstanding. |
-| 07, 09–12 | `production/orchestrator.ts` calls `risk`, `context`, `index`, `readiness`, `credit-assessment` engines. `lib/workspace/financing-request.ts` and form now carry urgency; five fields, backward compatibility and persistence tested. Saved-request cutoff defect remains open below; no policy/weight change. Verify legal lifecycle only from explicitly sourced applicable facts; no fabricated ACTIVE in QA A. |
+| 07, 09–12 | `production/orchestrator.ts` calls `risk`, `context`, `index`, `readiness`, `credit-assessment` engines. `lib/workspace/financing-request.ts` and form now carry urgency; five fields, backward compatibility and persistence tested. Saved-request cutoff defect is fixed in packet 3 below; no policy/weight change. Verify legal lifecycle only from explicitly sourced applicable facts; no fabricated ACTIVE in QA A. |
 | 08 | `scripts/credit-lab-business.mjs`, `credit-lab/business-corpus.mjs`, existing 24-case corpus/fingerprints. Run all 24 and unchanged fingerprint tests. Internal QA only. |
 | 14–16 | Orchestrator `productSelection → recommendationSet → actionPlan`; `client-analysis.tsx` FinancingProducts/ActionPlan. Verify canonical factor → supported product/recommendation → ordered action links and honest unknown conditions, shared read-only dossier. |
 | 17 | `explainability/engine.ts`, `client-insights.tsx` Why, `explanation-library.tsx`. Verify real claim/source IDs, search, navigation, provenance and no independent UI math. |
@@ -99,14 +99,34 @@ Parent: `5240822d240fa9635284b5e4346ff0f2b0301057` (packet 1; issue comment 6445
 | CREDIT_LIMIT | Excluded schedule remains null; known dated 100,000 payment and reason retained |
 | Conflict / foreign identity | Financial conflict reaches risk review; foreign profile/invalid INN rejected |
 
-Targeted evidence: integration B plus original canonical provenance/fingerprint checks 25/25 PASS; financing persistence 5/5 PASS; existing source-authority/full-response/completion checks 25/25 PASS. Original business Credit Lab 24/24 PASS, fingerprints unchanged. Full serial gate remains pending; these counts are separate commands, not an invented aggregate.
+Targeted evidence: integration B plus original canonical provenance/fingerprint checks 25/25 PASS; financing persistence 5/5 PASS; existing source-authority/full-response/completion checks 25/25 PASS. Original business Credit Lab 24/24 PASS, fingerprints unchanged. Full serial gate for packet 2 was superseded by the dated-declaration fix below; these counts are separate commands, not an invented aggregate.
 
 ### Outstanding, evidenced limitations
 
-- A later saved financing request (2026-07-02) against B sources dated 2026-06-30 reproduces `CAPACITY / FUTURE_OR_INVALID_AVAILABILITY`. `canonicalAsOf` omits the saved declaration receipt date. Next packet must include this recorded knowledge date and preserve historical vs current principal semantics; do not move source dates or weaken availability validation.
+- Before packet 3, a later saved financing request (2026-07-02) against B sources dated 2026-06-30 reproduced `CAPACITY / FUTURE_OR_INVALID_AVAILABILITY`. `canonicalAsOf` omits the saved declaration receipt date. Packet 3 includes this recorded knowledge date and preserves historical vs current principal semantics; source dates and availability validation remain unchanged.
 - Local Docker executable is absent. Docker image checks remain mandatory and BLOCKED; no Dockerfile gate is disabled.
 - `npx playwright install chromium` failed extracting the downloaded Chromium 151.0.7922.34 archive: “End of central directory record signature not found.” Browser QA and visual PDF acceptance remain BLOCKED, not passed by static renders.
 - No trusted free legal-evidence upload/review workflow has been implemented here. Adapter-level offline provenance proves independence from a provider, not independent verification of arbitrary user declarations. Live sufficient-data acceptance requires an explicitly authorized trusted-source path.
 - No staging candidate has been promoted, no live acceptance claimed, no QA A/production/DB/configuration changed.
 
-Next concrete packet: repair the demonstrated saved-request cutoff defect, rerun the same mandatory gates, then persist the exact result. Only a verified unified candidate may be considered for staging; never bypass outstanding mandatory gates.
+## Packet 3 — saved declaration cutoff and real isolated routes
+
+Parent packet 2: `860e977836faab3c9f05330cd17ca67b3c1fb726`, tree `92c0f93709fdce86bdbe439532ca6ba4688282e0`, issue comment 6446232862.
+
+`canonicalAsOf` now considers `financingRequestV1.receivedAt`, a saved observation date. It does not consult the wall clock, rewrite any source date, extend history, or refresh a debt balance. Regression demonstrates 02.07 declaration against 30.06 sources: all five CLIENT_DECLARED facts are DEFINED, full history remains 12 months, the 15.07 scheduled payment remains 100,000, and 1,500,000 principal stays dated evidence while current principal is UNKNOWN/null. Invalid receipt dates are rejected. Repeated builds of the same input are identical.
+
+Targeted integration B + unchanged provenance/fingerprints + real financing persistence: **31 PASS / 0 FAIL / 0 skipped**. Fresh typecheck and Next standalone build PASS. The full unmodified recovery-build-gate is running after that build; result must be recorded before any staging consideration.
+
+An additional read of real API handlers in isolated PGlite used synthetic B only. CLIENT, assigned BROKER and ADMIN canonical and report objects were identical; BROKER/ADMIN readonly flags true; stranger received HTTP 404. This exercises handler/permission integration, not production login or live authorization.
+
+| Local route | HTTP | Elapsed ms | Response bytes |
+|---|---|---|---|
+| workspace?projection=summary | 200 | 594 | 335 |
+| modules | 200 | 19 | 10,540 |
+| workspace-model, first | 200 READY_FULL | 1,017 | 940,016 |
+| workspace-model, repeat 1 | 200 READY_FULL | 819 | 940,016 |
+| workspace-model, repeat 2 | 200 READY_FULL | 795 | 940,016 |
+
+No before/after performance improvement is claimed. Service still builds canonical results after each authorized FULL read; use-model binds fetching to analysis/revision/endpoint rather than section selection. A future result cache cannot be keyed only by analysis ID: it must include actual current source/profile/declaration content and policy versions, while authorization and entitlement must still run on every read. No cache was introduced without invalidation and browser evidence. Time to visible UI, section latency, network request count and real client-file parsing remain BLOCKED by browser/input availability.
+
+Next concrete operation: record the final mandatory gate result and exact candidate SHA. Mandatory Docker and real browser/live acceptance remain open; do not turn them into PASS or promote by bypassing them.
