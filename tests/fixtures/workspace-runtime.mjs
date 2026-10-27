@@ -9,6 +9,8 @@ import {PortableDatabase} from '../../lib/db/compatibility.ts';
 const require=createRequire(import.meta.url);
 export async function createWorkspaceRuntime(){
  const pg=new PGlite(),scope=new AsyncLocalStorage(),cache=new Map();
+ // UTC timestamps/date filters must not inherit PGlite's packaged timezone.
+ await pg.exec("SET TIME ZONE 'UTC'");
  const query=async(sql,values)=>{const r=await pg.query(sql,values);return {rows:r.rows,rowCount:r.affectedRows};};
  let transactionTail=Promise.resolve();
  const pool={query,connect:async()=>{let unlock;const turn=new Promise(resolve=>{unlock=resolve;});const previous=transactionTail;transactionTail=turn;await previous;let released=false;return{query,release(){if(released)return;released=true;unlock();}};}};
