@@ -15,6 +15,7 @@
 
 # next.js
 /.next/
+/.prescore-build/
 /out/
 
 # misc
