@@ -2,6 +2,24 @@
 
 Updated 2026-10-27. Scope: existing recovery branch; no production, database, DNS, paid provider, webhook or configuration changes. QA A `992ab9e3-672e-4adf-955e-9a2c40e3ece3` remains unchanged.
 
+## Current packet — linked Why evidence and packaged provenance
+
+Continuation of #11 comment 6451350666, on recovery HEAD `511e1baf191fcd21c66d74b317709eb2ff2ef01f`; staging remains `186706751b43798c53f59533628fcb6dcbb94482`. The previous container completed exit 0 and Amvera revision `0c0b10ef2d9dcb98467011aa1ea94c58bd0aaf4c` became active. New health/ready HTTP 200 and read-only QA A/entry checks are preserved as confirmed historical results, not reset to unaccepted and not inherited by the next candidate.
+
+WHY_EXPLANATION: regression first reproduced the exact generic copy and doubled missing-period placeholder. Presentation now follows existing claimId → riskFindingIds → concrete claims → value-binding sourceReferenceIds. No text/array-position/source-kind join; no source dates borrowed from the whole analysis. Same-source identities and dates are deduplicated, distinct periods are preserved, and missing/partial/as-of dates remain explicit. CLIENT and read-only BROKER share this resolver. Key-constraint selection order and all canonical computations are unchanged; Golden files are unchanged.
+
+BUILD_TRACEABILITY: previous artifact remains BLOCKED for imported-tree/running-digest identity. A bounded system-log query returned no history; export prohibition was respected. The next build captures/rechecks/embeds actual source inputs and lock fingerprint, retaining only verified local Git metadata when available. Health reads packaged evidence, never runtime SHA assertions. Scope and limitations: [BUILD-PROVENANCE.md](BUILD-PROVENANCE.md). No manifest/timestamp claim is a running-digest attestation.
+
+Targeted checks: `node --experimental-strip-types --test --test-reporter=tap --test-concurrency=1 tests/why-linked-evidence.test.mjs tests/build-provenance.test.mjs tests/rc-runtime.test.mjs tests/live-source-full-response.test.mjs tests/client-product.test.mjs tests/recovery-build-gate.test.mjs` — 75/75 PASS, 0 fail/skip. Compatibility checks first caught four missing-claims rendering failures; the resolver now retains the original fallback when claims are absent. The existing assertions were not weakened. `npm run build` (including typecheck, 0 diagnostics) and `node scripts/release/package-runtime.mjs` passed. `node scripts/qa/recovery-build-gate.mjs --build-only` is RUNNING at candidate save; the terminal result and exact candidate SHA will be appended, with no inherited old full PASS. Local standalone `/api/health` returned HTTP 200, 513 ms, the packaged fingerprint and timestamp; forged runtime SHA/timestamp did not replace them (sourceSha remained UNKNOWN). This is a local artifact check, not staging health/ready acceptance.
+
+Candidate input fingerprint `ef11633a5b56cf8128eb50f4f0afecaaa10e0c1d97cf5a1ac4712a58f5c9ac6c`, scope `PRESCORE-SOURCE-INPUTS-1`, 702 files; lock SHA-256 `8fc1937ff193da2f1cd7504442f2dd64e44559306a0f77d2775af83e17f9deb1`. Local build checkout was dirty and correctly published no commit/tree. Container Git absence must remain UNAVAILABLE; compare source fingerprints, not a runtime SHA assertion. Before transfer, Amvera Control Versions showed `0c0b10ef2d9dcb98467011aa1ea94c58bd0aaf4c` Built/Stored/Used, with the normal rollback action (disabled while already active); no retention setting or rollback was changed. Existing Git staging source remains a separate rollback reference. QA A, data, roles, production, DNS, paid providers and secrets remain untouched. Live FNS, ordinary uploads, sufficient legal scenario, BROKER browser flow, AI and visual PDF remain separately unperformed/blocked as previously recorded.
+
+## Historical checkpoint — trusted legal intake candidate
+
+**Local gate PASS; Amvera container RUNNING; live acceptance NOT DONE.** Frozen code candidate: `a42207b5aff43e0ff6a0b5957f6ab35d80021154`, tree `9a329daaeb8db9fee385daf97d33852063472113`. One staging merge: `186706751b43798c53f59533628fcb6dcbb94482`, same tree. New Amvera imported revision: `0c0b10ef2d9dcb98467011aa1ea94c58bd0aaf4c`. Last captured build stage `RUN npm ci`; last log line `27/10/26 19:23:42` (literal Amvera UI time; timezone not independently established), `Container builder is still running.` Observation ended as instructed, without cancellation, restart, repeated query or duplicate delivery.
+
+The API cells for 01/07/10 now distinguish the implemented/verified isolated handler from the still-unverified live official-source path. Historical results below remain attached to their original code; final evidence for the new candidate is at the end.
+
 ## Baseline and packet 1
 
 - Recovery base: `2a4f981eee08c97b4ce5099c02235d5d0366f04b`, tree `4bed0546f53ffbeedcb4a8ea4e528b0ae8791792`.
@@ -23,17 +41,17 @@ PASS means the named layer was executed and checked on the integrated candidate,
 
 | Block | Engine | Canonical | API | CLIENT | BROKER | Report/AI | Tests | Live |
 |---|---|---|---|---|---|---|---|---|
-| 01 Source Integrity | PASS | PASS | PARTIAL | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
+| 01 Source Integrity | PASS | PASS | PARTIAL (handler PASS) | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
 | 02 Normalization | PASS | PASS | PASS | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
 | 03 Classification | PASS | PASS | PASS | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
 | 04 Banking Metrics | PASS | PASS | PASS | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
 | 05 Financial Analysis | PASS | PASS | PASS | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
 | 06 Reconciliation | PASS | PASS | PASS | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
 | 6.5 Credit Portfolio Foundation | PASS | PASS | PASS | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
-| 07 Risk / Stops | PASS | PASS | PARTIAL | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
+| 07 Risk / Stops | PASS | PASS | PARTIAL (handler PASS) | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
 | 08 Credit Lab | PASS | NOT_APPLICABLE | NOT_APPLICABLE | NOT_APPLICABLE | NOT_APPLICABLE | NOT_APPLICABLE | PASS | NOT_APPLICABLE |
 | 09 Context | PASS | PASS | PASS | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
-| 10 Prescore Index | PASS | PASS | PARTIAL | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
+| 10 Prescore Index | PASS | PASS | PARTIAL (handler PASS) | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
 | 11 Financing Readiness | PASS | PASS | PASS | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
 | 12 Credit Assessment | PASS | PASS | PASS | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
 | 13 Debt Capacity | PASS | PASS | PASS | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
@@ -46,7 +64,7 @@ PASS means the named layer was executed and checked on the integrated candidate,
 
 ## Exact verification seams and exit criteria
 
-Engine/canonical/test gates now pass for the stated synthetic and supported-source scope. API PARTIAL for 01/07/10 identifies the missing trusted provider-independent legal-document intake, not a failing current Checko/profile adapter. UI/BROKER/Report BLOCKED cells require an available real browser and visual/ordinary-role acceptance, beyond tested static renders and handler role isolation. Every Live cell requires a successfully identified candidate, real HTTP health/ready, and authorized browser verification. An unchanged old deployment does not satisfy them.
+Engine/canonical/test gates now pass for the stated synthetic and supported-source scope. At the historical baseline, API PARTIAL for 01/07/10 identified missing trusted provider-independent legal-document intake, not a failing Checko/profile adapter. The new handler and its isolated checks are now implemented; live official-source compatibility remains unverified as detailed in the latest checkpoint. UI/BROKER/Report BLOCKED cells require an available real browser and visual/ordinary-role acceptance, beyond tested static renders and handler role isolation. Every Live cell requires a successfully identified candidate, real HTTP health/ready, and authorized browser verification. An unchanged old deployment does not satisfy them.
 
 | Blocks | Existing locations / outstanding criterion |
 |---|---|
@@ -207,3 +225,32 @@ Minimal correction: initialize the isolated `tests/fixtures/workspace-runtime.mj
 
 
 The first full gate completed: **6,740 PASS / 3 FAIL / 0 skipped**, 837,409.987 ms, REGRESSION exit 1; later gates correctly did not run. In addition to both billing failures, a focused presentation harness failed before registering its cases: `Error: UNEXPECTED_IMPORT:../legal-registry.ts` at `tests/live-source-presentation-recovery.test.mjs:28`, called while loading `lib/workspace/model.ts`. The explicit test loader was extended to load the real legal receipt projection and new child presentation component. No assertions, Golden cases or production fallback were removed. First failed output and manifest are preserved; no staging build or runtime was cancelled/restarted.
+
+
+## Final local candidate and single staging delivery — 2026-10-27
+
+- Evidence subject: `a42207b5aff43e0ff6a0b5957f6ab35d80021154`, exact tree `9a329daaeb8db9fee385daf97d33852063472113`; clean local tree matched the GitHub tree.
+- Exact final commands: `npm run build`; `node scripts/release/package-runtime.mjs`; `node scripts/qa/recovery-build-gate.mjs --build-only`. All exited 0. Build includes typecheck (0 diagnostics) and Next 16.4.1 production compilation.
+- REGRESSION: **6764/6764 PASS, 0 fail, 0 skipped**, 836560.425625 ms. CREDIT_LAB: **24/24 PASS**, 0 failures. LINT: PASS. ARTIFACT: VALID standalone, 12 runtime assets, schema `0009_analysis_archive.sql`. PDF_RUNTIME: native DOMMatrix/canvas/worker/text extraction PASS. This is not visual PDF acceptance.
+- The unchanged gate manifest is PASSED for all five stages, scope BUILD_REGRESSION_ONLY, browserAccepted=false, liveAccepted=false. Lock SHA-256 `8fc1937ff193da2f1cd7504442f2dd64e44559306a0f77d2775af83e17f9deb1`; final build log SHA-256 `85aabfc1535695654ba2415a0dce53769102bce6bc94b28169a5d9ad9cbaa6bd`; final gate log SHA-256 `951c246daea6afad975bfcc7b103bbb13627e7de55b17d0812e3eba9163a9d51`; manifest SHA-256 `b926af284abe2ecc2b3dbbf20571e789cb2ee3df1b8d04d09c4d2a26b977499d`.
+- Heads were re-read immediately before transfer: staging `783bfdf9977d6a1aaa899cddcb757ffc637df4b6`, recovery `a42207b5aff43e0ff6a0b5957f6ab35d80021154`. Exact recursive tree diff: **38 changed/added paths, no deletions**. Two paths added since the earlier 36-path check are only the UTC test fixture and focused presentation test loader. No independent staging change was discarded.
+- A single two-parent commit `186706751b43798c53f59533628fcb6dcbb94482` was put on existing staging with expected-head lease, force=false. Parents are the two preceding HEADs; tree exactly `9a329daaeb8db9fee385daf97d33852063472113`. Commit includes [skip ci]; no GitHub Actions operation or manual Amvera build/restart was used.
+
+### Container checkpoint (not SUCCESS)
+
+Amvera Repository changed to `0c0b10ef2d9dcb98467011aa1ea94c58bd0aaf4c` and displayed “Выполняется сборка”. One build-log query (200 rows, last 30 minutes, stream OFF) returned 43 lines. First: `27/10/26 19:22:58 Cloning into '/git'...`; next `19:23:00 HEAD is now at 0c0b10e ...`. Builder selected `node:22-bookworm-slim`, read `.dockerignore`, resolved stages and started `RUN npm ci` at `19:23:17`. Last returned line: **27/10/26 19:23:42 — Container builder is still running.** The slice includes two npm deprecation warnings, no confirmed failure. These are literal UI timestamps, not an asserted timezone conversion.
+
+Per RUNNING instruction, observation stopped after this single query and one saved screenshot, without cancelling/restarting the build or issuing another push. Last positively inspected active/built/stored revision **before transfer** was `574c42b929b3116dac4bf3b99ec012d9d0aa60ba`; new activation has not been verified. The GitHub candidate/staging tree identity is proven. The new Amvera checkout/revision is observed, but its full tree/parent equivalence and active image identity are **NOT YET PROVEN**; a merge label is not accepted as proof.
+
+### Explicit remaining limits
+
+- Container final result / active revision: PENDING. No container PASS is inferred from local gates.
+- New-candidate `/api/health` and `/api/ready`: NOT RUN, pending successful activation. No old HTTP response is reused as new-candidate evidence; no HTTP status/timing is invented.
+- Manual Work-browser acceptance: NOT RUN. Exact owner entry `/dashboard?view=documents`, explicit analysis selection, QA A facts (no LEGAL_LIFECYCLE, one full month, July observed zero, BKI 9000 on 01.11.2026 and retained exclusion explanation), CLIENT/BROKER rights, Why, Action Plan, sources, company switch/reload, provider-free AI context, print and visual PDF all remain outstanding for the new image. No automatic Playwright PASS is claimed.
+- Ordinary browser uploads and a sufficient trusted-legal scenario: NOT RUN. The native-PDF/API/PGlite tests use synthetic data and controlled outbound responses; the original B legal adapter fixture is not real provenance. Actual FNS availability/format compatibility remains BLOCKED by the earlier 503/timeout. Unsupported/ambiguous extracts remain unconfirmed; no synthetic test key/host/config is accepted by production.
+- Index B remains 1000/PARTIAL/UNKNOWN confidence with the exact review/capacity reasons recorded above, not a fully evidenced index or lending decision.
+- QA A and all existing analysis data were unchanged. No production, DNS, credentials/access settings, tariffs, real payments, data deletion/archive/reset or new database migration occurred. Only existing recovery/staging branches and the existing staging delivery path were used.
+
+Screenshot: `prescore-staging-legal-intake-running-20261027.jpg`, cropped to staging status and build log, without account/balance/secrets/documents; preserved with the session deliverable. Full synthetic local failure and final gate logs remain in the workspace; fingerprints above bind the final evidence. This final ledger update is documentation-only on recovery after the single staging delivery and must not trigger another staging build.
+
+Screenshot SHA-256: `44099850d12e915178aba437519e385b4f2eccafa8f6909d4deb84a44ec2ed50`.

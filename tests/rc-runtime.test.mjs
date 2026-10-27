@@ -24,7 +24,7 @@ test('portable artifact identifies RC3, includes PostgreSQL 17 runtime and exclu
  const version=runtimeVersion({DATABASE_URL:'must-not-leak',AUTH_SECRET:'must-not-leak',PRESCORE_SOURCE_SHA:'a'.repeat(40)});
  assert.equal(PRESCORE_RELEASE_ID,'PRESCORE-V1-RC3-20261019');
  assert.equal(version.releaseId,PRESCORE_RELEASE_ID);
- assert.equal(version.sourceSha,'a'.repeat(40));
+ assert.notEqual(version.sourceSha,'a'.repeat(40),'runtime SHA must not impersonate packaged build provenance');
  assert.equal(version.schemaVersion,'0009_analysis_archive.sql');
  assert.ok(!JSON.stringify(version).includes('must-not-leak'));
  const docker=fs.readFileSync('Dockerfile','utf8');

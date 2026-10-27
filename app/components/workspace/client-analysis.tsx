@@ -1,4 +1,5 @@
 "use client";
+import {whyTitle} from '../../../lib/workspace/why-evidence';
 import {useState} from 'react';
 import type {WorkspaceModelV1} from '../../../lib/workspace/model';
 import {Financing} from '../../dashboard/report-v2/analysis-v3';
@@ -95,7 +96,7 @@ export function FullCreditAnalysis({model,retry,initialSection='conclusion'}:{mo
   {tab==='conclusion'&&<>
    <section className="pc-analysis-hero">
     <div><span className="pc-kicker">КРЕДИТНОЕ ЗАКЛЮЧЕНИЕ</span><h2>{r.hero.headline}</h2><p>{r.hero.summary}</p><div className="pc-statusline"><span className={'pc-badge'+(r.hero.globalStop?' critical':'')}>{r.hero.globalStop?'Есть критичное ограничение':'Критичного общего стоп-фактора нет'}</span><span className="pc-badge">{r.hero.confidence}</span></div></div>
-    <aside><span>Ключевое ограничение</span><strong>{publicText(topConstraint?.title??'Отдельное ограничение не выделено')}</strong><small>{publicText(topConstraint?.text??'Проверьте комплект источников и готовность к финансированию.')}</small>{topConstraint&&<Why model={model} ids={[topConstraint.claimId]}/>}</aside>
+    <aside><span>Ключевое ограничение</span><strong>{publicText(topConstraint?whyTitle(model.full?.canonical.explainability,topConstraint.claimId,topConstraint.title):'Отдельное ограничение не выделено')}</strong><small>{publicText(topConstraint?.text??'Проверьте комплект источников и готовность к финансированию.')}</small>{topConstraint&&<Why model={model} ids={[topConstraint.claimId]}/>}</aside>
    </section>
    <BankingSnapshot model={model}/><CreditSummary model={model}/><AssessmentLimits model={model}/><IndexEvidenceGaps model={model}/>
    {model.full!.canonical.financingReadiness.level!=='UNKNOWN'&&<Panel title="Готовность к финансированию"><h3>{r.readiness.level}</h3><p>{r.readiness.text}</p><FactorRows model={model} items={r.readiness.constraints}/></Panel>}
