@@ -9,6 +9,7 @@ import {productPurpose,productReason} from './product-copy';
 import {PublishedValue,label} from './credit-depth';
 import {BankingSnapshot} from './banking-ledger';
 import {ExplanationLibrary} from './explanation-library';
+import {publicText} from '../../../lib/credit-engine/client-report/copy';
 
 export function FinancingProducts({model,embedded=false,showHeading=true}:{model:WorkspaceModelV1;embedded?:boolean;showHeading?:boolean}){
  const r=model.full?.report;
@@ -74,7 +75,7 @@ export function FullCreditAnalysis({model,retry,initialSection='conclusion'}:{mo
   {tab==='conclusion'&&<>
    <section className="pc-analysis-hero">
     <div><span className="pc-kicker">КРЕДИТНОЕ ЗАКЛЮЧЕНИЕ</span><h2>{r.hero.headline}</h2><p>{r.hero.summary}</p><div className="pc-statusline"><span className={'pc-badge'+(r.hero.globalStop?' critical':'')}>{r.hero.globalStop?'Есть критичное ограничение':'Критичного общего стоп-фактора нет'}</span><span className="pc-badge">{r.hero.confidence}</span></div></div>
-    <aside><span>Ключевое ограничение</span><strong>{topConstraint?.title??'Отдельное ограничение не выделено'}</strong><small>{topConstraint?.text??'Проверьте комплект источников и готовность к финансированию.'}</small>{topConstraint&&<Why model={model} ids={[topConstraint.claimId]}/>}</aside>
+    <aside><span>Ключевое ограничение</span><strong>{publicText(topConstraint?.title??'Отдельное ограничение не выделено')}</strong><small>{publicText(topConstraint?.text??'Проверьте комплект источников и готовность к финансированию.')}</small>{topConstraint&&<Why model={model} ids={[topConstraint.claimId]}/>}</aside>
    </section>
    <BankingSnapshot model={model}/><CreditSummary model={model}/><AssessmentLimits model={model}/>
    {model.full!.canonical.financingReadiness.level!=='UNKNOWN'&&<Panel title="Готовность к финансированию"><h3>{r.readiness.level}</h3><p>{r.readiness.text}</p><FactorRows model={model} items={r.readiness.constraints}/></Panel>}
