@@ -1,0 +1,44 @@
+{
+  "id": "INTEGRATION-B-12M",
+  "synthetic": true,
+  "companyInn": "9900002906",
+  "asOfDate": "2026-06-30",
+  "origin": "Existing business source arithmetic, separately named offline acceptance fixture. Original 24-case archive unchanged.",
+  "sources": {
+    "bank-1-1.txt": "5c0643f093b4570cbfca2590a70986588ca90809014e3342b39cd3369dd812d1",
+    "bfo-2024.json": "5bf202360ce093196edaac4fb9bd381cfaf0c6445b89024cec8062c319d6c4fe",
+    "bfo-2025.json": "84401e9385d63b4fae6ccea380f7c47f791ff0b28b16aeecf7f5c8a5cf264dc6",
+    "bki-adapter-input.json": "8bf0bff52406731452e873f8ab296a2c7fff20fa52ca98602fcea41fe0a0dd6b",
+    "legal-adapter-input.json": "f46b7f56dbd2bc2b9858d85d6dc82a1aa0268230c94b334b7068c2935ecee650",
+    "quarterly-2026-6m.json": "bc15cc5deaf7bec31494730811dd9c2bb735fb1e86cf76f9890c6b8cd970d6ce"
+  },
+  "expected": {
+    "months": 12,
+    "monthlyOperatingReceipts": 1000000,
+    "monthlyObservedDebtService": 100000,
+    "scheduled30d": 100000,
+    "historicalAndCurrentPrincipalAtCutoff": 1500000,
+    "grossInflow": 12000000,
+    "grossOutflow": 10320000,
+    "endingBalance": 11680000,
+    "annualRevenue": 12000000,
+    "interimRevenue": 6000000,
+    "index": 1000,
+    "prudentialMonthlyHeadroom": 100000,
+    "maximumPolicyMonthlyHeadroom": 150000
+  },
+  "independentBasis": [
+    "5 buyers x 200000 = 1000000 monthly operating receipts; 12 months = 12000000.",
+    "Monthly outflows 860000, including debt service 100000; 12 x 860000 = 10320000.",
+    "Opening 10000000 + 12000000 - 10320000 = closing 11680000.",
+    "No adverse credit-risk finding with adequate four-component evidence: 400 + 300 + 200 + 100 = 1000, pre-calibration analytical scale.",
+    "20% x 1000000 - 100000 = 100000; 25% x 1000000 - 100000 = 150000.",
+    "Annual and 6M revenue are explicit separate source observations, never automatic annualization."
+  ],
+  "prohibited": [
+    "No live database writes",
+    "No provider requests",
+    "Not a real entity or bank approval",
+    "Do not amend original Golden fingerprints"
+  ]
+}

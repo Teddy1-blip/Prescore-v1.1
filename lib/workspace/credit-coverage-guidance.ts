@@ -45,3 +45,15 @@ export function capacityGapGuidance(capacity:CapacityGuidanceInput, requiredFull
  if(schedule.unknownObligationIds.length)notes.push(`По ${schedule.unknownObligationIds.length} обязательствам данные о графике или статусе недостаточны.`);
  return notes;
 }
+
+/** Membership comes only from the calculated schedule. No eligibility is inferred here. */
+export function obligationScheduleGuidance(id:string, exposure:string, schedule:CapacityGuidanceInput['portfolioScheduledDebtService30d'] & {eligibleObligationIds:string[]}):string{
+ if(schedule.excludedObligationIds.includes(id)){
+  if(exposure==='CREDIT_LIMIT')return 'Не включено в график ёмкости: обязательство классифицировано как лимит кредитной линии. Лимит не приравнивается к подтверждённому выданному долгу. Указанный платёж сохраняется в портфеле на дату источника; требуется подтверждение вида задолженности.';
+  if(exposure==='CONTINGENT')return 'Не включено в график ёмкости: условное обязательство учитывается отдельно от выданного долга.';
+  return 'Исключено расчётной моделью из графика ёмкости. Проверьте тип, класс обязательства и подтверждённый действующий статус; это не означает отсутствия платежа или долга.';
+ }
+ if(schedule.unknownObligationIds.includes(id))return 'График или статус подтверждены недостаточно. Известный платёж может учитываться как нижняя граница; неизвестный остаток графика не считается нулём.';
+ if(schedule.eligibleObligationIds.includes(id))return 'Обязательство допущено расчётной моделью. Учитываются только подтверждённые платежи в расчётном окне ближайших 30 дней.';
+ return 'Основание участия в графике в текущем расчёте не раскрыто.';
+}

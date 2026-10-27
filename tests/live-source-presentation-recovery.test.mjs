@@ -1,6 +1,7 @@
 /** Focused presentation checks. Real target code; JSX/React and imported child components
  * are explicit stand-ins. These checks are not a browser, SQL, full build or scoring validation. */
 import test from 'node:test';
+import {legalRegistryView} from '../lib/legal-registry.ts';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -14,6 +15,7 @@ function load(file,basis=0){
  assert.equal(compiled.diagnostics.filter(d=>d.category===ts.DiagnosticCategory.Error).length,0);
  const exports={};let state=0;
  const imports={
+  '../legal-registry.ts':{legalRegistryView},
   'react/jsx-runtime':{jsx,jsxs:jsx,Fragment:Symbol.for('fragment')},
   'react':{useState:initial=>[state++===0?basis:initial,()=>{}],useEffect:()=>{}},
   './expertise.tsx':{ExpertiseMemo:()=>null},
@@ -24,6 +26,7 @@ function load(file,basis=0){
  };
  new Function('exports','require',compiled.outputText)(exports,id=>{
   if(Object.hasOwn(imports,id))return imports[id];
+  if(id==='./legal-registry-source')return load('app/components/workspace/legal-registry-source.tsx');
   if(id.endsWith('/client-report/copy.ts'))return load('lib/credit-engine/client-report/copy.ts');
   throw Error('UNEXPECTED_IMPORT:'+id);
  });

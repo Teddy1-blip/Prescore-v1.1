@@ -1,3 +1,4 @@
+import {legalRegistryView} from "../legal-registry.ts";
 import {financialSources} from "../credit-engine/financial-analysis/source-selection.ts";
 import type { AnalysisResult } from "../prescore.ts";
 import type { BankStatementMetricsV2, MetricResult } from "../credit-engine/contracts/metrics.ts";
@@ -28,6 +29,7 @@ export type WorkspaceOperationalStateV1 = {
 };
 
 export type WorkspaceBasicV1 = {
+  legalRegistry?: import("../legal-registry.ts").LegalRegistryV1;
   financingRequest?: import("./financing-request.ts").FinancingRequestV1;
   analysis: {
     id: string;
@@ -153,6 +155,7 @@ export function projectWorkspaceBasic(
   const statementPeriodFrom = metrics?.period.from ?? (statements?.length ? statements.map((item) => item.periodFrom).filter((value): value is string => !!value).sort()[0] ?? null : null);
   const statementPeriodTo = metrics?.period.to ?? (statements?.length ? statements.map((item) => item.periodTo).filter((value): value is string => !!value).sort().at(-1) ?? null : null);
   return {
+    ...(analysis.legalRegistryV1 ? {legalRegistry: legalRegistryView(analysis)} : {}),
     financingRequest: analysis.financingRequestV1 ? structuredClone(analysis.financingRequestV1) : undefined,
     analysis: {
       id: analysis.id,

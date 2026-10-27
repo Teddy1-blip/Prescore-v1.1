@@ -32,7 +32,7 @@ function pageText(items: PdfTextItem[]) {
   }).join("\n");
 }
 
-export async function extractPdfText(bytes: Uint8Array) {
+export async function extractPdfText(bytes: Uint8Array, maxPages = Number.POSITIVE_INFINITY) {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   const document = await pdfjs.getDocument({
     data: bytes,
@@ -41,6 +41,7 @@ export async function extractPdfText(bytes: Uint8Array) {
   }).promise;
   const pages: string[] = [];
   try {
+    if (document.numPages > maxPages) throw new Error("PDF_PAGE_LIMIT");
     for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
       const page = await document.getPage(pageNumber);
       const content = await page.getTextContent();
