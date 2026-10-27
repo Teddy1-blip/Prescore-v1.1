@@ -9,15 +9,24 @@ import { readableAnalysis, requireApiUser, unauthorized } from "../api-auth";
 import { analysisView, resolveAnalysisTier } from "../../../lib/entitlements";
 import { structuredAttachmentIsUntrusted } from "../../../lib/credit-engine/source-foundation";
 
-type PreparedStatement = {
-  bind: (...values: unknown[]) => PreparedStatement;
+// Batch consumers (including admin controls) require only the common statement methods.
+// Keep all() on prepared statements used for lightweight summary queries.
+type BatchStatement = {
+  bind: (...values: unknown[]) => BatchStatement;
   run: () => Promise<unknown>;
   first: <T = unknown>() => Promise<T | null>;
 };
 
+type PreparedStatement = {
+  bind: (...values: unknown[]) => PreparedStatement;
+  run: () => Promise<unknown>;
+  first: <T = unknown>() => Promise<T | null>;
+  all: <T = unknown>() => Promise<{ results: T[] }>;
+};
+
 type RuntimeDatabase = {
   prepare: (query: string) => PreparedStatement;
-  batch: (statements: PreparedStatement[]) => Promise<Array<{ results: unknown[] }>>;
+  batch: (statements: BatchStatement[]) => Promise<Array<{ results: unknown[] }>>;
 };
 
 async function getDatabase() {
@@ -121,6 +130,24 @@ export async function GET(request: Request) {
   if (!user) return unauthorized();
   try {
     const db = await getDatabase();
+    // The landing page needs labels and IDs, not dozens of full credit payloads.
+    // This owner-scoped, read-only projection never migrates, mutates or calculates.
+    const requestUrl = new URL(request.url);
+    if (!requestUrl.searchParams.get("client") && requestUrl.searchParams.get("projection") === "summary") {
+      const ownerFilter = user.isAdmin
+        ? "(owner_email = ? OR owner_email = '')"
+        : "owner_email = ?";
+      const sql = `SELECT id, company_name AS companyName, company_inn AS companyInn,
+        created_at AS createdAt, period_from AS periodFrom, period_to AS periodTo
+        FROM analyses WHERE archive_state = 'ACTIVE' AND ${ownerFilter}
+        ORDER BY created_at DESC LIMIT 50`;
+      const { results } = await db.prepare(sql).bind(user.email).all<{
+        id: string; companyName: string; companyInn: string;
+        createdAt: string; periodFrom: string; periodTo: string;
+      }>();
+      return Response.json({ analyses: results, deals: [], readOnly: false,
+        accessRole: "owner", projection: "summary" });
+    }
     await ensureSchema(db);
     if (user.isAdmin) await db.batch([
       db.prepare("UPDATE analyses SET owner_email = ? WHERE owner_email = ''").bind(user.email),

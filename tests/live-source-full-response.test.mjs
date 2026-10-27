@@ -75,7 +75,10 @@ function fixture(options={}){
  const observations=options.observations??[analysis.sourceManifest.bankStatements[0],bki,
   {sourceId:'external-bfo',sourceType:'BFO',status:'READY',periodFrom:'2025-01-01',periodTo:'2025-12-31'}];
  const canonical={model:reportFixture(),sourceObservations:observations.map(s=>({sourceId:s.sourceId,sourceType:s.sourceType,status:s.status,periodFrom:s.periodFrom??null,periodTo:s.periodTo??null,receivedAt:s.receivedAt??'2026-10-26'})),
-  prescoreIndex:{value:null},financingReadiness:{level:'UNKNOWN'},creditAssessment:{},debtCapacity:{},productSelection:{},recommendationSet:{},actionPlan:{},explainability:{}};
+  prescoreIndex:{value:null,coverage:{components:[
+   {component:'LEGAL_CORPORATE',state:'INSUFFICIENT',missingFactCodes:['LEGAL_LIFECYCLE']},
+   {component:'OPERATING_BEHAVIOR',state:'LIMITED',missingFactCodes:['BANK_OPERATING_TREND']},
+  ]}},financingReadiness:{level:'UNKNOWN'},creditAssessment:{},debtCapacity:{},productSelection:{},recommendationSet:{},actionPlan:{},explainability:{}};
  let engineCalls=0;
  const load=loader({
   './financing-request.ts':{savedCanonicalInput:(analysis,companyProfile)=>({analysis,companyProfile})},
@@ -140,6 +143,8 @@ for(const group of ['constraints','limitations','dataQuality'])test('Conclusion 
  assert.match(output,/Для уточнения готовности проверьте связанный источник/);
  assert.ok(expand(view).some(n=>n?.props?.['data-claims']==='claim-1'));
  assert.equal(JSON.stringify(m),before);assert.equal(m.full.canonical.prescoreIndex.value,null);
+  assert.match(output,/Не подтверждён юридический статус компании/);
+  assert.match(output,/Не подтверждена динамика банковского оборота/);
 });
 test('unrelated constraint and its explicit zero remain untouched',async()=>{
  const f=fixture(),m=await f.run();Object.assign(m.full.report.readiness.constraints[0],{title:'Подтверждённая просрочка 0 ₽',text:'Отчёт на 02.08.2026'});

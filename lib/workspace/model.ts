@@ -85,6 +85,7 @@ export type WorkspaceModelV1 = {
   basic: WorkspaceBasicV1;
   fullAvailability: WorkspaceAvailabilityV1;
   full?: {
+    policyRequirements?: { debtCapacityMinFullMonths: number };
     report: import("../credit-engine/contracts/client-report.ts").ClientReportModelV1;
     canonical: {
       prescoreIndex: import("../credit-engine/production/orchestrator.ts").CanonicalCreditAnalysisV1["prescoreIndex"];
