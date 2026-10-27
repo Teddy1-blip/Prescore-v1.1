@@ -14,39 +14,39 @@ Updated 2026-10-27. Scope: existing recovery branch; no production, database, DN
 - All five failures reproduced locally in `tests/live-source-full-response.test.mjs`: `TypeError: Cannot read properties of undefined (reading 'components')` at `IndexEvidenceGaps`. The isolated service stub supplied only `prescoreIndex: {value:null}`; the real required Index contract includes coverage. Fixture now supplies legal/operating missing facts; assertions additionally require both explanations. No production fallback, scoring change, skip, or Golden update.
 - Node 24.22.1, npm 11.9.0: clean `npm ci` PASS (473 packages); `npm run typecheck` PASS (0 diagnostics).
 - Targeted packet checks: 30 PASS / 0 FAIL / 0 skipped across full-source-response, quick-entry authorization, coverage guidance and preserved public financing.
-- Initial full regression was superseded by the reproduced defects below; no complete PASS is claimed. The packet 2 full run was locally stopped after another reproduced defect; no Amvera build was cancelled. A clean build and the unchanged full gate were then started for packet 3.
+- Initial full regression was superseded by the reproduced defects below; no complete PASS is claimed. The packet 2 full run was locally stopped after another reproduced defect; no Amvera build was cancelled. A clean build and the unchanged full gate subsequently passed for packet 3; final evidence is below.
 - Local Next build compiled and generated routes but returned exit 1 with `SecurityFatalError` for Next 16.4.0. This is NOT build PASS; dependency advisory was subsequently verified and addressed in packet 2. Docker executable is unavailable locally. Required Docker/recovery gates are unchanged.
 
 ## Status rules
 
-PASS means the named layer was executed and checked on the integrated candidate, not merely found in source. Tests PASS here is narrowly the packet 2 integrated B/provenance checks described below, not completion of every block acceptance criterion. Engine/canonical remain PARTIAL until the complete suite and source-to-route gates finish. BLOCKED means verification/input/environment is outstanding. PARTIAL identifies an evidenced missing integration. No live acceptance is inherited from old documents or an older active revision.
+PASS means the named layer was executed and checked on the integrated candidate, not merely found in source. Engine/canonical/tests PASS below refers to the completed 6,754-test regression, 24 business cases and isolated B/handler checks on code candidate 88966d3. It is bounded by those supported formats and synthetic cases, not proof of every possible real document or live workflow. API PASS means actual handler/permission tests, with synthetic auth identities and isolated PGlite. CLIENT/BROKER/Report cells remain BLOCKED for browser/visual acceptance even where static renders pass. AI PASS is the deterministic provider-free and mocked-provider contract only. BLOCKED means verification/input/environment is outstanding. PARTIAL identifies an evidenced missing integration. No live acceptance is inherited from old documents or an older active revision.
 
 | Block | Engine | Canonical | API | CLIENT | BROKER | Report/AI | Tests | Live |
 |---|---|---|---|---|---|---|---|---|
-| 01 Source Integrity | PARTIAL | PARTIAL | BLOCKED | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
-| 02 Normalization | PARTIAL | PARTIAL | BLOCKED | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
-| 03 Classification | PARTIAL | PARTIAL | BLOCKED | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
-| 04 Banking Metrics | PARTIAL | PARTIAL | BLOCKED | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
-| 05 Financial Analysis | PARTIAL | PARTIAL | BLOCKED | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
-| 06 Reconciliation | PARTIAL | PARTIAL | BLOCKED | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
-| 6.5 Credit Portfolio Foundation | BLOCKED | BLOCKED | BLOCKED | PARTIAL | PARTIAL | BLOCKED | BLOCKED | BLOCKED |
-| 07 Risk / Stops | PARTIAL | PARTIAL | BLOCKED | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
+| 01 Source Integrity | PASS | PASS | PARTIAL | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
+| 02 Normalization | PASS | PASS | PASS | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
+| 03 Classification | PASS | PASS | PASS | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
+| 04 Banking Metrics | PASS | PASS | PASS | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
+| 05 Financial Analysis | PASS | PASS | PASS | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
+| 06 Reconciliation | PASS | PASS | PASS | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
+| 6.5 Credit Portfolio Foundation | PASS | PASS | PASS | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
+| 07 Risk / Stops | PASS | PASS | PARTIAL | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
 | 08 Credit Lab | PASS | NOT_APPLICABLE | NOT_APPLICABLE | NOT_APPLICABLE | NOT_APPLICABLE | NOT_APPLICABLE | PASS | NOT_APPLICABLE |
-| 09 Context | PARTIAL | PARTIAL | PARTIAL | PARTIAL | BLOCKED | BLOCKED | PASS | BLOCKED |
-| 10 Prescore Index | PARTIAL | PARTIAL | BLOCKED | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
-| 11 Financing Readiness | PARTIAL | PARTIAL | PARTIAL | PARTIAL | BLOCKED | BLOCKED | PASS | BLOCKED |
-| 12 Credit Assessment | PARTIAL | PARTIAL | BLOCKED | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
-| 13 Debt Capacity | PARTIAL | PARTIAL | BLOCKED | PARTIAL | PARTIAL | BLOCKED | PASS | BLOCKED |
-| 14 Product Selection | PARTIAL | PARTIAL | BLOCKED | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
-| 15 Recommendations | PARTIAL | PARTIAL | BLOCKED | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
-| 16 Action Plan | PARTIAL | PARTIAL | BLOCKED | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
-| 17 Explainability | PARTIAL | PARTIAL | BLOCKED | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
-| 18 Client Report | PARTIAL | PARTIAL | BLOCKED | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
-| 19 AI Analyst | BLOCKED | BLOCKED | BLOCKED | BLOCKED | BLOCKED | BLOCKED | BLOCKED | BLOCKED |
+| 09 Context | PASS | PASS | PASS | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
+| 10 Prescore Index | PASS | PASS | PARTIAL | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
+| 11 Financing Readiness | PASS | PASS | PASS | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
+| 12 Credit Assessment | PASS | PASS | PASS | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
+| 13 Debt Capacity | PASS | PASS | PASS | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
+| 14 Product Selection | PASS | PASS | PASS | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
+| 15 Recommendations | PASS | PASS | PASS | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
+| 16 Action Plan | PASS | PASS | PASS | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
+| 17 Explainability | PASS | PASS | PASS | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
+| 18 Client Report | PASS | PASS | PASS | BLOCKED | BLOCKED | BLOCKED | PASS | BLOCKED |
+| 19 AI Analyst | PASS | PASS | PASS | BLOCKED | BLOCKED | PASS | PASS | BLOCKED |
 
 ## Exact verification seams and exit criteria
 
-All BLOCKED engine/canonical/test cells below require the current serial suite plus sufficient and insufficient synthetic integration scenarios; all API/UI/BROKER cells require real authorized route/component acceptance and role isolation. Every Live cell requires a successfully identified candidate, real HTTP health/ready, and authorized browser verification. An unchanged old deployment does not satisfy them.
+Engine/canonical/test gates now pass for the stated synthetic and supported-source scope. API PARTIAL for 01/07/10 identifies the missing trusted provider-independent legal-document intake, not a failing current Checko/profile adapter. UI/BROKER/Report BLOCKED cells require an available real browser and visual/ordinary-role acceptance, beyond tested static renders and handler role isolation. Every Live cell requires a successfully identified candidate, real HTTP health/ready, and authorized browser verification. An unchanged old deployment does not satisfy them.
 
 | Blocks | Existing locations / outstanding criterion |
 |---|---|
@@ -115,7 +115,7 @@ Parent packet 2: `860e977836faab3c9f05330cd17ca67b3c1fb726`, tree `92c0f93709fdc
 
 `canonicalAsOf` now considers `financingRequestV1.receivedAt`, a saved observation date. It does not consult the wall clock, rewrite any source date, extend history, or refresh a debt balance. Regression demonstrates 02.07 declaration against 30.06 sources: all five CLIENT_DECLARED facts are DEFINED, full history remains 12 months, the 15.07 scheduled payment remains 100,000, and 1,500,000 principal stays dated evidence while current principal is UNKNOWN/null. Invalid receipt dates are rejected. Repeated builds of the same input are identical.
 
-Targeted integration B + unchanged provenance/fingerprints + real financing persistence: **31 PASS / 0 FAIL / 0 skipped**. Fresh typecheck and Next standalone build PASS. The full unmodified recovery-build-gate is running after that build; result must be recorded before any staging consideration.
+Targeted integration B + unchanged provenance/fingerprints + real financing persistence: **31 PASS / 0 FAIL / 0 skipped**. Fresh typecheck and Next standalone build PASS. The full unmodified recovery-build-gate subsequently passed after that build; final evidence is below.
 
 An additional read of real API handlers in isolated PGlite used synthetic B only. CLIENT, assigned BROKER and ADMIN canonical and report objects were identical; BROKER/ADMIN readonly flags true; stranger received HTTP 404. This exercises handler/permission integration, not production login or live authorization.
 
@@ -129,4 +129,45 @@ An additional read of real API handlers in isolated PGlite used synthetic B only
 
 No before/after performance improvement is claimed. Service still builds canonical results after each authorized FULL read; use-model binds fetching to analysis/revision/endpoint rather than section selection. A future result cache cannot be keyed only by analysis ID: it must include actual current source/profile/declaration content and policy versions, while authorization and entitlement must still run on every read. No cache was introduced without invalidation and browser evidence. Time to visible UI, section latency, network request count and real client-file parsing remain BLOCKED by browser/input availability.
 
-Next concrete operation: record the final mandatory gate result and exact candidate SHA. Mandatory Docker and real browser/live acceptance remain open; do not turn them into PASS or promote by bypassing them.
+Mandatory Docker and real browser/live acceptance remain open; do not turn them into PASS or promote by bypassing them.
+
+## Final local gate evidence and delivery state
+
+Test subject: recovery code commit **`88966d3ce75e6c53cea358d0a7973b4c772df852`**, exact tree **`55095af98e45776b18ed1961c2960b07fb7f2b4a`**. Local index matched that tree and worktree was clean before recording this result. This subsequent ledger-only commit does not change executable code; the tests are attributed to 88966d3, not silently relabeled to another SHA.
+
+Environment: Node 24.22.1 / npm 11.9.0. Docker's Node 22 image was NOT executed locally.
+
+| Mandatory command/stage | Observed result |
+|---|---|
+| npm ci | PASS, 473 packages, dependency lock unchanged during final build/gate |
+| npm run typecheck | PASS, no TypeScript diagnostics |
+| npm run build | PASS, Next 16.4.1 webpack and standalone routes |
+| node scripts/release/package-runtime.mjs | PASS |
+| node scripts/qa/recovery-build-gate.mjs --build-only | PASS, exit 0, all five mandatory stages |
+| Full serial tests, concurrency 1 | 6,754 PASS / 0 FAIL / 0 skipped; 837,297 ms |
+| Credit Lab business | 24 cases / 24 returned models / 24 PASS / 0 FAIL; original corpus/fingerprints unchanged |
+| npm run lint | PASS, exit 0 |
+| validate:artifact | VALID; standalone true; 12 runtime assets; schema 0009_analysis_archive.sql |
+| PDF artifact smoke | PASS: DOMMatrix, native canvas, worker and text extraction |
+| Docker build/runtime checks | BLOCKED: no Docker executable |
+| Applicable scripts/qa browser suites | BLOCKED: no Chromium binary; standard install downloaded an invalid ZIP |
+| Visual PDF pagination / long-table review | BLOCKED: extraction smoke is not visual report acceptance |
+| New candidate Amvera / health / ready / QA A | BLOCKED: candidate not promoted, no new-version HTTP/browser proof |
+
+Final build-verification manifest: version PRESCORE-RECOVERY-BUILD-GATE-1; scope BUILD_REGRESSION_ONLY; status PASSED; REGRESSION/CREDIT_LAB/LINT/ARTIFACT/PDF_RUNTIME each exit 0. It explicitly retains browserAccepted=false and liveAccepted=false. Lock SHA-256: `8fc1937ff193da2f1cd7504442f2dd64e44559306a0f77d2775af83e17f9deb1`.
+
+The first complete regression also passed 6,754/6,754 (877,588 ms), but its following Credit Lab command failed before calculations with EEXIST at scripts/credit-lab-business.mjs:7:84: the output directory already existed. That FAILED result was not called PASS. The previous local output and failed manifest were preserved separately, then the **entire unchanged gate** was rerun once with a fresh output directory. No check was skipped, no gate code altered, and no Amvera build restarted or cancelled.
+
+Latest checked GitHub staging remains `783bfdf9977d6a1aaa899cddcb757ffc637df4b6`; product remains `e798d4654f2b0cf7eb96b291ff2c6135c84dcfa8`. Last observed active Amvera revision is `574c42b929b3116dac4bf3b99ec012d9d0aa60ba`; observed failed build a02e4c6 is described above. No newer activation is claimed. No Actions, staging push, production/DNS/configuration change or live database write was performed. QA A was preserved.
+
+The current implementation already warns above “Добавить в досье” and after saving that attachments do not enter the credit calculation automatically. This was checked in source/static coverage; its appearance in a live browser remains unverified. The original owner's real statement file was not available, so synthetic 1C/PDF test success does not establish support for that specific file or arbitrary bank PDF/XLSX formats.
+
+Remaining execution, in order: obtain the existing permitted Docker/browser execution environment; run unchanged Docker build and applicable CLIENT/BROKER/ADMIN/print browser suites on the exact candidate; implement and test the trusted legal intake described below without overwriting QA A; reassess all gates if code changes; then prepare one reviewed staging candidate, prove GitHub-to-Amvera source identity, obtain real health/ready and ordinary-role E2E evidence. Only after those gates is there a basis for a separate commercial/production decision. Real payments, production domain and external paid providers remain outside this delivery.
+
+## Provider-independent legal lifecycle: verified source and remaining implementation
+
+Official FNS service documentation, checked 2026-10-27: https://egrul.nalog.ru/about.html and https://www.nalog.gov.ru/rn77/related_activities/registries/egrul_egrip/ . FNS supplies a free electronic registry extract signed with a qualified electronic signature. This is a source option, not a claim that Prescore already verifies such PDFs.
+
+Engineering conclusion: existing `risk/adapters/legal.ts` accepts sourced CompanyProfileData with an applicable READY company envelope, matching INN, observation date/freshness and explicit source confidence. It does not require Checko as a provider; B proves the OTHER source seam offline. A production intake must verify the original document/signature or independently authenticated source, preserve original hash/issuer/effective and receipt dates, and project only explicitly established fields. A PDF's visual signature stamp or client-entered ACTIVE is insufficient. Unknown address, enforcement and other facts must remain unknown; a lifecycle extract does not establish that all other legal risks are absent.
+
+Concrete missing integration: a trusted intake/review path into the existing profile/source contract, including malformed/altered signature, foreign INN, stale/future observation, ambiguous/unsupported status and duplicate/replacement tests, then ordinary-role browser acceptance. Do not label an arbitrary attachment READY/HIGH or alter QA A. No new credit engine, commercial provider dependency or legal-status override was introduced.
