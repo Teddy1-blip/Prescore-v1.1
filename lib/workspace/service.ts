@@ -6,6 +6,7 @@ import type { AnalysisTier } from "../entitlements.ts";
 import type { ClientReportModelV1 } from "../credit-engine/contracts/client-report.ts";
 import { buildCanonicalCreditAnalysis, CanonicalUnavailable } from "../credit-engine/production/orchestrator.ts";
 import { publicCanonicalModel } from "../credit-engine/production/public-model.ts";
+import { DEBT_CAPACITY_POLICY } from "../credit-engine/debt-capacity/policy.ts";
 import type { ReportAccess } from "../credit-engine/production/report-service.ts";
 import { projectWorkspaceBasic, WORKSPACE_MODEL_V1, type WorkspaceAccessRoleV1, type WorkspaceModelV1, type WorkspaceOperationalInput } from "./model.ts";
 
@@ -125,6 +126,7 @@ export async function loadWorkspaceModelV1(analysisId: string, dependencies: Wor
       state: "READY_FULL",
       fullAvailability: "READY",
       full: {
+        policyRequirements: { debtCapacityMinFullMonths: DEBT_CAPACITY_POLICY.minimumFullMonthsForNumericCapacity },
         report,
         canonical: {
           prescoreIndex: canonical.prescoreIndex,

@@ -10,6 +10,7 @@ import {PublishedValue,label} from './credit-depth';
 import {BankingSnapshot} from './banking-ledger';
 import {ExplanationLibrary} from './explanation-library';
 import {publicText} from '../../../lib/credit-engine/client-report/copy';
+import {indexGapGuidance,capacityGapGuidance} from '../../../lib/workspace/credit-coverage-guidance';
 
 export function FinancingProducts({model,embedded=false,showHeading=true}:{model:WorkspaceModelV1;embedded?:boolean;showHeading?:boolean}){
  const r=model.full?.report;
@@ -53,6 +54,25 @@ export function DebtPortfolio({model,embedded=false}:{model:WorkspaceModelV1;emb
  </>;
 }
 
+
+function IndexEvidenceGaps({model}:{model:WorkspaceModelV1}){
+ const index=model.full?.canonical.prescoreIndex;
+ if(!index||index.value!==null)return null;
+ const gaps=indexGapGuidance(index.coverage.components);
+ if(!gaps.length)return null;
+ return <Panel title="Что мешает рассчитать Prescore Index">
+  <p className="pc-muted">Указаны фактически отсутствующие подтверждения из расчётной модели. Диагностические баллы компонентов не являются общим индексом.</p>
+  <ul>{gaps.map(g=><li key={g.component+g.factCode}><b>{g.component}: {g.label}.</b> {g.blocksNumericIndex?'Без этого подтверждения итоговый индекс не публикуется.':'Покрытие компонента ограничено, но это не самостоятельная блокировка общего индекса.'} {g.action}</li>)}</ul>
+ </Panel>;
+}
+function CapacityEvidenceGaps({model}:{model:WorkspaceModelV1}){
+ const full=model.full;
+ if(!full)return null;
+ const notes=capacityGapGuidance(full.canonical.debtCapacity,full.policyRequirements?.debtCapacityMinFullMonths);
+ if(!notes.length)return null;
+ return <Panel title="Основания и ограничения долговой ёмкости"><ul>{notes.map((note,i)=><li key={i}>{note}</li>)}</ul><p className="pc-muted">Долговые платежи по выписке и датированный платёж из БКИ — разные основания. Prescore не приравнивает неизвестный график к нулевому долгу.</p></Panel>;
+}
+
 export function FullCreditAnalysis({model,retry,initialSection='conclusion'}:{model:WorkspaceModelV1;retry:()=>void;initialSection?:string}){
  const [tab,setTab]=useState(()=>{
   const value=typeof window==='undefined'?initialSection:new URLSearchParams(window.location.search).get('section')||initialSection;
@@ -77,7 +97,7 @@ export function FullCreditAnalysis({model,retry,initialSection='conclusion'}:{mo
     <div><span className="pc-kicker">КРЕДИТНОЕ ЗАКЛЮЧЕНИЕ</span><h2>{r.hero.headline}</h2><p>{r.hero.summary}</p><div className="pc-statusline"><span className={'pc-badge'+(r.hero.globalStop?' critical':'')}>{r.hero.globalStop?'Есть критичное ограничение':'Критичного общего стоп-фактора нет'}</span><span className="pc-badge">{r.hero.confidence}</span></div></div>
     <aside><span>Ключевое ограничение</span><strong>{publicText(topConstraint?.title??'Отдельное ограничение не выделено')}</strong><small>{publicText(topConstraint?.text??'Проверьте комплект источников и готовность к финансированию.')}</small>{topConstraint&&<Why model={model} ids={[topConstraint.claimId]}/>}</aside>
    </section>
-   <BankingSnapshot model={model}/><CreditSummary model={model}/><AssessmentLimits model={model}/>
+   <BankingSnapshot model={model}/><CreditSummary model={model}/><AssessmentLimits model={model}/><IndexEvidenceGaps model={model}/>
    {model.full!.canonical.financingReadiness.level!=='UNKNOWN'&&<Panel title="Готовность к финансированию"><h3>{r.readiness.level}</h3><p>{r.readiness.text}</p><FactorRows model={model} items={r.readiness.constraints}/></Panel>}
    {expertise&&<Panel title="Экспертный разбор">
     <p className="pc-analysis-section-note">Факты и интерпретация разделены: сначала вывод, затем детали и подтверждения.</p>
@@ -86,11 +106,11 @@ export function FullCreditAnalysis({model,retry,initialSection='conclusion'}:{mo
   </>}
 
   {tab==='factors'&&<>
-   <Panel title="Prescore Index"><p>{r.index.status} · {r.index.confidence}</p><dl className="pc-definition">{r.index.components.map(c=><div key={c.id}><dt>{c.label}</dt><dd>{c.score.value===null?'Недостаточно данных':c.score.display} / {c.maximum.value===null?'—':c.maximum.display}<Why model={model} ids={[c.score.claimId]}/></dd></div>)}</dl></Panel>
+   <Panel title="Prescore Index"><p>{r.index.status} · {r.index.confidence}</p><dl className="pc-definition">{r.index.components.map(c=><div key={c.id}><dt>{c.label}</dt><dd>{c.score.value===null?'Недостаточно данных':c.score.display} / {c.maximum.value===null?'—':c.maximum.display}<Why model={model} ids={[c.score.claimId]}/></dd></div>)}</dl></Panel><IndexEvidenceGaps model={model}/>
    {([['Критичные ограничения',['critical']],['Требует внимания',['attention','data']],['Сильные стороны',['positive']],['Контекст оценки',['info','neutral']]] as Array<[string,string[]]>).map(([title,tones])=><Panel key={title} title={title}><FactorRows model={model} items={all.filter(f=>tones.includes(f.status.tone))}/></Panel>)}
   </>}
 
-  {tab==='capacity'&&<div className="pc-canonical av-report"><Financing model={r}/></div>}
+  {tab==='capacity'&&<><div className="pc-canonical av-report"><Financing model={r}/></div><CapacityEvidenceGaps model={model}/></>}
   {tab==='financials'&&<FinancialStatements model={model}/>}
   {tab==='obligations'&&<DebtPortfolio model={model} embedded/>}
   {tab==='financing'&&<FinancingProducts model={model} embedded/>}
