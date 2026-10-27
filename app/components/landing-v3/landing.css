@@ -1146,3 +1146,8 @@
 /* Isolate the public footer from the legacy global footer layout. */
 .l3-footer{display:block;background:var(--l3-background);color:var(--l3-abyss)}
 .l3-footer-bottom>span,.l3-brand-dot{font-size:inherit}
+
+/* Financing enquiry and financial-analysis actions: preserve the existing hero layout. */
+.l3-hero-ctas{display:flex;flex-direction:column;gap:10px;width:100%;min-width:0}
+.l3-hero-ctas .l3-button{width:100%;min-width:0;gap:12px}
+@media(min-width:601px) and (max-width:850px){.l3-hero-aside .l3-hero-ctas{width:45%;flex:0 0 auto}}
