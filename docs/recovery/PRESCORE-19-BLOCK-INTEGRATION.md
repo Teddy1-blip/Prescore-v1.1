@@ -10,6 +10,12 @@ Targeted command: `node --experimental-strip-types --test --test-concurrency=1 t
 
 AI reproductions: three isolated tests fail for cumulative-period meaning, past payment dating/basis and composite index/capacity coverage. Fix follows as a separate packet. Prior acceptance evidence below remains historical for its original code.
 
+Packet 2 (local explanations): prompt/context namespace now `PRESCORE-AI-ANALYST-CANONICAL-1.2`; no old messages rewritten. Bounded subtopics preserve the old primary-topic function and include debt/capacity in an index question. Safe allowlist adds reported period kind/flow/months, assessment/source/payment dates, canonical anchor basis and actual coverage/capacity diagnostics. Annual versus cumulative meaning, dated historical/UNKNOWN principal, dated overdue, past payment not proof of payment/default, observed versus contractual service, and published next action are rendered without recalculation or provider calls.
+
+`tests/ai-local-acceptance.test.mjs tests/ai-context.test.mjs`: **31/31 PASS**, including actual isolated API persistence/auth/provider-mock boundary and legacy conversation isolation; typecheck **0 diagnostics**. New test scenario explicitly uses existing `parseFinancialPeriod('за 6 месяцев 2026')` to obtain valid CUMULATIVE_YTD; legacy integration-b YTD fixture and all Golden remain unchanged. Replayed pre-fix AI against this valid scenario: all three annual/YTD/annualization explanations absent. Tests also vary period type/months, missing dates, evaluation date, zero/UNKNOWN and actual coverage while preserving the input model. This fixture is not the live saved analysis.
+
+Combined candidate still requires final build/regression/Credit Lab/lint/standalone/PDF-runtime gates and one staging delivery. Actual PDF export/visual and live AI answers are not yet accepted. No live messages, source writes, deployment or settings changes occurred during these local packets.
+
 ## Current packet — report, broker and local AI acceptance, 2026-10-28
 
 Continuation after [#11 comment 6463225892](https://github.com/Teddy1-blip/Prescore-v1.1/issues/11#issuecomment-6463225892). Working analysis **`36527dc1-d7db-4fef-bd47-719a451b4d58`**, ООО PRESCORE QA UPLOAD 20261028 SYNTHETIC, synthetic INN **9900002906**. QA A `992ab9e3-672e-4adf-955e-9a2c40e3ece3` was only selected read-only to check context separation; no message or source update was submitted there.

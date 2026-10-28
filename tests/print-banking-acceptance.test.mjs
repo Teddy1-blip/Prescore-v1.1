@@ -9,8 +9,12 @@ import {projectPrintBanking,printPeriod} from '../lib/workspace/print-banking.ts
 const workspace=await reportAcceptanceModel();
 const render=()=>renderToStaticMarkup(createElement(PrintReport,{model:workspace.full.report,banking:projectPrintBanking(workspace),realAnalysisId:workspace.analysisId})).replace(/\u00a0|\u202f/g,' ');
 test('reproduction: bank outflows have their own label, unit and period in actual PrintReport',()=>{
- const h=render();assert.match(h,/<tr[^>]*>[\s\S]*?Банковские списания[\s\S]*?10 320 000 ₽[\s\S]*?01\.07\.2025 — 30\.06\.2026[\s\S]*?<\/tr>/);
- assert.match(h,/<tr[^>]*>[\s\S]*?Остаток на конец периода[\s\S]*?11 680 000 ₽[\s\S]*?01\.07\.2025 — 30\.06\.2026[\s\S]*?<\/tr>/);
+ const h=render(),rows=h.match(/<tr[^>]*>[\s\S]*?<\/tr>/g);
+ for(const [label,value] of [['Банковские поступления','12 000 000 ₽'],['Банковские списания','10 320 000 ₽'],['Остаток на конец периода','11 680 000 ₽'],['Чистое движение средств','1 680 000 ₽']]){
+  const row=rows.find(r=>r.includes('>'+label+'<'));assert.ok(row,label);assert.ok(row.includes(value),label+' amount/unit');assert.ok(row.includes('01.07.2025 — 30.06.2026'),label+' own period');
+ }
+ assert.match(h,/Полных месяцев: 12/);
+ assert.ok(rows.filter(r=>r.includes('Банковские выписки')).some(r=>r.includes('01.07.2025 — 30.06.2026')),'bank source table owns its period');
 });
 test('reproduction: protected real print page exposes screen-only explicit print control',()=>{
  assert.match(render(),/Управление печатью/);assert.match(render(),/Печать \/ сохранить PDF/);
