@@ -1,8 +1,72 @@
 # Prescore 19-block integration — acceptance ledger
 
-Updated 2026-10-28. Current scope: ordinary upload acceptance in the existing staging account, followed by a documentation-only recovery update. The only application data writes were one new synthetic QA analysis and its four analytic sources through normal forms (including the normal related persistence/entitlement records). QA A `992ab9e3-672e-4adf-955e-9a2c40e3ece3` was not modified. No production, DNS, settings, roles, tariffs, secrets, manual SQL, migrations, deletion, archive, paid requests or new build.
+Updated 2026-10-28. Current packet is acceptance of the already-saved synthetic analysis: client/print report, permitted broker access and local AI. No implementation or deployment. Application writes in this packet are limited to three test questions and three answers in that analysis, with ordinary conversation/usage metadata. Previous upload evidence and its separately authorized source writes are preserved below.
 
-## Current packet — ordinary document upload acceptance, 2026-10-28
+## Current packet — report, broker and local AI acceptance, 2026-10-28
+
+Continuation after [#11 comment 6463225892](https://github.com/Teddy1-blip/Prescore-v1.1/issues/11#issuecomment-6463225892). Working analysis **`36527dc1-d7db-4fef-bd47-719a451b4d58`**, ООО PRESCORE QA UPLOAD 20261028 SYNTHETIC, synthetic INN **9900002906**. QA A `992ab9e3-672e-4adf-955e-9a2c40e3ece3` was only selected read-only to check context separation; no message or source update was submitted there.
+
+| Acceptance item | Status | Scope and evidence |
+| --- | --- | --- |
+| CLIENT_REPORT_PARITY | **FAIL — missing bank details in print report** | Company/INN, annual and interim figures, dated historical principal/current UNKNOWN, insufficient index/readiness/capacity, material limitations and Action Plan retain their meaning. However the ordinary linked print report omits bank outflow **10,320,000 RUB**, closing balance **11,680,000 RUB**, and bank start/period **01.07.2025–30.06.2026** that exist in the live API/client screen. The bank source row has an empty date cell. The 12,000,000 RUB visible in the financial appendix is BFO revenue, not proof of a displayed bank inflow total. |
+| PRINT_VIEW | **PASS — opening only** | The normal “Печать / PDF” link opened the authenticated product route `/dashboard/report-v2?analysisId=36527dc1-d7db-4fef-bd47-719a451b4d58&print=1`, for the correct saved company. Actual report, source appendix and actions rendered. This PASS does not certify a PDF, pagination or complete financial parity. |
+| PDF_EXPORT_AND_VISUAL | **BLOCKED** | This reachable print route exposes no save/print button: `ClientReportShell` renders `PrintControl` only when `!print`. One ordinary browser Ctrl+P attempt exposed no usable save-PDF/print-preview dialog or downloadable PDF in this cloud session. The supported browser API has no general PDF printing/export capability and native computer APIs are disabled. No alternate generated PDF, reconstructed HTML export, hidden browser/CDP method or old extraction smoke was substituted. **PDF file, page count and SHA-256: unavailable. All-page PDF visual inspection: not performed.** |
+| BROKER_PARITY_AND_ACCESS | **BLOCKED** | The available authorized session returns `access.role=OWNER`, `readOnly=false`. No separate existing ASSIGNED_BROKER session for this analysis was available. Assignment is not proved absent; it could not be tested under a broker actor. No /agent-owner view was counted as broker acceptance, no account/role/assignment was created or changed, and no mutation was attempted to test denial. |
+| AI_LOCAL_CONTEXT | **PARTIAL** | Existing GET returned available=true, mode=rules, providerConnected=false, promptVersion `PRESCORE-AI-ANALYST-CANONICAL-1.1`, zero initial messages. Source review proved that the POST cannot choose the external DeepSeek provider without the same key/model pair. Three normal UI questions produced three saved deterministic answers; subsequent GET remained rules/false and contained exactly six messages. Financial facts were not invented, but each answer misses part of the requested explanation; details below. Context switching and return preserved correct per-analysis history. |
+| FINANCIAL_SOURCES_UNCHANGED | **PASS — explicit before/after projection** | Fresh authorized workspace-model before and after the pass: exact equality of company/analysis period, full basic source summary, all bank facts/months, financial analysis/history, BKI portfolio, index value/status, capacity status/operating basis/headline and readiness status/level. Technical request/conversation timestamps were not treated as financial regressions. Four sources remain READY. |
+
+### Version, baseline and method
+
+Remote staging remained `48d3b7d79e90bd76079a1f21352c80bc844f9162`; recovery baseline for this documentation update is `8c99ffdc9cd2b09650aa61d8ec7b372f0b7ba9c1`. Latest issue comment at start was 6463225892. One fresh health GET completed **28.10.2026 12:37:32 MSK** (`2026-10-28T12:37:32.379969+03:00`), **HTTP 200 / 6021 ms**. Release `PRESCORE-V1-RC3-20261019`, schema `0009_analysis_archive.sql`, buildId `qrOQ6A71_FY67MFZVPx4C`, buildTimestamp `2026-10-27T20:34:25.026Z`.
+
+Packaged fingerprint unchanged: `ef11633a5b56cf8128eb50f4f0afecaaa10e0c1d97cf5a1ac4712a58f5c9ac6c`, scope `PRESCORE-SOURCE-INPUTS-1`, 702 files; lock `8fc1937ff193da2f1cd7504442f2dd64e44559306a0f77d2775af83e17f9deb1`. sourceSha/sourceTree UNKNOWN and running/published digest fields null remain separate limitations. Last independently verified active Amvera revision is `0fc268e4d611bb4bf5cc9bf4c29c762a095936c4` from the accepted earlier pass; old build logs/activation/ready were not re-audited or relabelled as freshly checked.
+
+This is manual browser Work acceptance against the live saved analysis, not a fixture/adaptor replay or an automated Playwright suite. Browser-rendered authorized API JSON was read via ordinary GET; no cookies, token export, raw DB access or fabricated payload. POST/API HTTP headers were not exposed by the available browser inspection, so no numeric status is invented for those requests.
+
+Baseline matched the preceding accepted controls:
+
+- Bank 01.07.2025–30.06.2026, 12 full months; inflow 12,000,000, outflow 10,320,000, ending balance 11,680,000 RUB. Operating basis 1,000,000 RUB.
+- Annual BFO 01.01–31.12.2025 / FULL_YEAR / 12 months: revenue 12,000,000, net profit 2,160,000 RUB.
+- Interim 01.01–30.06.2026 / CUMULATIVE_YTD / 6 months: revenue 6,000,000, net profit 1,080,000 RUB. These are separate periods, not comparable annual growth or automatic annualization.
+- BKI source date 30.06.2026: reportedPrincipal 1,500,000 RUB; payment/nextPayment 100,000 RUB; nextDate 15.07.2026. Current principal null/UNKNOWN as of 28.10.2026. The July payment date is in the past relative to assessment, not a new future payment.
+- Overall index null/INSUFFICIENT_DATA; readiness UNKNOWN/INSUFFICIENT_DATA; capacity INSUFFICIENT_DATA. Existing stale-source, unproven account coverage, unmatched-payment, unknown-principal/incomplete-schedule and LEGAL_LIFECYCLE limits remain. No expected values were changed to fit a different live result.
+
+### Report defect reproduction and bounded evidence
+
+1. Open the working saved analysis → “Анализ Prescore” → “Печать / PDF”.
+2. In the rendered print route, inspect “Данные и ограничения” / source table and source appendix.
+3. Expected: bank source retains its known period, and the report carries the checked bank totals/balance distinctly from accounting revenue.
+4. Actual: bank source date cell is blank; the rendered full report text (76,025 characters) contains neither bank-period start nor outflow/ending-balance values, including whitespace-normalized checks. The client Conclusion and live API retain them. This is an omission in report projection/display, not evidence that source data were lost.
+5. Financial appendix does show the two separate accounting periods and their exact revenue/profit, then historical principal 1,500,000 RUB on 30.06.2026 versus “Не определено” on the analysis date. It preserves the next-payment date as a dated source field; it is not accepted as a future commitment.
+6. Report retains 12 full months, operating bases 1,000,000 RUB, insufficient index/readiness/capacity, stale-source/unknown-principal/unmatched-payment explanations, recommendations and Action Plan counts **11 / 1 / 0** on 04.11 / 27.11 / 27.12.2026. No bank approval promise found.
+7. A separate visible HTML-print issue: the repeated footer disclaimer has dark text on a dark background. This observation concerns the web print view, not unproduced PDF pages.
+
+Safe image: [bank source has no period](evidence/2026-10-28-print-bank-period-missing.jpg). No input document or full payload is included.
+
+### Local AI: exact questions, bounded result and persistence
+
+Preflight checked `app/api/ai-analyst/route.ts`, `lib/ai/providers/index.ts` and `lib/platform/runtime.ts` for the accepted source scope. GET's key/model pair comes from process.env via getRuntime; POST's configuredProvider returns null when that pair is absent. Existing mode was rules before submission; no mode/config/key change or provider smoke request was made. All three questions were submitted through the ordinary UI on the working analysis:
+
+1. “Сопоставь годовую и промежуточную выручку и прибыль. Укажи периоды и объясни, почему это разные показатели”.
+   **Facts PASS, explanation PARTIAL:** correct 2025 revenue/profit 12,000,000 / 2,160,000 and 2026 Jan–Jun 6,000,000 / 1,080,000 RUB, with both date ranges. It lists facts but does not explain annual versus six-month cumulative comparability; generic repeated context text adds noise.
+2. “Какой остаток долга подтверждён сейчас? Чем он отличается от 1,5 млн рублей в отчёте БКИ? Актуален ли указанный следующий платёж?”
+   **Principal distinction PASS, payment currency PARTIAL:** current debt is not confirmed, historical 1,500,000 RUB explicitly tied to 30.06.2026. It does not include 15.07.2026 or assess that payment date's past/current status. It gives the canonical regular/near-term service anchors 100,000 RUB without explaining their distinction from the historical next-payment field; it does not explicitly call July a future date. Overdue 0 RUB is printed without its own source-date qualification in that line. No new current principal or approved limit is invented.
+3. “Почему общий индекс и долговая ёмкость не рассчитаны, хотя загружены четыре документа и есть 12 месяцев выписок? Каких подтверждений не хватает?”
+   **PARTIAL:** states index insufficient, then generic factors and caveats. It does not enumerate the actual missing BANK_OPERATING_TREND, BANK_TOP1, BANK_COVERAGE_ADEQUATE, BANK_DEBT_SERVICE_RATIO and LEGAL_LIFECYCLE facts, or the separate capacity coverage/staleness/portfolio constraints. It does not claim FNS alone would suffice. Existing keyword routing selects the index topic before debt; this is a diagnostic observation, not a code change.
+
+All responses remained within the selected synthetic snapshot: no other-company facts, newly calculated score, bank approval promise or declared current 1.5m debt. Generic labels and repeated “период не указан — не указан” remain in local AI source text; this does not undo the separately accepted linked Why dialog on QA A.
+
+One post-answer history GET returned visible infrastructure text: `upstream connect error or disconnect/reset before headers. reset reason: connection termination`. HTTP status was not exposed. One read-only retry succeeded, with rules/false and six messages; no POST was repeated. Switching the selector to QA A removed all six messages and displayed its own empty local conversation. No message was sent there. Switching back restored the same three questions/three answers. This checks per-analysis context in one owner session, not cross-user security.
+
+Safe image: [local AI answer and limitations](evidence/2026-10-28-ai-local-result.jpg). Exactly **3 user messages + 3 assistant messages** were observed persisted in the working synthetic analysis; the ordinary handler also maintains its conversation and three usage records. Usage metadata count is inferred from the successful handler path, not independently queried with SQL. No financial source or analysis parameter was edited.
+
+### Remaining next steps and boundaries
+
+Next implementation package, if authorized separately: restore missing bank totals/source period in the ordinary report; improve deterministic explanations of period comparability, past BKI payment dates and the actual index/capacity limitations. No fix or rebuild was attempted here. Genuine PDF export + all-page visual inspection still requires an available supported print/download path. Broker acceptance still requires an existing authorized ASSIGNED_BROKER session and effective assignment, without changing roles to manufacture a pass.
+
+No new uploads/analyses, source changes, code changes, deployments, manual SQL/migrations, role/settings changes, production, DNS, payment, FNS or external AI/Checko request. Documentation-only recovery evidence must not be transferred to staging. Full numeric scoring, trusted live legal intake, full imported-tree/running-digest identity and overall 19-block acceptance remain separate.
+
+## Previous accepted packet — ordinary document upload acceptance, 2026-10-28
 
 Continuation after [#11 comment 6460656372](https://github.com/Teddy1-blip/Prescore-v1.1/issues/11#issuecomment-6460656372). The preceding packet's build/activation, health/ready, source-input match, live Why and QA A control facts remain accepted in their verified scope. The historical RUNNING observations below are superseded by that terminal acceptance, not repeated here. Full imported-tree/running-container-digest identity remains a separate PARTIAL/BLOCKED release-ledger item.
 
