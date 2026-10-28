@@ -55,3 +55,10 @@
 .cr-source-appendix{max-width:1120px;margin:0 auto;padding:28px;background:#fff;color:#182d39;font:14px/1.5 Arial,sans-serif;overflow-wrap:anywhere}.cr-source-appendix section{margin:24px 0}.cr-source-appendix table{width:100%;border-collapse:collapse}.cr-source-appendix td,.cr-source-appendix th{padding:8px;border-bottom:1px solid #d9e1e6;text-align:left}.cr-source-appendix dl>div{display:grid;grid-template-columns:1fr 1fr;gap:12px;border-bottom:1px solid #d9e1e6;padding:8px 0}.cr-source-appendix dd{margin:0}.cr-source-appendix small{display:block;font-size:11px;color:#506574}@media print{.cr-source-appendix{break-before:page;padding:0}.cr-source-appendix tr,.cr-source-appendix dl>div{break-inside:avoid}}
 
 @media print{.cr-source-appendix .cr-credit-source{break-inside:avoid}}
+
+/* Protected print page: controls stay on screen, disclaimers retain contrast. */
+.cr-print-toolbar{display:flex;flex-wrap:wrap;gap:16px;align-items:center;padding:16px;background:#fff;color:#182d39;border-bottom:1px solid #ccd8df}
+.cr-print-toolbar a{color:#174c75}
+.cr-report .cr-footer{background:#fff;color:#243746}
+.cr-banking table{width:100%;table-layout:fixed;overflow-wrap:anywhere}
+@media print{.cr-print-toolbar{display:none!important}.cr-report .cr-footer{color:#000;background:#fff}.cr-banking thead{display:table-header-group}.cr-banking tr{break-inside:avoid}}

@@ -126,6 +126,8 @@ export async function loadWorkspaceModelV1(analysisId: string, dependencies: Wor
       state: "READY_FULL",
       fullAvailability: "READY",
       full: {
+        bankingSources: [...new Map(canonical.sourceObservations.filter(source=>source.sourceType==='BANK_STATEMENT').map(source=>[source.sourceId,source])).values()]
+          .map(source=>({sourceId:source.sourceId,periodFrom:source.periodFrom,periodTo:source.periodTo})),
         policyRequirements: { debtCapacityMinFullMonths: DEBT_CAPACITY_POLICY.minimumFullMonthsForNumericCapacity },
         report,
         canonical: {

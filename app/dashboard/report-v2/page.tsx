@@ -1,3 +1,4 @@
+import {projectPrintBanking} from '../../../lib/workspace/print-banking.ts';
 import {notFound, redirect} from 'next/navigation';
 import Link from 'next/link';
 import {AnalysisV3} from './analysis-v3.tsx';
@@ -31,7 +32,7 @@ export default async function ReportPage({searchParams}: {searchParams: Promise<
   if(result.state === 'NOT_FOUND') notFound();
   if('entitlement' in result && result.fullAvailability === 'LOCKED') return <main className="cr-report cr-state"><h1>Полный отчёт</h1><p>Для этой версии анализа требуется доступ FULL.</p><Link href={'/checkout?analysisId='+encodeURIComponent(query.analysisId)}>Открыть FULL</Link></main>;
   if(!('full' in result) || !result.full) return <main className="cr-report cr-state"><h1>Отчёт временно недоступен</h1><p>Сохранённые источники доступны в кабинете. Повторите открытие отчёта или проверьте состояние документов.</p><Link href={'/dashboard?analysisId='+encodeURIComponent(query.analysisId)}>Вернуться к анализу</Link></main>;
-  return <PrintReport model={result.full.report} realAnalysisId={query.analysisId}/>;
+  return <PrintReport model={result.full.report} banking={projectPrintBanking(result)} realAnalysisId={query.analysisId}/>;
  }
  // Separate synthetic branch: real analysisId always takes the protected path above.
  if (query.lab) {

@@ -87,6 +87,8 @@ export type WorkspaceModelV1 = {
   basic: WorkspaceBasicV1;
   fullAvailability: WorkspaceAvailabilityV1;
   full?: {
+    /** Source identity/period only; never exposed to BASIC or forwarded to the analyst. */
+    bankingSources?: Array<{sourceId:string;periodFrom:string|null;periodTo:string|null}>;
     policyRequirements?: { debtCapacityMinFullMonths: number };
     report: import("../credit-engine/contracts/client-report.ts").ClientReportModelV1;
     canonical: {

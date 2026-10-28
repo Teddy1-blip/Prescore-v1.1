@@ -1,0 +1,17 @@
+prescore-staging / Amvera account dorogovab — single observation
+GitHub staging: 48d3b7d79e90bd76079a1f21352c80bc844f9162
+Candidate tree: 05661a427d579add8eeee46341d930aa9c2c2536
+Amvera repository revision: 0fc268e4d611bb4bf5cc9bf4c29c762a095936c4
+Control Versions: 0c0b10ef2d9dcb98467011aa1ea94c58bd0aaf4c Built/Stored/Used.
+Application status: Выполняется сборка.
+One query: build log, last 30 minutes, limit 2000, stream OFF.
+Selected literal lines from the captured 43-line response (not a full log export):
+27/10/26 22:30:07 Cloning into '/git'...
+27/10/26 22:30:08 HEAD is now at 0fc268e Merge branch 'staging' of https://github.com/Teddy1-blip/Prescore-v1.1.git
+27/10/26 22:30:20 INFO [0009] RUN npm ci
+27/10/26 22:30:20 INFO [0010] Running: [/bin/sh -c npm ci]
+27/10/26 22:30:43 Container builder is still running.
+Last confirmed stage: npm ci. Terminal result/exit code: unavailable, RUNNING.
+UI timestamps preserved literally; timezone not independently established.
+No repeated query, restart, cancellation, manual build, new delivery or data mutation.
+No new-candidate activation, health/ready, Why UI or running digest PASS is claimed.
