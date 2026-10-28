@@ -30,12 +30,13 @@ test('projection preserves exact facts, zero/unknown and input, without leaking 
  const rows=html.match(/<tr[^>]*>[\s\S]*?<\/tr>/g);assert.match(rows.find(r=>r.includes('Банковские списания')),/Не определено/);
  m.entitlement='BASIC';assert.equal(projectPrintBanking(m),null);
  const basic=structuredClone(workspace.full.report);basic.meta.entitlement='BASIC';assert.doesNotMatch(renderToStaticMarkup(createElement(PrintReport,{model:basic,banking:p})),/Банковские списания|11.?680.?000/);
+ assert.ok(m.basic.sources.availability.every(s=>!('sourceId' in s)),'common source-list contract unchanged');
  assert.equal('payload' in p,false);assert.equal('analysisId' in p,false);
 });
 test('bank source dates join actual identifiers and preserve multiple source periods',()=>{
- const m=structuredClone(workspace),bank=m.basic.sources.availability.find(s=>s.source==='BANK_STATEMENTS');
+ const m=structuredClone(workspace),bank=m.full.bankingSources[0];
  const p=projectPrintBanking(m);assert.ok(Object.values(p.sourcePeriods).flat().includes('01.07.2025 — 30.06.2026'));
- m.basic.sources.availability.push({...bank,sourceId:'second-bank',periodFrom:'2024-01-01',periodTo:'2024-12-31'});
+ m.full.bankingSources.push({...bank,sourceId:'second-bank',periodFrom:'2024-01-01',periodTo:'2024-12-31'});
  const ref=m.full.canonical.explainability.sourceReferences.find(r=>r.sourceKind==='BANK_STATEMENT');ref.sourceIds.push('second-bank');
  const both=Object.values(projectPrintBanking(m).sourcePeriods).flat();assert.ok(both.includes('01.01.2024 — 31.12.2024'));assert.ok(both.includes('01.07.2025 — 30.06.2026'));
  for(const r of m.full.canonical.explainability.sourceReferences)if(r.sourceKind==='BANK_STATEMENT')r.sourceIds=['unrelated'];

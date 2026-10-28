@@ -41,7 +41,7 @@ export type WorkspaceBasicV1 = {
     statements: { status: SourceStatus | "UNKNOWN"; count: number | null; bankNames: string[] | null; accountCount: number | null; periodFrom: string | null; periodTo: string | null };
     completeness: number | null;
     missingSources: string[] | null;
-    availability: Array<{ sourceId?: string; source: string; status: SourceStatus | "UNKNOWN"; periodFrom: string | null; periodTo: string | null; reportDate?: string | null }>;
+    availability: Array<{ source: string; status: SourceStatus | "UNKNOWN"; periodFrom: string | null; periodTo: string | null; reportDate?: string | null }>;
   };
   bankingFacts: {
     grossInflow: WorkspaceFactV1;
@@ -87,6 +87,8 @@ export type WorkspaceModelV1 = {
   basic: WorkspaceBasicV1;
   fullAvailability: WorkspaceAvailabilityV1;
   full?: {
+    /** Source identity/period only; never exposed to BASIC or forwarded to the analyst. */
+    bankingSources?: Array<{sourceId:string;periodFrom:string|null;periodTo:string|null}>;
     policyRequirements?: { debtCapacityMinFullMonths: number };
     report: import("../credit-engine/contracts/client-report.ts").ClientReportModelV1;
     canonical: {

@@ -18,8 +18,8 @@ export function printPeriod(from:string|null|undefined,to:string|null|undefined)
  * Source dates require exact manifest sourceId -> canonical reference -> report group identity. */
 export function projectPrintBanking(model:WorkspaceModelV1):PrintBankingV1|null {
  if(model.entitlement!=='FULL'||model.state!=='READY_FULL'||model.fullAvailability!=='READY'||!model.full||model.full.report.meta.entitlement!=='FULL')return null;
- const b=model.basic, sources=b.sources.availability.filter(s=>s.source==='BANK_STATEMENTS');
- if(!sources.length)return null;
+ const b=model.basic, sources=model.full.bankingSources??[];
+ if(!b.sources.availability.some(s=>s.source==='BANK_STATEMENTS'))return null;
  const sourcePeriods:Record<string,string[]>={};
  for(const ref of model.full.canonical.explainability.sourceReferences){
   if(ref.sourceKind!=='BANK_STATEMENT'||!ref.sourceIds.length)continue;

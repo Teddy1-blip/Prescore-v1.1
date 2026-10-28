@@ -112,7 +112,6 @@ export async function loadWorkspaceModelV1(analysisId: string, dependencies: Wor
       // including cached company BFO. The saved bank-only manifest is not enough.
       basic: { ...basic, sources: { ...basic.sources, availability:
         [...new Map(canonical.sourceObservations.map(source => [source.sourceId, source])).values()].map(source => ({
-          sourceId: source.sourceId,
           source: source.sourceId.startsWith("client-request-") ? "CLIENT_DECLARATION" :
             ({ BANK_STATEMENT: "BANK_STATEMENTS", BFO: "FINANCIAL_STATEMENTS", QUARTERLY: "QUARTERLY_REPORT", BKI: "CREDIT_HISTORY" } as Record<string,string>)[source.sourceType] ?? "EXTERNAL_SOURCE",
           status: source.status, periodFrom: source.periodFrom, periodTo: source.periodTo,
@@ -127,6 +126,8 @@ export async function loadWorkspaceModelV1(analysisId: string, dependencies: Wor
       state: "READY_FULL",
       fullAvailability: "READY",
       full: {
+        bankingSources: [...new Map(canonical.sourceObservations.filter(source=>source.sourceType==='BANK_STATEMENT').map(source=>[source.sourceId,source])).values()]
+          .map(source=>({sourceId:source.sourceId,periodFrom:source.periodFrom,periodTo:source.periodTo})),
         policyRequirements: { debtCapacityMinFullMonths: DEBT_CAPACITY_POLICY.minimumFullMonthsForNumericCapacity },
         report,
         canonical: {

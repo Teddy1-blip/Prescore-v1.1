@@ -16,6 +16,12 @@ Packet 2 (local explanations): prompt/context namespace now `PRESCORE-AI-ANALYST
 
 Combined candidate still requires final build/regression/Credit Lab/lint/standalone/PDF-runtime gates and one staging delivery. Actual PDF export/visual and live AI answers are not yet accepted. No live messages, source writes, deployment or settings changes occurred during these local packets.
 
+### First full gate failure and source-contract correction
+
+Candidate `cf92291e7f10dafb1528be007609e7a710b71654`, tree `96b9873b497bb5e08794c9646490adeb75cbac16`: production build/typecheck and package-runtime passed, but full REGRESSION completed **6,794 PASS / 1 FAIL / 0 skipped** (6,795 total; 1,419,336.841079 ms), exit **1**. First/only failure: `tests/live-source-full-response.test.mjs:127`, `canonical sources remain authoritative and non-BKI rows keep their shape`, deep equality rejected the additional `sourceId: external-bfo` on a FINANCIAL_STATEMENTS row. Later gates correctly did not run. This candidate was never delivered to staging. Failed verification is preserved at `evidence/2026-10-28-print-ai-first-failed-gate.json`.
+
+Correction restores the exact common `basic.sources.availability` contract. Only FULL receives a separate narrow `bankingSources` array (sourceId and its own dates), copied from the same canonical source observations; print uses it for ID joins. BASIC and the analyst allowlist do not receive these IDs. The existing failing test and all Golden remain unchanged; the new print test also asserts unchanged common source rows. Targeted print + FULL response + AI context + local AI tests: **53/53 PASS**, 18,659.092621 ms; typecheck **0 diagnostics**. Mandatory full gates must run again on the corrected tree; no prior PASS is transferred to it. No staging/app data write occurred.
+
 ## Current packet — report, broker and local AI acceptance, 2026-10-28
 
 Continuation after [#11 comment 6463225892](https://github.com/Teddy1-blip/Prescore-v1.1/issues/11#issuecomment-6463225892). Working analysis **`36527dc1-d7db-4fef-bd47-719a451b4d58`**, ООО PRESCORE QA UPLOAD 20261028 SYNTHETIC, synthetic INN **9900002906**. QA A `992ab9e3-672e-4adf-955e-9a2c40e3ece3` was only selected read-only to check context separation; no message or source update was submitted there.
