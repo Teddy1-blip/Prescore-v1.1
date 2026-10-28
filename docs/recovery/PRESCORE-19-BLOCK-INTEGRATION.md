@@ -1,6 +1,37 @@
 # Prescore 19-block integration — acceptance ledger
 
-Updated 2026-10-28. Current packet is acceptance of the already-saved synthetic analysis: client/print report, permitted broker access and local AI. No implementation or deployment. Application writes in this packet are limited to three test questions and three answers in that analysis, with ordinary conversation/usage metadata. Previous upload evidence and its separately authorized source writes are preserved below.
+Updated 2026-10-28. Current packet: live acceptance of the already-delivered print/local-AI fixes on staging db33a762. No code or deployment change in this pass. Earlier implementation, failed gate, corrected final gates and historical acceptance evidence remain below.
+
+## Latest acceptance — db33a762 print/local AI, 2026-10-28
+
+Continuation after [#11 comment 6469622804](https://github.com/Teddy1-blip/Prescore-v1.1/issues/11#issuecomment-6469622804). Full bounded evidence: [live acceptance record](2026-10-28-PRINT-AI-LIVE-ACCEPTANCE.md).
+
+GitHub staging `db33a7624ea061879fe8e2efb32e0b58c75e4993`; tested recovery code `1d693c2ec6b48eb2273281d74e7fb5a8a6b24bd5`; GitHub tree `ba7c020f2a20b45e9462a0903b35ca4639eba83d`. Amvera success and active/used revision `2cbc84ddc51c9ebf199ad9360d8dce0e3c3e10b0`, previous 0fc268e4 no longer used. UI row date 28.10.2026 16:19; timezone not independently confirmed. No repeated build/restart/push/cancel.
+
+Fresh health/ready HTTP **200 / 200**, READY, measured 10,256 / 6,154 ms at 18:07:17 / 18:07:23 UTC. Release RC3, schema 0009. Packaged source fingerprint `80a9e0f06b05f2c4638f695c9f4a17aef41874663372e8de62cae63cfa5bc797`, scope `PRESCORE-SOURCE-INPUTS-1`, 707 files, lock `8fc1937ff193da2f1cd7504442f2dd64e44559306a0f77d2775af83e17f9deb1`: exact expected match. sourceSha/sourceTree UNKNOWN and image digests null remain separate **FULL_TREE_AND_RUNNING_DIGEST PARTIAL / TRACEABILITY_BLOCKED**; source-input match is not full-tree/image proof.
+
+| Item | Result | Evidence |
+| --- | --- | --- |
+| BUILD_AND_ACTIVATION | PASS | Success and used checks on new revision; previous revision not used; running 1/1. |
+| HEALTH_READY_AND_SOURCE_INPUTS | PASS | Fresh 200/200 READY, exact fingerprint/scope/count/lock match. |
+| PRINT_BANKING_PARITY | PASS | Ordinary “Печать / PDF” link opened the protected report for the working analysis; banking labels, RUB values and individual periods match the fresh workspace-model. Source table retains bank period. Accounting periods and historical/current debt remain separate. |
+| PRINT_CONTROL | PASS — screen control | Visible enabled “Печать / сохранить PDF” in “Управление печатью”; no automatic dialog on opening. Dark text now readable on white disclaimer background. This does not certify an exported PDF. |
+| PDF_EXPORT_AND_VISUAL | BLOCKED | One ordinary print-button click: no download within 12,000 ms, no exposed save/print dialog; cloud browser has no supported general product-page PDF export and native control is unavailable. No substituted PDF. File, page count and SHA-256 unavailable; zero PDF pages visually inspected. |
+| AI_PERIOD_EXPLANATION | PASS — requested meaning | New 1.2 answer gives annual 12 months versus actual six-month CUMULATIVE_YTD, exact revenue/profit/periods, and expressly rejects automatic annualization or treating half-year totals as equivalent annual deterioration. |
+| AI_DEBT_DATES_AND_BASIS | PASS | New answer separates current UNKNOWN from dated historical 1.5m, dates overdue zero to the source, identifies 15.07.2026 as past relative to explicit 28.10.2026 assessment, and says this proves neither payment nor default. Observed service is explicitly distinguished from a confirmed future schedule. |
+| AI_INDEX_AND_CAPACITY_LIMITATIONS | PASS — current-model reasons | Composite question includes both index and capacity, actual five missing fact codes in Russian, account coverage, freshness, unknown current principal, incomplete schedule and unmatched payments; 12 months/files do not establish sufficiency. No FNS-only or approval promise. |
+| FINANCIAL_SOURCES_UNCHANGED | PASS | Exact before/after equality of nine financial/source projection groups. All four sources remain READY; no analysis/source parameter change. |
+
+Working analysis `36527dc1-d7db-4fef-bd47-719a451b4d58`: bank 01.07.2025–30.06.2026, 12 full months, inflow 12,000,000 / outflow 10,320,000 / closing 11,680,000 / net 1,680,000 RUB all match their labelled print rows and periods. Opening remains UNKNOWN. Annual 2025 revenue/profit 12,000,000 / 2,160,000 and Jan–Jun 2026 cumulative 6,000,000 / 1,080,000 remain separate. Historical BKI 1,500,000 RUB on 30.06.2026 is not substituted for current UNKNOWN. No general index or capacity invented.
+
+AI preflight rules/false/1.2 with zero messages; three ordinary UI questions sent once, exactly six new messages read back in the new namespace. Old 1.1 messages untouched. Application writes: 3 user + 3 assistant messages, normal conversation metadata and three usage writes inferred from successful handler; no SQL verification claimed. QA A not modified or messaged. Financial/source projection (nine groups) identical before/after, SHA-256 `44b5c8e677ec08611cf15a9350835c1effc15b2a86b95047b4f577180936aeb8`; all four sources READY.
+
+Residual presentation issue: generic factor tails still repeat phrases, despite the three specific explanations now being correct; not claimed fixed. Actual PDF file/count/hash/all-page visual check remain BLOCKED after one ordinary button attempt. No alternative PDF generation. Broker/live legal/full numerical evaluation and missing image identity remain independent.
+
+Final local code evidence for 1d693c2 (recorded in 6469622804, not rerun here): typecheck/build PASS; targeted 53/53; regression **6795/6795, zero skipped**; Credit Lab **24/24**; lint, standalone and PDF runtime gate PASS. This supersedes the pending corrected-candidate gates below without erasing the first failed gate. No old SHA PASS is transferred to changed code.
+
+Safe evidence: [bank rows/disclaimer](evidence/2026-10-28-db33-print-banking.jpg), [print control](evidence/2026-10-28-db33-print-control.jpg), [new local limitations](evidence/2026-10-28-db33-ai-debt-capacity.jpg), [bounded JSON](evidence/2026-10-28-db33-acceptance-safe.json). Documentation-only recovery update; **do not merge this evidence commit into staging**. This pass does not close all 19 blocks.
+
 
 ## Implementation continuation after comment 6465853196 — 2026-10-28
 
@@ -22,7 +53,7 @@ Candidate `cf92291e7f10dafb1528be007609e7a710b71654`, tree `96b9873b497bb5e08794
 
 Correction restores the exact common `basic.sources.availability` contract. Only FULL receives a separate narrow `bankingSources` array (sourceId and its own dates), copied from the same canonical source observations; print uses it for ID joins. BASIC and the analyst allowlist do not receive these IDs. The existing failing test and all Golden remain unchanged; the new print test also asserts unchanged common source rows. Targeted print + FULL response + AI context + local AI tests: **53/53 PASS**, 18,659.092621 ms; typecheck **0 diagnostics**. Mandatory full gates must run again on the corrected tree; no prior PASS is transferred to it. No staging/app data write occurred.
 
-## Current packet — report, broker and local AI acceptance, 2026-10-28
+## Historical packet — report, broker and local AI acceptance before fixes, 2026-10-28
 
 Continuation after [#11 comment 6463225892](https://github.com/Teddy1-blip/Prescore-v1.1/issues/11#issuecomment-6463225892). Working analysis **`36527dc1-d7db-4fef-bd47-719a451b4d58`**, ООО PRESCORE QA UPLOAD 20261028 SYNTHETIC, synthetic INN **9900002906**. QA A `992ab9e3-672e-4adf-955e-9a2c40e3ece3` was only selected read-only to check context separation; no message or source update was submitted there.
 
