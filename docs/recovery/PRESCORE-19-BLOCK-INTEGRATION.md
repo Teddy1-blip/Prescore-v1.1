@@ -1,8 +1,62 @@
 # Prescore 19-block integration — acceptance ledger
 
-Updated 2026-10-27. Scope: existing recovery branch; no production, database, DNS, paid provider, webhook or configuration changes. QA A `992ab9e3-672e-4adf-955e-9a2c40e3ece3` remains unchanged.
+Updated 2026-10-28. Current scope: ordinary upload acceptance in the existing staging account, followed by a documentation-only recovery update. The only application data writes were one new synthetic QA analysis and its four analytic sources through normal forms (including the normal related persistence/entitlement records). QA A `992ab9e3-672e-4adf-955e-9a2c40e3ece3` was not modified. No production, DNS, settings, roles, tariffs, secrets, manual SQL, migrations, deletion, archive, paid requests or new build.
 
-## Current packet — linked Why evidence and packaged provenance
+## Current packet — ordinary document upload acceptance, 2026-10-28
+
+Continuation after [#11 comment 6460656372](https://github.com/Teddy1-blip/Prescore-v1.1/issues/11#issuecomment-6460656372). The preceding packet's build/activation, health/ready, source-input match, live Why and QA A control facts remain accepted in their verified scope. The historical RUNNING observations below are superseded by that terminal acceptance, not repeated here. Full imported-tree/running-container-digest identity remains a separate PARTIAL/BLOCKED release-ledger item.
+
+### Version and safe write boundary
+
+- At start and before this ledger update, staging remained `48d3b7d79e90bd76079a1f21352c80bc844f9162`; recovery remained `c1dd60c268d9598951688a26ad5008e20fa30807`. The latter is the parent baseline for this documentation-only update; it is not another staging delivery.
+- One fresh `GET /api/health` at `2026-10-28T06:59:04.076590Z`: HTTP 200, 4514 ms. Release `PRESCORE-V1-RC3-20261019`, schema `0009_analysis_archive.sql`, buildId `qrOQ6A71_FY67MFZVPx4C`, packaged buildTimestamp `2026-10-27T20:34:25.026Z`.
+- Same packaged source fingerprint `ef11633a5b56cf8128eb50f4f0afecaaa10e0c1d97cf5a1ac4712a58f5c9ac6c`, scope `PRESCORE-SOURCE-INPUTS-1`, 702 files; lock SHA-256 `8fc1937ff193da2f1cd7504442f2dd64e44559306a0f77d2775af83e17f9deb1`. sourceSha/sourceTree remain UNKNOWN, checkout UNAVAILABLE. No full-tree or running-digest assertion is added. Last independently confirmed active Amvera revision remains `0fc268e4d611bb4bf5cc9bf4c29c762a095936c4` from the prior pass; this pass did not repeat the build/version-control investigation or claim a fresh ready check.
+- Before the first write, the selected host and Amvera app were verified as `prescore-staging-dorogovab.msk1.amvera.tech` / `prescore-staging`. Existing non-secret configuration showed release-candidate mode and `PRESCORE_STAGING_FREE_FULL=1`; no change was made.
+- Source review found that ordinary bank acceptance automatically attempts the internal `/api/checko` route. All 16 staging variable names were inspected without revealing values: `CHECKO_API_KEY` is absent. The route returns before the external provider call without that key; Docker inputs exclude .env files. The UI subsequently reported that open data were unavailable while bank analysis was saved. Thus this flow includes an internal enrichment attempt but did not send the synthetic INN to Checko. No FNS request, AI message, external application, payment or email was initiated. Ordinary source handlers use local parsers.
+- New analysis: **`36527dc1-d7db-4fef-bd47-719a451b4d58`**, **ООО PRESCORE QA UPLOAD 20261028 SYNTHETIC**, synthetic INN **9900002906**. Existing authorized OWNER session, existing FULL entitlement. Opened documents without analysisId, saw an explicit selection/new-analysis prompt, then used “Новый анализ”. Exactly one bank submission created this analysis; three subsequent analytic source submissions extended the same analysis. No duplicate analysis, seed, API payload injection or “Добавить в досье” substitution.
+
+### Inputs fixed before upload
+
+Existing `tests/fixtures/integration-b` supplied the synthetic 12-month 1C data and accounting values; the prior synthetic corporate PDF layout supplied the BKI layout. Three real, text-readable PDFs were prepared with the same synthetic company, visually inspected and text-extracted before upload. Adapter-only JSON was not uploaded. No legal ACTIVE or legal source was fabricated.
+
+Before any live write, file hashes and independent controls were recorded. Bank expectations came from Python Decimal summation of raw 1C transactions; PDF expectations came from explicitly authored accounting rows and labelled BKI figures, not the Prescore parser or workspace-model under test. The pre-upload manifest is an immutable preparation snapshot, not a subsequent runtime PASS.
+
+| Uploaded file | Format / bytes | SHA-256 |
+| --- | --- | --- |
+| `01_bank_12m_synthetic.txt` | 1C TXT / 113054 | `ed2418cbd22c9225688b0164066edfb7a77503ea68518612fabc5ae8cfe78134` |
+| `02_bfo_2025_synthetic.pdf` | Text PDF / 27165 | `517c8b35878e5076f0b6a258ed4273db9249455e86ec21f60592d19b50188d48` |
+| `03_quarterly_6m_2026_synthetic.pdf` | Text PDF / 27188 | `ceb477ea3bd9956038974988d06a92d98a76535f882a7bf9713f6d0296b547a3` |
+| `04_bki_corporate_synthetic.pdf` | Text PDF / 27548 | `70af77a09c8ba82ea0ff3e1660b5d43b36f57ca8648ad13fd4dce5db5bec084c` |
+
+### Actual ordinary-form results
+
+PASS here means supported file → ordinary form → parsed/saved source → authorized workspace-model → screen → page reload, for this synthetic input only. This was a manual Work browser pass, not an automated Playwright suite. POST response status/timing/size were not exposed by this browser inspection; none is invented. Fresh standard workspace-model JSON and visible success/source states were read without publishing their full payloads. HTTP 200 above belongs only to the independently measured health request.
+
+| Source | Result | Independently expected and observed controls |
+| --- | --- | --- |
+| Bank statement | **PASS** | 01.07.2025–30.06.2026; 132 transactions; 12 full months. Inflow 12,000,000 RUB; outflow 10,320,000 RUB; net 1,680,000 RUB; closing 11,680,000 RUB from opening 10,000,000 RUB. Each month: inflow/operating basis 1,000,000 RUB, outflow 860,000 RUB, observed debt payments 100,000 RUB. UI “Обработан”, API bank source READY. Reload retained analysis, company, period and values. |
+| Annual BFO | **PASS** | 01.01.2025–31.12.2025, FULL_YEAR, 12 months, RUB scale 1. Revenue 12,000,000; net profit 2,160,000; assets 10,000,000; current assets 6,000,000; equity 5,000,000; current liabilities 3,000,000; working capital 3,000,000 RUB; current ratio 2. API annual source READY, source identity includes the uploaded file hash. Balance/income reconciled. UI values and period match; reload retained source. Bank facts remained equal to the prior fresh API snapshot. |
+| Interim / quarterly reporting | **PASS** | 01.01.2026–30.06.2026, INTERIM / CUMULATIVE_YTD, 6 months. Revenue 6,000,000; net profit 1,080,000 RUB; same explicit balance controls and current ratio 2. API source READY, hash-linked identity; annual and interim periods coexist without annualization or replacement. UI period/values match; reload retained both. Bank facts and existing annual history remained equal. |
+| Corporate BKI | **PASS** | One TERM_LOAN / FUNDED_DEBT obligation, report dated 30.06.2026. Historical reported principal 1,500,000 RUB; monthly/next payment 100,000 RUB, next date 15.07.2026; overdue 0 RUB **as of the report date**. UI separates report date from receipt 28.10.2026, displays the source size/limit 2,500,000 RUB, and explains incomplete/current-unknown schedule. Current principal remains null/UNKNOWN, not the historical amount or zero. API source READY; reload retained obligation and previous sources. |
+
+The source's labelled 2,500,000 RUB size/limit was displayed; no additional acceptance claim is made that this label proves a particular `originalAmount` contract. Period confidence from the authored preparation manifest is not runtime validation: parsed financial period confidence was MEDIUM and was not elevated to the author's HIGH annotation.
+
+Final reload and fresh workspace-model: same analysis/company; all four source statuses READY. Bank facts equal the bank baseline, the complete two-period financial history equals the pre-BKI snapshot, and BKI portfolio equals its pre-reload snapshot. The Financials screen retained both periods and their expanded control values; Obligations retained historical principal, dated payment and current-unknown explanation. Documents displayed all four “Обработан” rows with separate own periods/report date. Only derived analytic persistence is accepted here; this is not a claim that original PDF bytes were retained in the company dossier.
+
+### Exact remaining limits
+
+- Workspace state READY_FULL describes the available workspace/entitlement, **not** a sufficient numeric index. Overall index is null / INSUFFICIENT_DATA; readiness level UNKNOWN / INSUFFICIENT_DATA; capacity INSUFFICIENT_DATA with 12 full months.
+- Financial-strength component ADEQUATE, missing facts [].
+- OPERATING_BEHAVIOR INSUFFICIENT: missing `BANK_OPERATING_TREND`, `BANK_TOP1`, `BANK_COVERAGE_ADEQUATE`.
+- DEBT_CREDIT INSUFFICIENT: missing `BANK_DEBT_SERVICE_RATIO`.
+- LEGAL_CORPORATE INSUFFICIENT: missing `LEGAL_LIFECYCLE`.
+- Observed capacity limitations include `ACCOUNT_COVERAGE_NOT_PROVEN`, `ASSESSMENT_NOT_COMPLETE`, `CAPACITY_NOT_COMPLETE`, `COVERAGE_INSUFFICIENT`, `SOURCE_STALE`, `CTX-BKI-STALE_SUPPORTED`, `DEBT_PAYMENT_UNMATCHED`, `CTX-UNMATCHED-PAYMENTS_SUPPORTED`, `PORTFOLIO_OUTSTANDING_UNKNOWN`, `PORTFOLIO_SCHEDULE_INCOMPLETE`, `UNSPLIT_PAYMENT_NOT_PRINCIPAL_REDUCTION`; pre-calibration/shadow and not-bank-decision/product-recommendation caveats also remain. UI explains stale evidence, preserves history and does not turn an unknown schedule remainder into zero. Twelve full months do not by themselves prove current coverage or adequate index inputs.
+- No upload/parser/persistence/API-projection/display defect was found in the four tested supported synthetic files. This does not accept an unavailable problematic owner file, arbitrary PDFs/scans or other formats.
+- Live FNS / sufficient trusted legal intake remains **BLOCKED / separate**. No test transport, arbitrary PDF or ACTIVE substitution. Full-tree/running-digest identity, live BROKER, AI and generated visual PDF acceptance remain separate, as does the whole 19-block acceptance. The next product scenario is a genuinely supported, independently verified legal-source intake when its service/path is available; it must not be inferred from these uploads.
+
+Input documents, full payloads, cookies, tokens and personal documents are not published. The safe UI evidence shows only the synthetic analysis and its four processed sources. This ledger update is documentation only and must not be merged into staging as another delivery.
+
+## Historical packet — linked Why evidence and packaged provenance
 
 **Final local gate PASS; one staging delivery RUNNING.** Frozen code candidate `2aaf838cb8941754b59dda681f1d0e7ce8dea0e8`, tree `05661a427d579add8eeee46341d930aa9c2c2536`. Staging merge `48d3b7d79e90bd76079a1f21352c80bc844f9162` has exactly the same tree and parents `186706751b43798c53f59533628fcb6dcbb94482` / `2aaf838cb8941754b59dda681f1d0e7ce8dea0e8`. Heads and 17-path diff were rechecked before the single non-forced delivery; no independent changes were discarded. This subsequent ledger-only recovery commit is **not** the staging candidate.
 
