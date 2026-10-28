@@ -5,6 +5,7 @@ import {CLIENT_REPORT_POLICY,policyFingerprint,validateClientReportPolicy} from 
 import {COPY,CATEGORY_GROUP,clientText} from './copy.ts';
 import {allFactors,validateClientReportModel} from './validation.ts';
 export const displayId=(kind:string,key:string)=>id('view-'+kind,key).replaceAll(':','-');
+export const sourceGroup=(s:ClientReportInputV1['explainability']['sourceReferences'][number])=>displayId('source',stable([s.sourceKind,s.asOf,s.periodFrom,s.periodTo,s.confidence]));
 const BINDING_LABELS:Record<string,string>={BKI_HISTORY_DAYS:'Исторический максимум просрочки, дней',BKI_OVERDUE:'Текущая просроченная сумма',UNDISPUTED_OPERATING_SUBTOTAL:'Бесспорная часть операционных поступлений — не полный итог',INDEX_VALUE:'Prescore Index',scorePoints:'Баллы',maxPoints:'Максимум',finalPenalty:'Учтенное влияние факторов',HEADROOM_prudential:'Ежемесячный запас · осторожная граница',HEADROOM_maximumPolicy:'Верхняя граница модели',FULL_MONTH_COUNT:'Полных месяцев',centralOperatingBasis:'Основная операционная база',conservativeOperatingBasis:'Осторожная операционная база',OPERATING_BASIS:'Операционная база',ANCHOR:'Действующее обслуживание',PRUDENTIAL_20_PERCENT_CEILING:'Граница обслуживания 20%',MAXIMUM_25_PERCENT_CEILING:'Граница обслуживания 25%',annualRatePercent:'Ставка сценария',termMonths:'Срок сценария',prudentialMonthlyPaymentCapacity:'Платеж сценария · осторожный',maximumPolicyMonthlyPaymentCapacity:'Платеж сценария · верхняя граница',prudentialPrincipalEquivalent:'Сценарный эквивалент · осторожный',maximumPolicyPrincipalEquivalent:'Сценарный эквивалент · верхняя граница',requestedAmount:'Запрошенная сумма'};
 export function prepareInput(x:ClientReportInputV1){
  if(!validDate(x.asOfDate))throw Error('CLIENT_REPORT_INVALID_DATE');
@@ -16,7 +17,7 @@ export function prepareInput(x:ClientReportInputV1){
 export function buildClientReportModel(x:ClientReportInputV1,options:{entitlement:'FREE'|'FULL';mode?:ClientReportModelV1['meta']['mode'];policy?:ClientReportPolicyV1}):ClientReportModelV1 {
  prepareInput(x);const p=options.policy??CLIENT_REPORT_POLICY;validateClientReportPolicy(p);
  const e=x.explainability, claims=new Map(e.claims.map(c=>[c.claimId,c]));
- const sourceGroup=(s:typeof e.sourceReferences[number])=>displayId('source',stable([s.sourceKind,s.asOf,s.periodFrom,s.periodTo,s.confidence]));
+
  const sourceMap=new Map(e.sourceReferences.map(s=>[s.sourceReferenceId,sourceGroup(s)]));
  const byCode=(code:string)=>e.claims.find(c=>c.claimCode===code);
  const label=(code:string)=>p.statusDisplayMap[code]??'Требуется проверка';

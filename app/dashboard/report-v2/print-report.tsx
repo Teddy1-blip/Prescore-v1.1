@@ -1,3 +1,5 @@
+import type {PrintBankingV1} from '../../../lib/workspace/print-banking.ts';
+import {BankingAppendix} from './banking-appendix.tsx';
 import {publicText} from '../../../lib/credit-engine/client-report/copy.ts';
 import {SourceAppendix} from './source-appendix.tsx';
 import {ExpertiseMemo} from './expertise.tsx';
@@ -13,4 +15,9 @@ export function printPresentation(model:ClientReportModelV1):ClientReportModelV1
  return {...model,primaryFactors,contextHighlights,capacity,dataQuality,limitations,readiness,detailedSections};
 }
 // Same presentation model; no second analytical pipeline.
-export function PrintReport({model,realAnalysisId}:{model:ClientReportModelV1;realAnalysisId?:string}){return <><ClientReportShell model={printPresentation(model)} realAnalysisId={realAnalysisId} print/><SourceAppendix model={model}/><div className="ex-print"><ExpertiseMemo model={model} print/></div></>;}
+export function PrintReport({model,realAnalysisId,banking}:{model:ClientReportModelV1;realAnalysisId?:string;banking?:PrintBankingV1|null}){
+ const full=model.meta.entitlement==='FULL';
+ const presentation=printPresentation(model);
+ if(full&&banking)presentation.sources=presentation.sources.map(s=>({...s,period:banking.sourcePeriods[s.id]?.join('; ')??s.period}));
+ return <><ClientReportShell model={presentation} realAnalysisId={realAnalysisId} print/>{full&&banking&&<BankingAppendix banking={banking}/>}<SourceAppendix model={model}/><div className="ex-print"><ExpertiseMemo model={model} print/></div></>;
+}

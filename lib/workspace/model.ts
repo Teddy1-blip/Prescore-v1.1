@@ -41,7 +41,7 @@ export type WorkspaceBasicV1 = {
     statements: { status: SourceStatus | "UNKNOWN"; count: number | null; bankNames: string[] | null; accountCount: number | null; periodFrom: string | null; periodTo: string | null };
     completeness: number | null;
     missingSources: string[] | null;
-    availability: Array<{ source: string; status: SourceStatus | "UNKNOWN"; periodFrom: string | null; periodTo: string | null; reportDate?: string | null }>;
+    availability: Array<{ sourceId?: string; source: string; status: SourceStatus | "UNKNOWN"; periodFrom: string | null; periodTo: string | null; reportDate?: string | null }>;
   };
   bankingFacts: {
     grossInflow: WorkspaceFactV1;

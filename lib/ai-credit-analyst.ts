@@ -90,7 +90,7 @@ export function buildSanitizedCreditContext(question: string, model: WorkspaceMo
   const sections = topic === "index" ? ["PRESCORE_INDEX","PRIMARY_DRIVERS"] : topic === "debt" ? ["DEBT_CAPACITY","DATA_QUALITY"] : topic === "products" ? ["PRODUCT_FIT","FINANCING_READINESS"] : topic === "actions" ? ["ACTION_PLAN","RECOMMENDATIONS"] : topic === "readiness" ? ["FINANCING_READINESS","PRIMARY_DRIVERS"] : ["PRIMARY_DRIVERS","CONTEXT"];
   const context: CanonicalAnalystContextV1 = {
     version:"CanonicalAnalystContextV1",topic,period:{...model.basic.analysis.period},
-    sources:{completeness:model.basic.sources.completeness,availability:model.basic.sources.availability.map(x=>({...x}))},
+    sources:{completeness:model.basic.sources.completeness,availability:model.basic.sources.availability.map(x=>({source:x.source,status:x.status,periodFrom:x.periodFrom,periodTo:x.periodTo,...(x.reportDate!==undefined?{reportDate:x.reportDate}:{})}))},
     limitations:r.limitations.slice(0,6).map(factor), factors:r.primaryFactors.filter(x=>relevant(x.title+" "+x.text)).slice(0,6).map(factor),
     explanations:c.explainability.claims.filter(x=>sections.includes(x.section)&&!['INDEX_COMPONENT','INDEX_CONTRIBUTION'].includes(x.claimKind)&&relevant(x.titleRu+" "+x.textRu)).slice(0,8).map(x=>({title:text(x.titleRu),text:text(x.textRu),confidence:x.confidence,evidence:refs(x.sourceReferenceIds)})),
   };

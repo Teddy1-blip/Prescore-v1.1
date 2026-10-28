@@ -2,6 +2,14 @@
 
 Updated 2026-10-28. Current packet is acceptance of the already-saved synthetic analysis: client/print report, permitted broker access and local AI. No implementation or deployment. Application writes in this packet are limited to three test questions and three answers in that analysis, with ordinary conversation/usage metadata. Previous upload evidence and its separately authorized source writes are preserved below.
 
+## Implementation continuation after comment 6465853196 — 2026-10-28
+
+Packet 1 (print banking/control): reproduced both omissions against actual PrintReport (2 failed assertions, after fixing the test loader import order). Added a FULL-only narrow banking projection from the same authorized workspace, exact sourceId joins to canonical report source groups, metric-specific periods, observed amounts/units/statuses and explicit UNKNOWN opening balance. No financial calculation, source mutation, scoring or Golden edit. Screen-only explicit print control on the protected real-analysis page; no automatic print dialog; footer contrast fixed.
+
+Targeted command: `node --experimental-strip-types --test --test-concurrency=1 tests/print-banking-acceptance.test.mjs tests/client-report-visual-v1.test.mjs`: **22/22 PASS**. Covers labels/amounts/units/periods, known zero, UNKNOWN, multiple source periods, missing/unrelated IDs, absent bank data, immutable input and BASIC/FULL boundary. `npm run typecheck`: zero diagnostics. Local code checkpoint; new live acceptance NOT RUN. Installed Playwright Chromium executable absent; actual PDF export/page count/hash/all-page visual inspection remain BLOCKED pending a supported browser path. No app data written, no deployment performed at this checkpoint. Source IDs added only to authorized FULL availability; AI source allowlist deliberately strips them.
+
+AI reproductions: three isolated tests fail for cumulative-period meaning, past payment dating/basis and composite index/capacity coverage. Fix follows as a separate packet. Prior acceptance evidence below remains historical for its original code.
+
 ## Current packet — report, broker and local AI acceptance, 2026-10-28
 
 Continuation after [#11 comment 6463225892](https://github.com/Teddy1-blip/Prescore-v1.1/issues/11#issuecomment-6463225892). Working analysis **`36527dc1-d7db-4fef-bd47-719a451b4d58`**, ООО PRESCORE QA UPLOAD 20261028 SYNTHETIC, synthetic INN **9900002906**. QA A `992ab9e3-672e-4adf-955e-9a2c40e3ece3` was only selected read-only to check context separation; no message or source update was submitted there.
