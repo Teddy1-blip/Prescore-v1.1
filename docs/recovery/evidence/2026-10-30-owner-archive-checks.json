@@ -1,0 +1,101 @@
+{
+  "version": "PRESCORE-OWNER-ARCHIVE-CHECKS-1",
+  "recordedAt": "2026-10-30T15:18:37.891195+00:00",
+  "codeCandidate": "7701c98bc23966f5c833c985538ec59a8a4b4651",
+  "codeTree": "14716732d62757e3bcbaad761528d8e6f9d9749c",
+  "sourceInputs": {
+    "scope": "PRESCORE-SOURCE-INPUTS-1",
+    "sha256": "860c9101b6409ea0165323ba05a8ba7b52c108b732d26c890347c85a95080fff",
+    "fileCount": 708,
+    "lockSha256": "8fc1937ff193da2f1cd7504442f2dd64e44559306a0f77d2775af83e17f9deb1"
+  },
+  "nodeVersion": "v24.22.1",
+  "typecheckExit": 0,
+  "buildExit": 0,
+  "targeted": {
+    "passed": 46,
+    "failed": 0,
+    "skipped": 0
+  },
+  "correctedBaselineTest": {
+    "passed": 16,
+    "failed": 0,
+    "skipped": 0
+  },
+  "regression": {
+    "tests": 6802,
+    "passed": 6802,
+    "failed": 0,
+    "skipped": 0,
+    "durationMs": 802489.369314
+  },
+  "creditLab": {
+    "passed": 24,
+    "failed": 0
+  },
+  "gate": {
+    "version": "PRESCORE-RECOVERY-BUILD-GATE-1",
+    "lockSha256": "8fc1937ff193da2f1cd7504442f2dd64e44559306a0f77d2775af83e17f9deb1",
+    "scope": "BUILD_REGRESSION_ONLY",
+    "browserAccepted": false,
+    "liveAccepted": false,
+    "status": "PASSED",
+    "checks": [
+      {
+        "stage": "REGRESSION",
+        "status": "PASSED",
+        "exitCode": 0
+      },
+      {
+        "stage": "CREDIT_LAB",
+        "status": "PASSED",
+        "exitCode": 0
+      },
+      {
+        "stage": "LINT",
+        "status": "PASSED",
+        "exitCode": 0
+      },
+      {
+        "stage": "ARTIFACT",
+        "status": "PASSED",
+        "exitCode": 0
+      },
+      {
+        "stage": "PDF_RUNTIME",
+        "status": "PASSED",
+        "exitCode": 0
+      }
+    ]
+  },
+  "firstGate": {
+    "candidate": "d2280832b04e02223cb08f475c17966e61f74a5e",
+    "stage": "REGRESSION",
+    "exitCode": 1,
+    "passed": 6800,
+    "failed": 2,
+    "durationMs": 814501.716754,
+    "cause": "One existing Evidence child assertion plus its parent. Reproduced on unchanged recovery baseline; raw title expectation ignored published client copy. Only test corrected; report/engine/Golden unchanged."
+  },
+  "logSha256": {
+    "prescore-archive-red.log": "11bb44a949017da3fe135b2ccb44e08ced9b8709bb38f20e0e65c2c99cba39ac",
+    "prescore-archive-target-final.log": "5c05f5072c665f1fb65ee019d56ccd1c423a057e374543f78d4ea7eaa0a1d79d",
+    "prescore-archive-gate.log": "46d927813e59f2a1576bb07fe58d0fbaa61217cf116bcf69c43b7409375789c0",
+    "prescore-archive-evidence-baseline.log": "08e1d5ae53d9f9aea4368286c94ffc1d14a0495dd440984640159451de46fc3a",
+    "prescore-archive-evidence-fixed.log": "44a518e9733ee117383df4c608f7829dcc4ee9e683f95f52de6a349847903437",
+    "prescore-archive-build-final.log": "46d0ca8b74fd0eb1f6dbfffdad6a8d45967fab12a3a4301f394772e2ed5ceeea",
+    "prescore-archive-gate-final.log": "168f1663108380b93a7e506a8f0dadb36e8d9de453defbb601d85a365d72a6cf"
+  },
+  "live": {
+    "environment": "prescore-staging",
+    "readOnlyInventory": 14,
+    "proposedArchive": 11,
+    "protectedQA": 3,
+    "applicationsTotal": 0,
+    "archived": 0,
+    "sourceWrites": 0,
+    "deployed": false,
+    "afterArchiveBrowserAcceptance": "NOT_RUN_REQUIRES_OWNER_CONFIRMATION",
+    "screenshotAttachment": "BLOCKED_SHARED_FILE_SYNC"
+  }
+}

@@ -1,6 +1,21 @@
 # Prescore 19-block integration — acceptance ledger
 
-Updated 2026-10-28. Current packet: live acceptance of the already-delivered print/local-AI fixes on staging db33a762. No code or deployment change in this pass. Earlier implementation, failed gate, corrected final gates and historical acceptance evidence remain below.
+Updated 2026-10-30. Current packet: owner-only history archive, prepared in recovery; no live archive/deployment authorized yet. The accepted db33a762 print/local-AI results remain historical evidence for that code.
+
+## Owner-only history cleanup — 2026-10-30
+
+Evidence and exact inventory: [bounded implementation / operator record](2026-10-30-OWNER-HISTORY-ARCHIVE.md); [proposed 11-ID request](2026-10-30-OWNER-ARCHIVE-REQUEST.json). Existing recovery branch only; no new API/storage/migration and no change to the credit engine.
+
+| Check | Status | Evidence / boundary |
+|---|---|---|
+| LIVE_OWNER_INVENTORY | PASS — read-only | Real staging dashboard has 14 ACTIVE rows; authenticated admin metadata matches the same owner and IDs. Broker fields null, applications total 0 at observation. |
+| OWNER_ARCHIVE_IMPLEMENTATION | PASS — targeted local tests | Existing archive CLI now supports owner + exact IDs + protected QA + broker-link refusal; transactional revalidation and existing restore. Unowned/foreign rows cannot enter this owner plan. |
+| PERSONAL_HISTORY_AND_EMPTY_ENTRY | PASS — local / live after change pending | Summary is strictly owner-only, GET no longer auto-claims unassigned rows; cached removed model cannot populate the header; explicit “Создать новый анализ”. |
+| SOURCE_AND_QA_PRESERVATION | PASS — isolated local | Payload/documents/entitlements/owner unchanged; protected QA and foreign rows remain ACTIVE; archive and restore tested. Live QA not modified. |
+| LOCAL_CANDIDATE_GATES | PASS — final code `7701c98bc23966f5c833c985538ec59a8a4b4651` | Typecheck/build, 6802/6802 regression, Credit Lab 24/24, lint, standalone and PDF runtime exit 0. Targeted 46/46; corrected baseline test 16/16. First 6800/6802 failure and baseline reproduction retained in evidence; only test binding corrected, report/engine/Golden unchanged. Source fingerprint `860c9101b6409ea0165323ba05a8ba7b52c108b732d26c890347c85a95080fff`, 708 files, same lock. |
+| LIVE_ARCHIVE_AND_AFTER_RELOAD | BLOCKED — required owner confirmation | 0 live analyses changed. Exact 11-ID approval and separate staging-deployment authorization required. Three QA must remain ACTIVE/visible; literal empty history is not claimed. |
+
+No other 19-block acceptance status is changed by this package. Production, DNS, roles and financial sources remain outside its write scope.
 
 ## Latest acceptance — db33a762 print/local AI, 2026-10-28
 
