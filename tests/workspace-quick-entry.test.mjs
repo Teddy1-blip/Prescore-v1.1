@@ -41,10 +41,10 @@ test('summary has no anonymous access',async()=>{
  const response=await api.GET(new Request('http://example.test/api/workspace?projection=summary'));
  assert.equal(response.status,401);assert.equal(queries.length,0);
 });
-test('administrator summary remains read-only and includes legacy unassigned history',async()=>{
+test('administrator personal summary is read-only and excludes unassigned history',async()=>{
  const {db,queries}=fakeDb();const api=loadRoute({email:'admin@example.test',isAdmin:true},db);
  const response=await api.GET(new Request('http://example.test/api/workspace?projection=summary'));
  assert.equal(response.status,200);
- assert.match(queries[0],/owner_email = ''/);
+ assert.doesNotMatch(queries[0],/owner_email = ''/);
  assert.doesNotMatch(queries[0],/UPDATE|payload/i);
 });

@@ -218,3 +218,14 @@ test('read-only diagnostic does not expose mutation controls',()=>{
  assert.equal(named(tree,'SourceUpload').length,0);
  assert.equal(named(tree,'CompanyData').length,0);
 });
+
+test('removed or unselected analysis cannot leak a cached company into the header or sections',()=>{
+ for(const view of ['home','documents','analysis'])for(const selectedId of ['',company.id]){
+  const model=readyModel(),before=JSON.stringify(model),tree=harness({view,analyses:[],selectedId,model}).render();
+  const shell=named(tree,'ClientShell')[0];
+  assert.doesNotMatch(JSON.stringify(shell.props.context),/Owned company|9900000012/);
+  assert.doesNotMatch(text(tree),/Owned company|9900000012/);
+  assert.equal(named(tree,'DocumentSources').length,0);assert.equal(named(tree,'FullCreditAnalysis').length,0);
+  assert.equal(JSON.stringify(model),before);
+ }
+});

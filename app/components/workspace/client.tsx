@@ -41,7 +41,7 @@ export default function ClientWorkspace(){
  const [analyses,setAnalyses]=useState<StoredAnalysis[]>([]),[deals,setDeals]=useState<Deal[]>([]),[selectedId,setSelectedId]=useState(''),[view,setView]=useState('home'),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState(''),[readOnly,setReadOnly]=useState(false),[revision,setRevision]=useState(0),[modules,setModules]=useState<Record<string,boolean>>({}),[modulesLoading,setModulesLoading]=useState(true);
  const [operationsError,setOperationsError]=useState(''),[operationsLoading,setOperationsLoading]=useState(false),[uploadReceipt,setUploadReceipt]=useState<{id:string;receipt:UploadReceipt}|null>(null);
  const operationsRequest=useRef(0),scope=useRef(''),selection=useRef(''),draftRequests=useRef(new Map<string,string>()),openDataRequests=useRef(new Set<string>());
- const selected=analyses.find(a=>a.id===selectedId), state=useWorkspaceModel(selectedId,revision),model=state.model;
+ const selected=analyses.find(a=>a.id===selectedId), state=useWorkspaceModel(selectedId,revision),model=selected?state.model:null;
  const locked=readOnly||!!model?.access.readOnly;
  useEffect(()=>{const c=new AbortController();const q=new URLSearchParams(window.location.search),client=q.get('client');scope.current=client??'';
  const initialView=resolveClientView(q.get('view'));
