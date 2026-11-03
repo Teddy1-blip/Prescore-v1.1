@@ -20,7 +20,7 @@
     "inputsMatchPackagedBuild": true
   },
   "delivery": {
-    "status": "BUILD_RUNNING",
+    "status": "SUCCESS_ACTIVE",
     "stagingBefore": "db33a7624ea061879fe8e2efb32e0b58c75e4993",
     "plannedCount": 1,
     "deletedPaths": 0,
@@ -30,15 +30,48 @@
     "fullTreeAndRunningDigest": "UNVERIFIED",
     "githubStaging": "8b0809bd5eb22223fc80d73739eaab4d05d2782d",
     "githubUpdatedAt": "2026-11-03T11:29:52Z",
-    "amveraObservedAt": "2026-11-03T11:30:29.680Z",
-    "amveraObservedLabel": "Выполняется сборка",
-    "amveraNewRevision": "NOT_YET_EXPOSED_IN_VERSION_TABLE",
+    "amveraObservedLabel": "SUCCESS; USED check separately observed; RUNNING 1/1",
+    "amveraNewRevision": "558be82bea4a078b6672086e917ef877f41c0e98",
     "buildStatusObservationCount": 1,
     "additionalBuilds": 0,
     "activationPerformed": false,
-    "newHealthReadyAndSourceMatch": "NOT_RUN",
-    "lastVerifiedActiveRevision": "2cbc84ddc51c9ebf199ad9360d8dce0e3c3e10b0",
-    "nextAction": "Check this same delivery without another push/build; then activation, health/ready/source match and ordinary browser checks."
+    "newHealthReadyAndSourceMatch": "PASS",
+    "lastVerifiedActiveRevision": "558be82bea4a078b6672086e917ef877f41c0e98",
+    "nextAction": "No build observation loop or new delivery; remaining archive, roles/mail/mobile and approved 2FA activation only.",
+    "continuationBuildStatusObservationCount": 1,
+    "additionalPushes": 0,
+    "restarts": 0,
+    "activationIndependentlyObserved": true,
+    "uiRevisionDate": "03.11.2026 14:23; UI timezone not independently confirmed",
+    "healthReady": {
+      "httpStatus": "NOT_EXPOSED_BY_BROWSER_JSON_SURFACE",
+      "alive": true,
+      "ready": true,
+      "code": "READY",
+      "configuration": "VALID",
+      "database": "REACHABLE",
+      "schema": "COMPATIBLE",
+      "storage": "READ_WRITE",
+      "outbox": "ACCESSIBLE",
+      "schemaVersion": "0009_analysis_archive.sql",
+      "buildTimestamp": "2026-11-03T11:37:04.265Z",
+      "buildId": "eEV00kHUIwKM9l-CJy11z",
+      "sourceInputs": {
+        "scope": "PRESCORE-SOURCE-INPUTS-1",
+        "algorithm": "SHA256_PATH_CONTENT_JSON",
+        "sha256": "c68d9c34f312c7b903cb22facac70e9b6959a0f8af1eab18da058e1a1a1cb0d9",
+        "fileCount": 711,
+        "lockSha256": "8fc1937ff193da2f1cd7504442f2dd64e44559306a0f77d2775af83e17f9deb1"
+      },
+      "sourceInputsMatchExpected": true,
+      "sourceSha": "UNKNOWN",
+      "sourceTree": "UNKNOWN",
+      "checkoutStatus": "UNAVAILABLE",
+      "publishedImageDigest": null,
+      "runningImageDigest": null,
+      "healthObservedAt": "2026-11-03T12:35:40.470Z",
+      "readyObservedAt": "FRESH_SUBSEQUENT_READ; separate timestamp not recorded"
+    }
   },
   "checks": {
     "targetedAuthUi": {
@@ -176,35 +209,86 @@
       "No authorized runtime maintenance CLI session; no local DATABASE_URL"
     ],
     "financialDataWrites": 0,
-    "protectedQaAfter": "NOT_VERIFIED"
+    "protectedQaAfter": {
+      "observedAt": "2026-11-03T12:49:04.303Z",
+      "method": "SHA256_JSON_STRINGIFY_CUA_PROJECTION_OBJECT_KEYS_ORDERED_BY_BRIDGE",
+      "qa": [
+        {
+          "analysisId": "36527dc1-d7db-4fef-bd47-719a451b4d58",
+          "state": "READY_FULL",
+          "sha256": "cccefaa81dd3cad8358b14f07cd53f2c1c34d409591632ca6d697c7d7c48e43a",
+          "matchesBefore": true
+        },
+        {
+          "analysisId": "992ab9e3-672e-4adf-955e-9a2c40e3ece3",
+          "state": "READY_FULL",
+          "sha256": "9f4f7df5bb872c6bf7ff9689199b4be0d4e73bfe79a8686c008ce3e74d2e7c08",
+          "matchesBefore": true
+        },
+        {
+          "analysisId": "7ec7daeb-dfef-4f1f-9c9d-15ea86fe864c",
+          "state": "READY_FULL",
+          "sha256": "bdf72efab952c374c2eda5de7a331b0e8b89cf05c95453c6565f448b2235330b",
+          "matchesBefore": true
+        }
+      ]
+    },
+    "newAnalysisClick": {
+      "beforeCount": 14,
+      "afterCount": 14,
+      "exactIdSetsEqual": true,
+      "recordsCreated": 0,
+      "emptyCompanyContext": true,
+      "path": "/dashboard?view=upload"
+    },
+    "snapshotConfirmed": false,
+    "isolatedLiveBackupRestoreVerified": false,
+    "archiveMechanismChanged": false
   },
   "otherBlockers": [
-    "Administrator 2FA enrollment/schema/server enforcement missing; additive existing Better Auth plugin migration proposed, not executed",
+    "Live MFA activation requires separate approval of concrete schema/enrollment/recovery plan",
     "Separate authorized CLIENT-only and BROKER browser sessions unavailable",
-    "Received verification/reset email and working link not verified",
-    "New active release desktop/mobile and reload browser checks pending"
+    "Received and used password-reset message unverified; connected mailbox profile tool unavailable",
+    "Actual mobile browser view unverified; no supported viewport sizing API"
   ],
   "productionTouched": false,
   "mainTouched": false,
   "stage2Started": false,
   "secretsDisclosed": false,
-  "checkpointAt": "2026-11-03T11:30:29.680Z",
+  "checkpointAt": "2026-11-03T13:28:05.409270+00:00",
   "evidence": {
     "beforeLogin": "2026-11-03-stage1-login-before.jpg",
     "beforeDashboard": "2026-11-03-stage1-dashboard-before.jpg",
-    "afterScreenshot": "UNAVAILABLE: browser capture timed out; no screenshot or live acceptance fabricated",
-    "mobileViewport": "NOT_VERIFIED; no supported viewport-size API exposed"
+    "afterScreenshot": "2026-11-03-stage1-documents-live.jpg",
+    "mobileViewport": "NOT_VERIFIED; no supported viewport-size API exposed",
+    "loginReturnScreenshot": "2026-11-03-stage1-login-return.jpg",
+    "afterFiles": [
+      {
+        "file": "2026-11-03-stage1-documents-live.jpg",
+        "bytes": 124440,
+        "sha256": "bccf0d3a30764ec7bd7f360803c0c1b17cda6b398f30694f7e4c00090aa4e414",
+        "width": 1348,
+        "height": 926
+      },
+      {
+        "file": "2026-11-03-stage1-login-return.jpg",
+        "bytes": 122470,
+        "sha256": "ee0630eb2177b1b76043ae62aff4959d56b144856e15c6135ff36aa27d04d17b",
+        "width": 1348,
+        "height": 926
+      }
+    ]
   },
   "acceptance": {
     "A": {
       "local": "PASS",
-      "live": "BLOCKED",
-      "detail": "Existing auth handlers tested; ordinary owner login passed on prior active code; registration and received reset email/link not verified."
+      "live": "PARTIAL",
+      "detail": "Owner login/logout/selected Documents return PASS. Received and used reset email/link not verified."
     },
     "B": {
-      "local": "BLOCKED",
+      "local": "PASS_NATIVE_MFA_AND_ROLE_TESTS",
       "live": "BLOCKED",
-      "detail": "Existing role and foreign-access tests PASS; 2FA missing, separate CLIENT-only/BROKER sessions unavailable."
+      "detail": "Central MFA enforcement prepared only in recovery; independent CLIENT/BROKER sessions and live approved MFA rollout absent."
     },
     "C": {
       "local": "PASS",
@@ -213,28 +297,231 @@
     },
     "D": {
       "local": "PASS",
-      "live": "BLOCKED",
-      "detail": "Explicit staging QA metadata and clean new-analysis context tested; candidate still building."
+      "live": "PASS_OWNER_SCENARIO",
+      "detail": "New analysis keeps empty context with identical 14 IDs; three QA grouped separately."
     },
     "E": {
       "local": "PASS",
-      "live": "BLOCKED",
-      "detail": "Selection, login return and error-context handling tested; new published reload not verified."
+      "live": "PASS_OWNER_SCENARIO",
+      "detail": "QA Documents reload, logout/login exact return and unknown-ID model clearing observed; foreign-role live check remains separate."
     },
     "F": {
-      "local": "BLOCKED",
-      "live": "BLOCKED",
-      "detail": "Build and shell tests PASS; final desktop/mobile visual acceptance unavailable."
+      "local": "RESPONSIVE_CONTRACT_TESTS_ONLY",
+      "live": "PARTIAL",
+      "detail": "Actual desktop screenshot inspected; mobile unavailable."
     },
     "G": {
-      "local": "PASS",
-      "live": "BLOCKED",
-      "detail": "Full regression and Credit Lab PASS; no finance/source writes, protected QA before hashes retained; post-activation parity not verified."
+      "local": "PASS_HISTORICAL_SHA",
+      "live": "PASS_DELIVERY_PARITY",
+      "detail": "All three QA fresh projection hashes match before. No source/financial/document writes. Does not prove archive/backup acceptance."
     },
     "H": {
       "local": "PASS",
-      "live": "BLOCKED",
-      "detail": "Full GitHub SHA/tree, local source inputs and one build observation recorded; active candidate health/ready/source match pending."
+      "live": "PARTIAL",
+      "detail": "Existing delivery SUCCESS and ACTIVE, fresh health/ready/scoped inputs match. Full runtime Git tree and image digest remain unverified."
     }
+  },
+  "priorDeliveryObservation": {
+    "status": "BUILD_RUNNING",
+    "stagingBefore": "db33a7624ea061879fe8e2efb32e0b58c75e4993",
+    "plannedCount": 1,
+    "deletedPaths": 0,
+    "comparedBlobChanges": 36,
+    "activeAmveraBefore": "2cbc84ddc51c9ebf199ad9360d8dce0e3c3e10b0",
+    "activeSourceFingerprintBefore": "80a9e0f06b05f2c4638f695c9f4a17aef41874663372e8de62cae63cfa5bc797",
+    "fullTreeAndRunningDigest": "UNVERIFIED",
+    "githubStaging": "8b0809bd5eb22223fc80d73739eaab4d05d2782d",
+    "githubUpdatedAt": "2026-11-03T11:29:52Z",
+    "amveraObservedAt": "2026-11-03T11:30:29.680Z",
+    "amveraObservedLabel": "Выполняется сборка",
+    "amveraNewRevision": "NOT_YET_EXPOSED_IN_VERSION_TABLE",
+    "buildStatusObservationCount": 1,
+    "additionalBuilds": 0,
+    "activationPerformed": false,
+    "newHealthReadyAndSourceMatch": "NOT_RUN",
+    "lastVerifiedActiveRevision": "2cbc84ddc51c9ebf199ad9360d8dce0e3c3e10b0",
+    "nextAction": "Check this same delivery without another push/build; then activation, health/ready/source match and ordinary browser checks."
+  },
+  "liveBrowser": {
+    "actor": "existing owner ADMIN; not CLIENT-only or assigned BROKER acceptance",
+    "qaSelection": "PASS",
+    "documentsReload": "PASS",
+    "logout": "PASS",
+    "passwordLoginReturn": "PASS",
+    "returnObservedAt": "2026-11-03T13:01:30.032Z",
+    "returnPath": "/dashboard?view=documents&analysisId=36527dc1-d7db-4fef-bd47-719a451b4d58",
+    "unknownAnalysisId": "00000000-0000-4000-8000-000000000001",
+    "unknownAnalysisShowsErrorWithoutPriorModel": true,
+    "foreignActor403": "NOT_TESTED_LIVE",
+    "internalAdminRoute": "PASS under ADMIN",
+    "oldAdminRoute": "404 rendered under ADMIN",
+    "desktop": "ACTUAL_SCREENSHOT_VISUALLY_INSPECTED",
+    "mobile": "NOT_VERIFIED; supported viewport/device sizing API unavailable",
+    "mobileSupportedUiAttempt": {
+      "action": "Chrome developer-tools keyboard shortcut through documented CUA pressKey",
+      "result": "No rendered controls or layout change; page remained 1348 CSS pixels wide",
+      "mobileAccepted": false
+    }
+  },
+  "mfaRecoveryCandidate": {
+    "commit": "d36a39528c5c9c41a7548fec6c1a4e43172cd8f8",
+    "tree": "56d11f948898cfb23e179215a45791b69503aac9",
+    "localIndexMatchesGitHub": true,
+    "changedCodeTestFiles": 15,
+    "sourceInputs": {
+      "scope": "PRESCORE-SOURCE-INPUTS-1",
+      "sha256": "1f56f34a259a9a34a97100b246f23688ad5bc5ecc847bc954edafe0ea00b7354",
+      "fileCount": 717,
+      "lockSha256": "8fc1937ff193da2f1cd7504442f2dd64e44559306a0f77d2775af83e17f9deb1"
+    },
+    "buildId": "57iwUNbcfYgtVDKV0rSCA",
+    "targeted": {
+      "pass": 32,
+      "fail": 0,
+      "skipped": 0,
+      "durationMs": 18083.569386
+    },
+    "firstTargetedFailure": "Two fixture/endpoint-expectation errors: existing documents require category; native view-backup-codes is not an exposed HTTP route (404). Corrected fixtures/expectations, no financial expectation change.",
+    "finalGate": {
+      "buildAndTypecheck": "PASSED",
+      "processExitCode": 0,
+      "regression": {
+        "pass": 6820,
+        "fail": 0,
+        "skipped": 0,
+        "durationMs": 810648.285523
+      },
+      "creditLab": {
+        "pass": 24,
+        "fail": 0
+      },
+      "report": {
+        "version": "PRESCORE-RECOVERY-BUILD-GATE-1",
+        "lockSha256": "8fc1937ff193da2f1cd7504442f2dd64e44559306a0f77d2775af83e17f9deb1",
+        "scope": "BUILD_REGRESSION_ONLY",
+        "browserAccepted": false,
+        "liveAccepted": false,
+        "status": "PASSED",
+        "checks": [
+          {
+            "stage": "REGRESSION",
+            "status": "PASSED",
+            "exitCode": 0
+          },
+          {
+            "stage": "CREDIT_LAB",
+            "status": "PASSED",
+            "exitCode": 0
+          },
+          {
+            "stage": "LINT",
+            "status": "PASSED",
+            "exitCode": 0
+          },
+          {
+            "stage": "ARTIFACT",
+            "status": "PASSED",
+            "exitCode": 0
+          },
+          {
+            "stage": "PDF_RUNTIME",
+            "status": "PASSED",
+            "exitCode": 0
+          }
+        ]
+      },
+      "standaloneRuntimeAssets": 13,
+      "scope": "RECOVERY_ONLY; not new staging or live MFA acceptance"
+    },
+    "defaultMode": "disabled",
+    "proposedMigration": "lib/db/proposed/0010_admin_mfa.sql",
+    "inAutomaticMigrationRegistry": false,
+    "liveMigrationApplied": false,
+    "liveFactorEnrollment": false,
+    "liveProtectionEnabled": false,
+    "requiresSeparateRolloutApproval": true,
+    "rolloutPlan": "docs/recovery/2026-11-03-ADMIN-MFA-ROLLOUT.md",
+    "priorCandidateFullGate": {
+      "tree": "d8ec0733bbb471b0131acf148a4396dab207ec53",
+      "sourceFingerprint": "1dc8b88c39aca3e967740b85f354f72b4160fa5097835f296c90a35d04dd2a0b",
+      "status": "PASSED",
+      "regression": {
+        "pass": 6820,
+        "fail": 0,
+        "skipped": 0,
+        "durationMs": 810327.381261
+      },
+      "checks": [
+        {
+          "event": "BUILD_CHECK_PASSED",
+          "stage": "REGRESSION",
+          "status": "PASSED",
+          "exitCode": 0
+        },
+        {
+          "event": "BUILD_CHECK_PASSED",
+          "stage": "CREDIT_LAB",
+          "status": "PASSED",
+          "exitCode": 0
+        },
+        {
+          "event": "BUILD_CHECK_PASSED",
+          "stage": "LINT",
+          "status": "PASSED",
+          "exitCode": 0
+        },
+        {
+          "event": "BUILD_CHECK_PASSED",
+          "stage": "ARTIFACT",
+          "status": "PASSED",
+          "exitCode": 0
+        },
+        {
+          "event": "BUILD_CHECK_PASSED",
+          "stage": "PDF_RUNTIME",
+          "status": "PASSED",
+          "exitCode": 0
+        }
+      ],
+      "supersededReason": "Review found pre-enrollment backup-code option. Final candidate requires initial TOTP, rejects early backup request without consuming code; targeted checks repeated and final full gate started."
+    },
+    "firstFinalTargetedInvocation": {
+      "status": "UNVERIFIED_NO_LOG_OUTPUT",
+      "countedAsPass": false,
+      "followup": "Targeted command repeated once with a new log; 32/32 actual output confirmed."
+    },
+    "inputsMatchPackagedBuild": true,
+    "completedLogEvidence": [
+      {
+        "file": "stage1-mfa-targeted-r3.log",
+        "bytes": 3281,
+        "sha256": "5418eac4e339da7d31e468983445d79cd668acd0e4a48ae536f39a8ad6d4838f"
+      },
+      {
+        "file": "stage1-mfa-full-gate.log",
+        "bytes": 476685,
+        "sha256": "d2155140f1f807ef19dcd70859dd6996af04b72146d017eb9371f22198eea51a"
+      },
+      {
+        "file": "stage1-mfa-targeted-final-r2.log",
+        "bytes": 3280,
+        "sha256": "9e7b333fdcbf1552a3bcdbe95741a2756933d6a66f97963472a8f9fad41da250"
+      },
+      {
+        "file": "stage1-mfa-build-final.log",
+        "bytes": 2278,
+        "sha256": "963b8c48fa8111a76a2e1104b330369bd317272cc06fa6a5f86ba6ff630f1158"
+      },
+      {
+        "file": "stage1-mfa-package-final.log",
+        "bytes": 275,
+        "sha256": "0b93dec40ee5c2979a7cded52d0c52dd2b9422a04b5f7150fd25331463ac43d6"
+      },
+      {
+        "file": "stage1-mfa-full-gate-final.log",
+        "bytes": 476693,
+        "sha256": "deb331e8086f844b27dd92b46133989eecc5d0ba7e5ff0415e8757c469ee92ee"
+      }
+    ]
   }
 }

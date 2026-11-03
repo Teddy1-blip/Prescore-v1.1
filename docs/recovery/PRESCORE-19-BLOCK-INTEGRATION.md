@@ -1,6 +1,55 @@
 # Prescore 19-block integration — acceptance ledger
 
-## Current checkpoint — Stage 1, 2026-11-03
+## Current checkpoint — Stage 1 continuation, 2026-11-03
+
+Continued from Issue #11 / 6602289739 and recovery `9e9dee2dda48bf52317ded85f380a38ccc75ae1f`. Actual recovery/staging HEADs and newer comments were read before work and rechecked before publication; no newer changes were found or overwritten. Existing development and archive machinery were not repeated. **Overall Stage 1 remains BLOCKED / not accepted.**
+
+### Live delivery accepted, no second delivery
+
+The one existing staging delivery remains **`8b0809bd5eb22223fc80d73739eaab4d05d2782d`** (code `5e84d1695bb8abb2f22e080de3a569495943d4d7`, tree `fdf3f528e6925038d80a21a8e12099aec2a4861a`). One continuation check of the existing Amvera build found SUCCESS. The new revision **`558be82bea4a078b6672086e917ef877f41c0e98`** was separately marked used/active, with the application running 1/1. The visible row date was 03.11.2026 14:23; that UI timezone was not independently confirmed. No push, build, restart or activation click was made to obtain status. Observation ended after success/activation; previous revision `2cbc84ddc51c9ebf199ad9360d8dce0e3c3e10b0` remains historical rollback evidence.
+
+Fresh browser health at **2026-11-03T12:35:40.470Z (15:35:40 Moscow)**, followed by a fresh ready read (separate timestamp not recorded): alive=true; READY, configuration VALID, database REACHABLE, schema COMPATIBLE, storage READ_WRITE, outbox ACCESSIBLE. The browser JSON surface did not separately expose the HTTP status, so no measured HTTP 200 is claimed here. Schema remains `0009_analysis_archive.sql`. Packaged build timestamp `2026-11-03T11:37:04.265Z`, build ID `eEV00kHUIwKM9l-CJy11z`. Exact expected match:
+
+- Source-input SHA-256 `c68d9c34f312c7b903cb22facac70e9b6959a0f8af1eab18da058e1a1a1cb0d9`.
+- Scope `PRESCORE-SOURCE-INPUTS-1`, 711 files; lock `8fc1937ff193da2f1cd7504442f2dd64e44559306a0f77d2775af83e17f9deb1`.
+- sourceSha/sourceTree UNKNOWN, checkout UNAVAILABLE and both image digests null remain **FULL_TREE_AND_RUNNING_DIGEST UNVERIFIED**. The matching scoped input fingerprint is not proof of the full deployed Git tree or container digest.
+
+### Same acceptance matrix — separate local and live results
+
+| Area | Recovery/local result | Published staging result / remaining condition |
+|---|---|---|
+| Delivery / interface (D, E, H) | Existing 6809/6809 gate retained only for its original SHA; new MFA candidate checked separately below | **PASS for existing delivery and owner scenario**: ordinary `/dashboard` → New analysis leaves empty company context and identical 14 IDs → protected QA selection → Documents → reload retains QA/section. Logout redirects to login; fresh password login returns to the exact selected Documents URL. Unknown analysis shows unavailable message, generic company header and no previous model. `/prescore-control` works for ADMIN; old `/admin` is 404. Foreign-role denial is not inferred from this ADMIN session. |
+| History / archive (C) | Existing approved request/CLI/archive/restore implementation unchanged | **BLOCKED**: 11 old records still ACTIVE, protected 3 separately labeled QA; archived **0**, batch **null**. They have not been hidden with a filter. Fresh recoverable snapshot, actual maintenance DB identity and transactional CLI preview are not available. |
+| Roles and received mail (A, B) | Actual native auth integration tests include CLIENT-only and assigned BROKER identities, reset verification, session revocation and denied ADMIN authority | **BLOCKED**: live owner ADMIN only; independent permitted CLIENT-only/BROKER sessions and received+used reset email remain unverified. Connected mailbox profile tool was unavailable; no receiver, email delivery or link use was invented. Passwords/roles of real users were not changed. |
+| Administrator 2FA (B) | **PREPARED in recovery**: native plugin enrollment, TOTP/backup verification, session proof and central server role filtering; proposed additive schema tested only in an isolated database | **BLOCKED**: no live schema/configuration/factor enrollment change. Requires separate approval of the [concrete rollout/recovery plan](2026-11-03-ADMIN-MFA-ROLLOUT.md), owner setup in secure UI, then live verification of all ADMIN API capabilities. |
+| Visual verification (F) | Render/responsive-contract tests remain automated tests, not live visuals | **PARTIAL**: actual desktop Documents view inspected, including the post-login return screen at 13:01:30Z (16:01:30 Moscow). **Mobile NOT VERIFIED**: supported browser surface exposes no viewport/device-resize method; no hidden CDP or synthetic render substituted. |
+| Data preservation (G) | Credit engine, parsers, Golden and financial expectations unchanged | **PASS for existing delivery**: fresh projections of all three QA exactly match the pre-delivery hashes at 12:49:04Z. All remain READY_FULL. No financial/source/document uploads or writes. This is not snapshot/restore or post-archive acceptance. |
+
+### Recovery-only MFA candidate
+
+Code commit **d36a39528c5c9c41a7548fec6c1a4e43172cd8f8**, tree **`56d11f948898cfb23e179215a45791b69503aac9`**; local temporary-index tree matches GitHub. Fifteen bounded auth/UI/test files change; no package/lock, parser, engine, archive or live migration-registry change. Source-input fingerprint **`1f56f34a259a9a34a97100b246f23688ad5bc5ecc847bc954edafe0ea00b7354`**, scope `PRESCORE-SOURCE-INPUTS-1`, **717 files**, same lock, local build ID `57iwUNbcfYgtVDKV0rSCA`. This is a new recovery candidate, **not** the running 711-file staging artifact.
+
+Existing credentials form uses the native plugin challenge before navigation. `/prescore-control/security` reuses the current login/session system and the existing UI primitives. `getAuthSession` removes ADMIN from the effective session roles unless the database proves that the particular live session completed the factor; existing downstream admin, billing, foreign-document and dossier checks therefore share enforcement. It does not edit the stored role. Proof lasts at most 12 hours and cascades on session deletion. Factor management requires current password and proof less than five minutes old. Trusted-device bypass and password-only factor disable are rejected. Native lockout, encrypted backup codes and one-time recovery are exercised by actual handler tests. Resetting the password cannot remove the factor.
+
+`lib/db/proposed/0010_admin_mfa.sql` is deliberately outside the automatic migration registry. Default mode is disabled, with explicit enrollment/required modes for the separately approved rollout. No schema or account is switched on by this recovery checkpoint. The plan covers additive migration/catalog/runtime compatibility, isolated restore rehearsal, supervised enrollment, mandatory enforcement, lost-factor recovery and schema-compatible rollback; owner secrets are never committed or logged.
+
+Final targeted auth/UI/history: **32/32 PASS**, 0 skipped, 18083.569386 ms. First MFA test attempt had two test-fixture errors (missing existing document category; a native non-public backup-code helper was expected to be HTTP 403 instead of actual route 404). Corrected only those test fixtures/expectations; 9/9 then expanded 32/32 passed. Original financial/Golden expectations are untouched. Before the final enrollment correction, the first complete gate passed 6820/6820 (810327.381261 ms), Credit Lab 24/24, lint, standalone and PDF runtime. Review then found that a backup code could be offered before the first TOTP verification; the final candidate hides that choice and rejects the direct request before consuming any code. The new native handler assertion verifies rejection and byte-identical backup-code storage. Final candidate full gate: **PASS** — build/typecheck, regression **6820/6820** (810648.285523 ms), zero skipped; Credit Lab **24/24**; lint; standalone VALID / 13 runtime assets; PDF runtime text extraction. All five required stages and the process exited 0. Local Node 24 checks are not a new Node 22 container build or live MFA acceptance.
+
+### Concrete blocked operations; do not restart an audit
+
+1. **Archive — one operator action:** open the authorized staging maintenance session for the actual runtime DB and document storage, with an isolated empty restore target. Do not send credentials or backups to chat. Through that channel verify connection identity, use the existing backup CLI with truthful quiescence confirmation, restore and verify in isolation, then fresh `preview-owner` → exact owner/11 IDs/3 QA/broker checks → existing execute/verify. Permission for the same 11 already exists; mismatch stops archive only. Snapshot confirmation has not been entered. Record the resulting real batch/count and list/reload/QA hashes only after execution.
+2. **2FA activation:** separately approve the concrete linked plan before migration, new activation build or owner factor setup. Recovery implementation is saved; do not implement it again. No documentation-only commit goes to staging.
+3. **Role/mail acceptance:** provide permitted separate CLIENT-only and assigned BROKER sign-in contexts plus a controlled recipient able to receive and use the reset message. Owner ADMIN does not satisfy these. Changing the password/factor belongs to the owner in the secure interface.
+4. **Mobile:** a supported browser/device viewport is required for an actual mobile view and interactions; CSS contracts alone are insufficient.
+
+Safe evidence: [checkpoint](evidence/2026-11-03-stage1-checkpoint-safe.json), [Documents after reload](evidence/2026-11-03-stage1-documents-live.jpg), [Documents after logout/login return](evidence/2026-11-03-stage1-login-return.jpg). QA hashes use the same projection constructed inside the read-only browser evaluate and serialized after the browser bridge's key ordering; reconstructing the object with a different insertion order is not a comparable hash method. Full source documents, credentials and recovery codes are absent from the evidence.
+
+Production, main, DNS, real-user roles, financial sources, credit engine and paid integrations were not changed. Stage 2 was not started. The accepted existing staging result is preserved even though archive/role/mail/mobile/live-2FA conditions prevent closing Stage 1.
+
+---
+## Prior checkpoint — Stage 1, 2026-11-03 at 11:33Z (historical)
+
+The following record describes the earlier RUNNING observation and its then-open checks. The current result above supersedes it; its original SHA and verification history are retained.
 
 Scope: existing recovery branch → one checked staging delivery → ordinary browser acceptance. Production and Stage 2 remain excluded. The owner's current instruction authorizes the exact archived set in `2026-10-30-OWNER-ARCHIVE-REQUEST.json`; the historical approval blocker below is superseded. The archive implementation and CLI are unchanged.
 
