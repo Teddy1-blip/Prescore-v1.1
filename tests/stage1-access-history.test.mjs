@@ -52,7 +52,7 @@ test('shared shell has explicit unavailable counterparties and no admin link in 
  const rt=await createWorkspaceRuntime();try{
   const {ClientShell,CLIENT_NAV,BROKER_NAV}=rt.load('app/components/workspace/client-shell.tsx');
   for(const broker of [false,true]){
-   const html=renderToStaticMarkup(React.createElement(ClientShell,{view:'home',choose(){},broker,availableViews:(broker?BROKER_NAV:CLIENT_NAV).map(x=>x.id),context:'Synthetic',children:'Test'}));
+   const html=renderToStaticMarkup(React.createElement(ClientShell,{view:'home',choose(){},broker,availableViews:(broker?BROKER_NAV:CLIENT_NAV).map(x=>x.id),context:'Synthetic'},'Test'));
    assert.doesNotMatch(html,/href="\/(?:admin|prescore-control)"/);
    assert.match(html,/href="\/logout">Сменить аккаунт/);
    if(!broker)assert.match(html,/<button[^>]*disabled=""[^>]*title="Проверка контрагентов появится на следующем этапе"/);
