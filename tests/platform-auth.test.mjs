@@ -1,5 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';
 import {smtpConfiguration} from '../lib/platform/environment.ts';
+import * as adminMfa from '../lib/auth/admin-mfa.ts';import {twoFactor} from 'better-auth/plugins';
 import ts from 'typescript';import {betterAuth}from'better-auth';import {PGlite}from'@electric-sql/pglite';import{randomUUID,createHmac}from'node:crypto';
 
 test('actual standalone auth: verification, secure sessions, roles, spoofed headers, logout and expiry',async()=>{
@@ -11,7 +12,7 @@ test('actual standalone auth: verification, secure sessions, roles, spoofed head
  const source=fs.readFileSync(new URL('../lib/auth/server.ts',import.meta.url),'utf8');
  const code=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;
  const exports={};new Function('exports','require',code)(exports,name=>{
-  if(name.includes('platform/environment'))return{smtpConfiguration};if(name==='better-auth')return{betterAuth};if(name.includes('db/client'))return{getPool:()=>pool};if(name==='node:crypto')return{randomUUID};
+  if(name==='./admin-mfa.ts')return adminMfa;if(name==='better-auth/plugins')return{twoFactor};if(name.includes('platform/environment'))return{smtpConfiguration};if(name==='better-auth')return{betterAuth};if(name.includes('db/client'))return{getPool:()=>pool};if(name==='node:crypto')return{randomUUID};
   if(name==='nodemailer')return{createTransport:()=>({sendMail:async m=>{mail.push(m);}})};throw Error('UNEXPECTED_IMPORT');
  });
  const auth=exports.getAuth();const headers={'content-type':'application/json',origin:'https://prescore.test'};

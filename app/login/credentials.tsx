@@ -4,9 +4,11 @@ import {useEffect,useRef,useState} from 'react';
 import {authClient} from '../../lib/auth/client';
 import {safeReturnPath} from '../../lib/auth/contracts';
 import {authErrorMessage,readRememberedEmail,rememberEmail,verificationReturnPath,RESEND_NOTICE,RESET_NOTICE} from '../../lib/auth/ux';
+import {SecondFactor} from '../components/auth/second-factor';
 
 export function Credentials({returnTo,verified=false,verificationError=false}:{returnTo:string;verified?:boolean;verificationError?:boolean}) {
  const [mode,setMode]=useState<'login'|'register'|'reset'>('login');
+ const [factorRequired,setFactorRequired]=useState(false);
  const [busy,setBusy]=useState(false),[email,setEmail]=useState(''),[remember,setRemember]=useState(false);
  const [notice,setNotice]=useState(verificationError?authErrorMessage({code:'TOKEN_EXPIRED'}):verified?'Почта подтверждена. Теперь можно войти.':'');
  const [canResend,setCanResend]=useState(verificationError),[cooldown,setCooldown]=useState(0);
@@ -24,6 +26,7 @@ export function Credentials({returnTo,verified=false,verificationError=false}:{r
    setNotice(result.error?authErrorMessage(result.error):RESEND_NOTICE);
   } catch {setNotice(authErrorMessage());} finally {inFlight.current=false;setBusy(false);}
  }
+ if(factorRequired)return <><SecondFactor onVerified={()=>window.location.assign(safeReturnPath(returnTo))}/><a href={'/login?returnTo='+encodeURIComponent(safeReturnPath(returnTo))}>Вернуться ко входу</a></>;
  return <form className="ps-form" aria-label={mode==='login'?'Вход':mode==='register'?'Регистрация':'Восстановление доступа'} onSubmit={async e=>{
   e.preventDefault();if(inFlight.current)return;inFlight.current=true;setBusy(true);setNotice('');setCanResend(false);
   const data=new FormData(e.currentTarget),normalizedEmail=String(data.get('email')||'').trim().toLowerCase(),password=String(data.get('password')||'');
@@ -40,7 +43,9 @@ export function Credentials({returnTo,verified=false,verificationError=false}:{r
    } else {
     const result=await authClient.signIn.email({email:normalizedEmail,password});
     if(result.error){setNotice(authErrorMessage(result.error));setCanResend(result.error.code==='EMAIL_NOT_VERIFIED');return;}
-    rememberEmail(normalizedEmail,remember);window.location.assign(safeReturnPath(returnTo));
+    rememberEmail(normalizedEmail,remember);
+    if(result.data&&'twoFactorRedirect' in result.data&&result.data.twoFactorRedirect){setFactorRequired(true);return;}
+    window.location.assign(safeReturnPath(returnTo));
    }
   } catch {setNotice(authErrorMessage());} finally {inFlight.current=false;setBusy(false);}
  }}>

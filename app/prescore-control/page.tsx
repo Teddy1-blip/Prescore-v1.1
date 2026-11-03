@@ -9,6 +9,7 @@ export const metadata = {robots: {index: false, follow: false}};
 
 export default async function ControlPage() {
   const user = await requireChatGPTUser('/prescore-control');
+  if(user.adminMfa&&!user.roles.includes('ADMIN'))redirect('/prescore-control/security');
   if (!user.roles.includes('ADMIN')) redirect('/dashboard');
   return <AdminDashboard />;
 }

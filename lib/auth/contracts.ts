@@ -1,5 +1,6 @@
 export type AuthRole = 'CLIENT' | 'AGENT' | 'ADMIN';
-export type AuthUser = {id:string; email:string; displayName:string; fullName:string|null; roles:AuthRole[]};
+export type AdminMfaState='DISABLED'|'ENROLLMENT_REQUIRED'|'VERIFICATION_REQUIRED'|'VERIFIED';
+export type AuthUser = {id:string; email:string; displayName:string; fullName:string|null; roles:AuthRole[];adminMfa?:AdminMfaState};
 export type AuthSession = {id:string; expiresAt:Date; user:AuthUser};
 export interface SessionProvider { getSession(headers:Headers):Promise<AuthSession|null> }
 export function safeReturnPath(value:string) {

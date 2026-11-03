@@ -1,4 +1,6 @@
 import { betterAuth } from 'better-auth';
+import {twoFactor} from 'better-auth/plugins';
+import {adminMfaMode,adminMfaHooks,adminMfaState} from './admin-mfa.ts';
 import { getPool } from '../db/client.ts';
 import { randomUUID } from 'node:crypto';
 import nodemailer from 'nodemailer';
@@ -19,10 +21,13 @@ async function sendAccountEmail(email:string,url:string,subject:string) {
   html:`<!doctype html><html lang="ru"><body style="margin:0;padding:24px;font-family:Arial,sans-serif;color:#182535;background:#ffffff"><h1 style="font-size:24px">Prescore</h1><p>${intro}</p><p><a href="${escaped}" style="display:inline-block;padding:12px 20px;background:#183c36;color:#ffffff;text-decoration:none;border-radius:6px">${action}</a></p><p>Если кнопка не работает, откройте ссылку:</p><p><a href="${escaped}">${escaped}</a></p><p style="font-size:13px;color:#586575">${ignore}</p></body></html>`});
 }
 function createAuth() {
+ const mfaMode=adminMfaMode();
  const secret=process.env.AUTH_SECRET,baseURL=process.env.PRESCORE_BASE_URL;
  if(!secret||secret.length<32||!baseURL)throw new Error('AUTH_CONFIGURATION_MISSING');
  if(process.env.NODE_ENV==='production'&&!baseURL.startsWith('https://')&&!(process.env.PRESCORE_RUNTIME_MODE==='release-candidate'&&['localhost','127.0.0.1'].includes(new URL(baseURL).hostname)))throw new Error('AUTH_HTTPS_REQUIRED');
  return betterAuth({
+  plugins:mfaMode==='disabled'?[]:[twoFactor({issuer:'Prescore',skipVerificationOnEnable:false,allowPasswordless:false,backupCodeOptions:{storeBackupCodes:'encrypted'},accountLockout:{enabled:true,maxFailedAttempts:5,durationSeconds:900}})],
+  ...(mfaMode==='disabled'?{}:{hooks:adminMfaHooks(getPool())}),
   appName:'Prescore',database:getPool(),secret,baseURL,trustedOrigins:[new URL(baseURL).origin],
   emailAndPassword:{enabled:true,requireEmailVerification:true,minPasswordLength:8,revokeSessionsOnPasswordReset:true,sendResetPassword:async({user,url})=>sendAccountEmail(user.email,url,'Восстановление доступа к Prescore')},
   emailVerification:{sendOnSignUp:true,sendOnSignIn:false,autoSignInAfterVerification:false,sendVerificationEmail:async({user,url})=>sendAccountEmail(user.email,url,'Подтверждение почты Prescore')},
@@ -40,5 +45,6 @@ export async function getAuthSession(headers:Headers):Promise<AuthSession|null> 
  if(!session||!session.user.emailVerified)return null;
  const r=await getPool().query("SELECT role FROM platform_roles WHERE user_id=$1 AND role='ADMIN' UNION SELECT 'AGENT' AS role FROM agent_accounts WHERE lower(user_email)=$2",[session.user.id,session.user.email.toLowerCase()]);
  const roles:AuthRole[]=['CLIENT',...r.rows.map(x=>x.role).filter((x):x is AuthRole=>['AGENT','ADMIN'].includes(x))];
- return{id:session.session.id,expiresAt:session.session.expiresAt,user:{id:session.user.id,email:session.user.email.toLowerCase(),fullName:session.user.name,displayName:session.user.name||session.user.email,roles}};
+ const mfa=roles.includes('ADMIN')?await adminMfaState(getPool(),session.user.id,session.session.id,adminMfaMode()):null;
+ return{id:session.session.id,expiresAt:session.session.expiresAt,user:{id:session.user.id,email:session.user.email.toLowerCase(),fullName:session.user.name,displayName:session.user.name||session.user.email,roles:mfa&&!mfa.allow?roles.filter(role=>role!=='ADMIN'):roles,...(mfa?{adminMfa:mfa.state}:{})}};
 }

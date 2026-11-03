@@ -38,7 +38,7 @@ function credentialsHarness(saved=''){
  const code=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;
  const originalWindow=globalThis.window;globalThis.window=fakeWindow;
  new Function('exports','require','FormData','window',code)(exports,name=>{
-  if(name==='react')return hooks;if(name.includes('/auth/client'))return{authClient:mockAuth};if(name.includes('/auth/contracts'))return{safeReturnPath};if(name.includes('/auth/ux'))return authUx;if(name.includes('/primitives'))return load('app/components/ui-v2/primitives.tsx');return require(name);
+  if(name.includes('/auth/second-factor'))return{SecondFactor:'factor-challenge'};if(name==='react')return hooks;if(name.includes('/auth/client'))return{authClient:mockAuth};if(name.includes('/auth/contracts'))return{safeReturnPath};if(name.includes('/auth/ux'))return authUx;if(name.includes('/primitives'))return load('app/components/ui-v2/primitives.tsx');return require(name);
  },class{constructor(data){this.data=data;}get(key){return this.data[key];}},fakeWindow);
  const props={returnTo:'https://attacker.invalid'};
  const render=()=>{cursor=0;refCursor=0;return exports.Credentials(props);};
@@ -91,4 +91,14 @@ test('landing V3 preserves public entry points and labels synthetic data',()=>{
  assert.match(html,/синтетических данных/);assert.match(html,/не являются банковским решением/);
  assert.match(html,/aria-controls="landing-navigation"/);assert.match(html,/aria-label="Остановить движение"/);
  assert.equal((html.match(/<details>/g)||[]).length,6);
+});
+
+test('password success with a native 2FA challenge does not enter the cabinet before factor completion',async()=>{
+ const h=credentialsHarness();try{
+  h.respond({data:{twoFactorRedirect:true,twoFactorMethods:['totp']},error:null});
+  await h.render().props.onSubmit({preventDefault(){},currentTarget:{email:'synthetic@example.test',password:'synthetic-only'}});
+  assert.equal(h.calls.some(call=>call[0]==='navigate'),false);
+  const challenge=h.nodes().find(n=>n.type==='factor-challenge');assert.ok(challenge);
+  challenge.props.onVerified();assert.deepEqual(h.calls.at(-1),['navigate','/dashboard']);
+ }finally{h.close();}
 });
