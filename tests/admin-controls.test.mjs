@@ -42,19 +42,19 @@ test("disabled factors, recommendations, banks and products are removed from cus
 });
 
 test("every header-authenticated page is forced dynamic", async () => {
-  for (const file of ["app/login/page.tsx", "app/dashboard/layout.tsx", "app/agent/layout.tsx", "app/admin/page.tsx", "app/report/[id]/page.tsx"]) {
+  for (const file of ["app/login/page.tsx", "app/dashboard/layout.tsx", "app/agent/layout.tsx", "app/admin/page.tsx", "app/prescore-control/page.tsx", "app/report/[id]/page.tsx"]) {
     const source = await readFile(new URL(`../${file}`, import.meta.url), "utf8");
     assert.match(source, /export const dynamic = ["']force-dynamic["']/);
   }
 });
 
-test("login hub exposes client, agent and administrator cabinets", async () => {
+test("login hub exposes client and agent but keeps internal administration private", async () => {
   const login = await readFile(new URL("../app/login/page.tsx", import.meta.url), "utf8");
   const landing = await readFile(new URL("../app/components/landing-v3/landing.tsx", import.meta.url), "utf8");
   assert.match(login, /href="\/dashboard"/);
   assert.match(login, /href="\/agent"/);
-  assert.match(login, /href="\/admin"/);
-  assert.match(login, /ЛК администратора/);
+  assert.doesNotMatch(login, /href="\/(?:admin|prescore-control)"/);
+  assert.doesNotMatch(login, /ЛК администратора/);
   assert.match(landing, /href="\/agent"/);
-  assert.match(landing, /href="\/admin"/);
+  assert.doesNotMatch(landing, /href="\/(?:admin|prescore-control)"/);
 });

@@ -85,7 +85,8 @@ test('expired verification takes precedence over verified flag',()=>{const html=
 test('landing V3 preserves public entry points and labels synthetic data',()=>{
  const html=renderToStaticMarkup(React.createElement(load('app/page.tsx').default));
  assert.equal((html.match(/<h1[ >]/g)||[]).length,1);
- for(const route of ['/login','/checkout','/agents','/agent','/admin','/privacy','/offer','/consent'])assert.ok(html.includes('href="'+route+'"'));
+ for(const route of ['/login','/checkout','/agents','/agent','/privacy','/offer','/consent'])assert.ok(html.includes('href="'+route+'"'));
+ assert.doesNotMatch(html,/href="\/(?:admin|prescore-control)"/);
  for(const id of ['how','product','pricing','faq'])assert.ok(html.includes('id="'+id+'"'));
  assert.match(html,/синтетических данных/);assert.match(html,/не являются банковским решением/);
  assert.match(html,/aria-controls="landing-navigation"/);assert.match(html,/aria-label="Остановить движение"/);
