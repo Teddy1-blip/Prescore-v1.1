@@ -1,3 +1,4 @@
+import {withHistoryPurpose} from '../lib/workspace/history.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -13,6 +14,7 @@ function loadRoute(user,db){
  assert.equal(compiled.diagnostics?.filter(x=>x.category===ts.DiagnosticCategory.Error).length,0);
  const exports={};
  function mocked(id){
+  if(id.endsWith('/workspace/history'))return {withHistoryPurpose};
   if(id.endsWith('/platform/runtime'))return {getRuntime:()=>({DB:db})};
   if(id.endsWith('/api-auth'))return {requireApiUser:async()=>user,unauthorized:()=>Response.json({error:'Unauthorized'},{status:401})};
   if(id.endsWith('/release/security'))return {safeErrorText:()=> 'SAFE_ERROR'};
@@ -41,10 +43,10 @@ test('summary has no anonymous access',async()=>{
  const response=await api.GET(new Request('http://example.test/api/workspace?projection=summary'));
  assert.equal(response.status,401);assert.equal(queries.length,0);
 });
-test('administrator summary remains read-only and includes legacy unassigned history',async()=>{
+test('administrator personal summary is read-only and excludes unassigned history',async()=>{
  const {db,queries}=fakeDb();const api=loadRoute({email:'admin@example.test',isAdmin:true},db);
  const response=await api.GET(new Request('http://example.test/api/workspace?projection=summary'));
  assert.equal(response.status,200);
- assert.match(queries[0],/owner_email = ''/);
+ assert.doesNotMatch(queries[0],/owner_email = ''/);
  assert.doesNotMatch(queries[0],/UPDATE|payload/i);
 });

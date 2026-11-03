@@ -51,7 +51,9 @@ test('FULL calculation unavailable retains known banking facts without checkout 
  const unavailable=await(await rt.request('/api/workspace-model?analysisId='+id)).json();
  assert.equal(unavailable.entitlement,'FULL');assert.equal(unavailable.fullAvailability,'UNAVAILABLE');assert.equal(unavailable.state,'READY_BASIC');assert.equal(unavailable.basic.bankingFacts.operatingInflow.status,'KNOWN');
  for(const C of [Home,Financing]){const html=renderToStaticMarkup(React.createElement(C,{model:unavailable}));assert.doesNotMatch(html,/\/checkout\?/);assert.match(html,/Повторная оплата не требуется/);assert.match(html,/Повторить загрузку расчёта/);}
- assert.match(renderToStaticMarkup(React.createElement(EmptyHome,{start(){}})),/Загрузить банковскую выписку/);
+ const empty=renderToStaticMarkup(React.createElement(EmptyHome,{start(){}}));
+ assert.match(empty,/<button[^>]*>Создать новый анализ/);
+ assert.match(empty,/Загрузить банковскую выписку/);
  }finally{await rt.close();}
 });
 test('real operational handlers: assigned broker status and shared chat, owner document and cancellation',async(t)=>{

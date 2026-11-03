@@ -26,7 +26,18 @@ test('Recovery B Phase 2 — published credit, portfolio and evidence',async t=>
   await t.test('missing portfolio never claims no debt',()=>{const m=structuredClone(model);m.full.report.analysisV3.portfolio=[];assert.match(render(PortfolioDepth,{model:m}),/не подтверждает отсутствие долга/);});
   await t.test('READY source does not imply all conclusions consumed it',()=>{const m=structuredClone(model);m.basic.sources.availability=[{source:'FINANCIAL_STATEMENTS',status:'READY',periodFrom:'2025-01-01',periodTo:'2025-12-31'}];const html=render(CompanyReporting,{model:m});assert.match(html,/Обработан/);assert.match(html,/сама по себе не подтверждает его использование во всех выводах/);});
   await t.test('quarterly persisted source status is visible without invented table',()=>{const m=structuredClone(model);m.basic.sources.availability=[{source:'QUARTERLY_REPORT',status:'FAILED',periodFrom:'2025-01-01',periodTo:'2025-03-31'}];const html=render(CompanyReporting,{model:m});assert.match(html,/Квартальная отчётность/);assert.match(html,/Ошибка обработки/);assert.match(html,/31.03.2025/);assert.doesNotMatch(html,/<table/);});
-  await t.test('evidence follows actual canonical claim and source references',()=>{const e=model.full.canonical.explainability,c=e.claims.find(c=>c.sourceReferenceIds.length);assert.ok(c);const html=render(Evidence,{model,claimIds:[c.claimId]});assert.ok(html.includes(c.titleRu));for(const ref of e.sourceReferences.filter(s=>c.sourceReferenceIds.includes(s.sourceReferenceId)))assert.ok(html.includes('data-source-ref="'+ref.sourceReferenceId+'"'));assert.doesNotMatch(html,/>explanation-claim:|canonicalPath|bindingCode/);});
+  await t.test('evidence follows actual canonical claim and source references',()=>{
+   const e=model.full.canonical.explainability,c=e.claims.find(c=>c.claimKind!=='INDEX_CONTRIBUTION'&&c.sourceReferenceIds.length);assert.ok(c);
+   const before=JSON.stringify(model),html=render(Evidence,{model,claimIds:[c.claimId]});
+   // Evidence has always used published client copy, not the raw engine title.
+   const {publicText}=rt.load('lib/credit-engine/client-report/copy.ts');
+   assert.ok(html.includes('data-claim-id="'+c.claimId+'"'));
+   assert.ok(html.includes(renderToStaticMarkup(React.createElement('h4',null,publicText(c.titleRu)))));
+   const expected=e.sourceReferences.filter(s=>c.sourceReferenceIds.includes(s.sourceReferenceId)).map(s=>s.sourceReferenceId).sort();
+   assert.deepEqual([...html.matchAll(/data-source-ref="([^"]+)"/g)].map(m=>m[1]).sort(),expected);
+   assert.equal(JSON.stringify(model),before);
+   assert.doesNotMatch(html,/>explanation-claim:|canonicalPath|bindingCode/);
+  });
   await t.test('source states distinguish empty absent failed partial and stale',()=>{assert.equal(new Set(['READY','PARTIAL','STALE','NOT_REQUESTED','EMPTY','FAILED'].map(sourceState)).size,6);});
   await t.test('FULL unavailable uses retry without checkout',()=>{const m={...model,full:undefined,entitlement:'FULL',fullAvailability:'UNAVAILABLE'};assert.match(credit(m),/Повторить загрузку расчёта/);assert.doesNotMatch(credit(m),/checkout/);});
   await t.test('all published recommendations and plan steps survive',()=>{const html=credit(model);for(const a of [...model.full.report.recommendations.primary,...model.full.report.recommendations.backlog,...model.full.report.actionPlan.horizons.flatMap(h=>h.items)])assert.ok(html.includes(a.title));});

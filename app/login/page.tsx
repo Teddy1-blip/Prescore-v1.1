@@ -27,7 +27,6 @@ export default async function LoginPage({ searchParams }: { searchParams?: Promi
         <div className="login-role">
           <Link className={requested === "/dashboard" ? "active" : ""} href="/dashboard"><UserRound /><span><b>Кабинет клиента</b><small>Анализ, отчёты и заявки</small></span><ArrowRight /></Link>
           <Link className={requested === "/agent" ? "active" : ""} href="/agent"><BriefcaseBusiness /><span><b>Кабинет агента</b><small>CRM, воронка, клиенты и куратор</small></span><ArrowRight /></Link>
-          <Link className={requested === "/admin" ? "active admin" : "admin"} href="/admin"><ShieldCheck /><span><b>ЛК администратора</b><small>Модули, показатели, доступы и заявки</small></span><ArrowRight /></Link>
         </div>
         {user ? <Link className="button button-primary login-submit" href={requested}>Открыть выбранный кабинет <ArrowRight /></Link> : <Credentials returnTo={requested} verified={params?.verified === "1" && !params?.error} verificationError={Boolean(params?.error)}/> }
         {user && <p className="login-session-note"><ShieldCheck /> Вы уже авторизованы. Выберите нужный кабинет выше.</p>}

@@ -4,7 +4,7 @@ import { AlertTriangle, ArrowRight, BriefcaseBusiness, Gauge, LockKeyhole, Messa
 import { type AnalysisResult, type StatementInput } from "../../../lib/prescore";
 import type {StatementScreeningResult} from "../../../lib/credit-engine/contracts/sources";
 import ApplicationChat from "../../dashboard/application-chat";
-export type StoredAnalysis = { id: string; companyName: string; companyInn: string; createdAt?: string; periodFrom?: string; periodTo?: string; bankNames?: string[]; viewTier?: string; screeningResults?: StatementScreeningResult[] };
+export type StoredAnalysis = { historyPurpose?: 'WORK' | 'QA'; id: string; companyName: string; companyInn: string; createdAt?: string; periodFrom?: string; periodTo?: string; bankNames?: string[]; viewTier?: string; screeningResults?: StatementScreeningResult[] };
 const rubles = (n: number) => new Intl.NumberFormat("ru-RU", {maximumFractionDigits:0}).format(n) + " ₽";
 const formatDate = (s: string) => s ? s.split("-").reverse().join(".") : "Не указан";
 export type Deal = {
