@@ -1,5 +1,70 @@
 # Prescore 19-block integration — acceptance ledger
 
+## Current checkpoint — Stage 1, 2026-11-03
+
+Scope: existing recovery branch → one checked staging delivery → ordinary browser acceptance. Production and Stage 2 remain excluded. The owner's current instruction authorizes the exact archived set in `2026-10-30-OWNER-ARCHIVE-REQUEST.json`; the historical approval blocker below is superseded. The archive implementation and CLI are unchanged.
+
+Final code checkpoint: `5e84d1695bb8abb2f22e080de3a569495943d4d7`, tree `fdf3f528e6925038d80a21a8e12099aec2a4861a`; the temporary index made from the exact 21 changed code/test files matches that GitHub tree. Logical preceding commits: `4ca8532555ac1a920ed358c7d1d22fa75747b715` (auth/internal administration) and `871c219c449d885042234ee487c5f4d4a7e04019` (history/context). Final source inputs: `c68d9c34f312c7b903cb22facac70e9b6959a0f8af1eab18da058e1a1a1cb0d9`, `PRESCORE-SOURCE-INPUTS-1`, 711 files, lock `8fc1937ff193da2f1cd7504442f2dd64e44559306a0f77d2775af83e17f9deb1`. Fresh files exactly match the packaged provenance. Local build ID `zgWAuDbHlmVcV3PKuw14p` is not a running-image identity.
+
+### Changes and route continuity
+
+| User scenario | Existing frontend → API → backend | Current change |
+|---|---|---|
+| Sign in / sign up / reset / logout | `app/login/credentials.tsx`, reset/logout → `/api/auth/[...all]` → `lib/auth/server.ts` / existing Better Auth tables | Preserve safe requested dossier+section across login using a proxy-overwritten request header; account switching goes through logout; logout handles network failure and duplicate clicks. No role creation or auth replacement. |
+| Personal history | `client.tsx` → `/api/workspace?projection=summary` and existing full projection → owner-scoped analyses query | Explicit metadata designates only the three protected IDs in the exact staging runtime/origin. Separate WORK and QA groups, QA disclosure, no name matching or filtered-away records. Existing authorization executes before annotation. |
+| Company navigation / reload | `client.tsx` → `use-model.ts` → `/api/workspace-model` → WorkspaceModelV1 | New analysis clears selected company without creating a record; 401/403/404 do not retain a financial model or stale company header. Documents retain their independent protected path. |
+| Broker | `broker.tsx` / existing ClientShell → `/api/agent`, assigned-dossier workspace path → existing agent assignment checks | Same shell and unchanged assigned-client/read-only contracts; ADMIN session is not BROKER evidence. |
+| Internal administration | `/prescore-control` → existing `app/admin/admin-dashboard.tsx` → existing `/api/admin` and `/api/billing/admin` | Server ADMIN check, noindex, no public links. Old `/admin` returns not-found. Existing administrative backend checks unchanged. |
+| Future counterparties | Existing ClientShell navigation | Explicit disabled “Контрагенты / Позже”; no second analysis path and no fake action/results. Payment navigation label is “Оплата”; no billing activation. |
+
+### Acceptance ledger — overall Stage 1 BLOCKED, not accepted
+
+| Criterion | Local | Live |
+|---|---|---|
+| A — authentication | PASS — existing real auth-handler/verification/reset/logout/expiry tests | BLOCKED — ordinary owner login PASS on old active version; registration, received reset email and working link not verified. |
+| B — roles | BLOCKED — server allow/deny and foreign-access tests PASS; mandatory 2FA missing | BLOCKED — owner ADMIN session available; separate CLIENT-only and BROKER sessions unavailable; no role grants. |
+| C — archive | PASS — unchanged archive/restore/idempotency/payload/document/entitlement tests | BLOCKED — 0 archived. Exact 14 ACTIVE = approved 11 + protected 3, matching owner, no broker links, applications 0; this is not a transactional CLI preview or verified DB snapshot. |
+| D — clean start / QA | PASS — explicit grouping, new work visibility and no name-based hiding | BLOCKED — candidate build RUNNING; no new live behavior claimed. |
+| E — context | PASS — explicit selection, clearing new context, safe full login return, 401/403/404 isolation | BLOCKED — reload on new active candidate pending. |
+| F — desktop/mobile / upload | BLOCKED — build and shell tests PASS; visual acceptance is not a CSS test | BLOCKED — safe before screenshots available; after capture timed out; mobile viewport not verified. |
+| G — finances | PASS — 6809 regression and 24 Credit Lab cases, no engine/parser/Golden/financial expectation edits | BLOCKED — no finance/source/document writes; three protected QA before hashes retained; after-activation parity not yet verified. |
+| H — traceability | PASS — exact GitHub code tree and packaged source-input match, all final local gates | BLOCKED — one Amvera RUNNING observation recorded; fresh candidate activation/health/ready/source match pending. |
+
+First complete regression: 6807/6809, 0 skipped, 783051.248632 ms. Exactly two pre-existing assertions required a public `/admin` link (admin-controls/platform-ui). The new user requirement intentionally forbids it. Assertions now reject both public administrative URLs; public CLIENT/AGENT and other route checks are retained. Added actual server-role/old-route negative tests. No Golden or financial expected value changed. Targeted auth/UI recheck: 19/19. Targeted new history/access/navigation recheck: 38/38. The complete gate was rerun on the final code; results below retain the failed attempt.
+
+Second complete gate: regression 6809/6809 (779859.127046 ms), Credit Lab 24/24, then LINT FAILED on `react/no-children-prop` in the new test. The correction passes the child as the third React.createElement argument; no product behavior changed. Corrected lint and the five new access/history tests pass. The third complete build and all gates PASS on the final code; the second attempt remains FAILED. Dockerfile and its mandatory gate remain unchanged. Local Docker is unavailable; container verification is still required by the existing Amvera build.
+
+### Final checks and one staging delivery
+
+Final local commands: `npm run build`, `node scripts/release/package-runtime.mjs`, `node scripts/qa/recovery-build-gate.mjs --build-only` — all exit 0. Regression **6809/6809**, zero skipped, 780941.706158 ms; Credit Lab **24/24**; lint PASS; standalone VALID with 13 runtime assets; PDF runtime text extraction PASS. Local Node 24 is not a substitute for the unchanged Node 22 Docker gate in Amvera.
+
+At 2026-11-03T11:29:52Z, staging advanced once from `db33a7624ea061879fe8e2efb32e0b58c75e4993` to **`8b0809bd5eb22223fc80d73739eaab4d05d2782d`**, a history-preserving merge with second parent `5e84d1695bb8abb2f22e080de3a569495943d4d7` and exact checked tree `fdf3f528e6925038d80a21a8e12099aec2a4861a`. Expected-SHA/non-force update succeeded. Direct staging-to-candidate comparison found 36 changed blobs, no removed paths; inherited archive changes were preserved. No parallel branch changes were overwritten. Recovery commits use `[skip ci]`; the existing Amvera hookup watches staging.
+
+**One Amvera observation at 2026-11-03T11:30:29.680Z: “Выполняется сборка” / RUNNING.** The version table still contained the prior successful rows and did not yet expose a new revision SHA. No second build, restart, activation or polling followed. Continue by checking this same delivery, not creating another. The last independently verified active revision/rollback remains `2cbc84ddc51c9ebf199ad9360d8dce0e3c3e10b0`; it is not relabelled as the new candidate. Candidate health/ready/source match and browser acceptance are NOT RUN. Full running digest/tree remain unverified.
+
+Ordinary cabinet URL: https://prescore-staging-dorogovab.msk1.amvera.tech/dashboard . Authenticated owner login and the prior desktop screen were observed there. After activation, verify: sign in → start a new analysis without creating a row → select a protected QA in “Тестовые данные” → open Documents → reload and retain the selected company. Do not write new source data into protected QA for this check.
+
+Safe evidence: [checkpoint and QA projection hashes](evidence/2026-11-03-stage1-checkpoint-safe.json), [login before](evidence/2026-11-03-stage1-login-before.jpg), [dashboard before](evidence/2026-11-03-stage1-dashboard-before.jpg). An Amvera screenshot capture timed out; no after screenshot is claimed. Documentation/evidence changes stay in recovery and must not trigger a second staging delivery.
+
+### Single remaining Stage 1 backlog
+
+1. Check the same staging delivery `8b0809bd5eb22223fc80d73739eaab4d05d2782d` on the next run. If successful, verify activation separately, then health/ready and source-input fingerprint. Do not push or rebuild merely to observe its completion. Docker gate remains enabled.
+2. Archive requires the existing authorized maintenance channel running the unchanged CLI, actual connection identity, a verified recoverable snapshot and a fresh owner/IDs/count/fingerprint/broker-link preview. Current local environment has no DATABASE_URL; Amvera only exposes a masked runtime secret. The application /data backup list is empty. The database panel shows the latest listed daily snapshot dated 2026-10-22 and manual snapshot dated 2026-10-17; these predate the 2026-10-28 protected QA/upload data. They do not satisfy a current verified recovery snapshot. The cluster notes also mention an isolated production database, so the cluster name alone is not proof of the runtime database identity. Do not export credentials or invent confirmations. Owner authorization is already present and must not be requested again.
+3. Existing Better Auth configuration has no 2FA plugin and existing schema has no factor enrollment. The installed package supports it, but activation requires a reviewed additive migration (`user.twoFactorEnabled`, plugin `twoFactor` records with encrypted secret/backup codes), owner enrollment/recovery and server enforcement for every ADMIN capability. No migration, fake 2FA or new privileged role was applied. Agree this minimal migration before executing it; hiding the URL is not 2FA.
+4. Obtain permitted separate CLIENT-only and BROKER identities/sessions; exercise received verification/reset mail and reset link through the ordinary flow. Do not invent email recipients or treat owner ADMIN as BROKER.
+5. After activation: ordinary dashboard + QA selection + documents/upload + reload; old URL and cross-role denial; desktop/mobile screenshots; exact active source metadata; archive batch/count and preserved QA evidence. Keep BLOCKED where these are absent.
+
+### Configuration presence (no external integrations called)
+
+Amvera `dorogovab/prescore-staging`: runtime mode `release-candidate`, exact canonical staging origin confirmed in UI. SMTP host/user/password/from variables present; delivery is unverified. AUTH_SECRET and DATABASE_URL present and masked. Checko, EIS, DeepSeek and acquiring credentials not listed in the complete 16-entry runtime configuration; no integration success inferred. Local build environment contains none of these live credentials. Existing synthetic fixtures and authorized real-source analyses are already present; no re-upload requested.
+
+### Requirements retained for later stages, not implemented here
+
+Counterparty checks reuse the same analytics; protected upload links without registration; FREE up to five quick checks per month and up to three justified own-company recommendations; paid target 500 with its period still undecided; Checko monitoring with update budget undecided; free financing requests; analysis versions and financing outcomes. Decide the 500 period and monitoring budget before commercial implementation. No guest upload, billing, Checko/EIS/DeepSeek integration or monitoring work in Stage 1.
+
+---
+Historical evidence below applies only to its stated code and dates.
+
 Updated 2026-10-30. Current packet: owner-only history archive, prepared in recovery; no live archive/deployment authorized yet. The accepted db33a762 print/local-AI results remain historical evidence for that code.
 
 ## Owner-only history cleanup — 2026-10-30

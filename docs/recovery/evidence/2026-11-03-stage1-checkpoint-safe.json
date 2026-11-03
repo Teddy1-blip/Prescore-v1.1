@@ -1,0 +1,240 @@
+{
+  "stage": 1,
+  "overallStatus": "BLOCKED",
+  "candidate": {
+    "commits": [
+      "4ca8532555ac1a920ed358c7d1d22fa75747b715",
+      "871c219c449d885042234ee487c5f4d4a7e04019",
+      "5e84d1695bb8abb2f22e080de3a569495943d4d7"
+    ],
+    "codeTree": "fdf3f528e6925038d80a21a8e12099aec2a4861a",
+    "localIndexMatchesGitHub": true,
+    "sourceInputs": {
+      "scope": "PRESCORE-SOURCE-INPUTS-1",
+      "algorithm": "SHA256_PATH_CONTENT_JSON",
+      "sha256": "c68d9c34f312c7b903cb22facac70e9b6959a0f8af1eab18da058e1a1a1cb0d9",
+      "fileCount": 711,
+      "lockSha256": "8fc1937ff193da2f1cd7504442f2dd64e44559306a0f77d2775af83e17f9deb1"
+    },
+    "localBuildId": "zgWAuDbHlmVcV3PKuw14p",
+    "inputsMatchPackagedBuild": true
+  },
+  "delivery": {
+    "status": "BUILD_RUNNING",
+    "stagingBefore": "db33a7624ea061879fe8e2efb32e0b58c75e4993",
+    "plannedCount": 1,
+    "deletedPaths": 0,
+    "comparedBlobChanges": 36,
+    "activeAmveraBefore": "2cbc84ddc51c9ebf199ad9360d8dce0e3c3e10b0",
+    "activeSourceFingerprintBefore": "80a9e0f06b05f2c4638f695c9f4a17aef41874663372e8de62cae63cfa5bc797",
+    "fullTreeAndRunningDigest": "UNVERIFIED",
+    "githubStaging": "8b0809bd5eb22223fc80d73739eaab4d05d2782d",
+    "githubUpdatedAt": "2026-11-03T11:29:52Z",
+    "amveraObservedAt": "2026-11-03T11:30:29.680Z",
+    "amveraObservedLabel": "Выполняется сборка",
+    "amveraNewRevision": "NOT_YET_EXPOSED_IN_VERSION_TABLE",
+    "buildStatusObservationCount": 1,
+    "additionalBuilds": 0,
+    "activationPerformed": false,
+    "newHealthReadyAndSourceMatch": "NOT_RUN",
+    "lastVerifiedActiveRevision": "2cbc84ddc51c9ebf199ad9360d8dce0e3c3e10b0",
+    "nextAction": "Check this same delivery without another push/build; then activation, health/ready/source match and ordinary browser checks."
+  },
+  "checks": {
+    "targetedAuthUi": {
+      "pass": 19,
+      "fail": 0
+    },
+    "targetedHistoryAccessNavigation": {
+      "pass": 38,
+      "fail": 0
+    },
+    "firstRegression": {
+      "pass": 6807,
+      "fail": 2,
+      "skipped": 0,
+      "reason": "Two old assertions required a public admin link, contrary to the new requirement. Replaced with public-link negative assertions and actual server-role denial tests."
+    },
+    "secondGate": {
+      "regressionPass": 6809,
+      "regressionFail": 0,
+      "creditLabPass": 24,
+      "status": "FAILED",
+      "stage": "LINT",
+      "reason": "New test passed children as a prop. Corrected to the third React.createElement argument."
+    },
+    "finalGate": {
+      "buildAndTypecheck": "PASSED",
+      "regression": {
+        "pass": 6809,
+        "fail": 0,
+        "skipped": 0,
+        "durationMs": 780941.706158
+      },
+      "creditLab": {
+        "pass": 24,
+        "fail": 0
+      },
+      "standaloneRuntimeAssets": 13,
+      "report": {
+        "version": "PRESCORE-RECOVERY-BUILD-GATE-1",
+        "lockSha256": "8fc1937ff193da2f1cd7504442f2dd64e44559306a0f77d2775af83e17f9deb1",
+        "scope": "BUILD_REGRESSION_ONLY",
+        "browserAccepted": false,
+        "liveAccepted": false,
+        "status": "PASSED",
+        "checks": [
+          {
+            "stage": "REGRESSION",
+            "status": "PASSED",
+            "exitCode": 0
+          },
+          {
+            "stage": "CREDIT_LAB",
+            "status": "PASSED",
+            "exitCode": 0
+          },
+          {
+            "stage": "LINT",
+            "status": "PASSED",
+            "exitCode": 0
+          },
+          {
+            "stage": "ARTIFACT",
+            "status": "PASSED",
+            "exitCode": 0
+          },
+          {
+            "stage": "PDF_RUNTIME",
+            "status": "PASSED",
+            "exitCode": 0
+          }
+        ]
+      },
+      "processExitCode": 0
+    },
+    "dockerGateDisabled": false,
+    "goldenOrFinancialExpectationsChanged": false,
+    "logs": [
+      {
+        "file": "stage1-build-r3.log",
+        "sha256": "0409086af0d0744fd5cdfd2a36900eef0ede659955a14461d1901484f1bb6c88",
+        "bytes": 2244
+      },
+      {
+        "file": "stage1-package-r3.log",
+        "sha256": "b85fa3635ee98e1d7d968b99c4e0b2fa11df7b984e50dfe1132fd39d2905c83e",
+        "bytes": 275
+      },
+      {
+        "file": "stage1-gates-r3.log",
+        "sha256": "17841ea7e40c8901a86b642a6314994dd162f051daa8fe25ee83b9bd98b5a6f7",
+        "bytes": 475317
+      }
+    ]
+  },
+  "data": {
+    "archivedCount": 0,
+    "archiveBatchId": null,
+    "protectedQaBefore": {
+      "observedAt": "2026-11-03T11:05:41.581Z",
+      "liveChangedCount": 0,
+      "qaBaselines": [
+        {
+          "analysisId": "36527dc1-d7db-4fef-bd47-719a451b4d58",
+          "state": "READY_FULL",
+          "scope": "analysis/sources/bankingFacts/financialAnalysis/prescoreIndex/debtCapacity/financingReadiness/entitlement",
+          "sha256": "cccefaa81dd3cad8358b14f07cd53f2c1c34d409591632ca6d697c7d7c48e43a"
+        },
+        {
+          "analysisId": "992ab9e3-672e-4adf-955e-9a2c40e3ece3",
+          "state": "READY_FULL",
+          "scope": "analysis/sources/bankingFacts/financialAnalysis/prescoreIndex/debtCapacity/financingReadiness/entitlement",
+          "sha256": "9f4f7df5bb872c6bf7ff9689199b4be0d4e73bfe79a8686c008ce3e74d2e7c08"
+        },
+        {
+          "analysisId": "7ec7daeb-dfef-4f1f-9c9d-15ea86fe864c",
+          "state": "READY_FULL",
+          "scope": "analysis/sources/bankingFacts/financialAnalysis/prescoreIndex/debtCapacity/financingReadiness/entitlement",
+          "sha256": "bdf72efab952c374c2eda5de7a331b0e8b89cf05c95453c6565f448b2235330b"
+        }
+      ]
+    },
+    "liveInventory": {
+      "activeTotal": 14,
+      "approvedArchiveCount": 11,
+      "protectedQaCount": 3,
+      "exactSetMatches": true,
+      "ownerMatchesPrivateRequest": true,
+      "brokerLinks": 0,
+      "applications": 0,
+      "isTransactionalCliPreview": false
+    },
+    "archiveBlockers": [
+      "Actual staging database identity not established through a maintenance connection",
+      "No fresh verified recoverable snapshot; listed DB backups predate protected QA uploads",
+      "No authorized runtime maintenance CLI session; no local DATABASE_URL"
+    ],
+    "financialDataWrites": 0,
+    "protectedQaAfter": "NOT_VERIFIED"
+  },
+  "otherBlockers": [
+    "Administrator 2FA enrollment/schema/server enforcement missing; additive existing Better Auth plugin migration proposed, not executed",
+    "Separate authorized CLIENT-only and BROKER browser sessions unavailable",
+    "Received verification/reset email and working link not verified",
+    "New active release desktop/mobile and reload browser checks pending"
+  ],
+  "productionTouched": false,
+  "mainTouched": false,
+  "stage2Started": false,
+  "secretsDisclosed": false,
+  "checkpointAt": "2026-11-03T11:30:29.680Z",
+  "evidence": {
+    "beforeLogin": "2026-11-03-stage1-login-before.jpg",
+    "beforeDashboard": "2026-11-03-stage1-dashboard-before.jpg",
+    "afterScreenshot": "UNAVAILABLE: browser capture timed out; no screenshot or live acceptance fabricated",
+    "mobileViewport": "NOT_VERIFIED; no supported viewport-size API exposed"
+  },
+  "acceptance": {
+    "A": {
+      "local": "PASS",
+      "live": "BLOCKED",
+      "detail": "Existing auth handlers tested; ordinary owner login passed on prior active code; registration and received reset email/link not verified."
+    },
+    "B": {
+      "local": "BLOCKED",
+      "live": "BLOCKED",
+      "detail": "Existing role and foreign-access tests PASS; 2FA missing, separate CLIENT-only/BROKER sessions unavailable."
+    },
+    "C": {
+      "local": "PASS",
+      "live": "BLOCKED",
+      "detail": "Unchanged archive/restore safeguards tested; archived 0; snapshot, DB identity and live CLI preview missing."
+    },
+    "D": {
+      "local": "PASS",
+      "live": "BLOCKED",
+      "detail": "Explicit staging QA metadata and clean new-analysis context tested; candidate still building."
+    },
+    "E": {
+      "local": "PASS",
+      "live": "BLOCKED",
+      "detail": "Selection, login return and error-context handling tested; new published reload not verified."
+    },
+    "F": {
+      "local": "BLOCKED",
+      "live": "BLOCKED",
+      "detail": "Build and shell tests PASS; final desktop/mobile visual acceptance unavailable."
+    },
+    "G": {
+      "local": "PASS",
+      "live": "BLOCKED",
+      "detail": "Full regression and Credit Lab PASS; no finance/source writes, protected QA before hashes retained; post-activation parity not verified."
+    },
+    "H": {
+      "local": "PASS",
+      "live": "BLOCKED",
+      "detail": "Full GitHub SHA/tree, local source inputs and one build observation recorded; active candidate health/ready/source match pending."
+    }
+  }
+}
