@@ -229,3 +229,24 @@ test('removed or unselected analysis cannot leak a cached company into the heade
   assert.equal(JSON.stringify(model),before);
  }
 });
+
+test('QA lives in a separate disclosure and explicit selector group; work with QA in its name remains work',()=>{
+ const control={...company,id:'test-control',companyName:'Control company',historyPurpose:'QA'};
+ const work={...company,companyName:'QA real working company',historyPurpose:'WORK'};
+ const tree=harness({analyses:[control,work]}).render();
+ const history=named(tree,'Panel').find(n=>n.props.title==='Последние активные анализы');
+ assert.match(text(history),/QA real working company/);assert.doesNotMatch(text(history),/Control company/);
+ const disclosure=named(tree,'details').find(n=>n.props.className==='pc-test-history');
+ assert.match(text(disclosure),/Control company/);assert.match(text(disclosure),/Тестовые данные/);
+ assert.deepEqual(named(tree,'optgroup').map(n=>n.props.label),['Рабочие компании','Тестовые данные']);
+});
+test('starting a new analysis clears the selected company and does not persist a phantom record',()=>{
+ const h=harness({selectedId:company.id,model:readyModel()});
+ named(h.render(),'ClientShell')[0].props.choose('upload');
+ const tree=h.render();assert.equal(h.values[2],'');assert.equal(h.values[0].length,1);
+ assert.equal(new URL(h.window.location.href).searchParams.has('analysisId'),false);
+ assert.equal(named(tree,'Analyze').length,1);
+ const header=nodes(tree).find(n=>n.props.className==='pc-company');
+ assert.doesNotMatch(text(header),/Owned company/);
+ assert.equal(named(tree,'select')[0].props.value,'');
+});

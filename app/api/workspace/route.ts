@@ -8,6 +8,7 @@ import { applyAnalysisControls, readControlState } from "../../../lib/admin-cont
 import { readableAnalysis, requireApiUser, unauthorized } from "../api-auth";
 import { analysisView, resolveAnalysisTier } from "../../../lib/entitlements";
 import { structuredAttachmentIsUntrusted } from "../../../lib/credit-engine/source-foundation";
+import { withHistoryPurpose } from '../../../lib/workspace/history';
 
 // Batch consumers (including admin controls) require only the common statement methods.
 // Keep all() on prepared statements used for lightweight summary queries.
@@ -143,7 +144,7 @@ export async function GET(request: Request) {
         id: string; companyName: string; companyInn: string;
         createdAt: string; periodFrom: string; periodTo: string;
       }>();
-      return Response.json({ analyses: results, deals: [], readOnly: false,
+      return Response.json({ analyses: results.map(withHistoryPurpose), deals: [], readOnly: false,
         accessRole: "owner", projection: "summary" });
     }
     await ensureSchema(db);
@@ -165,7 +166,7 @@ export async function GET(request: Request) {
       const histories = historyResult.results as Array<{ applicationId: string }>;
       const deals = (dealResult.results as Array<Record<string, unknown>>).map((deal) => ({ ...deal, statusHistory: histories.filter((item) => item.applicationId === deal.id) }));
       const tier = await resolveAnalysisTier(db, { analysisId: parsed.id, userEmail: access.row.ownerEmail, companyInn: access.row.companyInn, privileged: user.isAdmin || access.access === "agent" });
-      return Response.json({ analyses: [analysisView(applyAnalysisControls(parsed, controls), tier)], deals, readOnly: access.access === "agent", accessRole: access.access });
+      return Response.json({ analyses: [withHistoryPurpose(analysisView(applyAnalysisControls(parsed, controls), tier))], deals, readOnly: access.access === "agent", accessRole: access.access });
     }
     const [analysisResult, dealResult, historyResult] = await db.batch([
       db.prepare("SELECT payload FROM analyses WHERE archive_state = 'ACTIVE' AND owner_email = ? ORDER BY created_at DESC LIMIT 50").bind(user.email),
@@ -178,7 +179,7 @@ export async function GET(request: Request) {
     const storedAnalyses = (analysisResult.results as Array<{ payload: string }>).map((row) => safeJson(row.payload) as AnalysisResult | null).filter((item): item is AnalysisResult => Boolean(item));
     const analyses = await Promise.all(storedAnalyses.map(async (item) => {
       const tier = await resolveAnalysisTier(db, { analysisId: item.id, userEmail: user.email, companyInn: item.companyInn, privileged: user.isAdmin });
-      return analysisView(applyAnalysisControls(item, controls), tier);
+      return withHistoryPurpose(analysisView(applyAnalysisControls(item, controls), tier));
     }));
     const histories = historyResult.results as Array<{ applicationId: string }>;
     const deals = (dealResult.results as Array<Record<string, unknown>>).map((deal) => ({ ...deal, statusHistory: histories.filter((item) => item.applicationId === deal.id) }));

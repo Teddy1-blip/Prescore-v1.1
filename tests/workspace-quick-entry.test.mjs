@@ -1,3 +1,4 @@
+import {withHistoryPurpose} from '../lib/workspace/history.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -13,6 +14,7 @@ function loadRoute(user,db){
  assert.equal(compiled.diagnostics?.filter(x=>x.category===ts.DiagnosticCategory.Error).length,0);
  const exports={};
  function mocked(id){
+  if(id.endsWith('/workspace/history'))return {withHistoryPurpose};
   if(id.endsWith('/platform/runtime'))return {getRuntime:()=>({DB:db})};
   if(id.endsWith('/api-auth'))return {requireApiUser:async()=>user,unauthorized:()=>Response.json({error:'Unauthorized'},{status:401})};
   if(id.endsWith('/release/security'))return {safeErrorText:()=> 'SAFE_ERROR'};
