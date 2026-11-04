@@ -1,6 +1,68 @@
 # Prescore 19-block integration — acceptance ledger
 
-## Current checkpoint — Stage 1 continuation, 2026-11-03
+## Current checkpoint — Stage 1 finish, 2026-11-04
+
+Latest authority: owner attachment `Prescore_Stage_1_Finish_Work.txt` and Issue #11 comment 6627365595. Continued from recovery `cc6fc4b8f9a3a78738dea7ef23e92cea11c7c57f`; no newer recovery/staging head was overwritten. **Stage 1 remains BLOCKED, not presented as technically complete. Stage 2 not started.**
+
+The owner now authorizes the bounded staging MFA rollout, subject to verified post-deletion backup/isolated restore and a compatible checked artifact. This replaces the previous missing-permission blocker; do not ask for that permission again. “Версия анализа” is untouched. The existing MFA implementation from `d36a39528c5c9c41a7548fec6c1a4e43172cd8f8` is reused, not rewritten.
+
+The owner-provided SELECT result dated 2026-11-04 is `database_name=prescorestaging`, `old_left=0`, `qa_left=3`. It is **owner evidence**, not Work SQL verification or proof of complete dependent-table cleanup. No repeat deletion, archival or restore of the 11 records was run. The old archive blocker/commands in historical checkpoints are superseded and must not be executed.
+
+### Published result retained and narrowly rechecked
+
+GitHub staging remains **`8b0809bd5eb22223fc80d73739eaab4d05d2782d`**; existing Amvera code revision **`558be82bea4a078b6672086e917ef877f41c0e98`**, application running 1/1. The previous activation proof is retained; no new build, restart or status-poll loop occurred. Fresh health at **2026-11-04T10:24:24.946Z (13:24:24 Moscow)**: alive=true, schema label `0009_analysis_archive.sql`; immediately preceding ready read reports READY, database REACHABLE, schema COMPATIBLE, storage READ_WRITE, outbox ACCESSIBLE. These browser JSON observations do not assert a separately measured HTTP status or SQL catalog inspection.
+
+The live source-input fingerprint remains `c68d9c34f312c7b903cb22facac70e9b6959a0f8af1eab18da058e1a1a1cb0d9`, `PRESCORE-SOURCE-INPUTS-1`, 711 files, lock `8fc1937ff193da2f1cd7504442f2dd64e44559306a0f77d2775af83e17f9deb1`. Full checkout tree and running/published image digests remain UNVERIFIED, not inferred from scoped inputs.
+
+Ordinary `/dashboard` with no analysisId and reload show **0 ordinary history entries, 3 QA separately**. After viewing a protected QA, known removed ID `4f95b8fa-d933-46d4-893b-992385b5d893` shows the unavailable-analysis error with generic company context, no substituted old/foreign model. Existing accepted New analysis / Documents / reload / logout-return / internal admin / old-admin-404 checks remain attached to the original staging SHA; they were not reset or relabelled as new-role/MFA acceptance.
+
+All three current QA financial projection hashes match the 2026-11-03 baseline using the same browser projection/serialization algorithm:
+
+| QA ID | SHA-256 |
+|---|---|
+| `36527dc1-d7db-4fef-bd47-719a451b4d58` | `cccefaa81dd3cad8358b14f07cd53f2c1c34d409591632ca6d697c7d7c48e43a` |
+| `992ab9e3-672e-4adf-955e-9a2c40e3ece3` | `9f4f7df5bb872c6bf7ff9689199b4be0d4e73bfe79a8686c008ce3e74d2e7c08` |
+| `7ec7daeb-dfef-4f1f-9c9d-15ea86fe864c` | `bdf72efab952c374c2eda5de7a331b0e8b89cf05c95453c6565f448b2235330b` |
+
+### A–G acceptance, live result separate from local tests
+
+| Condition | Status | Evidence and precise remainder |
+|---|---|---|
+| A — independent CLIENT registration/login | **BLOCKED** | Existing native auth/authorization tests pass locally; live browser still uses owner ADMIN. Two controlled test email values have not yet been supplied. Current Work browser exposes no independent cookie contexts; separate tabs are not accepted as separate profiles. No accounts/real roles changed. |
+| B — assigned BROKER, foreign denial/revocation | **BLOCKED** | Local role/API fixtures retained; no permitted live dedicated BROKER identity or independent profile. Need owner-controlled broker test address, normal account registration and scoped test assignment/revocation through existing controls. |
+| C — received reset email and changed test password | **BLOCKED** | No designated test recipient/account yet; connected mail tool unavailable. No owner reset was requested. Once the test account exists, owner privately receives/opens the real email and changes its password in the existing flow; local mailbox/SMTP acceptance is not receipt. |
+| D — ADMIN MFA required/new login/recovery | **BLOCKED** | Prepared native 2FA reused; additive migration candidate and targeted tests ready. No actual DB/storage maintenance session, fresh verified backup or isolated restored copy. No live migration/config/enrollment/required change. Owner factor UI is not yet published: do not ask for enrollment until it is ready. |
+| E — published desktop/mobile | **ОЖИДАЕТ ДЕЙСТВИЯ ВЛАДЕЛЬЦА (mobile)** | Existing desktop acceptance retained; fresh dashboard screenshot and DOM viewport 1363×936, document scrollWidth 1348. Supported browser API has no viewport or independent-profile control; prior ineffective shortcut not repeated. After final activation, use owner's phone/independent browser for the short login/error/reset/menu/New analysis/Documents/reload/logout/safe MFA-screen scenario; no secret screenshots. |
+| F — history, current data/documents/QA | **PASS within checked scope** | Fresh empty ordinary history/reload, three separate QA and identical financial hashes; deleted-ID denial without fallback. No new source/document/AI writes. Prior Documents result retained. This does not assert complete dependent-table cleanup, a SQL backup or successful restore. |
+| G — new staging/schema/provenance/compatible recovery | **BLOCKED** | Existing live delivery remains accepted. Recovery activation candidate is prepared, but not deployed: startup auto-applies 0010, so backup/restore and a verified compatible switch path must come first. New candidate/container/live acceptance are distinct from the historical 711-file delivery. |
+
+### Recovery candidate and verification
+
+Code commit **`1ba46bcb55b918a78469cfca7864fae680a833cf`**, tree **`3b33f9eeedb625011875e8cd5d670e34e02fdecf`**. GitHub tree equals the locally checked temporary-index tree. Recovery advanced by expected-SHA, non-force update from `cc6fc4b8f9a3a78738dea7ef23e92cea11c7c57f`; staging did not advance.
+
+Only the prepared MFA migration was promoted to `lib/db/migrations/0010_admin_mfa.sql`; old proposed copy removed to avoid two definitions. Catalog, MFA key/constraint/default validation, runtime schema version, Docker schema label and standalone validator agree on 0010. Existing PostgreSQL upgrade scenario now expects the additive `user.twoFactorEnabled=false` field. Prior migrations 0001–0009 match the published recovery index byte-for-byte. No parser, credit engine, Golden, archive mechanism, analysis-version UI, lock file or package change.
+
+Targeted final auth/migration/role/UI/runtime checks: **34/34 PASS**, 0 skipped, 8820.772883 ms. New migration test covers upgrade from 0009, interruption after MFA DDL before history insert, transactional rollback, unchanged analysis/document/role/session rows, retry, no-op second run, old-registry rejection, unique factor owner, FK/method/counter constraints, proof cascade and schema drift fail-closed. Synthetic PGlite rehearsal is **not** restoration of the current staging backup.
+
+Final local build/typecheck and full gate: **PASS** — regression **6821/6821**, 0 failed/skipped, 791296.167717 ms; Credit Lab **24/24**; lint; standalone **VALID / 13 runtime assets / 0010**; PDF runtime extraction. All five gate stages and the process exited 0. Runtime was **Node 24.22.1**, not a Node 22 Docker build. The historical 6820/6820 result was not transferred to changed code. [Safe candidate evidence](evidence/2026-11-04-stage1-candidate-safe.json).
+
+New packaged inputs: **`e53db33e34da9d53e21138344fef2203a028bed22b689706ee5cccacc30c82b6`**, scope `PRESCORE-SOURCE-INPUTS-1`, **717 files**, same lock. Local standalone build ID `6Lv_ilJ9sy3g9ZhN3T9El`. Local mirror checkout provenance honestly reports UNVERIFIED_DIRTY_CHECKOUT with null commit/tree; no environment-variable SHA substitution. These are scoped input identities, not a running container digest. Compatible local 0010 standalone is prepared at `.next/standalone`; no verified container recovery/switch path is claimed.
+
+A fresh Node 22 container gate remains **BLOCKED**: no local Docker/Podman; the GitHub workflow page exposes no Run workflow control in this session. Last existing RC1 run [39172424372](https://github.com/Teddy1-blip/Prescore-v1.1/actions/runs/39172424372), historical commit `b27ae31ab3c8be3eccae6a799abd4c9976236d47`, reports all jobs not started because of account payment/spending-limit restrictions. This historical failure is not a new-candidate result; no unchanged job rerun or paid setting change was made. The existing Dockerfile gate remains mandatory and unchanged apart from the accurate schema label.
+
+Fresh automatic product QA for the real code change: [run 41815387569](https://github.com/Teddy1-blip/Prescore-v1.1/actions/runs/41815387569), exact code SHA `1ba46bcb55b918a78469cfca7864fae680a833cf`, **RUNNING / in_progress** observed once at **2026-11-04T10:38:12.836023+00:00**. No conclusion is claimed; no status polling, rerun or additional build follows. This workflow is validation, not an Amvera delivery and not the separate RC1 container gate. Resume this same run later. The documentation checkpoint uses `[skip ci]` and must not be transferred to staging.
+
+### Operational continuation, without another audit
+
+One exact operator action: open [Amvera staging](https://cloud.amvera.ru/projects/applications/msk1/~/dorogovab/prescore-staging), **Чат поддержки → Чат поддержки**, and send the non-secret request in the updated [MFA rollout record](2026-11-03-ADMIN-MFA-ROLLOUT.md#exact-current-operational-blocker). Existing Repository → Online IDE returned upstream connection timeout, unchanged after one reload. `/data` backup list is empty; newest visible database scheduled copy is 2026-10-22. Runtime DB/storage identity and isolated restore destination have not been established. Do not stop the app, assert a backup exists, migrate, deploy or enable enrollment while these conditions are missing. No DBeaver setup or manual SQL chain is required from the owner.
+
+The owner selected “Укажу адреса” but supplied no values yet: the only non-secret information needed now is two controlled test email addresses and whether staging accounts already exist. Do not invent recipients or use the owner's real account for password reset. Factor/password/mail/mobile personal actions must be handed off in the ready interface when their prerequisites are satisfied, together rather than as repeated credential requests.
+
+Evidence: [safe live checkpoint](evidence/2026-11-04-stage1-live-safe.json), [desktop history](evidence/2026-11-04-stage1-history-live.jpg). No secrets, QR/setup key, password, reset token or backup code was saved. No live schema, data, role, password, MFA setting or mail configuration was changed by Work in this continuation. No restart/build/deploy to Amvera was initiated; staging remained available. Production/main/DNS untouched. Future tariff parameters and Checko/EIS/DeepSeek/payment access remain in the existing backlog below; no Stage 2 work.
+
+---
+
+## Prior checkpoint — Stage 1 continuation, 2026-11-03 (historical)
 
 Continued from Issue #11 / 6602289739 and recovery `9e9dee2dda48bf52317ded85f380a38ccc75ae1f`. Actual recovery/staging HEADs and newer comments were read before work and rechecked before publication; no newer changes were found or overwritten. Existing development and archive machinery were not repeated. **Overall Stage 1 remains BLOCKED / not accepted.**
 

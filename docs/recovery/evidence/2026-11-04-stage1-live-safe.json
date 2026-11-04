@@ -1,0 +1,75 @@
+{
+  "observedAt": "2026-11-04T10:24:40.174Z",
+  "qa": [
+    {
+      "id": "36527dc1-d7db-4fef-bd47-719a451b4d58",
+      "sha256": "cccefaa81dd3cad8358b14f07cd53f2c1c34d409591632ca6d697c7d7c48e43a"
+    },
+    {
+      "id": "992ab9e3-672e-4adf-955e-9a2c40e3ece3",
+      "sha256": "9f4f7df5bb872c6bf7ff9689199b4be0d4e73bfe79a8686c008ce3e74d2e7c08"
+    },
+    {
+      "id": "7ec7daeb-dfef-4f1f-9c9d-15ea86fe864c",
+      "sha256": "bdf72efab952c374c2eda5de7a331b0e8b89cf05c95453c6565f448b2235330b"
+    }
+  ],
+  "health": {
+    "alive": true,
+    "version": {
+      "application": "prescore-rc1",
+      "billingContractVersion": "BILLING_V1",
+      "buildProvenance": {
+        "buildId": "eEV00kHUIwKM9l-CJy11z",
+        "checkoutStatus": "UNAVAILABLE",
+        "fileCount": 711,
+        "lockSha256": "8fc1937ff193da2f1cd7504442f2dd64e44559306a0f77d2775af83e17f9deb1",
+        "publishedImageDigest": null,
+        "runningImageDigest": null,
+        "scope": "PRESCORE-SOURCE-INPUTS-1",
+        "sourceFingerprint": "c68d9c34f312c7b903cb22facac70e9b6959a0f8af1eab18da058e1a1a1cb0d9",
+        "sourceIdentity": "BUILD_CHECKOUT",
+        "status": "PACKAGED_INPUT_FINGERPRINT",
+        "version": "PRESCORE-BUILD-PROVENANCE-1"
+      },
+      "buildTimestamp": "2026-11-03T11:37:04.265Z",
+      "publicReportContractVersion": "PRESCORE-CLIENT-REPORT-1.0.0-SHADOW",
+      "releaseId": "PRESCORE-V1-RC3-20261019",
+      "schemaVersion": "0009_analysis_archive.sql",
+      "sourceSha": "UNKNOWN",
+      "sourceTree": "UNKNOWN",
+      "version": "1.0.0-rc.1"
+    }
+  },
+  "ready": {
+    "code": "READY",
+    "components": {
+      "configuration": "VALID",
+      "database": "REACHABLE",
+      "outbox": "ACCESSIBLE",
+      "schema": "COMPATIBLE",
+      "storage": "READ_WRITE"
+    },
+    "ready": true
+  },
+  "history": {
+    "normalCount": 0,
+    "qaCount": 3,
+    "reload": true,
+    "oldIdRejected": "4f95b8fa-d933-46d4-893b-992385b5d893",
+    "oldIdFallback": false
+  },
+  "viewport": {
+    "width": 1363,
+    "height": 936,
+    "documentScrollWidth": 1348
+  },
+  "capabilities": {
+    "independentBrowserContexts": false,
+    "mobileViewport": false,
+    "ide": "upstream connection timeout after one reload",
+    "dataBackupList": "empty",
+    "databaseBackupNewest": "2026-10-22",
+    "maintenanceEstablished": false
+  }
+}

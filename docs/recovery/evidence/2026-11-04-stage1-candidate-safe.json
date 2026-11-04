@@ -1,0 +1,136 @@
+{
+  "codeCommit": "1ba46bcb55b918a78469cfca7864fae680a833cf",
+  "gitTree": "3b33f9eeedb625011875e8cd5d670e34e02fdecf",
+  "baseRecovery": "cc6fc4b8f9a3a78738dea7ef23e92cea11c7c57f",
+  "staging": "8b0809bd5eb22223fc80d73739eaab4d05d2782d",
+  "amveraExisting": "558be82bea4a078b6672086e917ef877f41c0e98",
+  "candidateSchema": "0010_admin_mfa.sql",
+  "liveHealthSchemaLabel": "0009_analysis_archive.sql",
+  "build": {
+    "exitCode": 0,
+    "node": "24.22.1",
+    "provenance": {
+      "version": "PRESCORE-BUILD-PROVENANCE-1",
+      "preparedAt": "2026-11-04T10:21:29.512Z",
+      "inputs": {
+        "scope": "PRESCORE-SOURCE-INPUTS-1",
+        "algorithm": "SHA256_PATH_CONTENT_JSON",
+        "sha256": "e53db33e34da9d53e21138344fef2203a028bed22b689706ee5cccacc30c82b6",
+        "fileCount": 717,
+        "lockSha256": "8fc1937ff193da2f1cd7504442f2dd64e44559306a0f77d2775af83e17f9deb1"
+      },
+      "checkout": {
+        "status": "UNVERIFIED_DIRTY_CHECKOUT",
+        "commit": null,
+        "tree": null
+      },
+      "packagedAt": "2026-11-04T10:22:29.001Z",
+      "buildId": "6Lv_ilJ9sy3g9ZhN3T9El",
+      "publishedImageDigest": null,
+      "runningImageDigest": null
+    }
+  },
+  "targeted": {
+    "passed": 34,
+    "failed": 0,
+    "skipped": 0,
+    "durationMs": 8820.772883
+  },
+  "fullRegression": {
+    "passed": 6821,
+    "failed": 0,
+    "skipped": 0,
+    "durationMs": 791296.167717
+  },
+  "creditLab": {
+    "passed": 24,
+    "failed": 0
+  },
+  "localGate": {
+    "version": "PRESCORE-RECOVERY-BUILD-GATE-1",
+    "lockSha256": "8fc1937ff193da2f1cd7504442f2dd64e44559306a0f77d2775af83e17f9deb1",
+    "scope": "BUILD_REGRESSION_ONLY",
+    "browserAccepted": false,
+    "liveAccepted": false,
+    "status": "PASSED",
+    "checks": [
+      {
+        "stage": "REGRESSION",
+        "status": "PASSED",
+        "exitCode": 0
+      },
+      {
+        "stage": "CREDIT_LAB",
+        "status": "PASSED",
+        "exitCode": 0
+      },
+      {
+        "stage": "LINT",
+        "status": "PASSED",
+        "exitCode": 0
+      },
+      {
+        "stage": "ARTIFACT",
+        "status": "PASSED",
+        "exitCode": 0
+      },
+      {
+        "stage": "PDF_RUNTIME",
+        "status": "PASSED",
+        "exitCode": 0
+      }
+    ]
+  },
+  "priorMigrationsUnchanged": [
+    {
+      "file": "lib/db/migrations/0001_product.sql",
+      "sha256": "c9d986d1b9b9a08e778a27f6bd56eced2223df52617af321c0c4fa12e94e2054"
+    },
+    {
+      "file": "lib/db/migrations/0002_platform_auth.sql",
+      "sha256": "cd4e1141871afd208f3b4c9a0249854c9a9b1e3f51d40539bf1ee03a68af489d"
+    },
+    {
+      "file": "lib/db/migrations/0003_runtime_indexes.sql",
+      "sha256": "cae77c497ae55073a692d337a34b4805e4c210f013b9f0b142c84b8a09839984"
+    },
+    {
+      "file": "lib/db/migrations/0004_admin_observations.sql",
+      "sha256": "4e1facfb0cda389ede71658b3f8ef163baaf8831874cd72b06059d220d1a7bc5"
+    },
+    {
+      "file": "lib/db/migrations/0005_admin_cache_invalidation.sql",
+      "sha256": "53a0aac3ad078aabeaa8ed0317aff144edd7ca682721a1afa5c12245dea317c3"
+    },
+    {
+      "file": "lib/db/migrations/0006_billing_v1.sql",
+      "sha256": "112900dce8dc6ae4f5d84581ceafff1f6c062edaffa9e5e87a06321202520464"
+    },
+    {
+      "file": "lib/db/migrations/0007_rc1_operations.sql",
+      "sha256": "65a35d2062c5a957081a345aafb110381f1a721635b41aab8f06f7bb8b8977f0"
+    },
+    {
+      "file": "lib/db/migrations/0008_rc1_lookup_indexes.sql",
+      "sha256": "89fed8f17f182a6531d3456a4d183d74addc9eba7e3a4d236edc4d6ee44add7c"
+    },
+    {
+      "file": "lib/db/migrations/0009_analysis_archive.sql",
+      "sha256": "346685ec80a752bd076dca99648bca662157e6f9f2a75c6c81ae81d7cef62ee5"
+    }
+  ],
+  "rehearsal": "synthetic PGlite only; not a restored staging backup",
+  "containerGate": "NOT_RUN_FOR_CANDIDATE",
+  "stagingBackupRestore": "NOT_PERFORMED",
+  "liveSchemaDataRolesConfigMutations": false,
+  "stage1Accepted": false,
+  "githubQAObservation": {
+    "observedAt": "2026-11-04T10:38:12.836023+00:00",
+    "runId": 41815387569,
+    "status": "in_progress",
+    "conclusion": null,
+    "url": "https://github.com/Teddy1-blip/Prescore-v1.1/actions/runs/41815387569",
+    "headSha": "1ba46bcb55b918a78469cfca7864fae680a833cf",
+    "observationCount": 1
+  }
+}
