@@ -1,3 +1,4 @@
+import * as brokerAuthorization from '../lib/auth/broker-authorizations.ts';
 import * as releaseSecurity from '../lib/release/security.ts';
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -20,6 +21,7 @@ function load(file, imports) {
   new Function("exports", "require", ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText)(exports, (name) => {
+    if(name.endsWith('/lib/auth/broker-authorizations'))return brokerAuthorization;
     if (name in imports) return imports[name];
     throw new Error("UNEXPECTED_IMPORT:" + name);
   });
@@ -66,7 +68,7 @@ for (const ownerFull of [false, true]) test(ownerFull
   });
 
   try {
-    for (const migration of ["0001_product.sql", "0003_runtime_indexes.sql", "0009_analysis_archive.sql"]) {
+    for (const migration of ["0001_product.sql", "0002_platform_auth.sql", "0003_runtime_indexes.sql", "0009_analysis_archive.sql"]) {
       await pg.exec(fs.readFileSync("lib/db/migrations/" + migration, "utf8"));
     }
 
@@ -168,6 +170,9 @@ for (const ownerFull of [false, true]) test(ownerFull
     await db.prepare("INSERT INTO agent_leads (id, agent_code, company_name, company_inn, email, consent_at) " +
       "VALUES (?, ?, ?, ?, ?, ?)")
       .bind("lead-1", "ws-agent", saved.companyName, saved.companyInn, current.email, "2026-07-31").run();
+    for(const email of [current.email,'workspace-broker@test.invalid'])await query('INSERT INTO "user"(id,email,name,"emailVerified") VALUES($1,$1,$1,true)',[email]);
+    const oldOrigin=process.env.PRESCORE_BASE_URL;process.env.PRESCORE_BASE_URL='https://prescore.test';
+    try{const grant=await brokerAuthorization.authorizeBroker(new Request('https://prescore.test/api/workspace',{headers:{origin:'https://prescore.test'}}),db,current,{operation:'grant',analysisId,brokerEmail:'workspace-broker@test.invalid',purpose:'DOSSIER',confirmed:true,days:30,requestId:crypto.randomUUID()});assert.equal(grant.status,201);}finally{if(oldOrigin===undefined)delete process.env.PRESCORE_BASE_URL;else process.env.PRESCORE_BASE_URL=oldOrigin;}
     current = { email: "workspace-broker@test.invalid", isAdmin: false };
     const brokerBefore = await apiAuth.readableAnalysis(db, analysisId, current);
     assert.equal(brokerBefore.access, "agent");

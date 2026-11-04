@@ -7,6 +7,8 @@ const json=body=>({method:'POST',headers:{'content-type':'application/json'},bod
 test('broker applications remain authorized, idempotent and consistent after reload',async t=>{
  const previous=process.env.PRESCORE_STORAGE_ROOT,storage=fs.mkdtempSync(path.join(os.tmpdir(),'broker-docs-'));process.env.PRESCORE_STORAGE_ROOT=storage;t.after(()=>{if(previous===undefined)delete process.env.PRESCORE_STORAGE_ROOT;else process.env.PRESCORE_STORAGE_ROOT=previous;fs.rmSync(storage,{recursive:true,force:true});});
  const rt=await createWorkspaceRuntime();const strangerBroker={...rt.stranger,roles:['AGENT']};try{
+ // An unrelated broker is an actual connected account, not a role-only fixture.
+ await rt.db.prepare('INSERT INTO agent_accounts(user_email,agent_code,name) VALUES(?,?,?)').bind(strangerBroker.email,'qa-unassigned-broker','Unassigned broker').run();
  const a=(await(await rt.request('/api/analysis',json({statements:[{fileName:'bank.txt',text:statementFixture()}]}))).json()).analysis;await rt.full(a.id);await rt.assign(a);
  const owner=await(await rt.request('/api/workspace-model?analysisId='+a.id)).json(),broker=await(await rt.request('/api/workspace-model?analysisId='+a.id,{},rt.broker)).json();
  await t.test('same canonical/report and read-only access',()=>{assert.deepEqual(owner.full.canonical,broker.full.canonical);assert.deepEqual(owner.full.report,broker.full.report);assert.equal(broker.access.readOnly,true);});

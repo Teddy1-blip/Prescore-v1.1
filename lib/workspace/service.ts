@@ -1,3 +1,4 @@
+import {documentAccessSQL} from '../auth/broker-authorizations.ts';
 import {diagnostic, safeReason, type CanonicalDiagnosticV1} from "../credit-engine/production/diagnostics.ts";
 import {savedCanonicalInput} from "./financing-request.ts";
 import type { AnalysisResult } from "../prescore.ts";
@@ -169,11 +170,9 @@ export async function readWorkspaceOperations(
   try {
     const row = await db.prepare(`SELECT COUNT(*) AS count,
       COALESCE(SUM(CASE WHEN d.analysis_id = ? THEN 1 ELSE 0 END), 0) AS analysis_count
-      FROM client_documents d WHERE d.company_inn = ? AND
-      (? = 1 OR d.owner_email = ? OR EXISTS
-      (SELECT 1 FROM agent_leads l JOIN agent_accounts u ON u.agent_code = l.agent_code
-       WHERE l.company_inn = d.company_inn AND u.user_email = ?))`)
-      .bind(analysisId, companyInn, user.isAdmin ? 1 : 0, user.email, user.email)
+      FROM client_documents d CROSS JOIN (SELECT ?::text AS email) actor WHERE d.company_inn = ? AND
+      (? = 1 OR ${documentAccessSQL('d','actor.email')})`)
+      .bind(analysisId, user.email, companyInn, user.isAdmin ? 1 : 0)
       .first<{ count: number | string; analysis_count: number | string }>();
     if (row) {
       const count = Number(row.count), analysisCount = Number(row.analysis_count);

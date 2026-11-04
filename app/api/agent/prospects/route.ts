@@ -1,3 +1,4 @@
+import {dossierAuthorizationSQL} from '../../../../lib/auth/broker-authorizations';
 import {getRuntime} from "../../../../lib/platform/runtime";
 import { averagePartnerCommissionRate } from "../../../../lib/partner-commissions";
 import type { Gold44Record } from "../../../../lib/gold44";
@@ -34,12 +35,9 @@ async function moduleAvailable(db: RuntimeDatabase) {
   return setting == null || Boolean(setting.enabled);
 }
 
-async function accountFor(db: RuntimeDatabase, user: { email: string; displayName: string; isAdmin: boolean }) {
-  const existing = await db.prepare("SELECT agent_code AS agentCode FROM agent_accounts WHERE user_email = ? LIMIT 1").bind(user.email).first<{ agentCode: string }>();
-  if (existing) return existing.agentCode;
-  const code = user.isAdmin ? "AGENT-ANTON-001" : `AGENT-${crypto.randomUUID().replace(/-/g, "").slice(0, 10).toUpperCase()}`;
-  await db.prepare("INSERT INTO agent_accounts (user_email, agent_code, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").bind(user.email, code, user.displayName || "Партнёр Прескор", new Date().toISOString(), new Date().toISOString()).run();
-  return code;
+async function accountFor(db: RuntimeDatabase, user: { email: string }) {
+  const existing = await db.prepare("SELECT agent_code AS agentCode FROM agent_accounts WHERE lower(user_email) = ? LIMIT 1").bind(user.email).first<{ agentCode: string }>();
+  return existing?.agentCode ?? null;
 }
 
 function parseRecord(row: Record<string, unknown>) {
@@ -69,6 +67,7 @@ export async function GET(request: Request) {
   if (!user.roles.includes("AGENT") && !user.isAdmin) return Response.json({error:"Нет доступа к кабинету агента"},{status:403});
   try {
     const db = await database(); await ensureSchema(db); if (!await moduleAvailable(db)) return Response.json({ error: "Модуль базы для прозвона отключён администратором" }, { status: 403 }); const agentCode = await accountFor(db, user);
+    if (!agentCode) return Response.json({ error: "Сначала подключите свой брокерский профиль в /agent" }, { status: 409 });
     const url = new URL(request.url); const status = String(url.searchParams.get("status") || "all");
     const query = String(url.searchParams.get("q") || "").trim().toLowerCase();
     const region = String(url.searchParams.get("region") || "").trim().toLowerCase();
@@ -100,6 +99,7 @@ export async function POST(request: Request) {
   if (!user.roles.includes("AGENT") && !user.isAdmin) return Response.json({error:"Нет доступа к кабинету агента"},{status:403});
   try {
     const db = await database(); await ensureSchema(db); if (!await moduleAvailable(db)) return Response.json({ error: "Модуль базы для прозвона отключён администратором" }, { status: 403 }); const agentCode = await accountFor(db, user);
+    if (!agentCode) return Response.json({ error: "Сначала подключите свой брокерский профиль в /agent" }, { status: 409 });
     const body = await request.json() as Record<string, unknown>; const type = String(body.type || ""); const now = new Date().toISOString();
     if (type === "import") {
       const records = Array.isArray(body.records) ? body.records.slice(0, 75) as Gold44Record[] : [];
@@ -110,7 +110,7 @@ export async function POST(request: Request) {
       return Response.json({ ok: true, imported: statements.length });
     }
     if (type === "match") {
-      const matches = await db.batch([db.prepare(`SELECT p.id, p.notice_number AS noticeNumber, p.guarantee_amount AS guaranteeAmount, l.id AS leadId, l.company_name AS companyName, l.consent_at AS consentAt, (SELECT a.id FROM analyses a WHERE a.company_inn = l.company_inn AND a.archive_state='ACTIVE' ORDER BY a.created_at DESC LIMIT 1) AS analysisId FROM agent_prospects p JOIN agent_leads l ON l.agent_code = p.agent_code AND l.company_inn = p.company_inn WHERE p.agent_code = ? AND p.status = 'new' LIMIT 200`).bind(agentCode)]);
+      const matches = await db.batch([db.prepare(`SELECT p.id, p.notice_number AS noticeNumber, p.guarantee_amount AS guaranteeAmount, l.id AS leadId, l.company_name AS companyName, l.consent_at AS consentAt, (SELECT a.id FROM analyses a WHERE a.company_inn = l.company_inn AND a.archive_state='ACTIVE' AND (a.owner_email=actor.email OR ${dossierAuthorizationSQL('a','actor.email')}) ORDER BY a.created_at DESC LIMIT 1) AS analysisId FROM agent_prospects p JOIN agent_leads l ON l.agent_code = p.agent_code AND l.company_inn = p.company_inn CROSS JOIN (SELECT ?::text AS email) actor WHERE p.agent_code = ? AND p.status = 'new' LIMIT 200`).bind(user.email,agentCode)]);
       let created = 0;
       for (const row of matches[0].results as Array<Record<string, unknown>>) {
         const applicationId = await createGuaranteeDraft(db, agentCode, { id: String(row.leadId), companyName: String(row.companyName), analysisId: String(row.analysisId || ""), consentAt: String(row.consentAt || "") }, { id: String(row.id), guaranteeAmount: Number(row.guaranteeAmount), noticeNumber: String(row.noticeNumber) }, user.email);

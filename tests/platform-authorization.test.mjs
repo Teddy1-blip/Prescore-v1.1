@@ -1,15 +1,20 @@
+import * as brokerAuthorization from '../lib/auth/broker-authorizations.ts';
 import test from 'node:test';import assert from'node:assert/strict';import fs from'node:fs';import ts from'typescript';import{PGlite}from'@electric-sql/pglite';
 import{PortableDatabase}from'../lib/db/compatibility.ts';
-function load(path,imports){const exports={};const source=fs.readFileSync(new URL(path,import.meta.url),'utf8');new Function('exports','require',ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(exports,name=>{if(name in imports)return imports[name];throw Error('UNEXPECTED_IMPORT:'+name);});return exports;}
+function load(path,imports){const exports={};const source=fs.readFileSync(new URL(path,import.meta.url),'utf8');new Function('exports','require',ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(exports,name=>{if(name.endsWith('/lib/auth/broker-authorizations'))return brokerAuthorization;if(name in imports)return imports[name];throw Error('UNEXPECTED_IMPORT:'+name);});return exports;}
 test('actual SQL authorization: owner, assigned agent, unrelated client, admin, document relationships',async()=>{
  const pg=new PGlite();const catalog=JSON.parse(fs.readFileSync(new URL('../lib/db/catalog.json',import.meta.url)));
  const query=async(s,v)=>{const r=await pg.query(s,v);return{rows:r.rows,rowCount:r.affectedRows};};const db=new PortableDatabase({query,connect:async()=>({query,release(){}})},catalog);
  try{
-  for(const f of ['0001_product.sql','0003_runtime_indexes.sql','0009_analysis_archive.sql'])await pg.exec(fs.readFileSync(new URL('../lib/db/migrations/'+f,import.meta.url),'utf8'));
+  for(const f of ['0001_product.sql','0002_platform_auth.sql','0003_runtime_indexes.sql','0009_analysis_archive.sql'])await pg.exec(fs.readFileSync(new URL('../lib/db/migrations/'+f,import.meta.url),'utf8'));
   await query(`INSERT INTO analyses(id,company_name,company_inn,file_name,period_from,period_to,score,grade,readiness,payload,owner_email) VALUES('a','Synthetic','7700000000','synthetic','2026-01-01','2026-01-31',1,'A','test','{}','owner@test.invalid')`);
   await query(`INSERT INTO agent_accounts(user_email,agent_code,name) VALUES('agent@test.invalid','agent','Synthetic')`);
   await query(`INSERT INTO agent_leads(id,agent_code,company_name,company_inn,consent_at) VALUES('l','agent','Synthetic','7700000000','2026-01-01')`);
   let current={email:'owner@test.invalid',isAdmin:false};
+  for(const email of ['owner@test.invalid','agent@test.invalid'])await query('INSERT INTO "user"(id,email,name,"emailVerified") VALUES($1,$1,$1,true)',[email]);
+  const previousOrigin=process.env.PRESCORE_BASE_URL;process.env.PRESCORE_BASE_URL='https://prescore.test';
+  try{const grant=await brokerAuthorization.authorizeBroker(new Request('https://prescore.test/api/workspace',{method:'POST',headers:{origin:'https://prescore.test'}}),db,current,{operation:'grant',analysisId:'a',brokerEmail:'agent@test.invalid',purpose:'DOSSIER',confirmed:true,days:30,requestId:crypto.randomUUID()});assert.equal(grant.status,201);}finally{if(previousOrigin===undefined)delete process.env.PRESCORE_BASE_URL;else process.env.PRESCORE_BASE_URL=previousOrigin;}
+
   const api=load('../app/api/api-auth.ts',{'../chatgpt-auth':{getChatGPTUser:async()=>null}});
   assert.equal((await api.readableAnalysis(db,'a',current)).access,'owner');
   assert.equal((await api.readableAnalysis(db,'a',{email:'agent@test.invalid',isAdmin:false})).access,'agent');

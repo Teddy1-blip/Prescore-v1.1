@@ -31,6 +31,8 @@ test('new analytical presentation has one API source and no legacy analytical fa
 
 test('production broker GET executes PostgreSQL curator ordering without alias errors',async()=>{
  const rt=await createWorkspaceRuntime();try{
+  // This read query operates on an already connected broker; GET cannot enroll it.
+  await rt.db.prepare('INSERT INTO agent_accounts(user_email,agent_code,name) VALUES(?,?,?)').bind(rt.broker.email,'qa-broker','Алексей · брокер').run();
   const response=await rt.request('/api/agent',{},rt.broker);
   assert.equal(response.status,200);
   const body=await response.json();

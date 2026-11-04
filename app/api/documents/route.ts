@@ -1,3 +1,4 @@
+import {documentAccessSQL, brokerApplicationSQL} from '../../../lib/auth/broker-authorizations';
 import {documentStorage} from "../../../lib/storage/documents";
 import {getRuntime} from "../../../lib/platform/runtime";
 import { requireApiUser, unauthorized } from "../api-auth";
@@ -48,8 +49,9 @@ export async function GET(request: Request) {
     await ensureSchema(db);
     const downloadId = url.searchParams.get("download")?.trim();
     if (downloadId) {
-      const result = await db.batch([db.prepare(user.isAdmin ? "SELECT file_name AS fileName, mime_type AS mimeType, content_base64 AS contentBase64, storage_key AS storageKey FROM client_documents WHERE id = ? LIMIT 1" : `SELECT d.file_name AS fileName, d.mime_type AS mimeType, d.content_base64 AS contentBase64, d.storage_key AS storageKey FROM client_documents d
-        WHERE d.id = ? AND (d.owner_email = ? OR EXISTS (SELECT 1 FROM agent_applications a JOIN agent_accounts u ON u.agent_code = a.agent_code WHERE a.id = d.application_id AND u.user_email = ?) OR EXISTS (SELECT 1 FROM agent_leads l JOIN agent_accounts u ON u.agent_code = l.agent_code WHERE l.company_inn = d.company_inn AND u.user_email = ?) OR EXISTS (SELECT 1 FROM deals ds JOIN analyses ax ON ax.id = ds.analysis_id WHERE ds.id = d.application_id AND ds.owner_email = ? AND ax.company_inn = d.company_inn AND (d.analysis_id = '' OR d.analysis_id = ax.id))) LIMIT 1`).bind(...(user.isAdmin ? [downloadId] : [downloadId, user.email, user.email, user.email, user.email]))]);
+      const result = await db.batch([db.prepare(`SELECT d.file_name AS fileName, d.mime_type AS mimeType, d.content_base64 AS contentBase64, d.storage_key AS storageKey
+        FROM client_documents d CROSS JOIN (SELECT ?::text AS email) actor
+        WHERE d.id=? AND (?=1 OR ${documentAccessSQL('d','actor.email')}) LIMIT 1`).bind(user.email,downloadId,user.isAdmin?1:0)]);
       const file = (result[0]?.results as Array<{ fileName: string; mimeType: string; contentBase64: string; storageKey: string }> | undefined)?.[0];
       if (!file) return Response.json({ error: "Документ не найден" }, { status: 404 });
       const bytes = file.contentBase64 ? Uint8Array.from(atob(file.contentBase64), char => char.charCodeAt(0)) : await documentStorage().get(file.storageKey);
@@ -58,9 +60,11 @@ export async function GET(request: Request) {
     const inn = (url.searchParams.get("inn") || "").replace(/\D/g, "");
     const applicationId = url.searchParams.get("applicationId")?.trim() || "";
     if (!inn && !applicationId) return Response.json({ error: "Укажите ИНН или заявку" }, { status: 400 });
-    const query = applicationId
-      ? db.prepare(user.isAdmin ? `SELECT id, company_inn AS companyInn, analysis_id AS analysisId, application_id AS applicationId, category, file_name AS fileName, mime_type AS mimeType, size_bytes AS sizeBytes, uploaded_by AS uploadedBy, status, created_at AS createdAt FROM client_documents WHERE application_id = ? ORDER BY created_at DESC` : `SELECT d.id, d.company_inn AS companyInn, d.analysis_id AS analysisId, d.application_id AS applicationId, d.category, d.file_name AS fileName, d.mime_type AS mimeType, d.size_bytes AS sizeBytes, d.uploaded_by AS uploadedBy, d.status, d.created_at AS createdAt FROM client_documents d WHERE d.application_id = ? AND (d.owner_email = ? OR EXISTS (SELECT 1 FROM agent_applications a JOIN agent_accounts u ON u.agent_code = a.agent_code WHERE a.id = d.application_id AND u.user_email = ?) OR EXISTS (SELECT 1 FROM deals ds JOIN analyses ax ON ax.id = ds.analysis_id WHERE ds.id = d.application_id AND ds.owner_email = ? AND ax.company_inn = d.company_inn AND (d.analysis_id = '' OR d.analysis_id = ax.id))) ORDER BY d.created_at DESC`).bind(...(user.isAdmin ? [applicationId] : [applicationId, user.email, user.email, user.email]))
-      : db.prepare(user.isAdmin ? `SELECT id, company_inn AS companyInn, analysis_id AS analysisId, application_id AS applicationId, category, file_name AS fileName, mime_type AS mimeType, size_bytes AS sizeBytes, uploaded_by AS uploadedBy, status, created_at AS createdAt FROM client_documents WHERE company_inn = ? ORDER BY created_at DESC` : `SELECT d.id, d.company_inn AS companyInn, d.analysis_id AS analysisId, d.application_id AS applicationId, d.category, d.file_name AS fileName, d.mime_type AS mimeType, d.size_bytes AS sizeBytes, d.uploaded_by AS uploadedBy, d.status, d.created_at AS createdAt FROM client_documents d WHERE d.company_inn = ? AND (d.owner_email = ? OR EXISTS (SELECT 1 FROM agent_leads l JOIN agent_accounts u ON u.agent_code = l.agent_code WHERE l.company_inn = d.company_inn AND u.user_email = ?) OR EXISTS (SELECT 1 FROM deals ds JOIN analyses ax ON ax.id = ds.analysis_id WHERE ds.id = d.application_id AND ds.owner_email = ? AND ax.company_inn = d.company_inn AND (d.analysis_id = '' OR d.analysis_id = ax.id))) ORDER BY d.created_at DESC`).bind(...(user.isAdmin ? [inn] : [inn, user.email, user.email, user.email]));
+    const query = db.prepare(`SELECT d.id, d.company_inn AS companyInn, d.analysis_id AS analysisId, d.application_id AS applicationId,
+      d.category, d.file_name AS fileName, d.mime_type AS mimeType, d.size_bytes AS sizeBytes, d.uploaded_by AS uploadedBy, d.status, d.created_at AS createdAt
+      FROM client_documents d CROSS JOIN (SELECT ?::text AS email) actor
+      WHERE ${applicationId?'d.application_id':'d.company_inn'}=? AND (?=1 OR ${documentAccessSQL('d','actor.email')}) ORDER BY d.created_at DESC`)
+      .bind(user.email,applicationId||inn,user.isAdmin?1:0);
     const result = await db.batch([query]);
     return Response.json({ documents: result[0]?.results ?? [], maxBytes: MAX_BYTES, storage: "Пилотное защищённое хранилище" });
   } catch {
@@ -95,11 +99,11 @@ export async function POST(request: Request) {
     }
     if (applicationId) {
       const query = db.prepare(`SELECT d.id FROM deals d JOIN analyses a ON a.id = d.analysis_id
-        WHERE d.id = ? AND a.company_inn = ? AND (d.owner_email = ? OR ? = 1)
+        WHERE d.id = ? AND a.company_inn = ? AND a.archive_state='ACTIVE' AND ((d.owner_email = ? AND a.owner_email=d.owner_email) OR ? = 1)
         UNION SELECT ap.id FROM agent_applications ap JOIN agent_accounts u ON u.agent_code = ap.agent_code
-        JOIN agent_leads l ON l.id = ap.lead_id AND l.agent_code = ap.agent_code
-        WHERE ap.id = ? AND l.company_inn = ? AND (u.user_email = ? OR ? = 1)`)
-        .bind(applicationId,companyInn,user.email,user.isAdmin?1:0,applicationId,companyInn,user.email,user.isAdmin?1:0);
+        JOIN agent_leads l ON l.id = ap.lead_id AND l.agent_code = ap.agent_code CROSS JOIN (SELECT ?::text AS email) actor
+        WHERE ap.id = ? AND l.company_inn = ? AND ((${brokerApplicationSQL('ap','actor.email')}) OR ? = 1) AND (ap.analysis_id='' OR EXISTS(SELECT 1 FROM analyses exact WHERE exact.id=ap.analysis_id AND exact.company_inn=l.company_inn))`)
+        .bind(applicationId,companyInn,user.email,user.isAdmin?1:0,user.email,applicationId,companyInn,user.isAdmin?1:0);
       if (!(await db.batch([query]))[0]?.results?.length) return Response.json({error:"Нет доступа к досье"},{status:403});
     }
     const id = crypto.randomUUID();
