@@ -47,6 +47,12 @@ test('owner-scoped grants reject forged contact authority, survive reload, and r
    assert.equal((await rt.request('/api/communications?applicationId='+appId,{},rt.broker)).status,403);
    assert.equal((await rt.request('/api/communications',json({applicationId:appId,message:'stale'}),rt.broker)).status,403);
    assert.equal((await rt.request('/api/agent',{...json({entity:'application',id:appId,status:'Одобрена'}),method:'PATCH'},rt.broker)).status,404);
+   // Historical forged mirror ownership cannot preserve cancellation authority.
+   await rt.pg.query('UPDATE deals SET owner_email=$1 WHERE id=$2',[rt.broker.email,appId]);
+   assert.equal((await rt.request('/api/workspace',{...json({id:appId,status:'Отменена клиентом'}),method:'PATCH'},rt.broker)).status,404);
+   assert.deepEqual((await(await rt.request('/api/workspace',{},rt.broker)).json()).deals,[]);
+   await rt.pg.query('UPDATE deals SET owner_email=$1 WHERE id=$2',[rt.owner.email,appId]);
+
    assert.equal((await rt.request('/api/documents',json({applicationId:appId,companyInn:a.companyInn,fileName:'stale.txt',sizeBytes:1,contentBase64:'eA=='}),rt.broker)).status,403);
    assert.deepEqual((await rt.pg.query('SELECT id,payload,owner_email FROM analyses ORDER BY id')).rows,snapshot);
   });

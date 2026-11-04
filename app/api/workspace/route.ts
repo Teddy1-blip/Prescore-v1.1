@@ -351,7 +351,7 @@ export async function PATCH(request: Request) {
     const body = await request.json() as { id?: string; status?: string };
     if (!body.id || !body.status) return Response.json({ error: "Нужны id и status" }, { status: 400 });
     if (body.status !== "Отменена клиентом") return Response.json({ error: "Статус меняет брокер или администратор; клиент может только отменить заявку" }, { status: 403 });
-    const currentRows = await db.batch([db.prepare("SELECT status FROM deals WHERE id = ? AND owner_email = ? LIMIT 1").bind(body.id, user.email)]);
+    const currentRows = await db.batch([db.prepare(`SELECT status FROM deals WHERE id = ? AND owner_email = ? AND (EXISTS(SELECT 1 FROM analyses owned WHERE owned.id=deals.analysis_id AND owned.archive_state='ACTIVE' AND owned.owner_email=deals.owner_email) OR EXISTS(SELECT 1 FROM agent_applications ap WHERE ap.id=deals.id AND ${brokerApplicationSQL('ap','deals.owner_email')})) LIMIT 1`).bind(body.id, user.email)]);
     const current = String((currentRows[0]?.results as Array<{ status?: string }>)[0]?.status || "");
     if (!current) return Response.json({ error: "Заявка не найдена" }, { status: 404 });
     if (["Выдана", "Закрыта", "Отклонена", "Отменена клиентом"].includes(current)) return Response.json({ error: "Завершённую заявку нельзя отменить" }, { status: 409 });
