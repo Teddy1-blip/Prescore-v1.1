@@ -28,7 +28,7 @@ async function connectInBrowser(role){
   const connected=await response;assert.equal(connected.status(),201);
   await page.getByText('Synthetic '+role,{exact:true}).waitFor();await page.reload();await page.getByText('Synthetic '+role,{exact:true}).waitFor();
   assert.equal(new URL(page.url()).pathname,'/agent');assert.deepEqual(errors,[]);
-  return connected.json();
+  return await connected.json();
  }finally{await browser.close();}
 }
 let app,worker;try{await verifySchema(pool);app=launch('scripts/release/start.mjs');await ready();worker=launch('scripts/billing/payout-worker.mjs',{PRESCORE_WORKER_ID:'rc-e2e-worker'});await wait(async()=>!!(await q("SELECT id FROM runtime_workers WHERE id='rc-e2e-worker' AND status='RUNNING'")).rows.length);out('production NODE_ENV standalone app + independent worker readiness');for(const role of ['admin','client','broker','curator','stranger'])await signup(role);await cli('scripts/platform/bootstrap-admin.mjs',[],{PRESCORE_BOOTSTRAP_ADMIN_ENABLED:'true',PRESCORE_BOOTSTRAP_ADMIN_EMAIL:' ADMIN@RC.TEST '});await cli('scripts/platform/bootstrap-admin.mjs',[],{PRESCORE_BOOTSTRAP_ADMIN_ENABLED:'true',PRESCORE_BOOTSTRAP_ADMIN_EMAIL:'admin@rc.test'});out('real signup/verification/password login and explicit idempotent bootstrap');
