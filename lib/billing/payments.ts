@@ -1,3 +1,4 @@
+import {confirmedReferralRows} from '../auth/broker-authorizations.ts';
 import {createHash,randomUUID} from 'node:crypto';
 import {applyRefund} from './refunds.ts';
 import {BillingError,PLAN} from './domain.ts';
@@ -16,7 +17,7 @@ export async function checkout(db:BillingDB,owner:string,input:Record<string,unk
   await lock(tx,'checkout:'+owner+':'+a.company_inn);
   const existing=await first<Order>(tx,'SELECT * FROM billing_orders WHERE owner_email=$1 AND idempotency_key=$2',[owner,key]);if(existing){if(existing.company_inn!==a.company_inn||existing.analysis_id!==analysisId)throw new BillingError('IDEMPOTENCY_CONFLICT',409);return existing;}
   const open=await first<Order>(tx,"SELECT * FROM billing_orders WHERE owner_email=$1 AND company_inn=$2 AND status IN ('CREATED','PAYMENT_PENDING','UNKNOWN_REVIEW')",[owner,a.company_inn]);if(open)return open;
-  const brokers=await tx.query(`SELECT DISTINCT aa.agent_code,ap.curator_code FROM agent_leads l JOIN agent_accounts aa ON aa.agent_code=l.agent_code LEFT JOIN agent_partners ap ON ap.agent_code=aa.agent_code WHERE l.company_inn=$1 AND lower(l.email)=$2 AND (ap.status IS NULL OR ap.status NOT IN ('BLOCKED','Заблокирован'))`,[a.company_inn,owner]);
+  const brokers=await confirmedReferralRows(tx,owner,a.company_inn);
   if(brokers.rows.length>1)throw new BillingError('ATTRIBUTION_NEEDS_REVIEW',409);
   const broker=brokers.rows[0]?.agent_code as string|null??null;let curator=brokers.rows[0]?.curator_code as string|null??null;
   if(curator===broker)curator=null;

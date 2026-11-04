@@ -1,5 +1,19 @@
 name: Prescore RC1
 on:
+  push:
+    branches: [prescore-live-product-recovery-v1]
+    paths:
+      - '.github/workflows/prescore-rc1.yml'
+      - '.github/workflows/prescore-product-qa.yml'
+      - 'app/**'
+      - 'lib/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'Dockerfile'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'next.config.ts'
+      - 'proxy.ts'
   workflow_dispatch:
 permissions:
   contents: read
@@ -21,7 +35,7 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
-      - run: npm run build
+      - run: npm run build && node scripts/release/package-runtime.mjs
       - run: npm run validate:artifact
       - run: node scripts/platform/pdf-artifact-smoke.mjs
       - run: node scripts/release/dependency-audit.mjs

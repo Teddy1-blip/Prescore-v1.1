@@ -1,3 +1,4 @@
+import { dossierAuthorizationSQL } from '../../lib/auth/broker-authorizations';
 import { getChatGPTUser } from "../chatgpt-auth";
 
 
@@ -26,10 +27,7 @@ export async function readableAnalysis<T extends AnalysisAccessRow = AnalysisAcc
   try {
     const assigned = await database.prepare(`SELECT a.payload, a.company_inn AS companyInn, a.owner_email AS ownerEmail
       FROM analyses a
-      JOIN agent_leads l ON l.company_inn = a.company_inn
-      JOIN agent_accounts aa ON aa.agent_code = l.agent_code
-      WHERE a.archive_state = 'ACTIVE' AND a.id = ? AND aa.user_email = ?
-      ORDER BY l.updated_at DESC LIMIT 1`).bind(analysisId, user.email).first<T>();
+      WHERE a.archive_state = 'ACTIVE' AND a.id = ? AND ${dossierAuthorizationSQL('a')} LIMIT 1`).bind(analysisId, user.email).first<T>();
     return assigned ? { row: assigned, access: "agent" as const } : null;
   } catch {
     return null;

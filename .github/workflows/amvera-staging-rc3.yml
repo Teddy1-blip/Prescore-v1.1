@@ -42,7 +42,7 @@ jobs:
 
       - run: npm ci
       - run: npm run typecheck
-      - run: npm run build
+      - run: npm run build && node scripts/release/package-runtime.mjs
 
       - name: Full product regression suite
         run: node --experimental-strip-types --test tests/*.test.mjs
@@ -51,6 +51,9 @@ jobs:
         run: npm run credit-lab:business -- "$RUNNER_TEMP/credit-lab-business-${{ github.run_id }}-${{ github.run_attempt }}"
 
       - run: npm run lint
+      - name: Production dependency security gate
+        run: node scripts/release/dependency-audit.mjs
+        env: {RC_REPORT_DIR: '${{ runner.temp }}/staging-dependency-security'}
       - run: npm run validate:artifact
 
       - name: Standalone PDF extraction

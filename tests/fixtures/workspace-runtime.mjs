@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import {randomUUID} from 'node:crypto';
 import path from 'node:path';
 import {createRequire} from 'node:module';
 import {AsyncLocalStorage} from 'node:async_hooks';
@@ -21,19 +22,25 @@ export async function createWorkspaceRuntime(){
  new Function('exports','require',code)(exports,name=>{
  if(name.endsWith('.css'))return {};
  if(name==='next/link')return {__esModule:true,default:({children,...props})=>React.createElement('a',props,children)};
- if(name==='next/navigation')return {};
+ if(name==='next/navigation')return {notFound(){throw Error('NOT_FOUND');},redirect(url){throw Error('REDIRECT:'+url);}};
  if(!name.startsWith('.'))return require(name);
  const base=path.resolve(path.dirname(file),name),target=[base,base+'.ts',base+'.tsx',base+'.json',path.join(base,'index.ts')].find(p=>fs.existsSync(p)&&fs.statSync(p).isFile());
  if(!target)throw Error('MISSING_MODULE:'+name);
  if(target.endsWith('/lib/platform/runtime.ts'))return {getRuntime:()=>({DB:db})};
- if(target.endsWith('/app/chatgpt-auth.ts'))return {getChatGPTUser:async()=>scope.getStore()??null};
+ if(target.endsWith('/app/chatgpt-auth.ts'))return {getChatGPTUser:async()=>scope.getStore()??null,requireChatGPTUser:async()=>{const user=scope.getStore();if(!user)throw Error('UNAUTHORIZED');return user;}};
  if(target.endsWith('.json'))return JSON.parse(fs.readFileSync(target,'utf8'));
  return load(target);
  });return exports;
  }
  const owner={email:'owner@workspace.test',roles:['CLIENT']},broker={email:'broker@workspace.test',roles:['AGENT']},admin={email:'admin@workspace.test',displayName:'QA Admin',roles:['CLIENT','ADMIN']},stranger={email:'other@workspace.test',roles:['CLIENT']};
  async function request(url,init={},user=owner){const route=path.resolve('app'+new URL(url,'http://workspace.test').pathname+'/route.ts');if(!fs.existsSync(route))return Response.json({error:'Route missing'},{status:404});return scope.run(user,()=>load(route)[init.method??'GET'](new Request(new URL(url,'http://workspace.test'),init)));}
- async function assign(analysis){await db.prepare('INSERT INTO agent_accounts (user_email,agent_code,name) VALUES (?,?,?) ON CONFLICT(user_email) DO NOTHING').bind(broker.email,'qa-broker','Алексей · брокер').run();await db.prepare('INSERT INTO agent_leads (id,agent_code,company_name,company_inn,email,contact_name,phone,consent_at,status) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING').bind('lead-'+analysis.id,'qa-broker',analysis.companyName,analysis.companyInn,owner.email,'Анна','+7 900 000-00-00','2026-09-25','Анализ готов').run();}
+ async function authorize(analysis,options={},actor=owner){
+  // Synthetic identities only. Exercise the real owner confirmation endpoint.
+  for(const email of [owner.email,broker.email])await pg.query('INSERT INTO "user"(id,email,name,"emailVerified") VALUES($1,$2,$2,true) ON CONFLICT(email) DO NOTHING',['fixture-'+email,email]);
+  const previous=process.env.PRESCORE_BASE_URL;process.env.PRESCORE_BASE_URL??='http://workspace.test';
+  try{return await request('/api/workspace',{method:'POST',headers:{'content-type':'application/json',origin:new URL(process.env.PRESCORE_BASE_URL).origin},body:JSON.stringify({type:'broker-authorization',operation:'grant',analysisId:analysis.id,brokerEmail:broker.email,purpose:'DOSSIER',confirmed:true,days:30,requestId:randomUUID(),...options})},actor);}finally{if(previous===undefined)delete process.env.PRESCORE_BASE_URL;else process.env.PRESCORE_BASE_URL=previous;}
+ }
+ async function assign(analysis){await db.prepare('INSERT INTO agent_accounts (user_email,agent_code,name) VALUES (?,?,?) ON CONFLICT(user_email) DO NOTHING').bind(broker.email,'qa-broker','Алексей · брокер').run();await db.prepare('INSERT INTO agent_leads (id,agent_code,company_name,company_inn,email,contact_name,phone,consent_at,status) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING').bind('lead-'+analysis.id,'qa-broker',analysis.companyName,analysis.companyInn,owner.email,'Анна','+7 900 000-00-00','2026-09-25','Анализ готов').run();const granted=await authorize(analysis);if(granted.status!==201)throw Error('OWNER_ASSIGNMENT_FAILED:'+await granted.text());return (await granted.json()).id;}
  async function full(id){const access=await db.prepare('SELECT company_inn AS inn FROM analyses WHERE id = ?').bind(id).first();await load('lib/entitlements.ts').grantFullEntitlement(db,{analysisId:id,userEmail:owner.email,companyInn:access.inn,grantedBy:'TEST_ONLY'});}
- return {pg,db,load,request,assign,full,owner,broker,admin,stranger,close:()=>pg.close()};
+ return {pg,db,load,asUser:(user,fn)=>scope.run(user,fn),request,assign,authorize,full,owner,broker,admin,stranger,close:()=>pg.close()};
 }

@@ -1,3 +1,4 @@
+import * as brokerAuthorization from '../lib/auth/broker-authorizations.ts';
 import * as releaseSecurity from '../lib/release/security.ts';
 /** Real upload handler + PostgreSQL-compatible disposable DB + protected report service.
  * Only the authentication boundary is a controlled synthetic principal. No runtime DB,
@@ -8,7 +9,7 @@ import test from 'node:test';import assert from 'node:assert/strict';import fs f
 import {PGlite} from '@electric-sql/pglite';import {PortableDatabase} from '../lib/db/compatibility.ts';
 import * as prescore from '../lib/prescore.ts';import * as sources from '../lib/credit-engine/source-foundation.ts';import * as controls from '../lib/admin-controls.ts';import * as entitlements from '../lib/entitlements.ts';
 import {loadCanonicalReport} from '../lib/credit-engine/production/report-service.ts';import {businessCatalog,loadBusiness} from '../lib/credit-engine/credit-lab/business-corpus.mjs';
-function load(file,imports){const exports={};new Function('exports','require',ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(exports,n=>{if(n in imports)return imports[n];throw Error('UNEXPECTED_IMPORT:'+n);});return exports;}
+function load(file,imports){const exports={};new Function('exports','require',ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(exports,n=>{if(n.endsWith('/lib/auth/broker-authorizations'))return brokerAuthorization;if(n in imports)return imports[n];throw Error('UNEXPECTED_IMPORT:'+n);});return exports;}
 test('Credit Lab isolated HTTP upload → SQL persistence → ownership/FULL → canonical report, all 24 sources',async t=>{
  const pg=new PGlite();const catalog=JSON.parse(fs.readFileSync('lib/db/catalog.json'));
  const query=async(s,v)=>{const r=await pg.query(s,v);return{rows:r.rows,rowCount:r.affectedRows};};const db=new PortableDatabase({query,connect:async()=>({query,release(){}})},catalog);
