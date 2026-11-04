@@ -1,0 +1,223 @@
+{
+  "kind": "PRESCORE-STAGE1-BROKER-AUTHORITY-SAFE-EVIDENCE-1",
+  "githubJobsSnapshot": [
+    {
+      "id": "41856017870",
+      "head_sha": "3d71b9b77674fd0eda2c539e2efb36e2c42365d0",
+      "status": "in_progress",
+      "jobs": [
+        {
+          "name": "presentation",
+          "status": "in_progress",
+          "conclusion": null,
+          "current_step": "CLIENT product routes and responsive regression"
+        },
+        {
+          "name": "billing",
+          "status": "completed",
+          "conclusion": "success",
+          "current_step": null
+        },
+        {
+          "name": "validate",
+          "status": "in_progress",
+          "conclusion": null,
+          "current_step": "Product regression suite"
+        },
+        {
+          "name": "admin",
+          "status": "completed",
+          "conclusion": "success",
+          "current_step": null
+        }
+      ]
+    },
+    {
+      "id": "41856017900",
+      "head_sha": "3d71b9b77674fd0eda2c539e2efb36e2c42365d0",
+      "status": "in_progress",
+      "jobs": [
+        {
+          "name": "container",
+          "status": "in_progress",
+          "conclusion": null,
+          "current_step": "Run docker build --build-arg SOURCE_SHA=\"3d71b9b77674fd0eda2c539e2efb36e2c42365d0\" --build-arg BUILD_TIMESTAMP=\"2026-11-04T18:16:17+03:00\" -t prescore:rc1 ."
+        },
+        {
+          "name": "static",
+          "status": "completed",
+          "conclusion": "success",
+          "current_step": null
+        },
+        {
+          "name": "postgres-clean-e2e-restore",
+          "status": "in_progress",
+          "conclusion": null,
+          "current_step": "Clean migrations / upgrade preservation"
+        },
+        {
+          "name": "postgres-upgrade",
+          "status": "in_progress",
+          "conclusion": null,
+          "current_step": "Clean migrations / upgrade preservation"
+        },
+        {
+          "name": "postgres-worker",
+          "status": "in_progress",
+          "conclusion": null,
+          "current_step": "Clean migrations / upgrade preservation"
+        },
+        {
+          "name": "product-regression",
+          "status": "in_progress",
+          "conclusion": null,
+          "current_step": "Run node scripts/release/wait-product.mjs"
+        }
+      ]
+    }
+  ],
+  "recordedAt": "2026-11-04T15:29:14.237097+00:00",
+  "recordedAtMoscow": "2026-11-04T18:29:14.237097+03:00",
+  "authority": "Issue #11 / 6632121779; bounded broker authority and new-order attribution fix",
+  "codeSha": "3d71b9b77674fd0eda2c539e2efb36e2c42365d0",
+  "codeTree": "1c8f50ed02d1f17ca42528127644ac14e7cb402b",
+  "implementationCommits": [
+    "2ae6cfb105e74fc1ff5375b71b80fc3b095cef3e",
+    "3b1245d652acd71665cf9da91d29b1d7ea6f75c9",
+    "3d71b9b77674fd0eda2c539e2efb36e2c42365d0"
+  ],
+  "candidate": {
+    "sha": "1f2a057e0694b72d7cbc5b1938b506866eddbf22",
+    "tree": "3264116bf1b12834439d8924dfe06f4c9820ae77",
+    "parent": "8b0809bd5eb22223fc80d73739eaab4d05d2782d",
+    "deployed": false,
+    "migrationRequired": false,
+    "schema": "0009_analysis_archive.sql",
+    "includesUnacceptedMfa0010": false,
+    "schemaRegistryCatalogDockerAndDatabaseScenarioDiff": "EMPTY"
+  },
+  "local": {
+    "runtime": "Node 24.22.1",
+    "npmCi": "PASS, standard npm ci",
+    "regression": {
+      "pass": 6822,
+      "fail": 0,
+      "skipped": 0,
+      "durationMs": 192622.988156
+    },
+    "creditLab": {
+      "pass": 24,
+      "fail": 0
+    },
+    "typecheck": "PASS",
+    "build": "PASS",
+    "lint": "PASS",
+    "artifact": {
+      "status": "VALID",
+      "runtimeAssets": 13,
+      "schema": "0009_analysis_archive.sql"
+    },
+    "pdfRuntime": "PASS; extraction only, not visual pagination",
+    "mfaCompatibility": "15/15 native MFA + settlement targeted checks; MFA implementation unchanged",
+    "originalRedTest": {
+      "name": "ordinary self-connected broker cannot grant itself a foreign dossier by creating a CRM contact",
+      "result": "PASS: foreign 404, CRM contact 201, foreign remains 404",
+      "testCaseUnchangedSha256": "7bcb779aba2f2238d1244c44d0447f7e19f731309a4626a670d9caf954adc753",
+      "comparedTo": "af6e868a560a3c2857bf18103951e739366e565d",
+      "byteIdenticalCase": true
+    },
+    "ownerGrantReload": "PASS isolated real owner route",
+    "revocationOldSession": "PASS isolated real routes",
+    "sameInnDifferentOwners": "PASS denial",
+    "newAndExistingClientConnection": "PASS native non-admin login/connection/relogin",
+    "referralAndHistoricalOrders": "PASS independent referral, conflict 409, immutable historical attribution/commissions/ledger"
+  },
+  "dependencies": {
+    "before": {
+      "better-auth": "1.7.5",
+      "zod": "4.6.5",
+      "criticalHigh": 2
+    },
+    "after": {
+      "better-auth": "1.7.16",
+      "zod": "4.6.6",
+      "criticalHigh": 0,
+      "critical": 0,
+      "high": 0,
+      "low": 0,
+      "moderate": 5
+    },
+    "gateWeakened": false,
+    "forceUpgrade": false,
+    "remainingModerate": [
+      "@esbuild-kit/core-utils",
+      "@esbuild-kit/esm-loader",
+      "drizzle-kit",
+      "esbuild",
+      "nodemailer"
+    ]
+  },
+  "candidateInputs": {
+    "scope": "PRESCORE-SOURCE-INPUTS-1",
+    "sha256": "41e32b16f76dfc242acb009e8ec89833de4b1b955c7c39c92b7d44d4e1516072",
+    "fileCount": 715,
+    "lockSha256": "30f95307620b4c49b2eba4665be9dcd8c10192eb1e51a72a9a112bea2c492932",
+    "buildId": "Fxrx9D0JIAkJcIAUuKBb_",
+    "checkout": "UNVERIFIED_DIRTY_CHECKOUT",
+    "isFullTreeOrContainerDigestProof": false
+  },
+  "live": {
+    "stagingSha": "8b0809bd5eb22223fc80d73739eaab4d05d2782d",
+    "freshHealthInputSha256": "c68d9c34f312c7b903cb22facac70e9b6959a0f8af1eab18da058e1a1a1cb0d9",
+    "inputCount": 711,
+    "schema": "0009_analysis_archive.sql",
+    "fixPublished": false,
+    "unsafeOldCrmJoinStillInStagingSource": true,
+    "publicContactFormReachable": true,
+    "publicContactFormSubmitted": false,
+    "foreignDossierRequested": false,
+    "ordinaryClientBrokerAcceptance": false,
+    "freshReadyThisContinuation": false
+  },
+  "browser": {
+    "localIsolatedRun": "BLOCKED: Chromium download invalid ZIP; no installed executable",
+    "scriptCoverage": "Owner grant/revoke/regrant and ordinary BROKER reload; 1440, 390, 360 widths",
+    "githubRun": "PENDING, not PASS",
+    "liveMobile": "NOT VERIFIED"
+  },
+  "containment": {
+    "url": "https://cloud.amvera.ru/projects/applications/msk1/~/dorogovab/prescore-staging/settings",
+    "controlObserved": "Управление / Заморозка / Заморозить проект",
+    "applied": false,
+    "effect": "Stops entire staging application; does not modify production or database service"
+  },
+  "operations": {
+    "amveraPushBuildRestart": false,
+    "newRemoteBranches": false,
+    "liveMigration": false,
+    "mfaEnrollment": false,
+    "liveArchiveDeleteRestore": false,
+    "qaSourcesModified": false,
+    "paidResources": false,
+    "supportContact": false,
+    "onlineIdeRetried": false,
+    "stage2": false
+  },
+  "stage1Accepted": false,
+  "logSha256": {
+    "selfassign-targeted-final.log": "2ce8dca68c9e4d75b869697de8a68115bc4aa8a6812327674a8bc39bccffc6af",
+    "selfassign-targeted-2.log": "3e7b50a01358018692a1f7d9106a442b78836db36799ba05637c41940d1ccde6",
+    "selfassign-revocation-target.log": "f1d11888a4e1347fc0566f6a7b7cbf986c341fcaac3a6b01f2f683dd7399a319",
+    "selfassign-0009-npm-ci.log": "85d807cc78395a7deedb5fb082683bd8034c2fb26515b258db189437ef275b97",
+    "selfassign-0009-browser-candidate-build.log": "6756219b4eca678ecec55525560a012890916e27993ff247100961a3c9a13782",
+    "selfassign-0009-browser-candidate-tests.log": "a48bf35570c1e86197ffc83cb6782dd6cbef7279b6fc0b0e96fe0ae64281b367",
+    "selfassign-0009-exact-candidate-credit.log": "929d179160e7fb255d672495d351b378125a67b4f1075ed53070503ac735e17b",
+    "selfassign-0009-browser-candidate-lint.log": "2eb3acce6aace252696dd70f7078a27a2b805d14851fedc66f142967664a2ece",
+    "selfassign-0009-browser-candidate-artifact.log": "54f3d10aa0a6a9728bcbdc778ffb1a8072f2fbc8a6efb04da26aa04ebf8c1308",
+    "selfassign-0009-browser-candidate-pdf.log": "7643a78eb0846a29c499ae949cbec294dacfa7ad246b4fa9b1e8bea738f75f5e",
+    "selfassign-audit-original.json": "5f691f1ee671a9e4fc59f4370c92d39d0cb2e5fb98b88b95fe4da30e9f7333a3",
+    "selfassign-audit-updated.json": "27c7e8c09c0d54ed3acf26c9a228a1da3ddef2c4ddcf0c1648c6791e6d4e147b",
+    "selfassign-dependency-gate.log": "c2ef22d3a8e63a04c75b7a344d011227aeab5898c0e6e8d90e094b8be6dfe050"
+  },
+  "githubSnapshotRecordedAt": "2026-11-04T15:23:57Z"
+}

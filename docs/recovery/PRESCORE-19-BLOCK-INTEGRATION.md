@@ -1,6 +1,78 @@
 # Prescore 19-block integration — acceptance ledger
 
-## Current checkpoint — ordinary broker connection, 2026-11-04
+## Current checkpoint — broker authority, 2026-11-04, 18:23 Moscow snapshot
+
+Authority: owner instruction continuing Issue #11 / **6632121779**, recovery **`af6e868a560a3c2857bf18103951e739366e565d`**. This instruction expressly authorizes the narrow new-order attribution correction in `lib/billing/payments.ts`. Fresh remote HEADs and newer comments were read; no intervening changes were overwritten. **The defect is corrected in recovery and isolated tests, not yet in published staging. Stage 1 remains NOT ACCEPTED.**
+
+### Saved code and a separate 0009 delivery candidate
+
+- Core authority/consumer/dependency fix: **`2ae6cfb105e74fc1ff5375b71b80fc3b095cef3e`**.
+- Old forged application cancellation and CRM existence-oracle correction: **`3b1245d652acd71665cf9da91d29b1d7ea6f75c9`**.
+- Final executable recovery/test SHA: **`3d71b9b77674fd0eda2c539e2efb36e2c42365d0`**, tree **`1c8f50ed02d1f17ca42528127644ac14e7cb402b`**. Existing browser script now tests owner grant/revoke/regrant and ordinary BROKER reload at 1440/390/360 widths.
+- Prepared 0009 candidate: **`1f2a057e0694b72d7cbc5b1938b506866eddbf22`**, tree **`3264116bf1b12834439d8924dfe06f4c9820ae77`**, parent existing staging **`8b0809bd5eb22223fc80d73739eaab4d05d2782d`**. **NOT DEPLOYED.** No remote branch was created or moved to this candidate. The documentation checkpoint retains it as an additional parent, keeping the candidate reachable without a new branch; the checkpoint tree keeps recovery code and documentation, not a staging merge.
+- Candidate migration files 0001–0009, catalog, registry, runtime schema, Docker label, artifact schema validation and database scenario are byte-identical to the current staging versions. **No 0010/MFA implementation is included in this candidate; no migration is required by this fix.** Ready recovery MFA remains unchanged behind its separate restore/migration gate. Never deploy the whole recovery/documentation checkpoint.
+- Previous candidate **`9231f37197e26278ece488cb4259c0d22bfc62f2`** remains rejected. Its earlier positive checks do not override its red security test.
+
+### Corrected authority and billing scope
+
+Existing native identity/AGENT connection and `/api/workspace` now use owner-issued append-only events in the existing `audit_log`. Confirmation records actor, verified recipient, exact owner/analysis, purpose, server time and expiry. Revocation is checked for every subsequent request. CRM data, public source/consent and matching INN/email never confer authority. Existing Documents → «Разрешения брокеру» provides owner confirmation/revocation; the requester cannot confirm foreign-owner access. No CRM backfill or invented legacy permission.
+
+Dossier/model/report/AI, analysis lists/prospects, documents/downloads/counts, application reads/writes/chat, synchronization and admin assignment labels use the confirmed scope. Same-INN records of different owners remain isolated. Historic forged broker-owned application mirrors cannot bypass current grants. ADMIN, owner, AGENT and paid entitlement checks remain.
+
+New checkout attribution requires **separate owner-confirmed commercial referral**, with authenticated accepted-invitation evidence for curator attribution. Dossier read permission is insufficient. Existing conflict policy returns `ATTRIBUTION_NEEDS_REVIEW` for ambiguity; no arbitrary broker is selected. Existing/idempotent orders retain their saved attribution. Prices, percentages, access duration, providers, webhooks, refund and payout rules, existing commissions and ledger were not changed. Full design, dependency paths and official advisories: [broker authority record](2026-11-04-BROKER-AUTHORIZATION.md).
+
+### Tests: exact observed result and limits
+
+| Check | Result / scope |
+|---|---|
+| Original red regression, unchanged expected denial | **PASS**: ordinary self-connected broker gets foreign 404 → creates CRM contact 201 → still foreign 404. Original test case unchanged byte-for-byte from af6e868, SHA-256 `7bcb779aba2f2238d1244c44d0447f7e19f731309a4626a670d9caf954adc753`. |
+| Owner grant, reload, revoke in old session | **PASS**, real routes on isolated synthetic data, including old model/doc/report/AI/chat/application links and writes. No ADMIN substitute. |
+| Forged INN/email/source/consent/public contact; same-INN different owners | **PASS**, unauthorized scope remains denied. No real foreign data was requested. |
+| Native new broker and existing CLIENT connection/relogin | **PASS** isolated real native authorization; not published-role acceptance. |
+| Commercial referral, conflict and immutable history | **PASS**, independent referral required; existing order/commission/ledger snapshots and financial assertions retained. |
+| Targeted authority/connection/settlement | **28/28 PASS**; later old-deal revocation/history correction **11/11 PASS**. These are separate commands, not an aggregate. |
+| Existing native MFA + settlement compatibility after dependency patch | **15/15 PASS**, including factor/recovery/session behavior. Ready MFA code not redeveloped. |
+| Exact 0009 candidate full regression | **6822/6822 PASS**, zero fail/skipped, 192622.988156 ms, Node 24.22.1. |
+| Exact 0009 candidate mandatory local gates | Standard `npm ci`, build/typecheck, Credit Lab **24/24**, lint, standalone validation (**13 assets, 0009**), PDF extraction **PASS**. Local process exit 0. PDF extraction is not visual pagination. |
+| Isolated browser execution | **PENDING in GitHub**. Local Chromium installation failed with invalid ZIP; no local browser run claimed. Test render/syntax is not live visual proof. |
+| Node 22 container and PostgreSQL gates | **PENDING**, current CI snapshot below. No local Docker or real PostgreSQL result substituted. |
+
+Original dependency gate was correct: **criticalHigh=2**. `better-auth@1.7.5` matches GHSA-965c-763c-88jm (critical), GHSA-r4xp-prcw-77qf (high), and GHSA-44jh-23m7-hpcf (low); `zod@4.6.5` matches GHSA-mrhx-c7xc-m3w5 (high). Minimal pinned patch family **Better Auth 1.7.16 / Zod 4.6.6** and lock fix; standard `npm ci` succeeded. Current unchanged gate: **criticalHigh=0**, high/critical/low zero, **five moderate entries remain** (`@esbuild-kit/core-utils`, `@esbuild-kit/esm-loader`, `drizzle-kit`, `esbuild`, `nodemailer`). No threshold reduction, forced audit fix or exception. Existing staging workflow now runs this same gate before delivery.
+
+Final candidate packaged inputs: **`41e32b16f76dfc242acb009e8ec89833de4b1b955c7c39c92b7d44d4e1516072`**, `PRESCORE-SOURCE-INPUTS-1`, **715 files**, lock **`30f95307620b4c49b2eba4665be9dcd8c10192eb1e51a72a9a112bea2c492932`**, build `Fxrx9D0JIAkJcIAUuKBb_`. Local provenance reports `UNVERIFIED_DIRTY_CHECKOUT`; exact local tree separately matches GitHub tree 3264116. Scoped fingerprint is not proof of a full runtime Git tree or container digest.
+
+### CI snapshot, not a passed delivery gate
+
+Recorded at **2026-11-04 18:23:57 Moscow / 15:23:57 UTC**, exact recovery SHA **3d71b9b77674fd0eda2c539e2efb36e2c42365d0**:
+
+- [Product QA 41856017870](https://github.com/Teddy1-blip/Prescore-v1.1/actions/runs/41856017870): **RUNNING**. ADMIN and isolated billing completed **success**. Presentation is at CLIENT responsive regression (Full Analysis V3 step completed); validate is at Product regression suite. BROKER/browser success is not inferred.
+- [RC1 41856017900](https://github.com/Teddy1-blip/Prescore-v1.1/actions/runs/41856017900): **RUNNING**. Static completed **success**, including the corrected dependency gate. Container is at Docker build; PostgreSQL clean/e2e/restore, upgrade and worker jobs are at “Clean migrations / upgrade preservation”; product job waits for Product QA.
+- Observation stops at these phases; no rerun or status-only commit/deployment. Recovery includes ready 0010, so even eventual success must not be relabelled as exact-0009-candidate CI proof. Complete the existing mandatory Node 22/container/PostgreSQL/browser gates for the exact candidate before delivering it under the current restrictions.
+- The old rejected candidate's PostgreSQL jobs were read for the existing first failure: they timed out/cancelled after 30 minutes in migration preservation. The log reached the intentional `rc_injected_missing_table` probe and then stopped. This is not proof of a connection failure or of a root cause; no unsupported runtime/migration fix was made. If this phase fails again, preserve its first actual error and investigate that precise gate, not a new general audit.
+
+### Published exposure and existing containment
+
+Fresh browser health still reports old fingerprint **c68d9c34f312c7b903cb22facac70e9b6959a0f8af1eab18da058e1a1a1cb0d9**, 711 files, old lock and schema0009. Fresh ready was not read in this continuation; historical ready remains tied to its previous observation. Current staging GitHub source still authorizes through the unsafe CRM-INN join. The live public contact route `/ref/AGENT-ANTON-001` is reachable; it was not submitted and no foreign dossier was requested. **The old published code is unsafe even though the new candidate is withheld.**
+
+A verified existing temporary control is [Amvera staging settings](https://cloud.amvera.ru/projects/applications/msk1/~/dorogovab/prescore-staging/settings) → Управление → Заморозка → **«Заморозить проект»**. It stops the whole staging app and is a proposed containment measure, **not applied**. It does not require a new paid resource; do not freeze production or the database service. A hidden menu/filter would not close these APIs.
+
+### A–G acceptance matrix — preserved prior evidence, no whole-stage PASS
+
+| Condition | Recovery / isolated result | Published result and exact missing condition |
+|---|---|---|
+| A — ordinary CLIENT login/registration | Native new/existing account connection PASS | **Pending** controlled CLIENT-only live session after safe activation; owner's ADMIN session is not evidence. |
+| B — ordinary BROKER / assigned scope | Original red now PASS; grant/reload/revoke/old-session denial PASS | **Not accepted live** until exact candidate mandatory gates, activation and dedicated BROKER login/assignment/revocation. |
+| C — recovery mail | Existing native reset tests retained | **Pending** designated owner-controlled test recipient, actual receipt/link use/new-password login; no real owner reset or secrets in chat. |
+| D — ADMIN MFA | Ready implementation unchanged; patched-dependency compatibility PASS | **Blocked** by unproven consistent DB+documents restore and no free isolated target/protected executor. No0010/enrollment/config change; owner factor setup only in ready protected UI later. |
+| E — interface / desktop / mobile | Existing browser scenario extended, execution pending | Prior desktop result preserved with original staging SHA; new UI and live mobile remain unverified. Do not substitute renders or ADMIN-role testing. |
+| F — history / QA / preservation | Financial/settlement assertions pass; no live data write | Prior 0 ordinary histories / 3 QA / reload and financial hashes retained at original SHA. No repeat deletion/archive/restore or source modification. Consistent restoration remains unproven. |
+| G — delivery / activation / schema / provenance | 0009 candidate local gates PASS, no migration needed | **NOT DELIVERED**; mandatory CI/browser/PostgreSQL/container and exact-candidate provenance gates outstanding, then fresh activation/health/ready/live roles. |
+
+Staging remains **`8b0809bd5eb22223fc80d73739eaab4d05d2782d`**; last accepted active Amvera revision **`558be82bea4a078b6672086e917ef877f41c0e98`** is historical activation evidence, not newly inspected. Production, DNS, financial core/parsers, “Версия анализа”, removed 11 analyses and all three QA sources are untouched. No new remote branch, paid resource, support contact, Online IDE retry, live role change, live migration or Stage 2 work. [Safe result and log hashes](evidence/2026-11-04-broker-authorizations-safe.json).
+
+---
+
+## Prior checkpoint — ordinary broker connection, 2026-11-04 (red regression retained below)
 
 Authority: owner follow-up to Issue #11 / **6630816883**, continuing the same Stage 1 under the current no-cost/staging-only/migration constraints. Actual recovery and staging HEADs/new comments were read before edits and before publication; non-force expected-SHA updates preserve newer history. **Stage 1 is NOT accepted. No new staging delivery, migration, role change, restart, archive/delete/restore, analysis-version edit or Stage 2 work occurred.**
 
