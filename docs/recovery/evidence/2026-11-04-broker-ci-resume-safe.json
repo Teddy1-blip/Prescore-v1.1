@@ -166,7 +166,47 @@
         "state": "READY_FULL",
         "sha256": "acb19b92adb5f41786e5301e33593042b81347baf971cf34cd7c5ed3c2a9493a"
       }
-    ]
+    ],
+    "historicalProjectionLimit": {
+      "bridgeMaxDepthLeaves": [
+        160,
+        160,
+        0
+      ],
+      "numericPrecisionAffectedLeaves": 2,
+      "example": {
+        "serializedSourceValue": "0.15384615384615385",
+        "structuredBridgeValue": "0.15384615384615383"
+      },
+      "provenBySameResponse": true,
+      "originalHashesPreserved": true
+    },
+    "preActivationFullProjection": {
+      "method": "SHA256_DEEP_SORTED_JSON_PROJECTION_V1",
+      "acquisition": "JSON.parse visible document; sort projection and JSON.stringify inside browser evaluation; return serialized string, not nested numeric object",
+      "verifiedOldRuntimeFingerprint": "c68d9c34f312c7b903cb22facac70e9b6959a0f8af1eab18da058e1a1a1cb0d9",
+      "schema": "0009_analysis_archive.sql",
+      "qa": [
+        {
+          "analysisId": "36527dc1-d7db-4fef-bd47-719a451b4d58",
+          "state": "READY_FULL",
+          "sha256": "99d79ffb20148d1146a3071a6fef9695dacd2c8e70e440709630867016192e71",
+          "characters": 126092
+        },
+        {
+          "analysisId": "992ab9e3-672e-4adf-955e-9a2c40e3ece3",
+          "state": "READY_FULL",
+          "sha256": "936516b97757bb390b9240d9af34406ac4239cbbd7b10dada9fc5f74aa736213",
+          "characters": 92935
+        },
+        {
+          "analysisId": "7ec7daeb-dfef-4f1f-9c9d-15ea86fe864c",
+          "state": "READY_FULL",
+          "sha256": "acb19b92adb5f41786e5301e33593042b81347baf971cf34cd7c5ed3c2a9493a",
+          "characters": 31870
+        }
+      ]
+    }
   },
   "acceptance": {
     "A_CLIENT": "isolated PASS; live pending",
