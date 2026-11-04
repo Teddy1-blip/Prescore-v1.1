@@ -28,7 +28,11 @@ async function connectInBrowser(role){
   const connected=await response;assert.equal(connected.status(),201);
   await page.getByText('Synthetic '+role,{exact:true}).waitFor();await page.reload();await page.getByText('Synthetic '+role,{exact:true}).waitFor();
   assert.equal(new URL(page.url()).pathname,'/agent');assert.deepEqual(errors,[]);
-  return await connected.json();
+  // The POST triggers a real navigation; its CDP body may already be discarded.
+  // Read durable account state with the same native session after the UI reload.
+  const persisted=await context.request.get(origin+'/api/agent');assert.equal(persisted.status(),200);
+  const cabinet=await persisted.json();assert.ok(cabinet.agent.code);assert.deepEqual(cabinet.leads,[]);
+  return cabinet.agent.code;
  }finally{await browser.close();}
 }
 let app,worker;try{await verifySchema(pool);app=launch('scripts/release/start.mjs');await ready();worker=launch('scripts/billing/payout-worker.mjs',{PRESCORE_WORKER_ID:'rc-e2e-worker'});await wait(async()=>!!(await q("SELECT id FROM runtime_workers WHERE id='rc-e2e-worker' AND status='RUNNING'")).rows.length);out('production NODE_ENV standalone app + independent worker readiness');for(const role of ['admin','client','broker','curator','stranger'])await signup(role);await cli('scripts/platform/bootstrap-admin.mjs',[],{PRESCORE_BOOTSTRAP_ADMIN_ENABLED:'true',PRESCORE_BOOTSTRAP_ADMIN_EMAIL:' ADMIN@RC.TEST '});await cli('scripts/platform/bootstrap-admin.mjs',[],{PRESCORE_BOOTSTRAP_ADMIN_ENABLED:'true',PRESCORE_BOOTSTRAP_ADMIN_EMAIL:'admin@rc.test'});out('real signup/verification/password login and explicit idempotent bootstrap');
@@ -40,8 +44,8 @@ for(const role of ['newbroker','existingclient']){
  const pending=await request('/agent',role);assert.equal(pending.status,200);assert.match(await pending.text(),/Подключение брокера/);
  assert.equal((await request('/api/agent',role)).status,403);
  assert.equal((await q('SELECT * FROM agent_accounts WHERE user_email=$1',[role+'@rc.test'])).rows.length,0);
- const connected=await connectInBrowser(role);
- for(let reload=0;reload<2;reload++){const cabinet=await json('/api/agent',role);assert.equal(cabinet.agent.code,connected.agent.agentCode);assert.deepEqual(cabinet.leads,[]);}
+ const connectedCode=await connectInBrowser(role);
+ for(let reload=0;reload<2;reload++){const cabinet=await json('/api/agent',role);assert.equal(cabinet.agent.code,connectedCode);assert.deepEqual(cabinet.leads,[]);}
  await json('/api/agent',role,{type:'connect',offerAccepted:true,consent:true});
  assert.equal((await q('SELECT * FROM agent_accounts WHERE user_email=$1',[role+'@rc.test'])).rows.length,1);
  assert.equal((await request('/api/admin?resource=brokers',role)).status,403);
