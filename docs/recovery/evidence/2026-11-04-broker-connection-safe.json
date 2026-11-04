@@ -1,0 +1,107 @@
+{
+  "task_issue_comment": 6630816883,
+  "recovery_code": "a566726dfa32eb36e0e27eaf6c8167f9d306ff90",
+  "recovery_tree": "56da5d116edddfae3ba7b09be84ecde1f85d48f0",
+  "schema_0009_candidate": "9231f37197e26278ece488cb4259c0d22bfc62f2",
+  "candidate_tree": "2baee93baf257a499c8ad56f29d825210d7e642f",
+  "candidate_branch": null,
+  "staging_base": "8b0809bd5eb22223fc80d73739eaab4d05d2782d",
+  "schema_changes": false,
+  "migrations_0001_to_0009_bytes_unchanged": true,
+  "migration_0010_in_candidate": false,
+  "package_lock_unchanged": true,
+  "source_inputs": {
+    "scope": "PRESCORE-SOURCE-INPUTS-1",
+    "sha256": "85d9557c579847c7bc91a937013a65f04ab725394cac7a7d73fc9c12489b4ba5",
+    "files": 713,
+    "lockSha256": "8fc1937ff193da2f1cd7504442f2dd64e44559306a0f77d2775af83e17f9deb1"
+  },
+  "local_build": {
+    "pass": true,
+    "buildId": "yV_czexz-rwxvacH3H6ro",
+    "checkout": "UNVERIFIED_DIRTY_CHECKOUT",
+    "runtime": "Node 24.22.1"
+  },
+  "targeted_recovery": {
+    "passed": 34,
+    "failed": 0
+  },
+  "targeted_schema_0009": {
+    "passed": 33,
+    "failed": 0
+  },
+  "regression": {
+    "status": "PASS original 0009 candidate suite only",
+    "passed": 6815,
+    "failed": 0,
+    "skipped": 0,
+    "duration_ms": 831110.320493,
+    "credit_lab": "24/24",
+    "lint": true,
+    "standalone": true,
+    "pdf_runtime": true,
+    "process_exit": 0,
+    "new_security_regression_included": false,
+    "latest_recovery_accepted": false
+  },
+  "final_ci": {
+    "observed_at": "2026-11-04T13:31:12Z",
+    "overall_at_observation": "RUNNING; observation stopped",
+    "product_run": 41837055180,
+    "rc1_run": 41837055277,
+    "presentation": "FAILED at obsolete empty-state button locator; recovery corrected, browser rerun pending",
+    "static": "FAILED at dependency gate; criticalHigh=2; better-auth critical, zod high",
+    "container": "RUNNING docker build",
+    "postgres": "RUNNING migration scenarios",
+    "live_acceptance": false
+  },
+  "live_acceptance": "NOT RUN",
+  "live_role_changes": 0,
+  "production_changes": 0,
+  "additional_paid_resources": 0,
+  "notes": [
+    "Native auth verified-email session is the authority, not URL/body role/email.",
+    "Explicit POST connect only; transaction includes profile and consent audit.",
+    "GET and redirect do not create accounts.",
+    "Existing broker and other users remain unchanged; separate consents required for new connection.",
+    "Existing referral claim matches authenticated verified email.",
+    "CI browser exercise is isolated, not published live acceptance.",
+    "One test-only correction awaits response JSON before closing browser; mandatory gates track final candidate.",
+    "Positive connection tests do not override the explicit failing foreign-access regression."
+  ],
+  "final_targeted": {
+    "passed": 22,
+    "failed": 0,
+    "skipped": 0,
+    "files": [
+      "tests/workspace-frontend.test.mjs",
+      "tests/broker-connection.test.mjs",
+      "tests/broker-product.test.mjs"
+    ]
+  },
+  "superseded_full_gate": {
+    "passed": 6814,
+    "failed": 1,
+    "reason": "workspace-frontend curator GET fixture lacked an explicitly connected broker profile; fixture corrected, expected 200 retained"
+  },
+  "auxiliary_branch": {
+    "name": "prescore-stage1-broker-fix",
+    "created_in_error": true,
+    "deleted": true,
+    "code_preserved_in_recovery": true,
+    "candidate_commit_preserved": true,
+    "verified_by": "GitHub UI Deleted now; no production/staging ref change"
+  },
+  "latest_code_checkpoint": "244862b9c1def6dbd4ed61183d5061ae1b12bd4c",
+  "delivery_decision": "REJECTED",
+  "security_regression": {
+    "status": "FAIL",
+    "scope": "isolated synthetic only",
+    "before": 404,
+    "self_reported_contact_post": 201,
+    "after": 200,
+    "expected_after": 404,
+    "file": "tests/broker-connection.test.mjs",
+    "live_reproduction": false
+  }
+}
