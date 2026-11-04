@@ -42,7 +42,7 @@ jobs:
 
       - run: npm ci
       - run: npm run typecheck
-      - run: npm run build
+      - run: npm run build && node scripts/release/package-runtime.mjs
 
       - name: Full product regression suite
         run: node --experimental-strip-types --test tests/*.test.mjs

@@ -23,8 +23,6 @@ async function getDatabase() {
   return env.DB as unknown as RuntimeDatabase;
 }
 
-const OWNER_AGENT = "AGENT-ANTON-001";
-
 async function ensureSchema(db: RuntimeDatabase) {
   await db.batch([
     db.prepare(`CREATE TABLE IF NOT EXISTS agent_leads (
@@ -104,13 +102,51 @@ function normalizeCode(value: string | null) {
   return (value || "").trim().toUpperCase().replace(/[^A-ZА-Я0-9-]/g, "").slice(0, 48);
 }
 
-async function accountFor(db: RuntimeDatabase, user: { email: string; displayName: string; isAdmin: boolean }) {
-  const existing = await db.prepare("SELECT agent_code AS agentCode, name FROM agent_accounts WHERE user_email = ? LIMIT 1").bind(user.email).first<{ agentCode: string; name: string }>();
-  if (existing) return existing;
-  const agentCode = user.isAdmin ? OWNER_AGENT : `AGENT-${crypto.randomUUID().replace(/-/g, "").slice(0, 10).toUpperCase()}`;
-  const name = user.displayName || "Партнёр Прескор";
-  await db.prepare("INSERT INTO agent_accounts (user_email, agent_code, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").bind(user.email, agentCode, name, new Date().toISOString(), new Date().toISOString()).run();
-  return { agentCode, name };
+async function accountFor(db: RuntimeDatabase, user: { email: string }) {
+  return db.prepare("SELECT agent_code AS agentCode, name FROM agent_accounts WHERE lower(user_email) = ? LIMIT 1").bind(user.email).first<{ agentCode: string; name: string }>();
+}
+
+// Explicit self-enrollment only. requireApiUser accepts verified native sessions;
+// neither GET, a requested role nor a submitted email can create this account.
+async function connectAccount(request: Request, db: RuntimeDatabase, user: NonNullable<Awaited<ReturnType<typeof requireApiUser>>>, body: Record<string, unknown>) {
+  try {
+    const base = process.env.PRESCORE_BASE_URL;
+    if (!base || request.headers.get("origin") !== new URL(base).origin || request.headers.get("sec-fetch-site") === "cross-site") {
+      return Response.json({ error: "Не удалось подтвердить источник запроса. Обновите страницу." }, { status: 403 });
+    }
+  } catch { return Response.json({ error: "Подключение временно недоступно" }, { status: 503 }); }
+  const existing = await accountFor(db, user);
+  if (existing) return Response.json({ ok: true, agent: existing, alreadyConnected: true });
+  if (body.offerAccepted !== true || body.consent !== true) {
+    return Response.json({ error: "Примите условия партнёрской программы и отдельно подтвердите согласие на обработку данных" }, { status: 400 });
+  }
+  if (body.invitation !== undefined && typeof body.invitation !== "string") return Response.json({ error: "Некорректное приглашение" }, { status: 400 });
+  const rawInvitation = typeof body.invitation === "string" ? body.invitation.trim().toUpperCase() : "";
+  const invitation = normalizeCode(rawInvitation);
+  if (invitation !== rawInvitation) return Response.json({ error: "Некорректное приглашение" }, { status: 400 });
+  const agentCode = invitation || `AGENT-${crypto.randomUUID().replace(/-/g, "").slice(0, 20).toUpperCase()}`;
+  const name = user.displayName || "Партнёр Прескор", now = new Date().toISOString();
+  const insert = invitation
+    ? db.prepare(`INSERT INTO agent_accounts (user_email, agent_code, name, created_at, updated_at)
+        SELECT ?, agent_code, ?, ?, ? FROM agent_partners
+        WHERE agent_code = ? AND lower(email) = ? AND status IN ('На подключении', 'Активен')
+        ON CONFLICT (user_email) DO NOTHING`).bind(user.email, name, now, now, invitation, user.email)
+    : db.prepare(`INSERT INTO agent_accounts (user_email, agent_code, name, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?) ON CONFLICT (user_email) DO NOTHING`).bind(user.email, agentCode, name, now, now);
+  await db.batch([
+    insert,
+    db.prepare(`UPDATE agent_partners SET status = 'Активен', consent_at = ?, updated_at = ?
+      WHERE agent_code = ? AND lower(email) = ? AND EXISTS
+      (SELECT 1 FROM agent_accounts WHERE user_email = ? AND agent_code = ?)`)
+      .bind(now, now, agentCode, user.email, user.email, agentCode),
+    db.prepare(`INSERT INTO audit_log (id, entity_type, entity_id, action, actor_role, actor_email, metadata, created_at)
+      SELECT ?, 'AGENT_ACCOUNT', agent_code, 'SELF_CONNECT', 'CLIENT', user_email, ?, ?
+      FROM agent_accounts WHERE user_email = ? AND agent_code = ? ON CONFLICT (id) DO NOTHING`)
+      .bind('agent-connect-' + agentCode, JSON.stringify({ offer: '/offer', consent: '/consent', privacy: '/privacy', documentRevision: '2026-08-20', offerAccepted: true, consentAccepted: true }), now, user.email, agentCode),
+  ]);
+  const account = await accountFor(db, user);
+  if (!account) return Response.json({ error: "Приглашение не связано с подтверждённой почтой этой учётной записи. Подключение не выполнено." }, { status: 409 });
+  return Response.json({ ok: true, agent: account }, { status: 201 });
 }
 
 async function createMatchedGuaranteeDraft(db: RuntimeDatabase, input: { agentCode: string; leadId: string; analysisId?: string; companyName: string; consentAt?: string; prospectId: string; noticeNumber: string; amount: number; ownerEmail: string }) {
@@ -138,6 +174,7 @@ export async function GET(request: Request) {
     await ensureSchema(db);
     const controls = await readControlState(db);
     const account = await accountFor(db, user);
+    if (!account) return Response.json({ error: "Сначала подключите свой брокерский профиль в /agent" }, { status: 409 });
     const prospectsModule = await db.prepare("SELECT enabled FROM module_settings WHERE module_key = 'prospects' LIMIT 1").first<{ enabled: number }>();
     const requestedCode = normalizeCode(new URL(request.url).searchParams.get("code"));
     const code = requestedCode && requestedCode === account.agentCode ? requestedCode : account.agentCode;
@@ -194,15 +231,17 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const db = await getDatabase();
-    await ensureSchema(db);
     const body = await request.json() as Record<string, unknown>;
     const type = String(body.type || "lead");
     const publicReferral = type === "subagent" || (type === "lead" && String(body.source || "") === "Реферальная ссылка");
     const user = publicReferral ? null : await requireApiUser();
     if (!publicReferral && !user) return unauthorized();
+    const db = await getDatabase();
+    if (type === "connect") return await connectAccount(request, db, user!, body);
     if (user && !user.roles.includes("AGENT") && !user.isAdmin) return Response.json({error:"Нет доступа к кабинету агента"},{status:403});
+    await ensureSchema(db);
     const account = user ? await accountFor(db, user) : null;
+    if (user && !account) return Response.json({ error: "Сначала подключите свой брокерский профиль в /agent" }, { status: 409 });
     const agentCode = account?.agentCode || normalizeCode(String(body.agentCode || ""));
     if (!agentCode) return Response.json({ error: "Некорректная реферальная ссылка" }, { status: 400 });
     if (publicReferral) {
@@ -313,6 +352,7 @@ export async function PATCH(request: Request) {
     const db = await getDatabase();
     await ensureSchema(db);
     const account = await accountFor(db, user);
+    if (!account) return Response.json({ error: "Сначала подключите свой брокерский профиль в /agent" }, { status: 409 });
     const body = await request.json() as { id?: string; entity?: string; status?: string };
     if (!body.id || !body.status) return Response.json({ error: "Нужны id и статус" }, { status: 400 });
     if (body.entity === "lead") {

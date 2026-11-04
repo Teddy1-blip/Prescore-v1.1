@@ -34,12 +34,9 @@ async function moduleAvailable(db: RuntimeDatabase) {
   return setting == null || Boolean(setting.enabled);
 }
 
-async function accountFor(db: RuntimeDatabase, user: { email: string; displayName: string; isAdmin: boolean }) {
-  const existing = await db.prepare("SELECT agent_code AS agentCode FROM agent_accounts WHERE user_email = ? LIMIT 1").bind(user.email).first<{ agentCode: string }>();
-  if (existing) return existing.agentCode;
-  const code = user.isAdmin ? "AGENT-ANTON-001" : `AGENT-${crypto.randomUUID().replace(/-/g, "").slice(0, 10).toUpperCase()}`;
-  await db.prepare("INSERT INTO agent_accounts (user_email, agent_code, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").bind(user.email, code, user.displayName || "Партнёр Прескор", new Date().toISOString(), new Date().toISOString()).run();
-  return code;
+async function accountFor(db: RuntimeDatabase, user: { email: string }) {
+  const existing = await db.prepare("SELECT agent_code AS agentCode FROM agent_accounts WHERE lower(user_email) = ? LIMIT 1").bind(user.email).first<{ agentCode: string }>();
+  return existing?.agentCode ?? null;
 }
 
 function parseRecord(row: Record<string, unknown>) {
@@ -69,6 +66,7 @@ export async function GET(request: Request) {
   if (!user.roles.includes("AGENT") && !user.isAdmin) return Response.json({error:"Нет доступа к кабинету агента"},{status:403});
   try {
     const db = await database(); await ensureSchema(db); if (!await moduleAvailable(db)) return Response.json({ error: "Модуль базы для прозвона отключён администратором" }, { status: 403 }); const agentCode = await accountFor(db, user);
+    if (!agentCode) return Response.json({ error: "Сначала подключите свой брокерский профиль в /agent" }, { status: 409 });
     const url = new URL(request.url); const status = String(url.searchParams.get("status") || "all");
     const query = String(url.searchParams.get("q") || "").trim().toLowerCase();
     const region = String(url.searchParams.get("region") || "").trim().toLowerCase();
@@ -100,6 +98,7 @@ export async function POST(request: Request) {
   if (!user.roles.includes("AGENT") && !user.isAdmin) return Response.json({error:"Нет доступа к кабинету агента"},{status:403});
   try {
     const db = await database(); await ensureSchema(db); if (!await moduleAvailable(db)) return Response.json({ error: "Модуль базы для прозвона отключён администратором" }, { status: 403 }); const agentCode = await accountFor(db, user);
+    if (!agentCode) return Response.json({ error: "Сначала подключите свой брокерский профиль в /agent" }, { status: 409 });
     const body = await request.json() as Record<string, unknown>; const type = String(body.type || ""); const now = new Date().toISOString();
     if (type === "import") {
       const records = Array.isArray(body.records) ? body.records.slice(0, 75) as Gold44Record[] : [];

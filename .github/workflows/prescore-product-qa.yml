@@ -2,7 +2,7 @@ name: Prescore product QA
 
 on:
   push:
-    branches: [prescore-product-v1, prescore-polish-v1, prescore-live-product-recovery-v1]
+    branches: [prescore-product-v1, prescore-polish-v1, prescore-live-product-recovery-v1, prescore-stage1-broker-fix]
   workflow_dispatch:
 
 permissions:

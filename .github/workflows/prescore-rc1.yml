@@ -1,7 +1,7 @@
 name: Prescore RC1
 on:
   push:
-    branches: [prescore-live-product-recovery-v1]
+    branches: [prescore-live-product-recovery-v1, prescore-stage1-broker-fix]
     paths:
       - '.github/workflows/prescore-rc1.yml'
       - '.github/workflows/prescore-product-qa.yml'
