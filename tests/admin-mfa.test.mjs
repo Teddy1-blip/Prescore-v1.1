@@ -18,10 +18,10 @@ function jar(initial=''){
  const cookies=new Map(initial.split('; ').filter(Boolean).map(x=>[x.slice(0,x.indexOf('=')),x.slice(x.indexOf('=')+1)]));
  return {header:()=>[...cookies].map(([k,v])=>k+'='+v).join('; '),accept(response){for(const c of response.headers.getSetCookie()){const first=c.split(';')[0],i=first.indexOf('=');if(/max-age=0/i.test(c))cookies.delete(first.slice(0,i));else cookies.set(first.slice(0,i),first.slice(i+1));}}};
 }
-test('MFA rollout configuration rejects invalid values; proposed schema is not an automatic live migration',async()=>{
+test('MFA rollout configuration rejects invalid values; approved additive schema is registered for the gated activation candidate',async()=>{
  assert.equal(mfa.adminMfaMode({}),'disabled');for(const mode of ['disabled','enrollment','required'])assert.equal(mfa.adminMfaMode({PRESCORE_ADMIN_2FA_MODE:mode}),mode);
  assert.throws(()=>mfa.adminMfaMode({PRESCORE_ADMIN_2FA_MODE:'true'}),/AUTH_MFA_CONFIGURATION_INVALID/);
- assert.equal((await migrationRegistry()).at(-1).version,'0009_analysis_archive.sql');
+ assert.equal((await migrationRegistry()).at(-1).version,'0010_admin_mfa.sql');
 });
 
 test('actual native 2FA lifecycle and central administrative authority, without live services',async t=>{
@@ -29,7 +29,6 @@ test('actual native 2FA lifecycle and central administrative authority, without 
  const query=async(sql,values)=>{const r=await pg.query(sql,values);return{rows:r.rows,rowCount:r.affectedRows,command:sql.trim().split(' ')[0].toUpperCase()};};
  const pool={query,connect:async()=>({query,release(){}}),end:async()=>{}};
  for(const m of await migrationRegistry())await pg.exec(m.sql);
- await pg.exec(fs.readFileSync('lib/db/proposed/0010_admin_mfa.sql','utf8'));
  const previous={...process.env};Object.assign(process.env,{PRESCORE_ADMIN_2FA_MODE:'required',AUTH_SECRET:'synthetic-isolated-mfa-test-secret-over-32-characters',PRESCORE_BASE_URL:'https://prescore.test',NODE_ENV:'production',SMTP_HOST:'synthetic',SMTP_FROM:'synthetic@prescore.test'});
  const server=load('lib/auth/server.ts',{'better-auth':{betterAuth},'better-auth/plugins':{twoFactor},'./admin-mfa.ts':mfa,'../db/client.ts':{getPool:()=>pool},'node:crypto':{randomUUID},'nodemailer':{createTransport:()=>({sendMail:async message=>{mail.push(message);}})},'../platform/environment.ts':{smtpConfiguration}});
  const auth=server.getAuth(),admin=jar(),other=jar();let password='Synthetic-Mfa-Password-2026!',secret,codes,userId,oldSessionCookie,readForeignDocument;

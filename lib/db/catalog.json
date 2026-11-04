@@ -683,7 +683,8 @@
       "emailVerified",
       "image",
       "createdAt",
-      "updatedAt"
+      "updatedAt",
+      "twoFactorEnabled"
     ],
     "primaryKey": [
       "id"
@@ -827,6 +828,33 @@
     ],
     "primaryKey": [
       "id"
+    ]
+  },
+  {
+    "table": "twoFactor",
+    "columns": [
+      "id",
+      "userId",
+      "secret",
+      "backupCodes",
+      "verified",
+      "failedVerificationCount",
+      "lockedUntil"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "platform_admin_mfa_sessions",
+    "columns": [
+      "session_id",
+      "user_id",
+      "verified_at",
+      "method"
+    ],
+    "primaryKey": [
+      "session_id"
     ]
   }
 ]

@@ -1,5 +1,4 @@
--- PROPOSED ONLY. Not in lib/db/migrations; startup does not apply this file.
--- Promote through the existing migration registry only after approval of rollout/recovery.
+-- Additive administrator MFA schema. Deploy only after the staging backup/restore gate.
 ALTER TABLE "user" ADD COLUMN "twoFactorEnabled" boolean NOT NULL DEFAULT false;
 CREATE TABLE "twoFactor" (
  id text PRIMARY KEY,
