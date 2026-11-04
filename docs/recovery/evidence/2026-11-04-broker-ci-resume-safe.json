@@ -78,7 +78,11 @@
         }
       ],
       "criticalHigh": 0
-    }
+    },
+    "fullRegression": "IN_PROGRESS: live log observed through test5433",
+    "container": "IN_PROGRESS: real Docker regression log observed through test4957",
+    "productResult": "IN_PROGRESS",
+    "rc1Result": "IN_PROGRESS"
   },
   "schema": {
     "version": "0009_analysis_archive.sql",
@@ -86,5 +90,59 @@
     "mfa0010": false
   },
   "deployed": false,
-  "liveAmveraRestore": false
+  "liveAmveraRestore": false,
+  "recoveryCheckpoint": "174ce0091534f7ddf8ff03261fec6e12e6bfceac",
+  "issueComment": 6637218148,
+  "browserReproduction": {
+    "before": "FAIL: discarded CDP response body",
+    "after": "PASS 3/3",
+    "fixtureOnly": true,
+    "logSha256": "cb2165e2dee15a4862436898d0e76d805d2d148f86d4b53e9c2ffe7385b9686a"
+  },
+  "liveBefore": {
+    "stagingSha": "8b0809bd5eb22223fc80d73739eaab4d05d2782d",
+    "amveraRevision": "558be82bea4a078b6672086e917ef877f41c0e98",
+    "fingerprint": "c68d9c34f312c7b903cb22facac70e9b6959a0f8af1eab18da058e1a1a1cb0d9",
+    "schema": "0009_analysis_archive.sql",
+    "ordinaryHistory": 0,
+    "qaCount": 3,
+    "qaProjectionMethod": "SHA256_DEEP_SORTED_JSON_PROJECTION_V1",
+    "qaProjectionScope": [
+      "analysis",
+      "sources",
+      "bankingFacts",
+      "financialAnalysis",
+      "prescoreIndex",
+      "debtCapacity",
+      "financingReadiness",
+      "entitlement"
+    ],
+    "qa": [
+      {
+        "analysisId": "36527dc1-d7db-4fef-bd47-719a451b4d58",
+        "state": "READY_FULL",
+        "sha256": "7990bf4b88864a418ce5ae9a4a6c5b70212563cb7369cc47279e441feda4f31e"
+      },
+      {
+        "analysisId": "992ab9e3-672e-4adf-955e-9a2c40e3ece3",
+        "state": "READY_FULL",
+        "sha256": "e7b9e2eb477d4672251cf913ef36f73962af1e5a3a570be32e0386daf43cd122"
+      },
+      {
+        "analysisId": "7ec7daeb-dfef-4f1f-9c9d-15ea86fe864c",
+        "state": "READY_FULL",
+        "sha256": "acb19b92adb5f41786e5301e33593042b81347baf971cf34cd7c5ed3c2a9493a"
+      }
+    ]
+  },
+  "acceptance": {
+    "A_CLIENT": "isolated PASS; live pending",
+    "B_BROKER": "isolated PASS; live pending",
+    "C_EMAIL": "real receiver and reset flow pending; fake mailbox is not real mail",
+    "D_MFA": "unchanged separate restoration/migration gate pending",
+    "E_VISUAL": "isolated responsive PASS; published owner/broker/mobile pending",
+    "F_HISTORY": "pre-delivery 0 ordinary/3 QA observed; no data writes; after-delivery compare pending",
+    "G_DELIVERY": "blocked until final regression and container gates complete"
+  },
+  "observedAt": "2026-11-04T17:36:36.440039+00:00"
 }
