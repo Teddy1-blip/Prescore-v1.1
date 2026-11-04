@@ -1,6 +1,52 @@
 # Prescore 19-block integration — acceptance ledger
 
-## Current checkpoint — Stage 1 finish, 2026-11-04
+## Current checkpoint — Stage 1 native backup continuation, 2026-11-04
+
+Authority: `Prescore_Stage1_Continue_Without_Support.txt`; continued from Issue #11 / **6628635543**, recovery **`74b86591a79f296d28dd48bfcdcde993857ea997`**. Actual heads and all newer issue comments were read before work and rechecked before checkpoint; no newer external change was overwritten. **Stage 1 remains incomplete; Stage 2 not started.** Latest owner clarification: **no additional expenses**; no paid restore resource may be created. No support contact, Online IDE retry, 2FA redevelopment, deletion/archival/restoration of the 11 analyses, or analysis-version change.
+
+### Concrete result
+
+**One native cluster backup completed:** `Moscow-1 / dorogovab / prescore-stage-db`, **`dorogovab-20261104123142-prescore-stage-db`**, UI **“Готов”**, confirmed by **2026-11-04T12:34:58Z / 15:34:58 Moscow**. The ID timestamp's timezone was not exposed. All older backups remain; third manual slot is occupied. No paid setting, schedule, live DB contents, application connection or restart changed. This is a platform cluster copy, not a custom database.dump and not a proven staging-only SQL export.
+
+Repository → Data was actually tested. Visible application storage setting: `/data/prescore`; Data contains `prescore`, which shows an empty folder. Native download completed as an empty **ZIP (22 bytes, 0 members)**, SHA-256 `8739c76e681f900923b900c9df0ef75cf421d39cabb54650c4b9ad19b6a76d85`; local file/directory restricted to 0600/0700, not published. Mounted permissions and SQL/document reconciliation remain unverified. Application “Бэкапы /data” still says no backups. Writers were not quiesced; **do not treat these separate observations as a consistent DB+documents restore point**.
+
+The native restore dialog was inspected, then cancelled. It explicitly creates a separate service; default quote **490 RUB/30 days compute + 324 RUB/30 days disk = 814 RUB/30 days**, 0.5 CPU/1 GB RAM, 18 GB disk. No expense approval or restored service. Existing PG inventory shows one cluster, no ready isolated target; no managed-backup dump export demonstrated. The owner explicitly declined additional expenses. The actual restore form offers seven paid compute options (minimum 290 RUB/30 days) and one paid disk option; no free variant. This new-service route is closed under current authority. Exact remaining requirement: an already authorized isolated target at no extra charge and a protected executor/credential binding for existing compatible **0009 verification → exact 0010 rehearsal/no-op/preservation**. Creating the service alone is insufficient. No paid service or larger budget will be requested. Establish the executor first; do not request passwords/tokens or a backup in chat, create a public SQL endpoint, change run.command, restore over live data, or invent a manifest. See the updated existing [rollout plan](2026-11-03-ADMIN-MFA-ROLLOUT.md#native-platform-route-checked--2026-11-04).
+
+The current owner's `prescorestaging` SQL identity remains owner-supplied evidence. Work could read the document root but the application `DATABASE_URL` is masked; no independent live SQL identity assertion was obtained. A proposed screenshot of the settings view was rejected by automatic approval review because it could expose database credentials; it was not captured and no bypass was attempted. Safe backup/restore-condition screenshots contain no credentials or backup contents.
+
+### Exact QA failure repaired in recovery, no staging delivery
+
+Existing [Product QA 41815387569](https://github.com/Teddy1-blip/Prescore-v1.1/actions/runs/41815387569), exact previous candidate **`1ba46bcb55b918a78469cfca7864fae680a833cf`**, was checked once: **FAILED**, completed 2026-11-04T10:52:02Z. Its Node 22 regression **6821/6821**, Credit Lab **24/24**, lint, ADMIN harness and Full Analysis V3 responsive harness passed. First failures:
+
+| Job | Observed failure | Narrow correction |
+|---|---|---|
+| validate | `RUNTIME_ARTIFACT_MISSING` for standalone release scripts, libraries and provenance | Existing `package-runtime.mjs` now runs immediately after build in Product QA and RC1 static; validator unchanged. |
+| presentation | CLIENT harness expected 9 navigation buttons, actual 10 | Assert the exact current 10 labels and disabled “Контрагенты”; no product navigation change. |
+| billing | Isolated ADMIN fixture waited on the disabled `/admin` page | Its two UI URLs use existing `/prescore-control`; billing implementation/API assertions unchanged. |
+
+New code commit **`7dee1a31437f3c41bd75dc54c13cddc64abe577d`**, exact tree **`499dd8ee21d95488bed41d3976006ed7547c3966`**, equals the local temporary-index tree and preserves the recovery parent. Four files changed, no product/MFA/migration/financial code. The **existing** RC1 workflow now also triggers for code paths on recovery (documentation-only excluded), enabling its current container/PostgreSQL gates without a staging push or a duplicate test system. Targeted checks **56/56 PASS**, zero failed/skipped, and both edited browser scripts pass syntax checks.
+
+Final candidate mandatory gates are running on that exact code SHA: [Product QA **41829997005**](https://github.com/Teddy1-blip/Prescore-v1.1/actions/runs/41829997005) and [RC1 **41829997057**](https://github.com/Teddy1-blip/Prescore-v1.1/actions/runs/41829997057), both **RUNNING / in_progress** at **2026-11-04T12:37:16Z / 15:37:16 Moscow**. Observation stopped; no rerun/status build. No conclusion, new packaged fingerprint or container digest is claimed. Preserve prior local/CI passes with their original SHA; they are not final-candidate passes. Resume these same runs later. The old historical GitHub spending-limit failure is **not** the current blocker: these new runs actually started. Documentation checkpoint uses `[skip ci]` and must not be deployed.
+
+### A–G acceptance matrix
+
+| Condition | Actual result | Exact remainder |
+|---|---|---|
+| A — CLIENT-only registration/login | **OPEN** | Two exact owner-controlled test emails and account-existence status still absent. Requested again without any secret fields; no answer received. Use normal sequential logout/login with identity/context checks; simultaneous profiles are not required. ADMIN is not accepted as CLIENT. |
+| B — BROKER assignment/revoke/foreign denial | **OPEN** | Dedicated test BROKER identity/recipient required. Existing isolated role checks retained; no live role or real-user assignment changed. Use minimal synthetic test-account data and existing controls after owner credential entry. |
+| C — delivered password reset and new login | **OPEN** | No designated controlled recipient/account; no reset sent. Prepare the native reset screen for that exact test account, then owner privately opens the delivered link and changes password. SMTP/internal mailbox is not receipt. |
+| D — ADMIN 2FA and recovery | **OPEN** | Prepared implementation reused, no live schema/config change. Native backup is now completed, but consistent restore/rehearsal and compatible container/switch path remain mandatory. Owner setup follows published enrollment; required enforcement only after TOTP and one-use backup-code recovery checks. |
+| E — published desktop/mobile | **PARTIAL** | Existing live desktop accepted on staging SHA below. Supported browser has no mobile viewport API. A short phone check was given now, independent of backup: dashboard → New analysis → QA → Documents → reload, working menu and no horizontal overflow. Owner phone/browser/result pending. CI responsive harness is isolated, not live mobile acceptance. |
+| F — history and data preservation | **PASS in retained observed scope** | Prior checkpoint's live 0 ordinary histories / 3 separate QA / reload / unchanged three financial projection hashes retained with original SHA. No repeat delete/archive/restore/source writes. New cluster backup finished; verified DB+documents restore and mounted permissions remain OPEN, not implied by history PASS. |
+| G — delivery/schema/provenance/recovery | **PARTIAL / new delivery blocked** | Existing staging **`8b0809bd5eb22223fc80d73739eaab4d05d2782d`**, active Amvera **`558be82bea4a078b6672086e917ef877f41c0e98`**, prior live health/ready/0009 and source-input fingerprint retained. New candidate not delivered: startup auto-migrates, so isolated restore/rehearsal, compatible recovery and exact-candidate gates must finish first. |
+
+Current live source-input fingerprint remains the last independently observed **`c68d9c34f312c7b903cb22facac70e9b6959a0f8af1eab18da058e1a1a1cb0d9`**, scope `PRESCORE-SOURCE-INPUTS-1`, 711 files, lock `8fc1937ff193da2f1cd7504442f2dd64e44559306a0f77d2775af83e17f9deb1`; it is **not** a full Git tree or running container digest. Accepted ordinary dashboard/New analysis/QA/Documents/reload/logout-return/internal-admin/old-admin-404 evidence is retained, not rerun as a new audit.
+
+[Safe continuation evidence](evidence/2026-11-04-stage1-native-continuation-safe.json) · [completed native backup](evidence/prescore-stage1-native-backup-ready-20261104.jpg) · [actual restore conditions](evidence/prescore-stage1-native-restore-conditions-20261104.jpg). No backup content, secret, password, reset URL, TOTP or recovery code is committed. Production, DNS, live schema, source documents, credit engine, parsers, paid integrations and Stage 2 unchanged.
+
+---
+
+## Prior checkpoint — Stage 1 finish, 2026-11-04 (historical; operational instructions superseded)
 
 Latest authority: owner attachment `Prescore_Stage_1_Finish_Work.txt` and Issue #11 comment 6627365595. Continued from recovery `cc6fc4b8f9a3a78738dea7ef23e92cea11c7c57f`; no newer recovery/staging head was overwritten. **Stage 1 remains BLOCKED, not presented as technically complete. Stage 2 not started.**
 

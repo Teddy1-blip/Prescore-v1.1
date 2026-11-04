@@ -1,0 +1,92 @@
+{
+  "continued_from_issue_comment": 6628635543,
+  "authority": "Prescore_Stage1_Continue_Without_Support.txt",
+  "recovery_base": "74b86591a79f296d28dd48bfcdcde993857ea997",
+  "code_candidate": "7dee1a31437f3c41bd75dc54c13cddc64abe577d",
+  "code_tree": "499dd8ee21d95488bed41d3976006ed7547c3966",
+  "staging_sha": "8b0809bd5eb22223fc80d73739eaab4d05d2782d",
+  "native_backup": {
+    "resource": "msk1/dorogovab/prescore-stage-db",
+    "id": "dorogovab-20261104123142-prescore-stage-db",
+    "status": "Готов",
+    "confirmed_by_utc": "2026-11-04T12:34:58Z",
+    "id_timestamp_timezone": "not displayed",
+    "new_copies": 1,
+    "old_copies_deleted": 0,
+    "cluster_copy_not_custom_dump": true,
+    "writers_quiesced": false,
+    "isolated_restore_verified": false,
+    "actual_application_sql_identity_verified": false
+  },
+  "data_export": {
+    "configured_root": "/data/prescore",
+    "visible_folder": "Пустая папка",
+    "format": "ZIP",
+    "bytes": 22,
+    "members": 0,
+    "sha256": "8739c76e681f900923b900c9df0ef75cf421d39cabb54650c4b9ad19b6a76d85",
+    "local_file_mode": "0600",
+    "local_parent_mode": "0700",
+    "mounted_permissions_verified": false,
+    "committed": false,
+    "consistent_with_database_verified": false
+  },
+  "native_restore": {
+    "dialog_verified": true,
+    "creates_new_service": true,
+    "compute_rub_per_30days": 490,
+    "disk_rub_per_30days": 324,
+    "total_rub_per_30days": 814,
+    "disk_gb": 18,
+    "started": false,
+    "expense_approval_received": false,
+    "isolated_existing_target_found": false,
+    "protected_executor_available": false,
+    "owner_declined_expenses": true,
+    "free_tariff_offered": false,
+    "paid_compute_options": 7,
+    "minimum_displayed_compute_rub_per_30days": 290,
+    "only_disk_option_paid": true,
+    "route_allowed_under_current_authority": false
+  },
+  "previous_qa": {
+    "run": 41815387569,
+    "sha": "1ba46bcb55b918a78469cfca7864fae680a833cf",
+    "conclusion": "failure",
+    "regression": {
+      "passed": 6821,
+      "failed": 0
+    },
+    "credit_lab_passed": 24,
+    "admin_job": "success",
+    "presentation_first_failure": "client-product-browser.mjs expected 9 navigation entries; actual 10",
+    "billing_first_failure": "billing-browser.mjs waits on disabled /admin route",
+    "validate_first_failure": "standalone runtime assets absent because package-runtime.mjs was not run"
+  },
+  "targeted_checks": {
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0
+  },
+  "live_roles": "not run; exact owner-controlled test emails missing",
+  "live_mobile": "owner phone check requested independently; no result received",
+  "mfa_live": "not migrated or enabled",
+  "forbidden_actions_performed": [],
+  "new_candidate_ci": {
+    "observed_utc": "2026-11-04T12:37:16Z",
+    "sha": "7dee1a31437f3c41bd75dc54c13cddc64abe577d",
+    "product_qa": {
+      "run": 41829997005,
+      "status": "in_progress",
+      "conclusion": null
+    },
+    "rc1": {
+      "run": 41829997057,
+      "status": "in_progress",
+      "conclusion": null
+    },
+    "reruns": 0,
+    "observation_stopped": true
+  },
+  "additional_expenses_authorized": false
+}
