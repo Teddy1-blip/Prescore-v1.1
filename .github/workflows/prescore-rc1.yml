@@ -158,7 +158,15 @@ jobs:
           echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
           sudo apt-get update
           sudo apt-get install -y postgresql-client-17
-          pg_dump --version | grep -Eq ' 17\.'
+          # Select the installed 17 binaries, not the runner's default pg_wrapper cluster.
+          export PATH="/usr/lib/postgresql/17/bin:$PATH"
+          echo '/usr/lib/postgresql/17/bin' >> "$GITHUB_PATH"
+          for pg_tool in pg_dump pg_restore psql; do
+            test "$(command -v "$pg_tool")" = "/usr/lib/postgresql/17/bin/$pg_tool"
+            pg_version="$("$pg_tool" --version)"
+            echo "$pg_version"
+            echo "$pg_version" | grep -Eq ' 17\.'
+          done
           npx --no-install playwright install --with-deps chromium
       - name: Real HTTP E2E / restart / clean restore / post-restore E2E
         if: matrix.scenario != 'worker'
