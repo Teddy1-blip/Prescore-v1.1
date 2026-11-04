@@ -1,3 +1,4 @@
+import {dossierAuthorizationSQL} from '../../../../lib/auth/broker-authorizations';
 import {getRuntime} from "../../../../lib/platform/runtime";
 import { averagePartnerCommissionRate } from "../../../../lib/partner-commissions";
 import type { Gold44Record } from "../../../../lib/gold44";
@@ -109,7 +110,7 @@ export async function POST(request: Request) {
       return Response.json({ ok: true, imported: statements.length });
     }
     if (type === "match") {
-      const matches = await db.batch([db.prepare(`SELECT p.id, p.notice_number AS noticeNumber, p.guarantee_amount AS guaranteeAmount, l.id AS leadId, l.company_name AS companyName, l.consent_at AS consentAt, (SELECT a.id FROM analyses a WHERE a.company_inn = l.company_inn AND a.archive_state='ACTIVE' ORDER BY a.created_at DESC LIMIT 1) AS analysisId FROM agent_prospects p JOIN agent_leads l ON l.agent_code = p.agent_code AND l.company_inn = p.company_inn WHERE p.agent_code = ? AND p.status = 'new' LIMIT 200`).bind(agentCode)]);
+      const matches = await db.batch([db.prepare(`SELECT p.id, p.notice_number AS noticeNumber, p.guarantee_amount AS guaranteeAmount, l.id AS leadId, l.company_name AS companyName, l.consent_at AS consentAt, (SELECT a.id FROM analyses a WHERE a.company_inn = l.company_inn AND a.archive_state='ACTIVE' AND (a.owner_email=actor.email OR ${dossierAuthorizationSQL('a','actor.email')}) ORDER BY a.created_at DESC LIMIT 1) AS analysisId FROM agent_prospects p JOIN agent_leads l ON l.agent_code = p.agent_code AND l.company_inn = p.company_inn CROSS JOIN (SELECT ?::text AS email) actor WHERE p.agent_code = ? AND p.status = 'new' LIMIT 200`).bind(user.email,agentCode)]);
       let created = 0;
       for (const row of matches[0].results as Array<Record<string, unknown>>) {
         const applicationId = await createGuaranteeDraft(db, agentCode, { id: String(row.leadId), companyName: String(row.companyName), analysisId: String(row.analysisId || ""), consentAt: String(row.consentAt || "") }, { id: String(row.id), guaranteeAmount: Number(row.guaranteeAmount), noticeNumber: String(row.noticeNumber) }, user.email);

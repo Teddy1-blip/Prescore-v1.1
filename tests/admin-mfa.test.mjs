@@ -9,11 +9,12 @@ import {twoFactor} from 'better-auth/plugins';
 import {createOTP} from '@better-auth/utils/otp';
 import {base32} from '@better-auth/utils/base32';
 import * as mfa from '../lib/auth/admin-mfa.ts';
+import * as brokerAuthorization from '../lib/auth/broker-authorizations.ts';
 import {smtpConfiguration} from '../lib/platform/environment.ts';
 import {PortableDatabase} from '../lib/db/compatibility.ts';
 import {migrationRegistry} from '../lib/release/migrations.ts';
 
-function load(file,imports){const out={};new Function('exports','require',ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText)(out,id=>{if(id in imports)return imports[id];throw Error('UNEXPECTED_IMPORT:'+id);});return out;}
+function load(file,imports){const out={};new Function('exports','require',ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText)(out,id=>{if(id in imports)return imports[id];if(id.endsWith('/lib/auth/broker-authorizations'))return brokerAuthorization;throw Error('UNEXPECTED_IMPORT:'+id);});return out;}
 function jar(initial=''){
  const cookies=new Map(initial.split('; ').filter(Boolean).map(x=>[x.slice(0,x.indexOf('=')),x.slice(x.indexOf('=')+1)]));
  return {header:()=>[...cookies].map(([k,v])=>k+'='+v).join('; '),accept(response){for(const c of response.headers.getSetCookie()){const first=c.split(';')[0],i=first.indexOf('=');if(/max-age=0/i.test(c))cookies.delete(first.slice(0,i));else cookies.set(first.slice(0,i),first.slice(i+1));}}};

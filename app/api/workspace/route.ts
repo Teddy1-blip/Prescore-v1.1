@@ -1,3 +1,4 @@
+import {authorizeBroker,listAuthorizations,assignedBroker,brokerApplicationSQL} from '../../../lib/auth/broker-authorizations';
 import {safeErrorText} from '../../../lib/release/security';
 import {parseFinancingRequest} from "../../../lib/workspace/financing-request";
 import {getRuntime} from "../../../lib/platform/runtime";
@@ -134,6 +135,10 @@ export async function GET(request: Request) {
     // The landing page needs labels and IDs, not dozens of full credit payloads.
     // This owner-scoped, read-only projection never migrates, mutates or calculates.
     const requestUrl = new URL(request.url);
+    if(requestUrl.searchParams.get('projection')==='broker-authorizations'){
+      const result=await listAuthorizations(db,requestUrl.searchParams.get('analysisId')||'',user.email);
+      return Response.json(result,{status:result.status});
+    }
     if (!requestUrl.searchParams.get("client") && requestUrl.searchParams.get("projection") === "summary") {
       const ownerFilter = "owner_email = ?";
       const sql = `SELECT id, company_name AS companyName, company_inn AS companyInn,
@@ -170,11 +175,11 @@ export async function GET(request: Request) {
     }
     const [analysisResult, dealResult, historyResult] = await db.batch([
       db.prepare("SELECT payload FROM analyses WHERE archive_state = 'ACTIVE' AND owner_email = ? ORDER BY created_at DESC LIMIT 50").bind(user.email),
-      db.prepare("SELECT id, analysis_id AS analysisId, company_name AS companyName, product, amount, status, owner, next_action AS nextAction, bank, application_group_id AS applicationGroupId, consent_at AS consentAt, created_at AS createdAt, updated_at AS updatedAt FROM deals WHERE NOT EXISTS (SELECT 1 FROM analyses archived WHERE archived.id=deals.analysis_id AND archived.archive_state<>'ACTIVE') AND owner_email = ? ORDER BY updated_at DESC LIMIT 100").bind(user.email),
+      db.prepare(`SELECT id, analysis_id AS analysisId, company_name AS companyName, product, amount, status, owner, next_action AS nextAction, bank, application_group_id AS applicationGroupId, consent_at AS consentAt, created_at AS createdAt, updated_at AS updatedAt FROM deals WHERE NOT EXISTS (SELECT 1 FROM analyses archived WHERE archived.id=deals.analysis_id AND archived.archive_state<>'ACTIVE') AND owner_email = ? AND (EXISTS(SELECT 1 FROM analyses owned WHERE owned.id=deals.analysis_id AND owned.owner_email=deals.owner_email) OR EXISTS(SELECT 1 FROM agent_applications ap WHERE ap.id=deals.id AND ${brokerApplicationSQL('ap','deals.owner_email')})) ORDER BY updated_at DESC LIMIT 100`).bind(user.email),
       db.prepare(`SELECT h.id, h.application_id AS applicationId, h.from_status AS fromStatus, h.to_status AS toStatus,
         h.actor_role AS actorRole, h.public_comment AS publicComment, h.created_at AS createdAt
         FROM application_status_history h JOIN deals d ON d.id = h.application_id
-        WHERE NOT EXISTS (SELECT 1 FROM analyses archived WHERE archived.id=d.analysis_id AND archived.archive_state<>'ACTIVE') AND d.owner_email = ? ORDER BY h.created_at ASC LIMIT 1000`).bind(user.email),
+        WHERE NOT EXISTS (SELECT 1 FROM analyses archived WHERE archived.id=d.analysis_id AND archived.archive_state<>'ACTIVE') AND d.owner_email = ? AND (EXISTS(SELECT 1 FROM analyses owned WHERE owned.id=d.analysis_id AND owned.owner_email=d.owner_email) OR EXISTS(SELECT 1 FROM agent_applications ap WHERE ap.id=d.id AND ${brokerApplicationSQL('ap','d.owner_email')})) ORDER BY h.created_at ASC LIMIT 1000`).bind(user.email),
     ]);
     const storedAnalyses = (analysisResult.results as Array<{ payload: string }>).map((row) => safeJson(row.payload) as AnalysisResult | null).filter((item): item is AnalysisResult => Boolean(item));
     const analyses = await Promise.all(storedAnalyses.map(async (item) => {
@@ -196,6 +201,10 @@ export async function POST(request: Request) {
     const db = await getDatabase();
     await ensureSchema(db);
     const body = await request.json() as { type?: string; analysis?: AnalysisPayload & Record<string, unknown>; deal?: Record<string, unknown>; analysisId?: string; companyName?: string; companyInn?: string; agentCode?: string; consentAt?: string; creditHistory?: CreditHistoryReport; quarterlyReport?: QuarterlyFinancialReport; requestId?: string; financingRequest?: unknown; applications?: Array<{ bank?: string; product?: string; amount?: number }> };
+    if(body.type==='broker-authorization'){
+      const result=await authorizeBroker(request,db,user,body as Record<string,unknown>);
+      return Response.json(result,{status:result.status});
+    }
     if (body.type === "analysis" && body.analysis) {
       return Response.json({ error: "Расчётный результат создаётся и изменяется только серверными модулями" }, { status: 409 });
     }
@@ -266,11 +275,11 @@ export async function POST(request: Request) {
         const rows = await db.batch([db.prepare("SELECT company_inn AS companyInn FROM analyses WHERE archive_state = 'ACTIVE' AND id = ? LIMIT 1").bind(analysisId)]);
         const companyInn = String((rows[0]?.results as Array<{ companyInn?: string }> | undefined)?.[0]?.companyInn || "");
         if (companyInn) {
-          const leadRows = await db.batch([db.prepare("SELECT id, agent_code AS agentCode FROM agent_leads WHERE company_inn = ? ORDER BY updated_at DESC LIMIT 1").bind(companyInn)]);
-          const leadRecord = (leadRows[0]?.results as Array<{ id?: string; agentCode?: string }> | undefined)?.[0];
-          const agentCode = String(leadRecord?.agentCode || "AGENT-ANTON-001");
-          const foundLead = leadRecord?.id;
-          const leadId = foundLead || `client-${companyInn}`;
+          const recipient=await assignedBroker(db,analysisId);
+          if(!recipient)return Response.json({deal:{...item,id},brokerSync:'NO_UNIQUE_CONFIRMED_ASSIGNMENT'},{status:201});
+          const agentCode=recipient.code;
+          const foundLead=(await db.prepare('SELECT id FROM agent_leads WHERE agent_code=? AND company_inn=? AND lower(email)=? ORDER BY created_at DESC LIMIT 1').bind(agentCode,companyInn,user.email).first<{id:string}>())?.id;
+          const leadId=foundLead||crypto.randomUUID();
           const now = new Date().toISOString();
           if (!foundLead) await db.prepare(`INSERT OR IGNORE INTO agent_leads (id, agent_code, company_name, company_inn, contact_name, phone, email, source, status, subscription_status, consent_at, created_at, updated_at) VALUES (?, ?, ?, ?, '', '', '', 'Клиентский кабинет', 'Подготовка заявки', 'Активна', ?, ?, ?)`)
             .bind(leadId, agentCode, companyName, companyInn, String(item.consentAt || now), now, now).run();
@@ -286,8 +295,9 @@ export async function POST(request: Request) {
       const companyInn = String(body.companyInn || "").replace(/\D/g, "");
       const consentAt = String(body.consentAt || "");
       if (!analysisId || !companyName || !/^(?:\d{10}|\d{12})$/.test(companyInn) || !consentAt || body.applications.length > 12) return Response.json({ error: "Проверьте компанию, согласие и список получателей" }, { status: 400 });
-      const ownership = await db.batch([db.prepare("SELECT owner_email AS ownerEmail FROM analyses WHERE archive_state = 'ACTIVE' AND id = ? LIMIT 1").bind(analysisId)]);
+      const ownership = await db.batch([db.prepare("SELECT owner_email AS ownerEmail, company_inn AS inn FROM analyses WHERE archive_state = 'ACTIVE' AND id = ? LIMIT 1").bind(analysisId)]);
       if (String((ownership[0]?.results as Array<{ ownerEmail?: string }>)[0]?.ownerEmail || "") !== user.email && !user.isAdmin) return Response.json({ error: "Нет доступа к анализу" }, { status: 403 });
+      if((ownership[0]?.results as Array<{inn:string}>)[0]?.inn!==companyInn)return Response.json({error:'ИНН не совпадает с анализом'},{status:400});
       const groupId = body.requestId || crypto.randomUUID();
       if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(groupId))return Response.json({error:"Некорректный идентификатор запроса"},{status:400});
       const requested=[...new Map(body.applications.map(item=>{
@@ -303,28 +313,24 @@ export async function POST(request: Request) {
       };
       const replay=await findGroup();if(replay)return replay;
       const now = new Date().toISOString();
-      const leadQuery = await db.batch([db.prepare("SELECT id, agent_code AS agentCode FROM agent_leads WHERE company_inn = ? ORDER BY updated_at DESC LIMIT 1").bind(companyInn)]);
-      const leadRecord = (leadQuery[0]?.results as Array<{ id?: string; agentCode?: string }> | undefined)?.[0];
-      const agentCode = String(leadRecord?.agentCode || "AGENT-ANTON-001");
-      const foundLead = leadRecord?.id;
-      const leadId = foundLead || `client-${companyInn}`;
-      if (!foundLead) await db.prepare(`INSERT OR IGNORE INTO agent_leads
-        (id, agent_code, company_name, company_inn, contact_name, phone, email, source, status, subscription_status, consent_at, created_at, updated_at)
-        VALUES (?, ?, ?, ?, '', '', '', 'Клиентский кабинет', 'Подготовка заявки', 'Активна', ?, ?, ?)`)
-        .bind(leadId, agentCode, companyName, companyInn, consentAt, now, now).run();
+      const recipient=await assignedBroker(db,analysisId);
+      const agentCode=recipient?.code;
+      const foundLead=agentCode?(await db.prepare('SELECT id FROM agent_leads WHERE agent_code=? AND company_inn=? AND lower(email)=? ORDER BY created_at DESC LIMIT 1').bind(agentCode,companyInn,user.email).first<{id:string}>())?.id:null;
+      const leadId=foundLead||crypto.randomUUID();
+      if(agentCode&&!foundLead)await db.prepare(`INSERT INTO agent_leads(id,agent_code,company_name,company_inn,email,source,consent_at,created_at,updated_at) VALUES(?,?,?,?,?,'Подтверждённое назначение',?,?,?)`).bind(leadId,agentCode,companyName,companyInn,user.email,consentAt,now,now).run();
       const created = requested.map((item,index) => {
         const id = groupId+'-'+index;
         const bank = String(item.bank || "").trim();
         const product = String(item.product || "").trim();
         const amount = Math.max(0, Number(item.amount) || 0);
-        return { id, analysisId, companyName, product, amount, status: "Подготовка документов", owner: "Брокер", nextAction: "Проверить документы и согласие перед отправкой", bank, applicationGroupId: groupId, consentAt, createdAt: now, updatedAt: now };
+        return { id, analysisId, companyName, product, amount, status: "Подготовка документов", owner: agentCode?"Брокер":"Не назначен", nextAction: "Проверить документы и согласие перед отправкой", bank, applicationGroupId: groupId, consentAt, createdAt: now, updatedAt: now };
       }).filter((item) => item.bank && item.product);
       if (!created.length) return Response.json({ error: "Не выбраны получатели" }, { status: 400 });
       try{await db.batch(created.flatMap((item) => [
         db.prepare(`INSERT INTO deals (id, analysis_id, company_name, product, amount, status, owner, next_action, bank, application_group_id, consent_at, owner_email, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
           .bind(item.id, item.analysisId, item.companyName, item.product, item.amount, item.status, item.owner, item.nextAction, item.bank, item.applicationGroupId, item.consentAt, user.email, now, now),
-        db.prepare(`INSERT OR REPLACE INTO agent_applications (id, agent_code, lead_id, analysis_id, company_name, bank, product, requested_amount, calculated_limit, reward_rate_bps, status, next_action, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`)
-          .bind(item.id, agentCode, leadId, analysisId, companyName, item.bank, item.product, item.amount, item.amount, "Подготовка заявки", item.nextAction, now, now),
+        ...(agentCode?[db.prepare(`INSERT OR REPLACE INTO agent_applications (id, agent_code, lead_id, analysis_id, company_name, bank, product, requested_amount, calculated_limit, reward_rate_bps, status, next_action, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`)
+          .bind(item.id, agentCode, leadId, analysisId, companyName, item.bank, item.product, item.amount, item.amount, "Подготовка заявки", item.nextAction, now, now)]:[]),
         db.prepare("INSERT INTO application_status_history (id, application_id, from_status, to_status, actor_role, actor_email, public_comment, created_at) VALUES (?, ?, '', ?, 'CLIENT', ?, 'Заявка создана по выбранному маршруту', ?)").bind(crypto.randomUUID(), item.id, item.status, user.email, now),
         db.prepare("INSERT INTO audit_log (id, entity_type, entity_id, action, actor_role, actor_email, metadata, created_at) VALUES (?, 'APPLICATION', ?, 'CREATE', 'CLIENT', ?, ?, ?)").bind(crypto.randomUUID(), item.id, user.email, JSON.stringify({ bank: item.bank, product: item.product }), now),
       ]));}catch(error){const replay=await findGroup();if(replay)return replay;throw error;}

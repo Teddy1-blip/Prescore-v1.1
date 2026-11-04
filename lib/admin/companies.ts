@@ -1,3 +1,4 @@
+import {dossierAuthorizationSQL} from '../auth/broker-authorizations.ts';
 import {fullMetadataPredicate} from '../billing/access-sql.ts';
 import {observationJoin,observationColumns} from './observations.ts';
 import {pageRows,rows,type AdminQuery,CLOSED} from './resources.ts';
@@ -13,14 +14,14 @@ const companyBase=`WITH company_ids AS (SELECT company_inn FROM analyses UNION S
  (SELECT COUNT(*) FROM analyses v WHERE v.company_inn=c.company_inn) AS analysisCount,a.id AS analysisId,a.created_at AS latestAt,a.period_from AS periodFrom,a.period_to AS periodTo,
  CASE WHEN ${fullMetadataPredicate} THEN 'FULL' WHEN a.id IS NOT NULL THEN 'BASIC' ELSE NULL END AS tier,
  (SELECT MIN(v.created_at) FROM (SELECT company_inn,created_at FROM analyses UNION ALL SELECT company_inn,created_at FROM agent_leads UNION ALL SELECT company_inn,created_at FROM client_documents UNION ALL SELECT company_inn,created_at FROM payment_orders) AS v WHERE v.company_inn=c.company_inn) AS createdAt,
- (SELECT string_agg(DISTINCT l.agent_code,', ') FROM agent_leads l WHERE l.company_inn=c.company_inn) AS broker,
+ (SELECT string_agg(DISTINCT confirmed.agent_code,', ') FROM agent_accounts confirmed JOIN analyses scope ON scope.company_inn=c.company_inn AND scope.archive_state='ACTIVE' WHERE ${dossierAuthorizationSQL('scope','lower(confirmed.user_email)')}) AS broker,
  (SELECT COUNT(*) FROM client_documents d WHERE d.company_inn=c.company_inn) AS documentCount,
  (SELECT COUNT(*) FROM apps ap WHERE ap.company_inn=c.company_inn) AS applicationCount,
  ${observationColumns}
  FROM company_ids c LEFT JOIN latest a ON a.company_inn=c.company_inn AND a.rn=1 LEFT JOIN analysis_entitlements e ON e.analysis_id=a.id ${observationJoin} WHERE c.company_inn<>''`;
 const analysisBase=`SELECT a.archive_state AS archiveState,a.archived_at AS archivedAt,a.id AS analysisId,a.company_name AS name,a.company_inn AS inn,a.owner_email AS ownerEmail,a.created_at AS createdAt,a.period_from AS periodFrom,a.period_to AS periodTo,
  CASE WHEN ${fullMetadataPredicate} THEN 'FULL' ELSE 'BASIC' END AS tier,
- (SELECT string_agg(DISTINCT l.agent_code,', ') FROM agent_leads l WHERE l.company_inn=a.company_inn) AS broker,${observationColumns}
+ (SELECT string_agg(DISTINCT confirmed.agent_code,', ') FROM agent_accounts confirmed WHERE ${dossierAuthorizationSQL('a','lower(confirmed.user_email)')}) AS broker,${observationColumns}
  FROM analyses a LEFT JOIN analysis_entitlements e ON e.analysis_id=a.id ${observationJoin}`;
 export async function companyList(db:PortableDatabase,q:AdminQuery){
  const values:unknown[]=[];const where:string[]=[];

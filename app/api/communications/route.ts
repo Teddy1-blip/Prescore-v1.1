@@ -1,3 +1,4 @@
+import {brokerApplicationSQL, documentAccessSQL} from '../../../lib/auth/broker-authorizations';
 import {safeErrorText} from '../../../lib/release/security';
 import {getRuntime} from "../../../lib/platform/runtime";
 import { requireApiUser, unauthorized } from "../api-auth";
@@ -39,8 +40,8 @@ export async function GET(request: Request) {
     const db = await database();
     await ensureSchema(db);
     if (!user.isAdmin) {
-      const access = await db.batch([db.prepare(`SELECT d.id FROM deals d WHERE d.id = ? AND d.owner_email = ?
-        UNION SELECT a.id FROM agent_applications a JOIN agent_accounts u ON u.agent_code = a.agent_code WHERE a.id = ? AND u.user_email = ? LIMIT 1`).bind(applicationId, user.email, applicationId, user.email)]);
+      const access = await db.batch([db.prepare(`SELECT d.id FROM deals d JOIN analyses owner_analysis ON owner_analysis.id=d.analysis_id AND owner_analysis.owner_email=d.owner_email AND owner_analysis.archive_state='ACTIVE' WHERE d.id = ? AND d.owner_email = ?
+        UNION SELECT a.id FROM agent_applications a CROSS JOIN (SELECT ?::text AS email) actor WHERE a.id = ? AND ${brokerApplicationSQL('a','actor.email')} LIMIT 1`).bind(applicationId, user.email, user.email, applicationId)]);
       if (!access[0]?.results?.length) return Response.json({ error: "Нет доступа к чату заявки" }, { status: 403 });
     }
     const result = await db.batch([db.prepare(`SELECT id, application_id AS applicationId, author_role AS authorRole,
@@ -66,11 +67,11 @@ export async function POST(request: Request) {
     const db = await database();
     await ensureSchema(db);
     if (!user.isAdmin) {
-      const access = await db.batch([db.prepare(`SELECT d.id FROM deals d WHERE d.id = ? AND d.owner_email = ?
-        UNION SELECT a.id FROM agent_applications a JOIN agent_accounts u ON u.agent_code = a.agent_code WHERE a.id = ? AND u.user_email = ? LIMIT 1`).bind(applicationId, user.email, applicationId, user.email)]);
+      const access = await db.batch([db.prepare(`SELECT d.id FROM deals d JOIN analyses owner_analysis ON owner_analysis.id=d.analysis_id AND owner_analysis.owner_email=d.owner_email AND owner_analysis.archive_state='ACTIVE' WHERE d.id = ? AND d.owner_email = ?
+        UNION SELECT a.id FROM agent_applications a CROSS JOIN (SELECT ?::text AS email) actor WHERE a.id = ? AND ${brokerApplicationSQL('a','actor.email')} LIMIT 1`).bind(applicationId, user.email, user.email, applicationId)]);
       if (!access[0]?.results?.length) return Response.json({ error: "Нет доступа к чату заявки" }, { status: 403 });
     }
-    if(documentId){const linked=await db.batch([db.prepare('SELECT id FROM client_documents WHERE id=? AND application_id=?').bind(documentId,applicationId)]);if(!linked[0]?.results.length)return Response.json({error:'DOCUMENT_ASSOCIATION_REQUIRED'},{status:403});}
+    if(documentId){const linked=await db.batch([db.prepare(`SELECT d.id FROM client_documents d CROSS JOIN (SELECT ?::text AS email) actor WHERE d.id=? AND d.application_id=? AND (?=1 OR ${documentAccessSQL('d','actor.email')})`).bind(user.email,documentId,applicationId,user.isAdmin?1:0)]);if(!linked[0]?.results.length)return Response.json({error:'DOCUMENT_ASSOCIATION_REQUIRED'},{status:403});}
     const id = crypto.randomUUID();
     const createdAt = new Date().toISOString();
     await db.prepare(`INSERT INTO application_messages (id, application_id, author_role, author_name, message, document_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`)

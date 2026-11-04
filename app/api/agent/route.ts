@@ -1,3 +1,4 @@
+import {brokerApplicationSQL,dossierAuthorizationSQL} from '../../../lib/auth/broker-authorizations';
 import {boundedPage} from '../../../lib/release/pagination';
 import {safeErrorText} from '../../../lib/release/security';
 import {createHash} from "node:crypto";
@@ -183,20 +184,20 @@ export async function GET(request: Request) {
         l.contact_name AS contactName, l.phone, l.email, l.source, l.status,
         l.subscription_status AS subscriptionStatus, l.consent_at AS consentAt,
         l.created_at AS createdAt, l.updated_at AS updatedAt,
-        (SELECT COUNT(*) FROM payment_orders po WHERE po.company_inn = l.company_inn AND po.status = 'Оплачен') AS paidFullOrders,
-        (SELECT a.id FROM analyses a WHERE a.company_inn = l.company_inn AND a.archive_state='ACTIVE' ORDER BY a.created_at DESC LIMIT 1) AS analysisId
-        FROM agent_leads l WHERE (NOT EXISTS (SELECT 1 FROM analyses ax WHERE ax.company_inn=l.company_inn) OR EXISTS (SELECT 1 FROM analyses ax WHERE ax.company_inn=l.company_inn AND ax.archive_state='ACTIVE') OR NOT EXISTS (SELECT 1 FROM analyses ax JOIN analysis_archive_batches ab ON ab.id=ax.archive_batch_id WHERE ax.company_inn=l.company_inn AND ax.archive_state<>'ACTIVE' AND l.created_at::timestamp AT TIME ZONE 'UTC' < ab.cutover_at)) AND l.agent_code = ? ORDER BY l.updated_at DESC,l.id DESC LIMIT ? OFFSET ?`).bind(code,paging.limit,paging.offset),
+        (SELECT COUNT(*) FROM payment_orders po JOIN analyses paid_analysis ON paid_analysis.id=po.analysis_id WHERE po.company_inn=l.company_inn AND po.status='Оплачен' AND ${dossierAuthorizationSQL('paid_analysis','actor.email')}) AS paidFullOrders,
+        (SELECT a.id FROM analyses a WHERE a.company_inn = l.company_inn AND a.archive_state='ACTIVE' AND (a.owner_email=actor.email OR ${dossierAuthorizationSQL('a','actor.email')}) ORDER BY a.created_at DESC LIMIT 1) AS analysisId
+        FROM agent_leads l CROSS JOIN (SELECT ?::text AS email) actor WHERE (NOT EXISTS (SELECT 1 FROM analyses ax WHERE ax.company_inn=l.company_inn) OR EXISTS (SELECT 1 FROM analyses ax WHERE ax.company_inn=l.company_inn AND ax.archive_state='ACTIVE') OR NOT EXISTS (SELECT 1 FROM analyses ax JOIN analysis_archive_batches ab ON ab.id=ax.archive_batch_id WHERE ax.company_inn=l.company_inn AND ax.archive_state<>'ACTIVE' AND l.created_at::timestamp AT TIME ZONE 'UTC' < ab.cutover_at)) AND l.agent_code = ? ORDER BY l.updated_at DESC,l.id DESC LIMIT ? OFFSET ?`).bind(user.email,code,paging.limit,paging.offset),
       db.prepare(`SELECT id, lead_id AS leadId, analysis_id AS analysisId, company_name AS companyName,
         bank, product, requested_amount AS requestedAmount, calculated_limit AS calculatedLimit,
         COALESCE((SELECT d.status FROM deals d WHERE d.id = agent_applications.id), status) AS status, next_action AS nextAction,
         created_at AS createdAt, updated_at AS updatedAt
-        FROM agent_applications WHERE NOT EXISTS (SELECT 1 FROM analyses ax WHERE ax.id=agent_applications.analysis_id AND ax.archive_state<>'ACTIVE') AND agent_code = ? ORDER BY updated_at DESC,id DESC LIMIT ? OFFSET ?`).bind(code,paging.limit,paging.offset),
+        FROM agent_applications CROSS JOIN (SELECT ?::text AS email) actor WHERE ${brokerApplicationSQL('agent_applications','actor.email')} AND agent_code = ? ORDER BY updated_at DESC,id DESC LIMIT ? OFFSET ?`).bind(user.email,code,paging.limit,paging.offset),
       db.prepare(`SELECT p.agent_code AS agentCode, p.name, p.agency, p.city, p.status, p.created_at AS createdAt,
         COUNT(l.id) AS clientsCount,
-        COALESCE(SUM((SELECT COUNT(*) FROM payment_orders po WHERE po.company_inn = l.company_inn AND po.status = 'Оплачен')), 0) AS activeSubscriptions
+        (SELECT COUNT(*) FROM billing_orders po WHERE po.broker_code=p.agent_code AND po.curator_code=p.curator_code AND po.status='PAID') AS activeSubscriptions
         FROM agent_partners p LEFT JOIN agent_leads l ON l.agent_code = p.agent_code
         WHERE p.curator_code = ?
-        GROUP BY p.agent_code, p.name, p.agency, p.city, p.status, p.created_at
+        GROUP BY p.agent_code, p.curator_code, p.name, p.agency, p.city, p.status, p.created_at
         ORDER BY "activeSubscriptions" DESC, p.created_at DESC,p.agent_code DESC LIMIT ? OFFSET ?`).bind(code,paging.limit,paging.offset),
     ]);
     const partners = (partnerResult.results as Array<Record<string, unknown>>).map((item) => ({
@@ -363,7 +364,7 @@ export async function PATCH(request: Request) {
     }
     const allowed = ["Подготовка заявки", "Подготовка документов", "Требуются документы", "На рассмотрении у финансового партнёра", "Предварительное решение", "Одобрена", "Выдана", "Отклонена", "Закрыта"];
     if (!allowed.includes(body.status)) return Response.json({ error: "Недопустимый статус заявки" }, { status: 400 });
-    const current = await db.prepare("SELECT COALESCE((SELECT d.status FROM deals d WHERE d.id = agent_applications.id), status) AS status FROM agent_applications WHERE id = ? AND agent_code = ? LIMIT 1").bind(body.id, account.agentCode).first<{ status?: string }>();
+    const current = await db.prepare(`SELECT COALESCE((SELECT d.status FROM deals d WHERE d.id = agent_applications.id), status) AS status FROM agent_applications CROSS JOIN (SELECT ?::text AS email) actor WHERE id = ? AND agent_code = ? AND ${brokerApplicationSQL('agent_applications','actor.email')} LIMIT 1`).bind(user.email, body.id, account.agentCode).first<{ status?: string }>();
     if (!current?.status) return Response.json({ error: "Заявка не найдена" }, { status: 404 });
     const terminal = ["Выдана", "Отклонена", "Закрыта", "Отменена клиентом"];
     if (terminal.includes(current.status) && current.status !== body.status) return Response.json({ error: "Завершённый статус нельзя изменить" }, { status: 409 });

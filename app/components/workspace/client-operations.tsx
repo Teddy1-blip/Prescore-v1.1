@@ -1,10 +1,26 @@
 "use client";
-import { ChangeEvent, DragEvent, ReactNode, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, ReactNode, useEffect, useRef, useState } from "react";
 import { AlertTriangle, ArrowRight, BriefcaseBusiness, Gauge, LockKeyhole, MessageSquareText, Plus, Search, ShieldCheck, Trash2, UploadCloud, X } from "lucide-react";
 import { type AnalysisResult, type StatementInput } from "../../../lib/prescore";
 import type {StatementScreeningResult} from "../../../lib/credit-engine/contracts/sources";
 import ApplicationChat from "../../dashboard/application-chat";
 export type StoredAnalysis = { historyPurpose?: 'WORK' | 'QA'; id: string; companyName: string; companyInn: string; createdAt?: string; periodFrom?: string; periodTo?: string; bankNames?: string[]; viewTier?: string; screeningResults?: StatementScreeningResult[] };
+
+export function BrokerPermissions({analysisId}:{analysisId:string}){
+ const [grants,setGrants]=useState<Array<{id:string;action:string;brokerEmail:string;expiresAt:string}>>([]),[email,setEmail]=useState(''),[purpose,setPurpose]=useState('DOSSIER'),[days,setDays]=useState(30),[confirmed,setConfirmed]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ const pending=useRef(false);
+ useEffect(()=>{let active=true;fetch('/api/workspace?projection=broker-authorizations&analysisId='+encodeURIComponent(analysisId),{cache:'no-store'}).then(async r=>{const b=await r.json();if(!r.ok)throw Error(b.error||'Разрешения недоступны');if(active)setGrants(b.grants);}).catch(e=>{if(active)setError(e.message);});return()=>{active=false;};},[analysisId]);
+ async function save(grantId?:string){
+  if(pending.current)return;pending.current=true;setBusy(true);setError('');
+  try{const r=await fetch('/api/workspace',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'broker-authorization',analysisId,operation:grantId?'revoke':'grant',grantId,brokerEmail:email,purpose,days,confirmed,requestId:crypto.randomUUID()})});const body=await r.json();if(!r.ok)throw Error(body.error||'Изменение не сохранено');
+   setConfirmed(false);const fresh=await fetch('/api/workspace?projection=broker-authorizations&analysisId='+encodeURIComponent(analysisId),{cache:'no-store'});const data=await fresh.json();if(!fresh.ok)throw Error(data.error||'Обновите список разрешений');setGrants(data.grants);
+  }catch(e){setError(e instanceof Error?e.message:'Не удалось сохранить разрешение');}finally{pending.current=false;setBusy(false);}
+ }
+ return <section className="ps-card"><h2>Разрешения брокеру</h2><p>Выберите подключённого брокера по подтверждённой почте. Каждый вид разрешения подтверждается отдельно.</p>
+ <fieldset disabled={busy} className="ps-form-grid"><label>Почта брокера<input type="email" value={email} onChange={e=>{setEmail(e.target.value);setConfirmed(false);}}/></label><label>Вид разрешения<select value={purpose} onChange={e=>{setPurpose(e.target.value);setConfirmed(false);}}><option value="DOSSIER">Доступ к выбранному анализу</option><option value="REFERRAL">Партнёрская привязка новых заказов</option></select></label><label>Срок, дней<input type="number" min="1" max="365" value={days} onChange={e=>{setDays(Number(e.target.value));setConfirmed(false);}}/></label>
+ <label><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/>{purpose==='DOSSIER'?'Разрешаю читать этот анализ, отчёт, документы и AI-контекст, работать с заявками по нему. Это не назначает партнёрское вознаграждение.':'Подтверждаю брокера для партнёрской привязки новых заказов моей компании. Это не открывает документы и не меняет существующие заказы.'}</label><button disabled={!email||!confirmed||busy} onClick={()=>void save()}>Подтвердить разрешение</button></fieldset>
+ {error&&<p role="alert">{error}</p>}<ul>{grants.map(g=><li key={g.id}><strong>{g.brokerEmail}</strong> · {g.action==='GRANT_DOSSIER'?'Доступ к анализу':'Новые заказы'} · до {new Date(g.expiresAt).toLocaleDateString('ru-RU')} <button disabled={busy} onClick={()=>void save(g.id)}>Отозвать</button></li>)}</ul><p>Отзыв прекращает следующие обращения к серверу. Уже скачанные файлы отозвать невозможно. Сохранённая атрибуция заказов остаётся прежней.</p></section>;
+}
 const rubles = (n: number) => new Intl.NumberFormat("ru-RU", {maximumFractionDigits:0}).format(n) + " ₽";
 const formatDate = (s: string) => s ? s.split("-").reverse().join(".") : "Не указан";
 export type Deal = {

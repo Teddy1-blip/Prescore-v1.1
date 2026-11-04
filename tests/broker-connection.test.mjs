@@ -54,11 +54,11 @@ test('native verified new user and existing CLIENT explicitly connect, refresh r
    const cabinet=await rt.request('/api/agent',{},session.user);assert.equal(cabinet.status,200);const data=await cabinet.json();assert.equal(data.agent.code,account.agentCode);assert.deepEqual(data.leads,[]);
    assert.equal((await rt.request('/api/admin?resource=brokers',{},session.user)).status,403);
    assert.equal((await rt.request('/api/workspace-model?analysisId='+foreignAnalysis.id,{},session.user)).status,404);
-   await rt.pg.query('INSERT INTO agent_leads(id,agent_code,company_name,company_inn,consent_at) VALUES($1,$2,$3,$4,$5)',[scenario,account.agentCode,foreignAnalysis.companyName,foreignAnalysis.companyInn,'synthetic-test-assignment']);
+   const granted=await rt.authorize(foreignAnalysis,{brokerEmail:email});assert.equal(granted.status,201);const grant=(await granted.json()).id;
    for(let reload=0;reload<2;reload++){
     const assigned=await rt.request('/api/workspace-model?analysisId='+foreignAnalysis.id,{},session.user);assert.equal(assigned.status,200);assert.equal((await assigned.json()).access.role,'ASSIGNED_BROKER');
    }
-   await rt.pg.query('DELETE FROM agent_leads WHERE id=$1',[scenario]);
+   assert.equal((await rt.authorize(foreignAnalysis,{operation:'revoke',grantId:grant})).status,200);
    assert.equal((await rt.request('/api/workspace-model?analysisId='+foreignAnalysis.id,{},session.user)).status,404);
    assert.equal((await connect(rt,session.user)).status,200);
    assert.equal((await rt.pg.query('SELECT * FROM agent_accounts WHERE user_email=$1',[email])).rows.length,1);
