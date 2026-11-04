@@ -79,19 +79,52 @@
       ],
       "criticalHigh": 0
     },
-    "fullRegression": "IN_PROGRESS: live log observed through test5433",
-    "container": "IN_PROGRESS: real Docker regression log observed through test4957",
-    "productResult": "IN_PROGRESS",
-    "rc1Result": "IN_PROGRESS"
+    "fullRegression": {
+      "status": "SUCCESS",
+      "tests": 6826,
+      "pass": 6826,
+      "fail": 0,
+      "skipped": 0,
+      "jobs": [
+        126733930485,
+        126733970005
+      ]
+    },
+    "container": {
+      "status": "SUCCESS",
+      "job": 126733970005,
+      "ciOnlyImageDigest": "sha256:096f580a3668b435402fbee7fb229c049c93d84083681f9209342bc709f8c849",
+      "appReady": true,
+      "workerReady": true,
+      "nonRoot": true,
+      "readOnly": true,
+      "gracefulShutdown": true,
+      "persistentVolume": true,
+      "nativePdf": true,
+      "secretsInLogs": false
+    },
+    "productResult": "SUCCESS",
+    "rc1Result": "SUCCESS",
+    "business": {
+      "status": "SUCCESS",
+      "cases": 24,
+      "pass": 24,
+      "fail": 0
+    },
+    "productCompletedAt": "2026-11-04T17:43:31Z",
+    "rc1CompletedAt": "2026-11-04T17:46:20Z",
+    "attempt": 1
   },
   "schema": {
     "version": "0009_analysis_archive.sql",
     "migrationsChanged": false,
-    "mfa0010": false
+    "mfa0010": false,
+    "criticalUnchangedFiles": 243,
+    "sameTreeVerified": true
   },
   "deployed": false,
   "liveAmveraRestore": false,
-  "recoveryCheckpoint": "174ce0091534f7ddf8ff03261fec6e12e6bfceac",
+  "recoveryCheckpoint": "88b70712e5e140e35bdc907a4be8a7502dcb1b6f",
   "issueComment": 6637218148,
   "browserReproduction": {
     "before": "FAIL: discarded CDP response body",
@@ -142,7 +175,36 @@
     "D_MFA": "unchanged separate restoration/migration gate pending",
     "E_VISUAL": "isolated responsive PASS; published owner/broker/mobile pending",
     "F_HISTORY": "pre-delivery 0 ordinary/3 QA observed; no data writes; after-delivery compare pending",
-    "G_DELIVERY": "blocked until final regression and container gates complete"
+    "G_DELIVERY": "CI SUCCESS; single delivery initiated; activation pending"
   },
-  "observedAt": "2026-11-04T17:36:36.440039+00:00"
+  "observedAt": "2026-11-04T18:17:48.413Z",
+  "workflowCarrier": "ad8fb70712ad94fa4d2b00e6f1ae441aa52338b8",
+  "delivery": {
+    "sourceSha": "7723bba2b64b01864d45bbbfea3f489665f79f15",
+    "sourceTree": "4027e6ca633091cf17d1b1006c67c2a815368f99",
+    "stagingSha": "3733146303d2024f2f0b914e37293c24306db674",
+    "amveraCodeRevision": "525a8aafc69da57855612d0b909491e3ce2abd71",
+    "path": "EXISTING_AMVERA_PUSH_WEBHOOK_ONLY",
+    "skipDuplicateDeliveryWorkflow": true,
+    "deliveryActionsRuns": 0,
+    "fastForward": true,
+    "sourceInputsExpected": {
+      "sha256": "63b20684724069ee354cf2b739992e73c23ddbb6575532006d7ffdcf8cedb222",
+      "fileCount": 717,
+      "lockSha256": "30f95307620b4c49b2eba4665be9dcd8c10192eb1e51a72a9a112bea2c492932"
+    },
+    "activation": "BUILDING_NOT_YET_ACCEPTED",
+    "lastObservedReady": {
+      "ready": true,
+      "code": "READY",
+      "components": {
+        "configuration": "VALID",
+        "database": "REACHABLE",
+        "schema": "COMPATIBLE",
+        "storage": "READ_WRITE",
+        "outbox": "ACCESSIBLE"
+      },
+      "note": "Pre-activation old runtime; not acceptance of new revision"
+    }
+  }
 }
