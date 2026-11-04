@@ -51,7 +51,7 @@ try{
  await context.addCookies([{name:'qa-role',value:'owner',url:origin}]);
  await page.goto(origin+'/dashboard?view=documents&analysisId='+seed.id);
  await permissions.getByLabel('Почта брокера',{exact:true}).fill('broker@workspace.test');
- await permissions.getByLabel('Вид разрешения',{exact:true}).selectOption('DOSSIER');
+ await permissions.getByRole('combobox',{name:'Вид разрешения',exact:true}).selectOption('DOSSIER');
  await permissions.getByRole('checkbox').check();
  for(const width of [1440,390,360]){await page.setViewportSize({width,height:1000});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'owner permission form overflow '+width);await permissions.screenshot({path:out+'/owner-permission-'+width+'.png'});}
  permissionResponse=page.waitForResponse(r=>r.url()===origin+'/api/workspace'&&r.request().method()==='POST');

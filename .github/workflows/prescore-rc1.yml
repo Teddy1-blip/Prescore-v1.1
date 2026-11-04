@@ -1,4 +1,5 @@
 name: Prescore RC1
+run-name: "Prescore RC1 / ${{ inputs.candidate_sha || github.sha }}"
 on:
   push:
     branches: [prescore-live-product-recovery-v1]
@@ -15,6 +16,11 @@ on:
       - 'next.config.ts'
       - 'proxy.ts'
   workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: 'Full commit SHA in this repository to test; empty tests the selected ref'
+        required: false
+        type: string
 permissions:
   contents: read
   actions: read
@@ -24,12 +30,41 @@ concurrency:
   group: prescore-rc1-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.source.outputs.sha }}
+      tree: ${{ steps.source.outputs.tree }}
+      timestamp: ${{ steps.source.outputs.timestamp }}
+      selection: ${{ steps.source.outputs.selection }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+      - name: Resolve exact test commit in this repository
+        id: source
+        run: node scripts/release/ci-candidate.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
   static:
+    needs: candidate
+    env:
+      PRESCORE_TEST_SHA: ${{ needs.candidate.outputs.sha }}
+      PRESCORE_CANDIDATE_SELECTION: ${{ needs.candidate.outputs.selection }}
+      RC_BUILD_TIMESTAMP: ${{ needs.candidate.outputs.timestamp }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with: {persist-credentials: false}
+        with: {ref: "${{ needs.candidate.outputs.sha }}", persist-credentials: false}
+      - name: Verify exact candidate checkout
+        run: test "$(git rev-parse HEAD)" = "$PRESCORE_TEST_SHA"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with: {node-version: '22'}
       - run: npm ci
@@ -43,15 +78,22 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: always() && vars.PRESCORE_UPLOAD_EVIDENCE == '1'
         with:
-          name: rc-static-${{ github.sha }}
+          name: rc-static-${{ needs.candidate.outputs.sha }}
           path: ${{ runner.temp }}/rc-reports/*.json
           if-no-files-found: error
   product-regression:
+    needs: candidate
+    env:
+      PRESCORE_TEST_SHA: ${{ needs.candidate.outputs.sha }}
+      PRESCORE_CANDIDATE_SELECTION: ${{ needs.candidate.outputs.selection }}
+      RC_BUILD_TIMESTAMP: ${{ needs.candidate.outputs.timestamp }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with: {persist-credentials: false}
+        with: {ref: "${{ needs.candidate.outputs.sha }}", persist-credentials: false}
+      - name: Verify exact candidate checkout
+        run: test "$(git rev-parse HEAD)" = "$PRESCORE_TEST_SHA"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with: {node-version: '22'}
       - run: node scripts/release/wait-product.mjs
@@ -61,10 +103,11 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: always() && vars.PRESCORE_UPLOAD_EVIDENCE == '1'
         with:
-          name: rc-product-${{ github.sha }}
+          name: rc-product-${{ needs.candidate.outputs.sha }}
           path: ${{ runner.temp }}/rc-reports/*.json
           if-no-files-found: error
   postgres:
+    needs: candidate
     name: postgres-${{ matrix.scenario }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -83,10 +126,15 @@ jobs:
           --health-cmd "pg_isready -U rc -d prescore_rc_ci"
           --health-interval 3s --health-timeout 3s --health-retries 30
     env:
+      PRESCORE_TEST_SHA: ${{ needs.candidate.outputs.sha }}
+      PRESCORE_CANDIDATE_SELECTION: ${{ needs.candidate.outputs.selection }}
+      RC_BUILD_TIMESTAMP: ${{ needs.candidate.outputs.timestamp }}
       DATABASE_URL: postgresql://rc:synthetic-ci-only-password@127.0.0.1:5432/prescore_rc_ci
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with: {persist-credentials: false}
+        with: {ref: "${{ needs.candidate.outputs.sha }}", persist-credentials: false}
+      - name: Verify exact candidate checkout
+        run: test "$(git rev-parse HEAD)" = "$PRESCORE_TEST_SHA"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with: {node-version: '22'}
       - run: npm ci
@@ -118,50 +166,63 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: always() && vars.PRESCORE_UPLOAD_EVIDENCE == '1'
         with:
-          name: rc-${{ matrix.scenario }}-${{ github.sha }}
+          name: rc-${{ matrix.scenario }}-${{ needs.candidate.outputs.sha }}
           path: |
             ${{ runner.temp }}/rc-reports/*.json
             ${{ runner.temp }}/rc-reports/*.png
           if-no-files-found: error
   container:
+    needs: candidate
+    env:
+      PRESCORE_TEST_SHA: ${{ needs.candidate.outputs.sha }}
+      PRESCORE_CANDIDATE_SELECTION: ${{ needs.candidate.outputs.selection }}
+      RC_BUILD_TIMESTAMP: ${{ needs.candidate.outputs.timestamp }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with: {persist-credentials: false}
+        with: {ref: "${{ needs.candidate.outputs.sha }}", persist-credentials: false}
+      - name: Verify exact candidate checkout
+        run: test "$(git rev-parse HEAD)" = "$PRESCORE_TEST_SHA"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with: {node-version: '22'}
-      - run: docker build --build-arg SOURCE_SHA="${{ github.sha }}" --build-arg BUILD_TIMESTAMP="${{ github.event.head_commit.timestamp }}" -t prescore:rc1 .
+      - run: docker build --build-arg SOURCE_SHA="${{ needs.candidate.outputs.sha }}" --build-arg BUILD_TIMESTAMP="${{ needs.candidate.outputs.timestamp }}" -t prescore:rc1 .
       - run: node scripts/release/container-smoke.mjs
         env: {RC_REPORT_DIR: '${{ runner.temp }}/rc-reports'}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: always() && vars.PRESCORE_UPLOAD_EVIDENCE == '1'
         with:
-          name: rc-container-${{ github.sha }}
+          name: rc-container-${{ needs.candidate.outputs.sha }}
           path: ${{ runner.temp }}/rc-reports/*.json
           if-no-files-found: error
   artifacts:
+    env:
+      PRESCORE_TEST_SHA: ${{ needs.candidate.outputs.sha }}
+      PRESCORE_CANDIDATE_SELECTION: ${{ needs.candidate.outputs.selection }}
+      RC_BUILD_TIMESTAMP: ${{ needs.candidate.outputs.timestamp }}
     if: vars.PRESCORE_UPLOAD_EVIDENCE == '1'
     runs-on: ubuntu-latest
-    needs: [static, product-regression, postgres, container]
+    needs: [candidate, static, product-regression, postgres, container]
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with: {persist-credentials: false}
+        with: {ref: "${{ needs.candidate.outputs.sha }}", persist-credentials: false}
+      - name: Verify exact candidate checkout
+        run: test "$(git rev-parse HEAD)" = "$PRESCORE_TEST_SHA"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with: {node-version: '22'}
       - run: npm ci
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
-          pattern: rc-*-${{ github.sha }}
+          pattern: rc-*-${{ needs.candidate.outputs.sha }}
           path: ${{ runner.temp }}/rc-manifest/reports
       - name: Deterministic release evidence / CycloneDX
         run: node --experimental-strip-types scripts/release/manifest.mjs "$RUNNER_TEMP/rc-manifest"
         env:
-          PRESCORE_SOURCE_SHA: ${{ github.sha }}
-          PRESCORE_BUILD_TIMESTAMP: ${{ github.event.head_commit.timestamp }}
+          PRESCORE_SOURCE_SHA: ${{ needs.candidate.outputs.sha }}
+          PRESCORE_BUILD_TIMESTAMP: ${{ needs.candidate.outputs.timestamp }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
-          name: prescore-rc1-release-${{ github.sha }}
+          name: prescore-rc1-release-${{ needs.candidate.outputs.sha }}
           path: ${{ runner.temp }}/rc-manifest/
           if-no-files-found: error
