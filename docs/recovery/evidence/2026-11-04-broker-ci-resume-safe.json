@@ -122,9 +122,9 @@
     "criticalUnchangedFiles": 243,
     "sameTreeVerified": true
   },
-  "deployed": false,
+  "deployed": true,
   "liveAmveraRestore": false,
-  "recoveryCheckpoint": "88b70712e5e140e35bdc907a4be8a7502dcb1b6f",
+  "recoveryCheckpoint": "fe3d7ab77b1bb80975cefbfacaace12cd8a1e5e5",
   "issueComment": 6637218148,
   "browserReproduction": {
     "before": "FAIL: discarded CDP response body",
@@ -214,10 +214,10 @@
     "C_EMAIL": "real receiver and reset flow pending; fake mailbox is not real mail",
     "D_MFA": "unchanged separate restoration/migration gate pending",
     "E_VISUAL": "isolated responsive PASS; published owner/broker/mobile pending",
-    "F_HISTORY": "pre-delivery 0 ordinary/3 QA observed; no data writes; after-delivery compare pending",
-    "G_DELIVERY": "CI SUCCESS; single delivery initiated; activation pending"
+    "F_HISTORY": "PASS after activation: 0 ordinary / 3 QA READY_FULL; full pre/post deep-sorted financial projections equal; analysis selector unchanged",
+    "G_DELIVERY": "PASS: existing mandatory CI SUCCESS; one webhook delivery, no duplicate delivery Actions; active Amvera525a8aaf; health/ready PASS; fingerprint,717 files,lock and schema0009 match"
   },
-  "observedAt": "2026-11-04T18:17:48.413Z",
+  "observedAt": "2026-11-04T18:57:48.389Z",
   "workflowCarrier": "ad8fb70712ad94fa4d2b00e6f1ae441aa52338b8",
   "delivery": {
     "sourceSha": "7723bba2b64b01864d45bbbfea3f489665f79f15",
@@ -233,7 +233,7 @@
       "fileCount": 717,
       "lockSha256": "30f95307620b4c49b2eba4665be9dcd8c10192eb1e51a72a9a112bea2c492932"
     },
-    "activation": "BUILDING_NOT_YET_ACCEPTED",
+    "activation": "ACTIVE_VERIFIED",
     "lastObservedReady": {
       "ready": true,
       "code": "READY",
@@ -244,7 +244,102 @@
         "storage": "READ_WRITE",
         "outbox": "ACCESSIBLE"
       },
-      "note": "Pre-activation old runtime; not acceptance of new revision"
-    }
+      "note": "Observed after new source fingerprint became active"
+    },
+    "amveraBuildRegression": {
+      "tests": 6826,
+      "pass": 6826,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "observedLogTime": "2026-11-04 20:48:31 displayed UTC+02",
+      "durationMs": 1959708.948391
+    },
+    "amveraBuildBusiness": {
+      "cases": 24,
+      "pipelineReturned": 24,
+      "pass": 24,
+      "fail": 0
+    },
+    "activeAmveraRevision": "525a8aafc69da57855612d0b909491e3ce2abd71",
+    "activeRevisionEvidence": {
+      "surface": "Amvera Control versions UI",
+      "buildSucceeded": true,
+      "stored": true,
+      "used": true,
+      "projectStatus": "Запущено",
+      "actualReplicas": 1,
+      "desiredReplicas": 1
+    },
+    "amveraBuildExitCode": 0,
+    "amveraBuildFinishedAt": "2026-11-04T18:54:28Z",
+    "amveraPublishedImageDigest": "sha256:001e1e63063aed465c90ca2cf566c7818269fc6a89734389b86646f48862d215",
+    "amveraPublishedImageDigestEvidence": "Amvera build log image push at 2026-11-04T18:54:24Z; not an independently exposed running-image digest",
+    "applicationStartedAt": "2026-11-04T18:54:41Z",
+    "applicationLog": "Next.js 16.4.1; Ready in 0ms"
+  },
+  "liveAfter": {
+    "amveraRevision": "525a8aafc69da57855612d0b909491e3ce2abd71",
+    "stagingSha": "3733146303d2024f2f0b914e37293c24306db674",
+    "alive": true,
+    "ready": {
+      "ready": true,
+      "code": "READY",
+      "components": {
+        "configuration": "VALID",
+        "database": "REACHABLE",
+        "schema": "COMPATIBLE",
+        "storage": "READ_WRITE",
+        "outbox": "ACCESSIBLE"
+      },
+      "note": "Observed after new source fingerprint became active"
+    },
+    "schema": "0009_analysis_archive.sql",
+    "sourceSha": "UNKNOWN",
+    "sourceTree": "UNKNOWN",
+    "provenance": {
+      "status": "PACKAGED_INPUT_FINGERPRINT",
+      "scope": "PRESCORE-SOURCE-INPUTS-1",
+      "sourceFingerprint": "63b20684724069ee354cf2b739992e73c23ddbb6575532006d7ffdcf8cedb222",
+      "fileCount": 717,
+      "lockSha256": "30f95307620b4c49b2eba4665be9dcd8c10192eb1e51a72a9a112bea2c492932",
+      "buildId": "hg9NMtV9WlL3MlXYt652-",
+      "buildTimestamp": "2026-11-04T18:15:14.624Z",
+      "publishedImageDigest": null,
+      "runningImageDigest": null
+    },
+    "ordinaryHistory": 0,
+    "qaCount": 3,
+    "selectedAnalysis": "EMPTY_UNCHANGED",
+    "method": "SHA256_DEEP_SORTED_JSON_PROJECTION_V1",
+    "acquisition": "JSON.parse visible document; sort projection and JSON.stringify inside browser evaluation; return serialized string, not nested numeric object",
+    "qa": [
+      {
+        "analysisId": "36527dc1-d7db-4fef-bd47-719a451b4d58",
+        "state": "READY_FULL",
+        "sha256": "99d79ffb20148d1146a3071a6fef9695dacd2c8e70e440709630867016192e71",
+        "characters": 126092,
+        "fullSerializedProjectionMatchesBefore": true
+      },
+      {
+        "analysisId": "992ab9e3-672e-4adf-955e-9a2c40e3ece3",
+        "state": "READY_FULL",
+        "sha256": "936516b97757bb390b9240d9af34406ac4239cbbd7b10dada9fc5f74aa736213",
+        "characters": 92935,
+        "fullSerializedProjectionMatchesBefore": true
+      },
+      {
+        "analysisId": "7ec7daeb-dfef-4f1f-9c9d-15ea86fe864c",
+        "state": "READY_FULL",
+        "sha256": "acb19b92adb5f41786e5301e33593042b81347baf971cf34cd7c5ed3c2a9493a",
+        "characters": 31870,
+        "fullSerializedProjectionMatchesBefore": true
+      }
+    ],
+    "comparison": "All three complete sorted serialized projection strings byte-for-byte equal to full pre-activation baseline; no truncation masking",
+    "ownerSessionUsedOnlyForPreservationChecks": true,
+    "ordinaryClientBrokerLiveAccepted": false,
+    "realResetMailAccepted": false,
+    "liveMobileAccepted": false
   }
 }
