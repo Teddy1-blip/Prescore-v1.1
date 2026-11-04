@@ -32,8 +32,11 @@ try{
  }
  }
  await page.setViewportSize({width:1440,height:1000});await page.goto(origin+'/dashboard?analysisId='+seed.id);await page.getByRole('heading',{name:'Обзор компании',exact:true}).waitFor();
- assert.equal(await page.getByRole('navigation',{name:'Разделы кабинета'}).getByRole('button').count(),9);assert.equal(await page.locator('.pc-content .pc-canonical').count(),0);
- let model=await(await page.request.get(origin+'/api/workspace-model?analysisId='+seed.id)).json();assert.match(await page.locator('[data-credit-index]').innerText(),new RegExp(String(model.full.canonical.prescoreIndex.value)));checks.push('canonical index and nine navigation entries including subscription');
+ const navigation=page.getByRole('navigation',{name:'Разделы кабинета'});
+ assert.deepEqual(await navigation.getByRole('button').evaluateAll(buttons=>buttons.map(button=>({label:button.querySelector('span')?.firstChild?.textContent,disabled:button.disabled}))),
+  ['Обзор','Анализ Prescore','Финансы','Обязательства','Финансирование','Документы','Контрагенты','Заявки','Кредитный аналитик','Оплата'].map(label=>({label,disabled:label==='Контрагенты'})));
+ assert.equal(await page.locator('.pc-content .pc-canonical').count(),0);
+ let model=await(await page.request.get(origin+'/api/workspace-model?analysisId='+seed.id)).json();assert.match(await page.locator('[data-credit-index]').innerText(),new RegExp(String(model.full.canonical.prescoreIndex.value)));checks.push('canonical index and ten navigation entries with counterparties disabled');
  await page.goto(origin+'/dashboard?analysisId='+seed.id+'&view=financing');
  await page.getByLabel('Цель финансирования',{exact:true}).selectOption('WORKING_CAPITAL');
  await page.getByLabel('Предпочтительный продукт',{exact:true}).selectOption('CREDIT_LINE');
