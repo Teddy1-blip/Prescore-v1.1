@@ -1,9 +1,15 @@
 name: Prescore product QA
+run-name: "Prescore product QA / ${{ inputs.candidate_sha || github.sha }}"
 
 on:
   push:
     branches: [prescore-product-v1, prescore-polish-v1, prescore-live-product-recovery-v1]
   workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: 'Full commit SHA in this repository to test; empty tests the selected ref'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -13,14 +19,43 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  validate:
+  candidate:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.source.outputs.sha }}
+      tree: ${{ steps.source.outputs.tree }}
+      timestamp: ${{ steps.source.outputs.timestamp }}
+      selection: ${{ steps.source.outputs.selection }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+      - name: Resolve exact test commit in this repository
+        id: source
+        run: node scripts/release/ci-candidate.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+  validate:
+    needs: candidate
+    env:
+      PRESCORE_TEST_SHA: ${{ needs.candidate.outputs.sha }}
+      PRESCORE_CANDIDATE_SELECTION: ${{ needs.candidate.outputs.selection }}
+      RC_BUILD_TIMESTAMP: ${{ needs.candidate.outputs.timestamp }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.candidate.outputs.sha }}
+          persist-credentials: false
+      - name: Verify exact candidate checkout
+        run: test "$(git rev-parse HEAD)" = "$PRESCORE_TEST_SHA"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: '22'
@@ -42,19 +77,26 @@ jobs:
         if: always() && vars.PRESCORE_UPLOAD_EVIDENCE == '1'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
-          name: product-credit-lab-${{ github.sha }}
+          name: product-credit-lab-${{ needs.candidate.outputs.sha }}
           path: ${{ runner.temp }}/credit-lab-product-${{ github.run_id }}-${{ github.run_attempt }}/
           if-no-files-found: error
           retention-days: 30
 
   presentation:
+    needs: candidate
+    env:
+      PRESCORE_TEST_SHA: ${{ needs.candidate.outputs.sha }}
+      PRESCORE_CANDIDATE_SELECTION: ${{ needs.candidate.outputs.selection }}
+      RC_BUILD_TIMESTAMP: ${{ needs.candidate.outputs.timestamp }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ needs.candidate.outputs.sha }}
           persist-credentials: false
+      - name: Verify exact candidate checkout
+        run: test "$(git rev-parse HEAD)" = "$PRESCORE_TEST_SHA"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: '22'
@@ -76,7 +118,7 @@ jobs:
         if: always() && vars.PRESCORE_UPLOAD_EVIDENCE == '1'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
-          name: product-presentation-${{ github.sha }}
+          name: product-presentation-${{ needs.candidate.outputs.sha }}
           path: |
             ${{ runner.temp }}/client-v3-browser/*.json
             ${{ runner.temp }}/client-v3-browser/*.png
@@ -89,13 +131,20 @@ jobs:
           retention-days: 30
 
   admin:
+    needs: candidate
+    env:
+      PRESCORE_TEST_SHA: ${{ needs.candidate.outputs.sha }}
+      PRESCORE_CANDIDATE_SELECTION: ${{ needs.candidate.outputs.selection }}
+      RC_BUILD_TIMESTAMP: ${{ needs.candidate.outputs.timestamp }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ needs.candidate.outputs.sha }}
           persist-credentials: false
+      - name: Verify exact candidate checkout
+        run: test "$(git rev-parse HEAD)" = "$PRESCORE_TEST_SHA"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: '22'
@@ -108,7 +157,7 @@ jobs:
         if: always() && vars.PRESCORE_UPLOAD_EVIDENCE == '1'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
-          name: product-admin-${{ github.sha }}
+          name: product-admin-${{ needs.candidate.outputs.sha }}
           path: |
             ${{ runner.temp }}/admin-product-browser/*.json
             ${{ runner.temp }}/admin-product-browser/*.png
@@ -116,13 +165,20 @@ jobs:
           retention-days: 30
 
   billing:
+    needs: candidate
+    env:
+      PRESCORE_TEST_SHA: ${{ needs.candidate.outputs.sha }}
+      PRESCORE_CANDIDATE_SELECTION: ${{ needs.candidate.outputs.selection }}
+      RC_BUILD_TIMESTAMP: ${{ needs.candidate.outputs.timestamp }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ needs.candidate.outputs.sha }}
           persist-credentials: false
+      - name: Verify exact candidate checkout
+        run: test "$(git rev-parse HEAD)" = "$PRESCORE_TEST_SHA"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: '22'
@@ -134,7 +190,7 @@ jobs:
         if: always() && vars.PRESCORE_UPLOAD_EVIDENCE == '1'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
-          name: product-billing-${{ github.sha }}
+          name: product-billing-${{ needs.candidate.outputs.sha }}
           path: |
             ${{ runner.temp }}/billing-browser/*.json
             ${{ runner.temp }}/billing-browser/*.png

@@ -118,12 +118,27 @@ try{
  await page.waitForFunction(()=>!document.body.innerText.includes('Показана последняя полученная версия'));
  checks.push('failed refresh retains application table and recovers');
  // No saved analyses and initial API errors.
- await page.route('**/api/workspace',route=>route.fulfill({json:{analyses:[],deals:[],readOnly:false}}));
- await page.goto(origin+'/dashboard');await page.getByRole('button',{name:'Создать новый анализ',exact:true}).waitFor();
- assert.equal(await page.locator('[data-credit-index]').count(),0);checks.push('no analysis actionable state');
- await page.unroute('**/api/workspace');
- await page.route('**/api/workspace',route=>route.fulfill({status:503,json:{error:'QA unavailable'}}));
- await page.goto(origin+'/dashboard');await page.getByRole('alert').waitFor();
- assert.match(await page.getByRole('alert').innerText(),/Повторить/);checks.push('initial API error actionable');await page.unroute('**/api/workspace');
+ const workspaceURL=url=>url.origin===origin&&url.pathname==='/api/workspace';
+ const workspaceResponse=response=>workspaceURL(new URL(response.url()))&&response.request().method()==='GET';
+ const intercepted={empty:[],unavailable:[]};
+ const emptyWorkspace=async route=>{intercepted.empty.push(route.request().url());await route.fulfill({status:200,json:{analyses:[],deals:[],readOnly:false}});};
+ await page.route(workspaceURL,emptyWorkspace);
+ const emptyResponse=page.waitForResponse(workspaceResponse);await page.goto(origin+'/dashboard');
+ const empty=await emptyResponse;assert.equal(empty.status(),200);assert.deepEqual((await empty.json()).analyses,[]);
+ assert.ok(intercepted.empty.includes(empty.url()));assert.equal(new URL(empty.url()).searchParams.get('projection'),'summary');
+ await page.getByRole('button',{name:'Создать новый анализ',exact:true}).waitFor();
+ assert.equal(await page.locator('[data-credit-index]').count(),0);assert.equal(await page.locator('.pc-recent-analyses').count(),0);checks.push('intercepted empty summary: no analysis actionable state');
+ await page.unroute(workspaceURL,emptyWorkspace);
+ const unavailableWorkspace=async route=>{intercepted.unavailable.push(route.request().url());await route.fulfill({status:503,json:{error:'QA unavailable'}});};
+ await page.route(workspaceURL,unavailableWorkspace);
+ const unavailableResponse=page.waitForResponse(workspaceResponse);await page.goto(origin+'/dashboard');
+ const unavailable=await unavailableResponse;assert.equal(unavailable.status(),503);assert.deepEqual(await unavailable.json(),{error:'QA unavailable'});
+ assert.ok(intercepted.unavailable.includes(unavailable.url()));assert.equal(new URL(unavailable.url()).searchParams.get('projection'),'summary');
+ await page.getByRole('alert').waitFor();assert.match(await page.getByRole('alert').innerText(),/Повторить/);
+ await page.unroute(workspaceURL,unavailableWorkspace);
+ const recoveredResponse=page.waitForResponse(workspaceResponse);await page.getByRole('button',{name:'Повторить',exact:true}).click();
+ assert.equal((await recoveredResponse).status(),200);await page.getByRole('button',{name:'Создать новый анализ',exact:true}).waitFor();
+ await page.waitForFunction(()=>document.querySelector('[role="alert"]')===null);
+ checks.push('intercepted summary 503: visible alert and successful retry');
  assert.deepEqual(errors,[]);checks.push('no browser runtime errors');console.log('PASS',checks.length);
 }catch(e){console.error(e);await page.screenshot({path:out+'/failure.png',fullPage:true});process.exitCode=1;}finally{fs.writeFileSync(out+'/result.json',JSON.stringify({checks,errors},null,2));await browser.close();await stopServer();}
