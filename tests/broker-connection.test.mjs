@@ -131,3 +131,19 @@ test('CLIENT /agent renders explicit connection instead of redirecting to dashbo
   assert.equal((await connect(rt,rt.owner)).status,201);
  }finally{await rt.close();restore();}
 });
+
+// Regression discovered during the explicit ordinary-broker acceptance. A CRM
+// contact supplied by that broker is not consent from the owner of a dossier.
+test('ordinary self-connected broker cannot grant itself a foreign dossier by creating a CRM contact',async()=>{
+ const restore=inEnvironment(),rt=await createWorkspaceRuntime();try{
+  const seeded=await rt.request('/api/analysis',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({statements:[{text:statementFixture(),fileName:'synthetic-contact.txt'}]})});
+  assert.equal(seeded.status,200);const analysis=(await seeded.json()).analysis;
+  assert.equal((await connect(rt,rt.stranger)).status,201);
+  const broker={...rt.stranger,roles:['CLIENT','AGENT']};
+  const model=()=>rt.request('/api/workspace-model?analysisId='+analysis.id,{},broker);
+  assert.equal((await model()).status,404);
+  const lead=await rt.request('/api/agent',{method:'POST',headers:{'content-type':'application/json',origin:base},body:JSON.stringify({type:'lead',companyName:'Synthetic foreign company',companyInn:analysis.companyInn,contactName:'Synthetic',email:broker.email,consent:true})},broker);
+  assert.equal(lead.status,201);
+  assert.equal((await model()).status,404,'A self-reported CRM contact must not authorize another user’s analysis');
+ }finally{await rt.close();restore();}
+});
