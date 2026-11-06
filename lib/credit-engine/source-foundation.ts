@@ -115,7 +115,12 @@ function sourceCalendarCoverage(
 
 // Company FULL requires all supplied accounts, not merely any account, on every day.
 // Same-account overlaps remain unresolved; distinct accounts are not duplicate sources.
-export function analyzeCalendarCoverage(sources: Array<Pick<SourceEnvelope, "sourceId" | "periodFrom" | "periodTo" | "accountCoverage">>): MonthCoverage[] {
+export function analyzeCalendarCoverage(sources: Array<Pick<SourceEnvelope, "sourceId" | "periodFrom" | "periodTo" | "accountCoverage" | "periodBasis">>): MonthCoverage[] {
+  // Observed postings establish activity only, never a complete calendar interval.
+  if (sources.some(s=>s.periodBasis==="OBSERVED_ONLY")) {
+    const declared=sources.filter(s=>s.periodBasis!=="OBSERVED_ONLY");
+    return analyzeCalendarCoverage(declared).map(m=>m.status==="FULL" ? {...m,status:"PARTIAL",warnings:[...m.warnings,"ACCOUNT_PERIOD_UNCONFIRMED"]} : m);
+  }
   if (!sources.length || sources.some(s => !s.accountCoverage?.length)) return sourceCalendarCoverage(sources);
   const accounts = new Map<string, Array<Pick<SourceEnvelope, "sourceId" | "periodFrom" | "periodTo">>>();
   for (const s of sources) for (const a of s.accountCoverage!) {

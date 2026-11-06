@@ -34,8 +34,8 @@ export type DeduplicationCandidate = {
   sourceRefs: string[];
 };
 
-export function deduplicateTransactions(items: CanonicalTransaction[], resolutions: ConflictResolution[] = []) {
-  const {eligible, conflicts} = isolateTransactionConflicts(items, resolutions);
+export function deduplicateTransactions(items: CanonicalTransaction[], resolutions: ConflictResolution[] = [], reconciledSources:ReadonlySet<string>=new Set()) {
+  const {eligible, conflicts} = isolateTransactionConflicts(items, resolutions, reconciledSources);
   const retained: CanonicalTransaction[] = [];
   const exact = new Map<string, CanonicalTransaction>();
   const probable = new Map<string, CanonicalTransaction[]>();
@@ -48,8 +48,13 @@ export function deduplicateTransactions(items: CanonicalTransaction[], resolutio
     else candidatesTruncated = true;
   };
 
+  const occurrences = new Map<string,number>();
   for (const original of eligible) {
-    const exactKey = exactFingerprint(original);
+    const fingerprint = exactFingerprint(original);
+    const sourceKey = JSON.stringify([original.sourceId,fingerprint]);
+    const ordinal = reconciledSources.has(original.sourceId) ? (occurrences.get(sourceKey) ?? 0)+1 : 1;
+    occurrences.set(sourceKey,ordinal);
+    const exactKey = JSON.stringify([fingerprint,ordinal]);
     const priorExact = exact.get(exactKey);
     if (priorExact) {
       original.duplicateStatus = "EXACT";

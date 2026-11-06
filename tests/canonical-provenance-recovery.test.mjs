@@ -1,3 +1,4 @@
+import {historicalBusinessResult} from './fixtures/historical-bank-inputs.mjs';
 /** Exact review of two metadata-only changes, not a blanket golden refresh.
  * Actual bank parser and canonical engines; no provider calls or engine mocks.
  * Optional extracted corpus uses the same hash-verified synthetic source files.
@@ -41,10 +42,10 @@ function assertReviewedDelta(result,entry){
 
 assert.deepEqual(audit.entries.map(e=>e.caseId),['CL-RU-BUS-010','CL-RU-BUS-022']);
 for(const entry of audit.entries){
- const fixture=load(entry.caseId),result=buildCanonicalCreditAnalysis(fixture.input);
+ const fixture=load(entry.caseId),result=buildCanonicalCreditAnalysis(fixture.input),historical=historicalBusinessResult(entry.caseId,fixture.input);
  test(entry.caseId+' exact reviewed delta reconstructs the complete original golden',()=>{
   assert.equal(goldens[entry.caseId],entry.reviewedOutputHash);
-  assertReviewedDelta(result,entry);
+  assertReviewedDelta(historical,entry);
  });
  test(entry.caseId+' entire client report is byte-equivalent to its original baseline',()=>{
   assert.equal(digest(result.model),entry.unchangedClientReportHash);
@@ -54,15 +55,15 @@ for(const entry of audit.entries){
   assert.ok(checks.length>0);assert.deepEqual(checks.filter(c=>c.status!=='PASS'),[]);
  });
  test(entry.caseId+' review rejects an unlisted credit-value change',()=>{
-  const changed=structuredClone(result);changed.prescoreIndex.value=123.456;
+  const changed=structuredClone(historical);changed.prescoreIndex.value=123.456;
   assert.throws(()=>assertReviewedDelta(changed,entry));
  });
  test(entry.caseId+' review rejects a changed client conclusion',()=>{
-  const changed=structuredClone(result);changed.model.hero.headline='Unexpected conclusion';
+  const changed=structuredClone(historical);changed.model.hero.headline='Unexpected conclusion';
   assert.throws(()=>assertReviewedDelta(changed,entry));
  });
  test(entry.caseId+' review rejects changed provenance rather than ignoring it',()=>{
-  const changed=structuredClone(result);changed.inputFingerprint='unreviewed-input';
+  const changed=structuredClone(historical);changed.inputFingerprint='unreviewed-input';
   assert.throws(()=>assertReviewedDelta(changed,entry));
  });
  if(entry.caseId==='CL-RU-BUS-010')test('010 internal-transfer provenance does not inflate revenue or change balance figures',()=>{

@@ -10,6 +10,7 @@ export type WorkspaceModelStateV1 = "READY_BASIC" | "READY_FULL" | "NOT_FOUND" |
 export type WorkspaceAvailabilityV1 = "READY" | "LOCKED" | "UNAVAILABLE" | "UNKNOWN";
 export type WorkspaceAccessRoleV1 = "OWNER" | "ASSIGNED_BROKER" | "ADMIN";
 export type WorkspaceFactV1 = {
+  code?: string;
   value: number | null;
   unit: MetricResult["unit"];
   status: MetricResult["status"];
@@ -44,6 +45,8 @@ export type WorkspaceBasicV1 = {
     availability: Array<{ source: string; status: SourceStatus | "UNKNOWN"; periodFrom: string | null; periodTo: string | null; reportDate?: string | null }>;
   };
   bankingFacts: {
+    operationListTruncated?:boolean;
+    balanceCheck?: import("../credit-engine/metrics/statement-balances.ts").BalanceCheck;
     grossInflow: WorkspaceFactV1;
     grossOutflow: WorkspaceFactV1;
     netCashFlow: WorkspaceFactV1;
@@ -67,7 +70,18 @@ export type WorkspaceBasicV1 = {
     topCounterparties: Array<{ name: string; amount: number; share: number }> | null;
     monthly: Array<{
       month: string;
-      coverage: string;
+      coverage: import("../credit-engine/contracts/sources.ts").MonthCoverageStatus;
+      otherReceipts?: number | null;
+      nonOperatingReceipts?: number | null;
+      unknownInflows?: number | null;
+      principal?: number | null;
+      interest?: number | null;
+      unsplit?: number | null;
+      leasing?: number | null;
+      taxOnly?: number | null;
+      social?: number | null;
+      netExternal?: number|null;
+      individualBusiness?: number|null;
       operatingReceipts: number | null;
       externalInflows: number | null;
       externalOutflows: number | null;
@@ -113,6 +127,7 @@ export type WorkspaceOperationalInput = WorkspaceOperationalStateV1;
 function fact(metric: MetricResult | undefined, unit: MetricResult["unit"] = "RUB"): WorkspaceFactV1 {
   if (!metric) return { value: null, unit, status: "UNKNOWN", confidence: "UNKNOWN", periodFrom: null, periodTo: null };
   return {
+    code: metric.code,
     value: metric.status === "UNKNOWN" ? null : metric.value,
     unit: metric.unit,
     status: metric.status,
@@ -179,6 +194,8 @@ export function projectWorkspaceBasic(
       availability: sourceAvailability(analysis),
     },
     bankingFacts: {
+      ...(analysis.transactionsTruncated ? {operationListTruncated:true} : {}),
+      ...(analysis.statementBalanceCheck ? {balanceCheck:analysis.statementBalanceCheck} : {}),
       grossInflow: fact(metrics?.cashFlow.grossExternalCashInflow),
       grossOutflow: fact(metrics?.cashFlow.grossExternalCashOutflow),
       netCashFlow: fact(metrics?.cashFlow.netExternalCashFlow),
@@ -205,11 +222,22 @@ export function projectWorkspaceBasic(
       monthly: metrics ? metrics.monthly.map((item) => ({
         month: item.month,
         coverage: item.coverage,
-        operatingReceipts: item.operatingReceipts,
-        externalInflows: item.externalInflows,
-        externalOutflows: item.externalOutflows,
-        taxPayments: item.taxPayments,
-        debtService: item.debtService,
+        otherReceipts: item.coverage === "MISSING" ? null : item.otherReceipts ?? null,
+        nonOperatingReceipts: item.coverage === "MISSING" ? null : item.nonOperatingReceipts ?? null,
+        unknownInflows: item.coverage === "MISSING" ? null : item.unknownInflows ?? null,
+        principal: item.coverage === "MISSING" ? null : item.principal ?? null,
+        interest: item.coverage === "MISSING" ? null : item.interest ?? null,
+        unsplit: item.coverage === "MISSING" ? null : item.unsplit ?? null,
+        leasing: item.coverage === "MISSING" ? null : item.leasing ?? null,
+        taxOnly: item.coverage === "MISSING" ? null : item.taxOnly ?? null,
+        netExternal:item.coverage==="MISSING"?null:item.netExternal??null,
+        individualBusiness:item.coverage==="MISSING"?null:item.individualBusiness??null,
+        social: item.coverage === "MISSING" ? null : item.social ?? null,
+        operatingReceipts: item.coverage === "MISSING" ? null : item.operatingReceipts,
+        externalInflows: item.coverage === "MISSING" ? null : item.externalInflows,
+        externalOutflows: item.coverage === "MISSING" ? null : item.externalOutflows,
+        taxPayments: item.coverage === "MISSING" ? null : item.taxPayments,
+        debtService: item.coverage === "MISSING" ? null : item.debtService,
       })) : null,
     },
     operations: structuredClone(operations),

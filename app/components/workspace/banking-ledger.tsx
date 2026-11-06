@@ -1,6 +1,9 @@
 "use client";
 import type {WorkspaceModelV1,WorkspaceFactV1} from '../../../lib/workspace/model';
-import {date,money} from './presentation';
+import {useState} from 'react';
+import type {CashSeries} from '../../../lib/workspace/cash-series';
+import {CashOperations,cashMoney as money} from './cash-movement';
+import {date} from './presentation';
 import {label} from './credit-depth';
 import {concentrationPercent,factValue} from './data-panel';
 
@@ -29,10 +32,10 @@ export const bankingFieldLabels={
 type BankingField=keyof typeof bankingFieldLabels;
 
 const groups:Array<{title:string;hint:string;fields:BankingField[]}>= [
- {title:'Денежный поток',hint:'Поступления и списания по внешнему контуру компании.',fields:['operatingInflow','observedMonthlyOperatingAverage','fullMonthOperatingAverage','grossInflow','grossOutflow','netCashFlow']},
- {title:'Ликвидность',hint:'Остатки и запас денежных средств внутри периода.',fields:['endingBalance','averageDailyBalance','minimumDailyBalance','lowLiquidityDays']},
- {title:'Долг и обязательные платежи',hint:'Наблюдаемые списания по выпискам, а не договорный график.',fields:['loanPrincipalPayments','interestPayments','unsplitDebtPayments','leasingPayments','taxPayments','socialContributions','transfersToIndividuals']},
- {title:'Концентрация покупателей',hint:'Доля прямых покупателей в операционных поступлениях.',fields:['directCustomerTop1','directCustomerTop3']}
+ {title:'Денежный поток',hint:'Сколько денег поступило от внешних контрагентов и сколько им перечислено?',fields:['operatingInflow','observedMonthlyOperatingAverage','fullMonthOperatingAverage','grossInflow','grossOutflow','netCashFlow']},
+ {title:'Ликвидность',hint:'До какого уровня опускался остаток по представленным счетам?',fields:['endingBalance','averageDailyBalance','minimumDailyBalance','lowLiquidityDays']},
+ {title:'Долг и обязательные платежи',hint:'Сколько компания фактически перечислила кредиторам и в бюджет?',fields:['loanPrincipalPayments','interestPayments','unsplitDebtPayments','leasingPayments','taxPayments','socialContributions','transfersToIndividuals']},
+ {title:'Концентрация покупателей',hint:'Какая доля операционных поступлений приходится на идентифицированных прямых покупателей?',fields:['directCustomerTop1','directCustomerTop3']}
 ];
 
 export function displayBankingFact(f:WorkspaceFactV1){
@@ -54,13 +57,22 @@ export function BankingSnapshot({model}:{model:WorkspaceModelV1}){
  const b=model.basic.bankingFacts,s=model.basic.sources.statements;
  const keys:BankingField[]=['operatingInflow','grossInflow','grossOutflow','netCashFlow','endingBalance','averageDailyBalance','minimumDailyBalance','lowLiquidityDays','taxPayments','socialContributions','loanPrincipalPayments','interestPayments','leasingPayments','unsplitDebtPayments','transfersToIndividuals','directCustomerTop1','directCustomerTop3'];
  const known=keys.filter(k=>factValue(b[k])!==null&&b[k].status!=='NOT_APPLICABLE'),missing=keys.filter(k=>!known.includes(k));
- return <section className="pc-panel pc-banking-snapshot"><header><div><h2>Что уже известно по выпискам</h2><p>{date(model.basic.analysis.period.from)} — {date(model.basic.analysis.period.to)} · {s.bankNames?.join(' · ')||'Банк не указан'} · Счетов: {s.accountCount??'не подтверждено'}</p></div></header><dl className="pc-definition pc-bank-summary">{known.map(k=><Fact key={k} name={k} fact={b[k]}/>)}</dl>{!known.length&&<p>Выписка сохранена, но её поля не позволяют подтвердить денежные показатели. Проверьте формат и полноту операций.</p>}{missing.length>0&&<details><summary>Показатели, требующие уточнения ({missing.length})</summary><p>Эти значения не заменены нулями. Проверьте остатки, даты и состав операций в исходной выписке.</p><dl className="pc-definition">{missing.map(k=><Fact key={k} name={k} fact={b[k]}/>)}</dl></details>}<p className="pc-muted">Поступления по счёту не равны бухгалтерской выручке. Наблюдаемые долговые платежи не заменяют договорный график.</p></section>;
+ return <section className="pc-panel pc-banking-snapshot"><header><div><h2>Что уже известно по выпискам</h2><p>{date(model.basic.analysis.period.from)} — {date(model.basic.analysis.period.to)} · {s.bankNames?.join(' · ')||'Банк не указан'} · Счетов: {s.accountCount??'не подтверждено'}</p></div></header><dl className="pc-definition pc-bank-summary">{known.map(k=><Fact key={k} name={k} fact={b[k]} model={model}/>)}</dl>{!known.length&&<p>Выписка сохранена, но её поля не позволяют подтвердить денежные показатели. Проверьте формат и полноту операций.</p>}{missing.length>0&&<details><summary>Показатели, требующие уточнения ({missing.length})</summary><p>Эти значения не заменены нулями. Проверьте остатки, даты и состав операций в исходной выписке.</p><dl className="pc-definition">{missing.map(k=><Fact key={k} name={k} fact={b[k]} model={model}/>)}</dl></details>}<p className="pc-muted">Поступления по счёту не равны бухгалтерской выручке. Наблюдаемые долговые платежи не заменяют договорный график.</p></section>;
 }
 
-function Fact({name,fact}:{name:BankingField;fact:WorkspaceFactV1}){
- return <div className="pc-bank-fact" data-banking-fact={name}>
+const operationSeries:Partial<Record<BankingField,CashSeries>>={
+ grossInflow:'externalInflows',grossOutflow:'externalOutflows',netCashFlow:'netExternal',operatingInflow:'operatingReceipts',
+ loanPrincipalPayments:'principal',interestPayments:'interest',unsplitDebtPayments:'unsplit',leasingPayments:'leasing',
+ taxPayments:'taxOnly',socialContributions:'social',transfersToIndividuals:'individualBusiness',
+};
+function Fact({name,fact,model}:{name:BankingField;fact:WorkspaceFactV1;model:WorkspaceModelV1}){
+ const [open,setOpen]=useState(false);
+ const series=operationSeries[name];
+ return <div className="pc-bank-fact" data-banking-fact={name} data-source={fact.code}>
   <dt>{bankingFieldLabels[name]}<small>{date(fact.periodFrom)} — {date(fact.periodTo)}</small></dt>
-  <dd>{display(fact)}<small>{label(fact.status)} · {label(fact.confidence)}</small></dd>
+  <dd>{display(fact)}<small>{label(fact.status)} · {label(fact.confidence)}</small>
+   {series && fact.value!=null && model.entitlement==='FULL' && <><button type="button" className="pc-text-button" aria-expanded={open} onClick={()=>setOpen(!open)}>Операции</button>
+    {open && <CashOperations analysisId={model.analysisId} month="all" series={series}/>}</>}</dd>
  </div>;
 }
 
@@ -71,7 +83,7 @@ export function BankingLedger({model}:{model:WorkspaceModelV1}){
    <header><div><h2>Банковские показатели</h2><p>Сгруппированы по экономическому смыслу. Неизвестное значение не считается нулём.</p></div></header>
    <div className="pc-bank-groups">{groups.map(group=><article key={group.title}>
     <header><h3>{group.title}</h3><p>{group.hint}</p></header>
-    <dl>{group.fields.map(name=><Fact key={name} name={name} fact={b[name]}/>)}</dl>
+    <dl>{group.fields.map(name=><Fact key={name} name={name} fact={b[name]} model={model}/>)}</dl>
    </article>)}</div>
   </section>
 

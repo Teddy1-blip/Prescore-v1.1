@@ -12,6 +12,7 @@ import {ClientShell,BROKER_NAV} from './client-shell';
 import {ExecutiveOverview,Panel} from './client-insights';
 import {FullCreditAnalysis,DebtPortfolio,FinancingProducts} from './client-analysis';
 import {FinancialStatements} from './client-financials';
+import {CashMovement} from './cash-movement';
 import {BankingLedger} from './banking-ledger';
 import {DocumentSources} from './client-documents';
 import './client-product.css';
@@ -45,7 +46,7 @@ export default function BrokerWorkspace(){
  {view==='dossier'&&<>{state.loading?<p role="status">Загружаем досье…</p>:state.error?<p role="alert">{state.error}<button onClick={()=>setRevision(x=>x+1)}>Повторить</button></p>:model&&<><section className="pc-panel"><button onClick={()=>choose('clients')}>← Клиенты</button><h1>{model.basic.analysis.company.name}</h1><p>ИНН {model.basic.analysis.company.inn} · {model.entitlement==='FULL'?'Полный анализ':'Базовый анализ'} · Только чтение</p><p>Версия анализа от {date(model.basic.analysis.createdAt)}</p><p>Период: {date(model.basic.analysis.period.from)} — {date(model.basic.analysis.period.to)}</p><button disabled={state.refreshing} onClick={()=>void state.refresh()}>{state.refreshing?'Обновляем досье…':'Обновить досье'}</button>{state.refreshError&&<p role="alert">{state.refreshError} Показана последняя полученная версия.</p>}</section><nav className="pc-tabs" aria-label="Разделы досье">{[['home','Обзор'],['analysis','Анализ Prescore'],['banking','Финансы'],['obligations','Обязательства'],['financing','Финансирование'],['documents','Документы'],['applications','Заявки']].map(([id,title])=><button key={id} aria-current={dossierView===id?'page':undefined} onClick={()=>chooseDossier(id)}>{title}</button>)}</nav>
  {dossierView==='home'&&<ExecutiveOverview model={model} choose={chooseDossier} retry={()=>setRevision(x=>x+1)}/>}
  {dossierView==='analysis'&&<FullCreditAnalysis key={selectedId} model={model} retry={()=>setRevision(x=>x+1)}/>}
- {dossierView==='banking'&&<><BankingLedger model={model}/><FinancialStatements model={model}/></>}
+ {dossierView==='banking'&&<><section className="pc-panel"><h2>Движение денег</h2><CashMovement model={model}/></section><BankingLedger model={model}/><FinancialStatements model={model}/></>}
  {dossierView==='obligations'&&<DebtPortfolio model={model}/>}
  {dossierView==='financing'&&<FinancingProducts model={model}/>}
  {dossierView==='documents'&&<><DocumentSources model={model}/><DocumentsHub key={selectedId} companyInn={model.basic.analysis.company.inn} companyName={model.basic.analysis.company.name} analysisId={selectedId} readOnly/></>}

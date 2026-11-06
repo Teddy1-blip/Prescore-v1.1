@@ -20,7 +20,7 @@ test('complete CLIENT renders current business corpus with field coverage and im
   const input=loadBusiness(entry.caseId).input,model=workspace(input),before=JSON.stringify(model),r=model.full.report;
   const html=screens.map(C=>render(C,model)).join('\n');assert.equal(JSON.stringify(model),before);
   assert.doesNotMatch(html,/NaN|undefined|Infinity/);
-  for(const key of Object.keys(model.basic.bankingFacts))assert.ok(key==='monthly'||key==='topCounterparties'||key==='seasonality'||key in bankingFieldLabels,'unclassified basic banking field '+key);
+  for(const key of Object.keys(model.basic.bankingFacts))assert.ok(key==='monthly'||key==='topCounterparties'||key==='seasonality'||key==='balanceCheck'||key==='operationListTruncated'||key in bankingFieldLabels,'unclassified basic banking field '+key);
   assert.ok(html.includes('Устойчивость поступлений и сезонность'));
   for(const key of Object.keys(bankingFieldLabels))assert.ok(html.includes('data-banking-fact="'+key+'"'),key);
   for(const f of [...r.primaryFactors,...r.contextHighlights,...r.readiness.constraints,...r.capacity.details,...r.dataQuality,...r.limitations,...r.detailedSections.flatMap(s=>s.factors),...r.actionPlan.rerun].filter(f=>model.full.canonical.explainability.claims.find(c=>c.claimId===f.claimId)?.claimKind!=='INDEX_CONTRIBUTION'))assert.ok(html.includes(escape(f.title)),'factor missing '+f.id);

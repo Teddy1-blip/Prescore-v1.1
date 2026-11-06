@@ -7,6 +7,7 @@ export type RawBankTransactionInput = {
   bankDocumentId?: string | null;
   date?: string | null;
   documentDate?: string | null;
+  postingSide?: "IN" | "OUT";
   amount?: string | number | null;
   currency?: string | null;
   payerName?: string | null;
@@ -52,10 +53,11 @@ export function normalizeTransaction(input: RawBankTransactionInput): CanonicalT
   const payerInn = normalizeInnValue(input.payerInn);
   const recipientInn = normalizeInnValue(input.recipientInn);
   const purpose = normalizePurpose(input.purpose);
-  for (const result of [date, amount, currency, purpose]) if (result.warning) warnings.push(result.warning);
+  for (const result of [date, amount, currency, purpose, payerAccount, recipientAccount, statementAccount, payerInn, recipientInn]) if (result.warning) warnings.push(result.warning);
   const companyAccounts = new Set(input.companyAccounts.map((item) => normalizeAccountValue(item).value).filter((item): item is string => Boolean(item)));
   if (statementAccount.value) companyAccounts.add(statementAccount.value);
   const direction = determineDirection({
+    postingSide: input.postingSide,
     companyInn: companyInn.value,
     companyAccounts,
     payerInn: payerInn.value,

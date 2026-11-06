@@ -1,3 +1,4 @@
+import {historicalCapacityEntries} from '../historical-bank-inputs.mjs';
 import {readFileSync} from 'node:fs';
 import {baseline,portfolio,withScenario,scenario,upstream,refresh,field,defect,reorder,cashBoundary} from './builders.mjs';
 export const CAPACITY_PACK_VERSION='PRESCORE-DEBT-CAPACITY-RU-GOLDEN-1.0.0';
@@ -55,4 +56,4 @@ export function entries(){const es=[];const add=(n,title,input,expected)=>es.pus
  add(53,'Reordered inputs byte identical',reorder(baseline({creditPortfolio:portfolio({payment:100000})})),{relative:[{other:'CAP-RU-054',field:'output',operator:'EQ'}]});
  add(54,'Canonical source, multi-risk and portfolio pipeline',baseline({creditPortfolio:portfolio({payment:100000})}),{schedule:100000,prudential:100000});
  es.push({caseId:'CAP-RU-DEFECT-001',revision:1,title:'Permanent historical-zero current-overdue chain',input:defect(),expected:{invariants:true,defect:true,prudential:200000,observed:0}});return es;}
-export function loadCapacityPack(){return {version:CAPACITY_PACK_VERSION,entries:entries(),fingerprints:JSON.parse(readFileSync(new URL('./fingerprints-v1.json',import.meta.url),'utf8'))};}
+export function loadCapacityPack(){return {version:CAPACITY_PACK_VERSION,entries:historicalCapacityEntries(entries()),fingerprints:JSON.parse(readFileSync(new URL('./fingerprints-v1.json',import.meta.url),'utf8'))};}

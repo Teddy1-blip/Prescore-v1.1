@@ -1,7 +1,7 @@
 "use client";
 import { ChangeEvent, DragEvent, ReactNode, useEffect, useRef, useState } from "react";
 import { AlertTriangle, ArrowRight, BriefcaseBusiness, Gauge, LockKeyhole, MessageSquareText, Plus, Search, ShieldCheck, Trash2, UploadCloud, X } from "lucide-react";
-import { type AnalysisResult, type StatementInput } from "../../../lib/prescore";
+import { type AnalysisResult } from "../../../lib/prescore";
 import type {StatementScreeningResult} from "../../../lib/credit-engine/contracts/sources";
 import ApplicationChat from "../../dashboard/application-chat";
 export type StoredAnalysis = { historyPurpose?: 'WORK' | 'QA'; id: string; companyName: string; companyInn: string; createdAt?: string; periodFrom?: string; periodTo?: string; bankNames?: string[]; viewTier?: string; screeningResults?: StatementScreeningResult[] };
@@ -34,6 +34,7 @@ function PageHeading({ kicker, title, body, action }: { kicker: string; title: s
   return <div className="ps-heading"><div><span>{kicker}</span><h1>{title}</h1><p>{body}</p></div>{action}</div>;
 }
 
+type BankUpload = {fileName:string; base64:string};
 export type UploadReceipt={screeningResults?:StatementScreeningResult[];rejectedFiles?:string[]};
 const screeningLabels:Record<string,string>={ACCEPTED:'Принят',DUPLICATE:'Дубликат',COMPANY_MISMATCH:'Другой ИНН',UNSUPPORTED:'Формат не поддерживается',UNRECOGNIZED:'Не распознан',INVALID:'Некорректный файл'};
 export function ScreeningSummary({receipt,open=false}:{receipt:UploadReceipt;open?:boolean}){
@@ -48,14 +49,19 @@ export function AnalysisHistory({analyses,selectedId,select}:{analyses:StoredAna
 }
 export function Analyze({onResult}:{onResult:(result:AnalysisResult,receipt?:UploadReceipt)=>void|Promise<void>}){
  const input=useRef<HTMLInputElement>(null),pending=useRef(false),reading=useRef(false);
- const [statements,setStatements]=useState<StatementInput[]>([]),[processing,setProcessing]=useState(false),[adding,setAdding]=useState(false),[error,setError]=useState(''),[localRejected,setLocalRejected]=useState<Array<{fileName:string;reason:string}>>([]),[receipt,setReceipt]=useState<UploadReceipt>({});
+ const [statements,setStatements]=useState<BankUpload[]>([]),[processing,setProcessing]=useState(false),[adding,setAdding]=useState(false),[error,setError]=useState(''),[localRejected,setLocalRejected]=useState<Array<{fileName:string;reason:string}>>([]),[receipt,setReceipt]=useState<UploadReceipt>({});
  async function addFiles(files:File[]){
   if(pending.current||reading.current||!files.length)return;reading.current=true;setAdding(true);setError('');setReceipt({});
-  const candidates:StatementInput[]=[],rejected:Array<{fileName:string;reason:string}>=[];
+  const candidates:BankUpload[]=[],rejected:Array<{fileName:string;reason:string}>=[];
   try{for(const file of files){
    if(statements.length+candidates.length>=30){rejected.push({fileName:file.name,reason:'До 30 файлов в одном запросе.'});continue;}
-   if(!/\.txt$/i.test(file.name)||file.size>15*1024*1024){rejected.push({fileName:file.name,reason:'Для банковского анализа нужен TXT до 15 МБ.'});continue;}
-   try{const buffer=await file.arrayBuffer();let text=new TextDecoder('utf-8').decode(buffer);if(text.includes('�'))text=new TextDecoder('windows-1251').decode(buffer);candidates.push({fileName:file.name,text});}catch{rejected.push({fileName:file.name,reason:'Не удалось прочитать файл. Выберите его повторно.'});}
+   if(!/\.txt$/i.test(file.name)||file.size>15*1024*1024){rejected.push({fileName:file.name,reason:'Нужен TXT 1CClientBankExchange до 15 МБ. Excel, PDF и архивы не поддерживаются.'});continue;}
+   try {
+    const buffer=await file.arrayBuffer();
+    const bytes=new Uint8Array(buffer), chunks:string[]=[];
+    for(let i=0;i<bytes.length;i+=32768) chunks.push(String.fromCharCode(...bytes.subarray(i,i+32768)));
+    candidates.push({fileName:file.name,base64:btoa(chunks.join(''))});
+   } catch { rejected.push({fileName:file.name,reason:'Не удалось прочитать файл. Выберите его повторно.'}); }
   }setStatements(current=>[...current,...candidates]);setLocalRejected(rejected);}finally{reading.current=false;setAdding(false);if(input.current)input.current.value='';}
  }
  async function calculate(){
@@ -68,7 +74,7 @@ export function Analyze({onResult}:{onResult:(result:AnalysisResult,receipt?:Upl
  return <><PageHeading kicker="БАНКОВСКИЕ ВЫПИСКИ" title="Соберите банковский поток компании" body="Каждый серверный расчёт сохраняется отдельным анализом. Проверку одного ИНН, формата и дубликатов выполняет сервер."/>
  <div className="ps-upload-layout"><section className="ps-card ps-upload-card"><div className="ps-dropzone" onDragOver={(e:DragEvent)=>e.preventDefault()} onDrop={(e:DragEvent)=>{e.preventDefault();void addFiles(Array.from(e.dataTransfer.files));}}>
  <input ref={input} multiple type="file" disabled={processing||adding} accept=".txt,text/plain" onChange={(e:ChangeEvent<HTMLInputElement>)=>void addFiles(Array.from(e.target.files??[]))}/>
- <UploadCloud/><h2>{processing?'Сервер проверяет и рассчитывает анализ…':adding?'Читаем файлы…':'Выберите банковские выписки'}</h2><p>TXT 1CClientBankExchange · UTF-8 / Windows-1251 · до 30 файлов, 15 МБ каждый. Банковский Excel/PDF в этом flow не поддерживается.</p><button disabled={processing||adding} onClick={()=>input.current?.click()}>Выбрать TXT-файлы</button></div>
+ <UploadCloud/><h2>{processing?'Сервер проверяет и рассчитывает анализ…':adding?'Читаем файлы…':'Выберите банковские выписки'}</h2><p>TXT 1CClientBankExchange (UTF-8 или Windows-1251). До 30 файлов по 15 МБ.</p><button disabled={processing||adding} onClick={()=>input.current?.click()}>Выбрать выписки</button></div>
  {statements.length>0&&<div className="ps-statement-list"><div className="ps-statement-list-head"><strong>Готовы к отправке: {statements.length}</strong><button disabled={processing||adding} onClick={()=>{setStatements([]);setReceipt({});setError('');}}>Очистить</button></div><p>Одинаковые имена и счета не исключаются заранее. Принятие каждого документа подтвердит сервер.</p>{statements.map((s,i)=><article key={i}><span><b>{s.fileName}</b><small>Ожидает серверной проверки</small></span><button disabled={processing||adding} aria-label={'Удалить '+s.fileName} onClick={()=>setStatements(current=>current.filter((_,n)=>n!==i))}><Trash2/></button></article>)}<button className="ps-analyze-files-button" disabled={processing||adding} onClick={()=>void calculate()}><Gauge/>{processing?'Проверяем и рассчитываем…':'Рассчитать по выбранным файлам'}</button></div>}
  {localRejected.length>0&&<section role="status"><h3>Не отправлены на сервер</h3>{localRejected.map((r,i)=><p key={i}><strong>{r.fileName}</strong>: {r.reason}</p>)}</section>}
  <ScreeningSummary receipt={receipt} open/>{error&&<div className="ps-upload-error" role="alert"><AlertTriangle/><span><b>Нет подтверждённого результата</b><p>{error}</p><p>Ранее сохранённые анализы доступны в истории. Выбранные файлы сохранены в форме для проверки и повторной попытки.</p></span></div>}</section>

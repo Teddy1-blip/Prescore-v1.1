@@ -7,6 +7,7 @@ import {money,date,FullAccessNotice} from './presentation';
 import {publicText as clientText} from '../../../lib/credit-engine/client-report/copy';
 import {sourceLabel,sourceState,label,PortfolioSnapshot} from './credit-depth';
 import {FinancialSnapshot} from './client-financials';
+import {CashMovement, cashMoney} from './cash-movement';
 import {BankingSnapshot} from './banking-ledger';
 export function Panel({title,action,children,id}:{title:string;action?:ReactNode;children:ReactNode;id?:string}){return <section className="pc-panel" id={id}><header><h2>{title}</h2>{action}</header>{children}</section>;}
 export function Why({model,ids}:{model:WorkspaceModelV1;ids:string[]}){
@@ -27,12 +28,13 @@ export function FactorRows({model,items,limit}:{model:WorkspaceModelV1;items:Pre
 export function ActionItem({item,model}:{item:PresentationActionV1;model:WorkspaceModelV1}){const r=model.full!.report,all=[...r.recommendations.primary,...r.recommendations.backlog,...r.actionPlan.horizons.flatMap(h=>h.items)];return <article className="pc-action" id={item.id}><small>{item.group} · {item.status}</small><h3>{clientText(item.title)}</h3><p>{clientText(item.summary)}</p>{item.why!==item.summary&&<p>{clientText(item.why)}</p>}{item.steps.length>0&&<ol>{item.steps.map((s,i)=><li key={i}>{s}</li>)}</ol>}{item.prerequisites.length>0&&<p><b>Сначала: </b>{item.prerequisites.map(id=>all.find(a=>a.id===id||a.canonicalId===id)?.title??'Уточнить связанное условие').join('; ')}</p>}<p><b>Проверка результата: </b>{clientText(item.recheck)}</p>{item.evidence.length>0&&<p><b>Подтверждения: </b>{item.evidence.join('; ')}</p>}<Why model={model} ids={[item.claimId]}/></article>;}
 const coverageLabels:Record<string,string>={FULL:'Полный месяц',PARTIAL:'Неполный месяц',MISSING:'Нет покрытия',OVERLAP:'Перекрытие выписок'};
 export function CashTrend({model,compact=false}:{model:WorkspaceModelV1;compact?:boolean}){
+ if (!compact) return <CashMovement model={model}/>;
  const rows=model.basic.bankingFacts.monthly??[],shown=compact?rows.slice(-6):rows;
  const max=Math.max(1,...shown.flatMap(r=>[r.externalInflows,r.externalOutflows]).filter((n):n is number=>n!==null).map(Math.abs));
  return <div className="pc-trend"><p className="pc-muted">Внешние поступления <i className="pc-key in"/> · списания <i className="pc-key out"/> {compact&&rows.length>6?'· Последние 6 месяцев':''}</p>
  {shown.length?<>
-  {shown.map(r=><div className="pc-trend-row" key={r.month}><span>{r.month.split('-').reverse().join('.')}<small>{r.coverage==='FULL'?'':coverageLabels[r.coverage]??'Покрытие не определено'}</small></span><div className="pc-bars" aria-hidden="true">{[r.externalInflows,r.externalOutflows].map((v,i)=><i key={i} className={v!==null&&v<0?'negative':''} style={{width:v===null?'0%':Math.abs(v)/max*100+'%'}}/>)}</div><span>{money(r.externalInflows)}<small>{money(r.externalOutflows)}</small></span></div>)}
-  {!compact&&<details className="pc-chart-data"><summary>Данные графика в таблице</summary><div className="pc-table-scroll" tabIndex={0} aria-label="Помесячное движение денег"><table><caption>Суммы в рублях за каждый месяц выписки</caption><thead><tr><th>Месяц</th><th>Поступления</th><th>Списания</th><th>Покрытие</th></tr></thead><tbody>{shown.map(r=><tr key={r.month}><th scope="row">{r.month.split('-').reverse().join('.')}</th><td>{money(r.externalInflows)}</td><td>{money(r.externalOutflows)}</td><td>{coverageLabels[r.coverage]??'Не определено'}</td></tr>)}</tbody></table></div></details>}
+  {shown.map(r=><div className="pc-trend-row" key={r.month}><span>{r.month.split('-').reverse().join('.')}<small>{r.coverage==='FULL'?'':coverageLabels[r.coverage]??'Покрытие не определено'}</small></span><div className="pc-bars" aria-hidden="true">{[r.externalInflows,r.externalOutflows].map((v,i)=><i key={i} className={v!==null&&v<0?'negative':''} style={{width:v===null?'0%':Math.abs(v)/max*100+'%'}}/>)}</div><span>{cashMoney(r.externalInflows)}<small>{cashMoney(r.externalOutflows)}</small></span></div>)}
+
  </>:<p>Для помесячного графика недостаточно данных. Добавьте выписку с датами операций.</p>}</div>;
 }
 export function SourceSummary({model,choose}:{model:WorkspaceModelV1;choose?:(v:string)=>void}){return <div className="pc-source-list">{['BANK_STATEMENTS','FINANCIAL_STATEMENTS','QUARTERLY_REPORT','CREDIT_HISTORY','EXTERNAL_SOURCE'].map(key=>{const rows=model.basic.sources.availability.filter(s=>s.source===key);return <div key={key}><span>{sourceLabel(key)}</span><b>{rows.length?[...new Set(rows.map(s=>sourceState(s.status)))].join(', '):'Не добавлен'}</b></div>;})}{choose&&<button className="pc-text-button" onClick={()=>choose('documents')}>Дополнить документы →</button>}</div>;}

@@ -1,3 +1,4 @@
+import type { StatementScreeningResult } from "../../../lib/credit-engine/contracts/sources";
 import {safeErrorText} from '../../../lib/release/security';
 import {getRuntime} from "../../../lib/platform/runtime";
 import { analysisForStorage, analyzeBankStatements, screenBankStatements, type StatementInput } from "../../../lib/prescore";
@@ -13,26 +14,44 @@ export async function POST(request: Request) {
   const user = await requireApiUser();
   if (!user) return unauthorized();
   try {
-    const body = await request.json() as { statements?: StatementInput[] };
+    const body = await request.json() as { statements?: Array<{fileName?:string;text?:string;base64?:string}> };
     const statements = Array.isArray(body.statements) ? body.statements : [];
     if (!statements.length || statements.length > MAX_FILES) return Response.json({ error: "Добавьте от 1 до 30 выписок" }, { status: 400 });
+    const candidates: StatementInput[] = [];
+    const excluded = new Map<number, StatementScreeningResult>();
     let totalLength = 0;
-    const rawCandidates = statements.map((item, index) => {
-      const text = String(item?.text || "");
-      const fileName = String(item?.fileName || `statement-${index + 1}.txt`).slice(0, 180);
-      totalLength += text.length;
-      return { text, fileName };
-    });
-    if (totalLength > MAX_SOURCE_LENGTH) return Response.json({ error: "Суммарный размер выписок превышает 60 МБ" }, { status: 413 });
-    const candidates: StatementInput[] = await Promise.all(rawCandidates.map(async (item) => {
-      const contentHash = await sha256Hex(item.text);
-      return { ...item, contentHash, sourceId: `statement:${contentHash}` };
-    }));
+    for (const [index, item] of statements.entries()) {
+      const fileName = String(item?.fileName || `statement-${index+1}.txt`).slice(0,180);
+      let text: string;
+      let content: string | Uint8Array;
+      if (typeof item?.base64 === "string") {
+        if (!item.base64 || item.base64.length>20*1024*1024 || !/^[A-Za-z0-9+/]+={0,2}$/.test(item.base64)) {
+          excluded.set(index,{fileName,status:"INVALID",reason:"Некорректный файл или превышен предел 15 МБ."});
+          continue;
+        }
+        content = Buffer.from(item.base64,"base64");
+        try { text = new TextDecoder("utf-8",{fatal:true}).decode(content); }
+        catch { text = new TextDecoder("windows-1251").decode(content); }
+      } else {
+        text = typeof item?.text === "string" ? item.text : "";
+        content = text;
+      }
+      totalLength += typeof content === "string" ? Buffer.byteLength(content,"utf8") : content.byteLength;
+      if (totalLength>MAX_SOURCE_LENGTH) return Response.json({error:"Суммарный размер выписок превышает 60 МБ"}, {status:413});
+      const contentHash = await sha256Hex(content);
+      if (!/\.txt$/i.test(fileName)) {
+        excluded.set(index,{fileName,status:"UNSUPPORTED",contentHash,sourceId:`statement:${contentHash}`,reason:"Банковский анализ принимает TXT 1CClientBankExchange в UTF-8 или Windows-1251."});
+        continue;
+      }
+      candidates.push({fileName,text,fileHash:typeof content!=="string",contentHash,sourceId:`statement:${contentHash}`});
+    }
     const screened = screenBankStatements(candidates);
-    if (!screened.accepted.length) return Response.json({ error: "Загруженные выписки не распознаны. Отправьте файлы на support@prescore.ru для проверки формата." }, { status: 400 });
+    const receipts = screened.screeningResults[Symbol.iterator]();
+    const screeningResults = statements.map((_,i) => excluded.get(i) ?? receipts.next().value!);
+    if (!screened.accepted.length) return Response.json({error:"Среди выбранных файлов нет пригодной выписки.", screeningResults}, {status:400});
     const safeStatements = screened.accepted;
-    const rejectedFiles = screened.unrecognizedFiles;
-    const result = analyzeBankStatements(safeStatements, { screeningResults: screened.screeningResults });
+    const rejectedFiles = [...screened.unrecognizedFiles,...Array.from(excluded.values(),r=>r.fileName)];
+    const result = analyzeBankStatements(safeStatements, { screeningResults });
     const env = getRuntime();
     type Statement = { bind: (...values: unknown[]) => Statement; run: () => Promise<unknown>; first: <T = unknown>() => Promise<T | null> };
     const db = env.DB as unknown as { prepare: (query: string) => Statement; batch: (statements: Statement[]) => Promise<Array<{ results: unknown[] }>> };
@@ -64,7 +83,7 @@ export async function POST(request: Request) {
       processedBy: "server",
       tier,
       rejectedFiles,
-      screeningResults: screened.screeningResults,
+      screeningResults,
     });
   } catch (error) {
     return Response.json({ error: safeErrorText(error, "Не удалось выполнить анализ") }, { status: 400 });

@@ -24,7 +24,7 @@ function accessRole(access: ReportAccess["access"]): WorkspaceAccessRoleV1 {
   return "OWNER";
 }
 
-function parseSavedAnalysis(access: ReportAccess, analysisId: string): AnalysisResult {
+export function parseSavedAnalysis(access: ReportAccess, analysisId: string): AnalysisResult {
   let value: unknown;
   try { value = JSON.parse(access.row.payload); }
   catch { throw new CanonicalUnavailable("SAVED_INPUT", "INVALID_SAVED_JSON"); }

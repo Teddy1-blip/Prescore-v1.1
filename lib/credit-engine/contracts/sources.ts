@@ -39,6 +39,9 @@ export type SourceEnvelope = {
   warnings: string[];
   rawReference?: string;
   contentHash?: string;
+  companyName?: string;
+  periodBasis?: "DECLARED" | "OBSERVED_ONLY";
+  ownerEvidence?: {rule:"DECLARED_ACCOUNT_AND_PARTY_INN";matchingSides:number};
   accountCoverage?: Array<{ account: string; periodFrom?: string; periodTo?: string }>;
   fieldAvailability?: Record<string, ValueKnowledge>;
 };
@@ -151,7 +154,7 @@ export type InfrastructureVersions = {
 };
 
 export const INFRASTRUCTURE_VERSIONS: InfrastructureVersions = {
-  statementParser: "PRESCORE-STATEMENT-PARSER-1",
+  statementParser: "PRESCORE-STATEMENT-PARSER-2",
   transactionNormalizer: "PRESCORE-TX-NORMALIZER-1",
   transactionClassifier: "PRESCORE-TX-CLASSIFIER-1",
   economicClassifier: "PRESCORE-TX-CLASSIFIER-2.0.0-SHADOW",

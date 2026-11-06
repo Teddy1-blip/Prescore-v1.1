@@ -11,11 +11,16 @@ export function documentIdentity(t:CanonicalTransaction):string|null {
 export function documentVersion(t:CanonicalTransaction):string {
  return JSON.stringify([t.amount,t.rawValues.payerInn,t.rawValues.recipientInn,t.purposeNormalized]);
 }
-export function isolateTransactionConflicts(items:CanonicalTransaction[], resolutions:ConflictResolution[]=[]){
+export function isolateTransactionConflicts(items:CanonicalTransaction[], resolutions:ConflictResolution[]=[], reconciledSources:ReadonlySet<string>=new Set()){
  const groups=new Map<string,Map<string,CanonicalTransaction[]>>();
  for(const t of items){const key=documentIdentity(t);if(!key)continue;const group=groups.get(key)??new Map<string,CanonicalTransaction[]>();const v=documentVersion(t);group.set(v,[...(group.get(v)??[]),t]);groups.set(key,group);}
  const blocked=new Set<string>();const selected=new Map<string,string>();const conflicts:TransactionConflict[]=[];
  for(const [identity,vs] of [...groups].sort(([a],[b])=>a.localeCompare(b))){if(vs.size<2)continue;
+  // The bank's reconciled journal contains every variant as a distinct posting.
+  // Unmatched variants across files continue through the conflict path.
+  const witnessed = [...vs.values()][0].some(first=>reconciledSources.has(first.sourceId) &&
+    [...vs.values()].every(variant=>variant.some(row=>row.sourceId===first.sourceId)));
+  if(witnessed)continue;
   const rs=resolutions.filter(r=>r.identity===identity);if(rs.length){if(rs.length!==1||!rs[0].confirmationReference.trim()||!vs.has(rs[0].versionKey))throw Error('INVALID_CONFLICT_RESOLUTION');selected.set(identity,rs[0].versionKey);continue;}
   blocked.add(identity);conflicts.push({version:TRANSACTION_CONFLICT_VERSION,identity,status:'UNRESOLVED',variants:[...vs].sort(([a],[b])=>a.localeCompare(b)).map(([versionKey,observations])=>({versionKey,observations:structuredClone(observations).sort((a,b)=>a.sourceId.localeCompare(b.sourceId)||a.transactionId.localeCompare(b.transactionId))}))});
  }

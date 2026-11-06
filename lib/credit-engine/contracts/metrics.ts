@@ -31,12 +31,24 @@ export type MetricResult = {
   warnings: string[];
 };
 
+export type CashSeries = "externalInflows" | "externalOutflows" | "operatingReceipts" | "otherReceipts" | "debtService" | "taxPayments" | "nonOperatingReceipts" | "unknownInflows" | "principal" | "interest" | "unsplit" | "leasing" | "taxOnly" | "social" | "netExternal" | "individualBusiness";
+
 export type MonthlyCashFlowV2 = {
   month: string;
   coverage: MonthCoverageStatus;
   operatingReceipts: number | null;
   externalInflows: number | null;
   externalOutflows: number | null;
+  otherReceipts?: number | null;
+  nonOperatingReceipts?: number | null;
+  principal?: number | null;
+  interest?: number | null;
+  unsplit?: number | null;
+  leasing?: number | null;
+  taxOnly?: number | null;
+  social?: number | null;
+  netExternal?: number | null;
+  individualBusiness?: number | null;
   supplierPayments: number | null;
   taxPayments: number | null;
   payrollPayments: number | null;

@@ -15,8 +15,8 @@ function normalizedName(value: string | null | undefined) {
 
 export function normalizeInnValue(value: string | null | undefined) {
   if (!value?.trim()) return { value: null, warning: "COUNTERPARTY_INN_UNKNOWN" };
-  const digits = value.replace(/\D/g, "");
-  if (digits.length !== 10 && digits.length !== 12) return { value: null, warning: "COUNTERPARTY_INN_INVALID" };
+  const digits = value.trim().replace(/[ -]/g, "");
+  if (!/^(?:\d{10}|\d{12})$/.test(digits)) return { value: null, warning: "COUNTERPARTY_INN_INVALID" };
   return { value: digits };
 }
 

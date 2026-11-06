@@ -10,6 +10,8 @@ import * as prescore from "../lib/prescore.ts";
 import * as sources from "../lib/credit-engine/source-foundation.ts";
 import * as controls from "../lib/admin-controls.ts";
 import * as entitlements from "../lib/entitlements.ts";
+import * as cashEvidence from '../lib/workspace/cash-evidence.ts';
+import * as cashSeries from '../lib/workspace/cash-series.ts';
 import * as workspaceService from "../lib/workspace/service.ts";
 import { buildCanonicalCreditAnalysis } from "../lib/credit-engine/production/orchestrator.ts";
 import { publicCanonicalModel } from "../lib/credit-engine/production/public-model.ts";
@@ -64,6 +66,8 @@ for (const ownerFull of [false, true]) test(ownerFull
     "../../../lib/entitlements": entitlements,
     "../../../lib/release/security": releaseSecurity,
     "../../../lib/workspace/service.ts": workspaceService,
+    "../../../lib/workspace/cash-evidence.ts": cashEvidence,
+    "../../../lib/workspace/cash-series.ts": cashSeries,
     "../api-auth": { requireApiUser: async () => current, readableAnalysis: apiAuth.readableAnalysis },
   });
 

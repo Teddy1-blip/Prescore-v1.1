@@ -20,7 +20,12 @@ export function adaptOneCDocument(document: OneCRecord, context: OneCAdapterCont
     .map(value => normalizeAccountValue(value).value).filter((value): value is string => Boolean(value)));
   // Use the same side-selection rules as normalization. The counterparty's
   // posting date must not move this account's cash to a different day/month.
+  const creditDate = field(document, "ДатаПоступило");
+  const debitDate = field(document, "ДатаСписано");
+  const postingSide = creditDate && !debitDate ? "IN"
+    : debitDate && !creditDate ? "OUT" : undefined;
   const { direction } = determineDirection({
+    postingSide,
     companyInn: normalizeInnValue(context.companyInn).value,
     companyAccounts,
     payerInn: normalizeInnValue(field(document, "ПлательщикИНН", "ИННПлательщика")).value,
@@ -33,6 +38,7 @@ export function adaptOneCDocument(document: OneCRecord, context: OneCAdapterCont
     : direction === "OUT" ? field(document, "ДатаСписано") : "";
   return {
     ...context,
+    postingSide,
     bankDocumentId: field(document, "Номер") || null,
     date: postingDate || documentDate,
     ...(postingDate ? { documentDate } : {}),
