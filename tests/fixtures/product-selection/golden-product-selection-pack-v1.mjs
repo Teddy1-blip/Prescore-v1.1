@@ -60,4 +60,4 @@ export function entries(){const es=[];const c=(productFamily,extra)=>({productFa
  add(59,'Real canonical contract-execution pipeline',{purpose:'CONTRACT_EXECUTION',contract:true},{primaryCandidateProducts:['BANK_GUARANTEE','CREDIT_LINE','TERM_LOAN']});
  add(60,'Current overdue historical zero preserves mechanics',{}, {defect:true,primaryCandidateProducts:wc});es.at(-1).input=defect();
  es.push({caseId:'PRD-RU-DEFECT-001',revision:1,status:'GOLDEN',reviewLevel:'METHODOLOGY_INTENT_REVIEWED',synthetic:true,title:'Permanent current-overdue known-historical-zero chain',input:defect(),expected:{defect:true,primaryCandidateProducts:wc}});return es;}
-export function loadPack(){return {version:PRODUCT_PACK_VERSION,entries:entries(),fingerprints:JSON.parse(readFileSync(new URL('./fingerprints-v1.json',import.meta.url),'utf8'))};}
+export function loadPack(){return {version:PRODUCT_PACK_VERSION,entries:entries(),fingerprints:JSON.parse(readFileSync(new URL('./fingerprints-stage5.json',import.meta.url),'utf8'))};}

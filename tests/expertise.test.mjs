@@ -1,3 +1,4 @@
+import {reviewed} from './fixtures/client-report/stage5-baseline.mjs';
 import {historicalBusinessResult} from './fixtures/historical-bank-inputs.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -13,10 +14,10 @@ import {buildClientReportModel} from '../lib/credit-engine/client-report/adapter
 import {buildExpertise,validateExpertise,canonicalExpertiseContext} from '../lib/credit-engine/expertise/model.ts';
 const {ExpertiseMemo}=await import('../app/dashboard/report-v2/expertise.tsx');
 const {PrintReport}=await import('../app/dashboard/report-v2/print-report.tsx');
-const cases=new Map();const hashes=JSON.parse(fs.readFileSync('tests/fixtures/client-report/analysis-v3-canonical-hashes.json'));
+const cases=new Map();
 for(const {caseId}of businessCatalog()){
  const input=loadBusiness(caseId).input,r=buildCanonicalCreditAnalysis(input),before=JSON.stringify(r),m=publicCanonicalModel(r.model,r);cases.set(caseId.slice(-3),{r,m});
- test(caseId+' expertise deterministic, immutable, unchanged canonical economics',()=>{assert.equal(JSON.stringify(r),before);assert.equal(crypto.createHash('sha256').update(JSON.stringify(historicalBusinessResult(caseId,input))).digest('hex'),hashes[caseId]);assert.deepEqual(m.expertise,buildExpertise(r,m));validateExpertise(r,m,m.expertise);});
+ test(caseId+' expertise deterministic, immutable, unchanged canonical economics',()=>{assert.equal(JSON.stringify(r),before);assert.equal(crypto.createHash('sha256').update(JSON.stringify(historicalBusinessResult(caseId,input))).digest('hex'),reviewed[caseId].historical);assert.deepEqual(m.expertise,buildExpertise(r,m));validateExpertise(r,m,m.expertise);});
  test(caseId+' all statements have upstream lineage and no bank promises',()=>{for(const i of m.expertise.items){assert.ok(i.claimIds.length);assert.ok(i.sourceReferenceIds.length);assert.ok(i.affectedObjects.length);assert.equal(i.asOfDate,r.asOfDate);for(const cid of i.claimIds)assert.ok(r.explainability.claims.some(c=>c.claimId===cid));for(const sid of i.sourceReferenceIds)assert.ok(r.explainability.sourceReferences.some(s=>s.sourceReferenceId===sid));assert.doesNotMatch(JSON.stringify(i),/банк (?:одобрит|откажет|выдаст)|гарантировано|идеальный заёмщик/);}});
  test(caseId+' screen/print expose same expertise statements and unique IDs',()=>{for(const print of [false,true]){const h=renderToStaticMarkup(createElement(ExpertiseMemo,{model:m,print}));for(const i of m.expertise.items)assert.ok(h.includes('id="'+i.id+'"'),i.id);const ids=[...h.matchAll(/\bid="([^"]+)"/g)].map(x=>x[1]);assert.equal(ids.length,new Set(ids).size);assert.ok(!/NaN|undefined|Infinity/.test(h));}const h=renderToStaticMarkup(createElement(PrintReport,{model:m}));assert.ok(h.includes('data-expertise-version="PRESCORE-EXPERTISE-1.0.0"'));assert.match(h,/<details(?=[^>]*class="ex-proof")(?=[^>]*open="")[^>]*>/);});
  test(caseId+' FREE redacts memo, creditor view, structure and AI seam server-side',()=>{const free=buildClientReportModel(r,{entitlement:'FREE'});free.expertise=m.expertise;const projection=publicCanonicalModel(free,r);assert.equal(projection.expertise,undefined);assert.equal(buildExpertise(r,free),undefined);assert.equal(canonicalExpertiseContext(r,free),undefined);assert.equal(renderToStaticMarkup(createElement(ExpertiseMemo,{model:free})), '');});

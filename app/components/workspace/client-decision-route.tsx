@@ -3,6 +3,7 @@
 import type { WorkspaceModelV1 } from "../../../lib/workspace/model";
 import type { PresentationActionV1, PresentationFactorV1 } from "../../../lib/credit-engine/contracts/client-report";
 import { publicText as clientText } from "../../../lib/credit-engine/client-report/copy";
+import {decisionRoute} from '../../../lib/credit-engine/client-report/route';
 import { money } from "./presentation";
 import { orderedNextSource } from "./source-operations";
 
@@ -132,26 +133,15 @@ export function resolveClientDecisionRoute(model: WorkspaceModelV1): ClientDecis
   const capacity = full.canonical.debtCapacity.headlineCapacity.monthlyIncrementalDebtServiceCapacity.prudential;
   const globalStop = report.hero.globalStop || assessment.globalStop.status === "PRESENT" || assessment.status === "NOT_RATABLE_GLOBAL_STOP";
 
-  if (globalStop || readiness.level === "NOT_READY") return preparationDecision(model, globalStop);
-
-  const insufficient = report.hero.cta.target === "data"
-    || readiness.status === "INSUFFICIENT_DATA"
-    || readiness.level === "UNKNOWN"
-    || assessment.status === "INSUFFICIENT_DATA";
-  if (insufficient) return missingDataDecision(model);
-
-  const readinessUsable = readiness.status === "ASSESSED" || readiness.status === "PARTIAL";
-  const assessmentUsable = assessment.status === "COMPLETE" || assessment.status === "PARTIAL";
-  const hasFinancingBasis = (typeof capacity === "number" && Number.isFinite(capacity) && capacity > 0)
-    || report.productFit.primary.length > 0;
-  const readyBand = readiness.level === "HIGH" || readiness.level === "MEDIUM";
-
-  if (readyBand && readinessUsable && assessmentUsable && hasFinancingBasis) return readyDecision(model);
-  return preparationDecision(model, false);
+  const code=report.hero.route ?? decisionRoute(report,readiness,assessment,capacity);
+  if(code==='READY_FOR_FINANCING') return readyDecision(model);
+  if(code==='INSUFFICIENT_DATA') return missingDataDecision(model);
+  return preparationDecision(model,globalStop);
 }
 
 export function ClientDecisionRoute({ model, choose }: { model: WorkspaceModelV1; choose: (view: string) => void }) {
   const route = resolveClientDecisionRoute(model);
+  const broker=model.access.role==='ASSIGNED_BROKER';
 
   function openRoute() {
     const url = new URL(window.location.href);
@@ -175,15 +165,7 @@ export function ClientDecisionRoute({ model, choose }: { model: WorkspaceModelV1
     </header>
     <p>{route.summary}</p>
     {route.details.length > 0 && <ul>{route.details.map((detail) => <li key={detail}>{detail}</li>)}</ul>}
-    {route.tasks.length > 0 && <>
-      <h3>Три приоритетных действия</h3>
-      <ol>{route.tasks.map((task) => <li key={task.id}>
-        <b>{clientText(task.title)}</b>
-        <span> — {clientText(task.summary)}</span>
-        <small> Проверка результата: {clientText(task.recheck)}</small>
-      </li>)}</ol>
-    </>}
-    <button className="pc-primary" data-client-route-cta={route.code} onClick={openRoute}>{route.cta.label}</button>
+    <button className="pc-primary" data-client-route-cta={route.code} onClick={broker?()=>choose('analysis'):openRoute}>{broker?'Открыть заключение':route.cta.label}</button>
     <p className="pc-muted">Это маршрут подготовки, а не решение банка и не гарантия одобрения.</p>
   </section>;
 }

@@ -216,3 +216,10 @@ test('a stated quarterly installment stays distinct from the next payment and mo
  assert.equal(p.obligations[0].currentTerms.scheduledPaymentAmount.value,15000);
  assert.equal(p.obligations[0].currentTerms.scheduledPaymentFrequency.value,'Ежеквартально');
 });
+
+test('explicit current duration is separate from the payment history and ambiguous labels',()=>{
+ const report=line=>parseCreditHistoryText(fixture({overdue:'25 000.00 ₽',second:line}),'synthetic-bki.pdf').obligations[0];
+ assert.equal(report('Длительность текущей просрочки: 93 дня').currentDelinquencyDays,93);
+ assert.equal(report('Максимальная длительность просрочки: 93 дня').currentDelinquencyDays,undefined);
+ assert.equal(report('Длительность текущей просрочки: 93 дня\nДлительность текущей просрочки: 5 дней').currentDelinquencyDays,undefined);
+});

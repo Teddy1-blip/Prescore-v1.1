@@ -39,4 +39,4 @@ export function entries(){const es=[];const add=(n,title,input,expected)=>es.pus
  add(40,'Real canonical multi-risk pipeline',fromIndex(40),{level:'LOW'});
  es.push({caseId:'RDY-RU-DEFECT-001',revision:1,title:'Permanent historical-zero overdue regression chain',input:fromIndex('IDX-RU-DEFECT-001'),expected:{invariants:true,level:'MEDIUM',defect:true,required:[{sourceCode:'RISK-BKI-CURRENT-OVERDUE',impact:'REFLECTED_IN_INDEX'}],forbidden:[{sourceCode:'RISK-BKI-HISTORICAL-DELINQUENCY'}]}});
  return es;}
-export function loadReadinessPack(){return {version:READINESS_PACK_VERSION,entries:entries(),fingerprints:JSON.parse(readFileSync(new URL('./fingerprints-v1.json',import.meta.url),'utf8'))};}
+export function loadReadinessPack(){return {version:READINESS_PACK_VERSION,entries:entries(),fingerprints:JSON.parse(readFileSync(new URL('./fingerprints-stage5.json',import.meta.url),'utf8'))};}

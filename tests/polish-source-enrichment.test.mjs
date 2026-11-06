@@ -66,7 +66,13 @@ test('shared overview shows annual and quarterly enrichment without replacing an
  const current=await model(rt,a),html=render(current);
  assert.match(html,/Годовая отчётность/);assert.match(html,/Промежуточная отчётность/);
  assert.match(html,/1[\s\u00a0]*300[\s\u00a0]*000/);assert.match(html,/300[\s\u00a0]*000/);
- assert.equal(render(await model(rt,a,rt.broker)),html);
+ const assigned=await model(rt,a,rt.broker);
+ assert.deepEqual(assigned.full,current.full);
+ const {FinancialSnapshot}=rt.load('app/components/workspace/client-financials.tsx');
+ const snapshot=m=>renderToStaticMarkup(React.createElement(FinancialSnapshot,{model:m,choose:()=>{}}));
+ assert.equal(snapshot(assigned),snapshot(current));
+ assert.ok(html.includes(snapshot(current))&&render(assigned).includes(snapshot(assigned)));
+ assert.match(render(assigned),/Открыть заключение/);
  assert.equal(render(await model(rt,a)),html);
  }finally{await rt.close();}
 });

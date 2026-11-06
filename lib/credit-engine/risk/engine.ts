@@ -19,6 +19,7 @@ export function evaluateRiskFacts(input: { companyInn: string; asOfDate: string;
   const dataset: RiskDataset = { ...input, facts, byCode }, evaluations: RiskRuleEvaluation[] = [], findings: RiskFinding[] = [];
   if (new Set(rules.map(r => r.code)).size !== rules.length) throw Error("DUPLICATE_RISK_RULE");
   for (const r of rules) {
+    if (r.optionalSourceFact && !byCode.has(r.optionalSourceFact)) continue;
     const groups: Array<string | undefined> = r.perObligation ? unique(facts.filter(f => r.requiredFactCodes.includes(f.semanticCode)).flatMap(f => (f.portfolioObligationId ?? f.subjectKey) ? [f.portfolioObligationId ?? f.subjectKey!] : [])) : [undefined];
     if (!groups.length) groups.push(undefined);
     for (const obligationId of groups) {

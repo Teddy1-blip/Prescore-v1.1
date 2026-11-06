@@ -1,4 +1,6 @@
 import {activeFinancialSnapshots, currentFinancialSnapshots, financialSources} from "../financial-analysis/source-selection.ts";
+import {publicReceipt, type DecisionReceipt} from '../explainability/receipts.ts';
+import {activeLegalReceipt} from '../../legal-registry.ts';
 import {safeReason} from './diagnostics.ts';
 import type { AnalysisResult } from '../../prescore.ts';
 import type { CompanyProfileData } from '../../company-profile.ts';
@@ -23,7 +25,7 @@ import { buildActionPlan } from '../action-plan/engine.ts';
 import { buildExplainability } from '../explainability/engine.ts';
 import { buildClientReportModel } from '../client-report/adapter.ts';
 
-export const CANONICAL_WIRING_VERSION = 'PRESCORE-CANONICAL-WIRING-1.0.0';
+export const CANONICAL_WIRING_VERSION = 'PRESCORE-CANONICAL-WIRING-1.1.0';
 export type CanonicalSavedInput = {
   analysis: AnalysisResult;
   companyProfile?: CompanyProfileData;
@@ -49,6 +51,8 @@ export function canonicalAsOf(input: CanonicalSavedInput): string {
     // A saved client declaration is a recorded observation, not a wall-clock refresh.
     // Advancing knowledge does not advance the effective dates of source balances.
     a.financingRequestV1?.receivedAt,
+    ...(a.legalRegistryV1?.history ?? []).map(r => r.informationDate),
+    ...(p?.externalFacts?.receipts ?? []).map(r => r.retrievedAt),
     ...sourcesOf(input).flatMap(s => [s.periodFrom, s.periodTo, s.receivedAt]),
     ...(a.financialStatementsV2 ?? []).map(s => s.period.asOf),
     ...(p?.financialStatementsV2 ?? []).map(s => s.period.asOf)];
@@ -110,11 +114,23 @@ export function buildCanonicalCreditAnalysis(input: CanonicalSavedInput) {
     stage = 'RECOMMENDATIONS'; const recommendationSet = buildRecommendations(products);
     const recommendations = {...products, recommendationSet};
     stage = 'ACTION_PLAN'; const actionPlan = buildActionPlan(recommendations);
-    stage = 'EXPLAINABILITY'; const explainability = buildExplainability({...recommendations, actionPlan});
+    stage = 'EXPLAINABILITY';
+    const receipts=new Map<string,DecisionReceipt>(allSources.map(s=>[s.sourceId,publicReceipt(s)]));
+    for(const r of p?.externalFacts?.receipts ?? []) if(r.retrievedAt && p?.externalFacts?.inn===a.companyInn)
+      receipts.set(r.id,{sourceId:r.id,sourceType:r.provider==='CHECKO'?'CHECKO':'EIS',provider:r.provider,
+        upstream:r.authority,direct:r.direct,receivedAt:r.retrievedAt,informationDate:r.informationDate});
+    const registry=activeLegalReceipt(a);
+    if(registry) receipts.set(registry.id,{sourceId:registry.id,sourceType:'OTHER',provider:'FNS_DIRECT',upstream:'FNS',direct:true,
+      receivedAt:registry.receivedAt,informationDate:registry.informationDate});
+    if(input.financingCase) {
+      const sourceId='case:'+input.financingCase.caseId;
+      receipts.set(sourceId,{sourceId,sourceType:'OTHER',receivedAt:a.financingRequestV1?.receivedAt??input.financingCase.financingPurpose.evidenceAsOf??input.financingCase.asOfDate});
+    }
+    const explainability = buildExplainability({...recommendations, actionPlan, sourceReceipts:[...receipts.values()]});
     const reportInput = {...recommendations, actionPlan, explainability, company: {name: a.companyName, inn: a.companyInn}};
     stage = 'CLIENT_REPORT'; const model = buildClientReportModel(reportInput, {entitlement: 'FULL', mode: 'SAVED_ANALYSIS'});
     return {version: CANONICAL_WIRING_VERSION, analysisId: a.id,
-      inputFingerprint: id('canonical-input', stable({metrics: a.metricsV2, snapshots, portfolio: creditPortfolio, manifest, profile: p, financingCase: input.financingCase, scenarios: input.scenarios})),
+      inputFingerprint: id('canonical-input', stable({asOfDate, integrity: a.integrity, legal: a.legalRegistryV1, bki: a.creditHistory, metrics: a.metricsV2, snapshots: currentSnapshots, portfolio: creditPortfolio, manifest, profile: p, financingCase: input.financingCase, scenarios: input.scenarios})),
       sourceObservations: allSources.map(s => ({sourceId: s.sourceId, sourceType: s.sourceType, status: s.status, periodFrom: s.periodFrom ?? null, periodTo: s.periodTo ?? null, receivedAt: s.receivedAt})),
       financialAnalysis, reconciliation, ...reportInput, model};
   } catch (error) {

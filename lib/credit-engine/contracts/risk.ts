@@ -29,7 +29,7 @@ export type RiskRuleEvaluation = { ruleCode: string; ruleVersion: string; domain
 export type RiskDataset = { companyInn: string; asOfDate: string; facts: RiskFact[]; byCode: Map<string, RiskFact[]>; obligationId?: string };
 export type RiskRuleEvaluationResult = { status: RiskRuleStatus; facts: RiskFact[]; severity?: RiskSeverity; scope?: RiskScope; reasonCodes: string[]; threshold?: RiskThreshold; actualValue?: RiskFact["value"]; unit?: RiskFact["unit"]; warnings?: string[] };
 export type RiskRule = { code: string; version: string; domain: RiskDomain; scope: RiskScope; calibrationClass: RiskCalibrationClass; requiredFactCodes: string[];
-  perObligation?: boolean; thresholds: RiskThreshold[]; evaluate: (dataset: RiskDataset) => RiskRuleEvaluationResult };
+  perObligation?: boolean; optionalSourceFact?: string; thresholds: RiskThreshold[]; evaluate: (dataset: RiskDataset) => RiskRuleEvaluationResult };
 export type RiskAssessmentSummary = { evaluatedRuleCount: number; triggeredFindingCount: number; globalStopCount: number; creditRiskCount: number; dataReviewCount: number; informationCount: number;
   criticalCount: number; highCount: number; mediumCount: number; lowCount: number;
   globalStopStatus: "TRIGGERED" | "NOT_TRIGGERED_WITH_AVAILABLE_DATA" | "INSUFFICIENT_DATA";

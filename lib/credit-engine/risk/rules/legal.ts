@@ -12,4 +12,10 @@ export const legalRules = [
     return { ...result("TRIGGERED", [amount, ratio], [ratio.value >= .05 ? "ACTIVE_ENFORCEMENT_RATIO_HIGH" : ratio.value >= .01 ? "ACTIVE_ENFORCEMENT_RATIO_MEDIUM" : "ACTIVE_ENFORCEMENT_MATERIAL"]), severity: ratio.value >= .05 ? "HIGH" : ratio.value >= .01 ? "MEDIUM" : "LOW", scope: ratio.value < .01 ? "INFORMATION" : "CREDIT_RISK", actualValue: ratio.value, unit: "RATIO", threshold: t("GTE", ratio.value >= .05 ? .05 : ratio.value >= .01 ? .01 : 0) };
   }),
   ...[["RISK-LEGAL-LITIGATION", "LEGAL_DEFENDANT_CASES", "INFORMATION", "LITIGATION_REQUIRES_REVIEW"], ["RISK-DATA-BANKRUPTCY-MESSAGES", "LEGAL_REGISTRY_REVIEW", "DATA_REVIEW", "BANKRUPTCY_STATUS_REQUIRES_REVIEW"], ["RISK-LEGAL-INSPECTION-OBSERVATION", "LEGAL_VIOLATIONS_REPORTED", "INFORMATION", "INSPECTION_VIOLATIONS_REPORTED"]].map(([code, fact, scope, reason]) => numeric({ code, domain: "LEGAL", scope: scope as "DATA_REVIEW" | "INFORMATION", calibrationClass: "FACTUAL", requiredFactCodes: [fact], thresholds: [t("GT", 0, "SOURCE_REPORTED_OBSERVATION")] }, n => n > 0 ? { severity: scope === "DATA_REVIEW" ? "MEDIUM" : "INFO", reason, threshold: t("GT", 0, "SOURCE_REPORTED_OBSERVATION") } : null)),
+  rule({code: 'RISK-LEGAL-RNP-ACTIVE', domain: 'LEGAL', scope: 'GLOBAL_STOP', calibrationClass: 'FACTUAL',
+    perObligation: true, optionalSourceFact: 'LEGAL_RNP_CURRENT_RECORD', requiredFactCodes: ['LEGAL_RNP_CURRENT_RECORD']}, d => {
+    const f = get(d, 'LEGAL_RNP_CURRENT_RECORD');
+    if (!usable(f) || f.confidence !== 'HIGH') return missing([f]);
+    return f.value === true ? {...result('TRIGGERED', [f], ['PRESCORE_CURRENT_RNP_CONSTRAINT']), severity: 'CRITICAL'} : result('NOT_TRIGGERED', [f]);
+  }),
 ];

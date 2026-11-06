@@ -44,4 +44,4 @@ export function entries(){const es=[];const add=(n,title,input,expected)=>es.pus
  add(44,'Input reordering byte identical',reorder(fromIndex(40)),{relative:[{other:'CAS-RU-045',field:'output',operator:'EQ'}]});
  add(45,'Real canonical multi-risk pipeline',fromIndex(40),{status:'PARTIAL',requiredDrivers:[{riskCode:'RISK-FIN-REVENUE-DECLINE'},{riskCode:'RISK-CF-CUSTOMER-CONCENTRATION'}]});
  es.push({caseId:'CAS-RU-DEFECT-001',revision:1,title:'Permanent five-block historical-zero overdue chain',input:fromIndex('IDX-RU-DEFECT-001'),expected:{invariants:true,defect:true,requiredDrivers:[{riskCode:'RISK-BKI-CURRENT-OVERDUE',severity:'MEDIUM'}],forbiddenDrivers:[{riskCode:'RISK-BKI-HISTORICAL-DELINQUENCY'}]}});return es;}
-export function loadAssessmentPack(){return {version:ASSESSMENT_PACK_VERSION,entries:entries(),fingerprints:JSON.parse(readFileSync(new URL('./fingerprints-v1.json',import.meta.url),'utf8'))};}
+export function loadAssessmentPack(){return {version:ASSESSMENT_PACK_VERSION,entries:entries(),fingerprints:JSON.parse(readFileSync(new URL('./fingerprints-stage5.json',import.meta.url),'utf8'))};}

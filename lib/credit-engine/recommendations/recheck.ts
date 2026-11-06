@@ -1,5 +1,6 @@
 // Explicit client-facing interpretation of the object checked on a later rerun.
 export const RISK_RECHECK_RU:Record<string,string>={
+ 'RISK-LEGAL-RNP-ACTIVE':'Проверит запись соответствующего реестра ЕИС, основание и дату исключения.',
  'RISK-FIN-EQUITY-NON-POSITIVE':'Сверит подтвержденный собственный капитал и сохранение признака неположительного капитала.',
  'RISK-FIN-NET-ASSETS-NEGATIVE':'Проверит отдельно заявленные чистые активы на новой отчетной дате; капитал не заменяет этот показатель.',
  'RISK-FIN-NET-ASSETS-PROXY-NEGATIVE':'Проверит появление подтвержденных чистых активов вместо прокси и сохранит различие источников.',

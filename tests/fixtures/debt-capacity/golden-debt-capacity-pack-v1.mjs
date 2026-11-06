@@ -56,4 +56,4 @@ export function entries(){const es=[];const add=(n,title,input,expected)=>es.pus
  add(53,'Reordered inputs byte identical',reorder(baseline({creditPortfolio:portfolio({payment:100000})})),{relative:[{other:'CAP-RU-054',field:'output',operator:'EQ'}]});
  add(54,'Canonical source, multi-risk and portfolio pipeline',baseline({creditPortfolio:portfolio({payment:100000})}),{schedule:100000,prudential:100000});
  es.push({caseId:'CAP-RU-DEFECT-001',revision:1,title:'Permanent historical-zero current-overdue chain',input:defect(),expected:{invariants:true,defect:true,prudential:200000,observed:0}});return es;}
-export function loadCapacityPack(){return {version:CAPACITY_PACK_VERSION,entries:historicalCapacityEntries(entries()),fingerprints:JSON.parse(readFileSync(new URL('./fingerprints-v1.json',import.meta.url),'utf8'))};}
+export function loadCapacityPack(){return {version:CAPACITY_PACK_VERSION,entries:historicalCapacityEntries(entries()),fingerprints:JSON.parse(readFileSync(new URL('./fingerprints-stage5.json',import.meta.url),'utf8'))};}

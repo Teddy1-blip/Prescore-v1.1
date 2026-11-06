@@ -31,7 +31,9 @@ test('complete CLIENT renders current business corpus with field coverage and im
   for(const i of r.expertise?.items??[])for(const text of [i.title,i.fact,i.interpretation,i.impact,i.limitation,...i.closure])assert.ok(html.includes(escape(text)),'expertise missing '+i.id);
   for(const period of r.financialAnalysis?.history??[])for(const g of period.groups)for(const m of g.metrics)assert.ok(html.includes(escape(m.label)));
   for(const f of r.reconciliation?.findings??[])assert.ok(html.includes(escape(f.title)));
-  const allowed=new Set(['hero','index','readiness','capacity','primaryFactors','contextHighlights','productFit','recommendations','actionPlan','dataQuality','detailedSections','sources','limitations','expertise','analysisV3','financialAnalysis','reconciliation','visual','meta','company','printMeta','technical']);
+  const sharedHome=render(rt.load('app/components/workspace/client-insights.tsx').ExecutiveOverview,model);
+  for(const finding of r.externalSummary??[]) assert.ok(sharedHome.includes(escape(finding.label))&&sharedHome.includes(escape(finding.value)));
+  const allowed=new Set(['externalSummary','hero','index','readiness','capacity','primaryFactors','contextHighlights','productFit','recommendations','actionPlan','dataQuality','detailedSections','sources','limitations','expertise','analysisV3','financialAnalysis','reconciliation','visual','meta','company','printMeta','technical']);
   assert.deepEqual(Object.keys(r).filter(k=>!allowed.has(k)),[],'new report field needs presentation classification');
  });
  await t.test('A → B → A rendering retains no preceding model',()=>{const a=workspace(loadBusiness('CL-RU-BUS-001').input),b=workspace(loadBusiness('CL-RU-BUS-002').input);a.basic.analysis.company.name='COMPANY_A_SENTINEL';b.basic.analysis.company.name='COMPANY_B_SENTINEL';const first=render(ClientOverview,a),second=render(ClientOverview,b),again=render(ClientOverview,a);assert.equal(first,again);assert.ok(!second.includes('COMPANY_A_SENTINEL'));assert.ok(second.includes('COMPANY_B_SENTINEL'));});

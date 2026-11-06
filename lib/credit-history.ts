@@ -29,6 +29,7 @@ export type CreditObligation = {
   annualRate: number | null;
   rateLabel: string;
   overdueAmount: number | null;
+  currentDelinquencyDays?: number;
   maxDelinquencyDays: number | null;
   fieldProvenance?: Record<string, { origin: "REPORTED" | "PARSER_DEFAULT" | "ESTIMATED" | "CONFLICTED"; value: number | null; reference: string }>;
   paymentQuality: DebtServiceQuality;
@@ -185,6 +186,11 @@ function sbServicingColumns(block: string) {
     nextPayment:nextDate && cells.length >= 3 ? sbServicingAmount(cells[cells.length-2]) : null};
 }
 
+// Match a labelled current duration within this obligation only.
+function currentDuration(block: string) {
+  const matches = [...block.matchAll(/^[ \t]*(?:длительность|продолжительность) текущей просрочки[ \t]*:[ \t]*(\d{1,5})(?:[ \t]+(?:день|дня|дней))?[ \t]*$/gimu)];
+  return matches.length === 1 ? {currentDelinquencyDays: Number(matches[0][1])} : {};
+}
 function maxDelinquencyFromSbBlock(block: string) {
   const history = block.split("Своевременность платежей по договору")[1]?.split(/Уникальный идентификатор договора|Сведения об изменениях|Обеспечение/)[0] ?? "";
   const rows = [...history.matchAll(/^\s*20\d{2}\s+(.+)$/gm)].map((match) => match[1]);
@@ -231,6 +237,7 @@ function parseSbObligation(block: string, index: number): CreditObligation | nul
   const nextPayment = columns ? columns.nextPayment : sbServicingAmount(nextField);
   const nextDate = nextDateField.match(/^(\d{2}\.\d{2}\.\d{4})(?:\s|$)/)?.[1]
     ?? nextField.match(/(?:^|\n)\s*(?:до\s+)?(\d{2}\.\d{2}\.\d{4})(?:\s|$)/i)?.[1] ?? "";
+  const current = currentDuration(block);
   const maxDays = maxDelinquencyFromSbBlock(block);
   const originalAmount = numberValue(conditions?.[1]);
   const isLine = /линия|карта|овердрафт/i.test(product);
@@ -255,8 +262,10 @@ function parseSbObligation(block: string, index: number): CreditObligation | nul
     annualRate: rate,
     rateLabel: rate === null ? "Ставка не указана" : "Полная стоимость кредита",
     overdueAmount: overdue,
+    ...current,
     maxDelinquencyDays: maxDays,
     fieldProvenance: {
+      ...(current.currentDelinquencyDays !== undefined ? {currentDelinquencyDays:{origin:"REPORTED" as const,value:current.currentDelinquencyDays,reference:"Explicit current arrears duration on this obligation"}} : {}),
       ...(maxDays === 0 ? {maxDelinquencyDays:{origin:"REPORTED" as const,value:0,reference:"Explicit bureau payment-history codes/count"}} : {}),
       ...(overdue === 0 ? {overdueAmount:{origin:"REPORTED" as const,value:0,reference:"SB Текущая просрочка: explicit absence or zero"}} : {}),
       ...(nextPayment === 0 ? {nextPaymentAmount:{origin:"REPORTED" as const,value:0,reference:"SB next-payment field: explicit zero"}} : {}),
@@ -354,6 +363,7 @@ function parseNbkiObligation(block: string, index: number): CreditObligation | n
   const suretySection = block.match(/Поручительства[\s\S]*?(?=Банковские гарантии)/i)?.[0] ?? "";
   const suretyAmount = numberValue(suretySection.match(/Сумма:\s*([^\n]+)/i)?.[1]);
   const product = guaranteeAmount !== null ? "Банковская гарантия" : suretyAmount !== null ? "Поручительство" : kind || "Кредитное обязательство";
+  const current = currentDuration(block);
   const maxDays = maxDelinquencyFromNbki(block);
   const regular = numberValue(nbkiField(block, "Плановый плат[её]ж:"));
   const frequency = nbkiField(block,"Периодичность платежей:").match(/^(ежемесячно|ежеквартально|еженедельно|ежегодно)$/i)?.[1];
@@ -379,8 +389,10 @@ function parseNbkiObligation(block: string, index: number): CreditObligation | n
     annualRate: rate,
     rateLabel: rate === null ? "Ставка не указана" : "Полная стоимость",
     overdueAmount: overdue,
+    ...current,
     maxDelinquencyDays: maxDays,
     fieldProvenance: {
+      ...(current.currentDelinquencyDays !== undefined ? {currentDelinquencyDays:{origin:"REPORTED" as const,value:current.currentDelinquencyDays,reference:"Explicit current arrears duration on this obligation"}} : {}),
       ...(maxDays === 0 ? {maxDelinquencyDays:{origin:"REPORTED" as const,value:0,reference:"Explicit bureau payment-history codes/count"}} : {}),
       ...(overdue === 0 ? {overdueAmount:{origin:"REPORTED" as const,value:0,reference:"NBKI Просрочено: 0"}} : {}),
       ...(debt === 0 ? {principalOutstanding:{origin:"REPORTED" as const,value:0,reference:"NBKI Задолж-сть: 0"},totalOutstanding:{origin:"REPORTED" as const,value:0,reference:"NBKI Задолж-сть: 0"}} : {}),

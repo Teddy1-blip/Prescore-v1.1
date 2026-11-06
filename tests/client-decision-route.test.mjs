@@ -13,6 +13,7 @@ function readyModel(){
  const value=structuredClone(model);
  value.full.report.hero.globalStop=false;
  value.full.report.hero.cta={label:'Посмотреть полный отчет',target:'full'};
+ delete value.full.report.hero.route;
  value.full.canonical.prescoreIndex.value=850;
  value.full.canonical.financingReadiness.status='ASSESSED';
  value.full.canonical.financingReadiness.level='HIGH';

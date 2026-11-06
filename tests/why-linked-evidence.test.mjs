@@ -19,6 +19,8 @@ function whyComponent(){
   if(id.endsWith('/workspace/why-evidence'))return require('../lib/workspace/why-evidence.ts');
   if(id==='./presentation')return {date:s=>s?s.slice(0,10).split('-').reverse().join('.'):'Период не указан'};
   if(id==='./credit-depth')return {sourceLabel:s=>s==='BANK_STATEMENT'?'Банковские выписки':s,label:s=>s};
+  if(id.endsWith('/explainability/receipts'))return require('../lib/credit-engine/explainability/receipts.ts');
+  if(id==='./client-decision-route'||id==='./explanation-library')return {};
   if(id==='./client-financials'||id==='./banking-ledger'||id==='./cash-movement')return {};
   throw Error('UNEXPECTED_IMPORT:'+id);
  });return exports.Why;

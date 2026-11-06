@@ -1,3 +1,4 @@
+import {rnpFacts} from "./rnp.ts";
 import {activeLegalReceipt, legalReceiptCurrent} from "../../../legal-registry.ts";
 import type { EntityLifecycleState, RiskFact, RiskShadowInput } from "../../contracts/risk.ts";
 import { fact, freshness, sourceConfidence, usable, weakest, validDate, RISK_SOURCE_FRESHNESS_DAYS as age } from "../common.ts";
@@ -14,8 +15,10 @@ function profileLegalFacts(input: RiskShadowInput, financial: RiskFact[]): RiskF
   const date = p.fetchedAt?.slice(0, 10), sources = p.sourceManifest?.external ?? [];
   const source = (endpoint: string) => sources.find(s => s.rawReference?.startsWith(`external:/${endpoint}:`) || s.sourceId.startsWith(`external:${endpoint}:`));
   const read = (code: string, value: RiskFact["value"], endpoint: string, details?: string): RiskFact => {
-    const s = source(endpoint), valid = (s?.status === "READY" || s?.status === "EMPTY" && !!p.externalFacts) && s.companyInn === a.companyInn && freshness(date, asOfDate, age.legal) && !p.failedMethods.includes(endpoint);
-    const f = fact(a.companyInn, code, "LEGAL", valid ? value : null, { confidence: s?.confidence == null && valid ? "HIGH" : sourceConfidence(s?.confidence), sourceTypes: s ? [s.sourceType] : [], sourceIds: s ? [s.sourceId] : [], period: { from: null, to: null, asOf: date ?? null }, calculationBasis: details ?? `Current canonical company profile /${endpoint}; no legacy signals`, warnings: valid ? [] : ["LEGAL_SOURCE_NOT_CURRENT_OR_AVAILABLE"] });
+    const s = source(endpoint), receipt=p.externalFacts?.receipts.find(r=>r.id===s?.sourceId);
+    const informationDate = ["company","entrepreneur"].includes(endpoint) ? p.externalFacts?.identity.informationDate : receipt?.informationDate;
+    const valid = (!p.externalFacts || !!receipt && receipt.freshness!=="STALE" && freshness(receipt.retrievedAt?.slice(0,10),asOfDate,age.legal) && (!informationDate || freshness(informationDate,asOfDate,age.legal))) && (s?.status === "READY" || s?.status === "EMPTY" && !!p.externalFacts) && s.companyInn === a.companyInn && freshness(date, asOfDate, age.legal) && !(p.failedMethods ?? []).includes(endpoint);
+    const f = fact(a.companyInn, code, "LEGAL", valid ? value : null, { confidence: s?.confidence == null && valid ? "HIGH" : sourceConfidence(s?.confidence), sourceTypes: s ? [s.sourceType] : [], sourceIds: s ? [s.sourceId] : [], period: { from: null, to: null, asOf: informationDate ?? receipt?.retrievedAt?.slice(0,10) ?? date ?? null }, calculationBasis: details ?? `Current canonical company profile /${endpoint}; no legacy signals`, warnings: valid ? [] : ["LEGAL_SOURCE_NOT_CURRENT_OR_AVAILABLE"] });
     f.evidence = f.evidence.map(e => ({ ...e, rawReference: s?.rawReference })); return f;
   };
   const facts=p.externalFacts, base=p.inn.length===12?"entrepreneur":"company";
@@ -30,7 +33,17 @@ function profileLegalFacts(input: RiskShadowInput, financial: RiskFact[]): RiskF
   out.push(fact(a.companyInn, "LEGAL_ENFORCEMENT_REVENUE_RATIO", "LEGAL", ratio, { unit: "RATIO", origin: "DERIVED", confidence: weakest(enforcement.confidence, revenue?.confidence ?? "UNKNOWN"), period: enforcement.period, sourceTypes: [...enforcement.sourceTypes, ...(revenue?.sourceTypes ?? [])], sourceIds: [...enforcement.sourceIds, ...(revenue?.sourceIds ?? [])], evidence: [...enforcement.evidence, ...(revenue?.evidence ?? [])], calculationBasis: "Current active enforcement amount / latest applicable annual accounting revenue; annual flow scaling only, never debt equivalence" }));
   out.push(read("LEGAL_DEFENDANT_CASES", !covered("legal-cases") || facts?.cases.some(e=>!e.date||e.role==="UNKNOWN") ? null : p.legalCaseItems?.filter(e => e.role === "DEFENDANT" && e.date.slice(0, 10) <= asOfDate).length ?? null, "legal-cases", `Reported defendant claims, not established debt; ${p.legalCaseItems?.map(e => `${e.number}@${e.date}`).join(", ") ?? "unavailable"}`));
   out.push(read("LEGAL_REGISTRY_REVIEW", !covered("fedresurs") || !covered("bankruptcy-messages") ? null : p.legal.bankruptcyMessages > 0 ? Math.max(p.legal.bankruptcyMessages, p.registryMessages?.filter(m => m.date.slice(0, 10) <= asOfDate && (m.classification !== "INFORMATIONAL" || /банкрот/i.test(m.title))).length ?? 0) : p.registryMessages?.filter(m => m.date.slice(0, 10) <= asOfDate && (m.classification !== "INFORMATIONAL" || /банкрот/i.test(m.title))).length ?? null, source("fedresurs") ? "fedresurs" : "bankruptcy-messages", `Registry messages do not prove active bankruptcy; ${p.registryMessages?.map(m => `${m.sourceId}@${m.date}: ${m.title}`).join("; ") ?? "aggregate message count only"}`));
+  if(facts){
+    const fed=out.at(-1)!;
+    const messages=read("LEGAL_REGISTRY_REVIEW",fed.value,"bankruptcy-messages",fed.calculationBasis);
+    out[out.length-1]=fact(a.companyInn,"LEGAL_REGISTRY_REVIEW","LEGAL",usable(fed)&&usable(messages)?fed.value:null,{
+      unit:"COUNT",period:fed.period,confidence:weakest(fed.confidence,messages.confidence),
+      sourceTypes:[...new Set([...fed.sourceTypes,...messages.sourceTypes])],sourceIds:[...new Set([...fed.sourceIds,...messages.sourceIds])],
+      evidence:[...fed.evidence,...messages.evidence],calculationBasis:fed.calculationBasis,warnings:[...new Set([...fed.warnings,...messages.warnings])]
+    });
+  }
   out.push(read("LEGAL_VIOLATIONS_REPORTED", !covered("inspections") || facts?.inspections.some(e=>!e.date||!e.violations) ? null : p.inspectionItems?.filter(e => e.date.slice(0, 10) <= asOfDate && e.violations.trim() && !/^(нет|не выявлено|отсутствуют)$/i.test(e.violations.trim())).length ?? null, "inspections"));
+  if (facts) out.push(...rnpFacts(facts, a.companyInn, asOfDate));
   return out;
 }
 

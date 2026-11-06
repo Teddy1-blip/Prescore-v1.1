@@ -8,6 +8,9 @@ import {publicText as clientText} from '../../../lib/credit-engine/client-report
 import {sourceLabel,sourceState,label,PortfolioSnapshot} from './credit-depth';
 import {FinancialSnapshot} from './client-financials';
 import {CashMovement, cashMoney} from './cash-movement';
+import {ClientDecisionRoute} from './client-decision-route';
+import {ExplanationLibrary} from './explanation-library';
+import {receiptLabel} from '../../../lib/credit-engine/explainability/receipts';
 import {BankingSnapshot} from './banking-ledger';
 export function Panel({title,action,children,id}:{title:string;action?:ReactNode;children:ReactNode;id?:string}){return <section className="pc-panel" id={id}><header><h2>{title}</h2>{action}</header>{children}</section>;}
 export function Why({model,ids}:{model:WorkspaceModelV1;ids:string[]}){
@@ -20,7 +23,7 @@ export function Why({model,ids}:{model:WorkspaceModelV1;ids:string[]}){
    <ul>{whyBindings(c).map((v,i)=><li key={i}>{whyBindingText(v)}</li>)}</ul>
    {c.warnings.length>0&&<p>Ограничения исходных данных: {c.warnings.map(clientText).join('; ')}</p>}
    {missingLinked&&<p>Связанное основание этого ограничения отсутствует в текущем отчёте; конкретный фактор и его значения не восстановлены.</p>}
-   {!linked&&e&&whySources(e,c).map(s=><p key={s.sourceReferenceId} data-source-ref={s.sourceReferenceId}><b>{sourceLabel(s.sourceKind)}</b><br/>{whySourceDates(s)}<br/><small>Достоверность источника: {label(s.confidence)}</small></p>)}
+   {!linked&&e&&whySources(e,c).map(s=><p key={s.sourceReferenceId} data-source-ref={s.sourceReferenceId}><b>{sourceLabel(s.sourceKind)}</b><br/>{whySourceDates(s)}{s.receipts?.map(r=><small key={r.sourceId}> · {receiptLabel(r)||sourceLabel(r.sourceType)} · получено {date(r.receivedAt?.slice(0,10))}{r.informationDate?' · сведения на '+date(r.informationDate):''}</small>)}<br/><small>Достоверность источника: {label(s.confidence)}</small></p>)}
   </section>):<p>Подробные основания этого вывода в текущей версии не раскрыты. Проверьте комплект документов.</p>}
  </dialog></>;
 }
@@ -38,11 +41,11 @@ export function CashTrend({model,compact=false}:{model:WorkspaceModelV1;compact?
  </>:<p>Для помесячного графика недостаточно данных. Добавьте выписку с датами операций.</p>}</div>;
 }
 export function SourceSummary({model,choose}:{model:WorkspaceModelV1;choose?:(v:string)=>void}){return <div className="pc-source-list">{['BANK_STATEMENTS','FINANCIAL_STATEMENTS','QUARTERLY_REPORT','CREDIT_HISTORY','EXTERNAL_SOURCE'].map(key=>{const rows=model.basic.sources.availability.filter(s=>s.source===key);return <div key={key}><span>{sourceLabel(key)}</span><b>{rows.length?[...new Set(rows.map(s=>sourceState(s.status)))].join(', '):'Не добавлен'}</b></div>;})}{choose&&<button className="pc-text-button" onClick={()=>choose('documents')}>Дополнить документы →</button>}</div>;}
-export function CreditSummary({model}:{model:WorkspaceModelV1}){
+export function CreditSummary({model,section}:{model:WorkspaceModelV1;section?:"index"|"capacity"}){
  const f=model.full;if(!f)return null;const r=f.report,index=f.canonical.prescoreIndex.value,capacity=f.canonical.debtCapacity.headlineCapacity.monthlyIncrementalDebtServiceCapacity.prudential;
  const ready=f.canonical.financingReadiness.level!=='UNKNOWN';
  if(index===null&&!ready&&capacity===null)return null;
- return <><div className="pc-metrics">{index!==null&&<section><span>Prescore Index</span><strong data-credit-index>{index}<small> / 1000</small></strong><p>{r.index.status} · {r.index.confidence}</p></section>}{ready&&<section><span>Готовность к финансированию</span><strong data-credit-readiness>{r.readiness.level}</strong><p>{r.readiness.confidence}</p></section>}{capacity!==null&&<section><span>Дополнительный платёж / месяц</span><strong data-prudential-capacity>{money(capacity)}</strong><p>Осторожная оценка · {r.capacity.status}</p></section>}</div><p className="pc-dimensions">Индекс характеризует финансовый профиль. Готовность учитывает ограничения и документы. Дополнительный платёж — способность обслуживать долг, а не одобренная сумма кредита.</p></>;
+ return <><div className="pc-metrics">{section!=="capacity"&&index!==null&&<section><span>Prescore Index</span><strong data-credit-index>{index}<small> / 1000</small></strong><p>{r.index.status} · {r.index.confidence}</p></section>}{section!=="capacity"&&ready&&<section><span>Готовность к финансированию</span><strong data-credit-readiness>{r.readiness.level}</strong><p>{r.readiness.confidence}</p></section>}{section!=="index"&&capacity!==null&&<section><span>Дополнительный платёж / месяц</span><strong data-prudential-capacity>{money(capacity)}</strong><p>Осторожная оценка · {r.capacity.status}</p></section>}</div>{section!=="capacity"&&<p className="pc-dimensions">Индекс характеризует финансовый профиль. Готовность учитывает ограничения и документы. Дополнительный платёж — способность обслуживать долг, а не одобренная сумма кредита.</p>}</>;
 }
 export function AssessmentLimits({model,choose}:{model:WorkspaceModelV1;choose?:(v:string)=>void}){
  const f=model.full;if(!f)return null;
@@ -55,23 +58,36 @@ export function AssessmentLimits({model,choose}:{model:WorkspaceModelV1;choose?:
  const action=bfo?'Добавить бухгалтерскую отчётность':bki?'Добавить кредитную историю':'Проверить основания оценки';
  return <aside className="pc-assessment-limit"><h2>Предварительная оценка</h2><p>Пока не определены: {missing.join(', ')}. Подтверждённые банковские данные показаны в обзоре.</p><p>{reason}</p><p>{bfo?'Отчётность дополнит денежный поток финансовым состоянием компании.':bki?'Кредитный отчёт позволит сопоставить обязательства с наблюдаемыми платежами.':'Уточнение источников позволит перепроверить ограниченные выводы; изменение оценки не гарантируется.'}</p>{choose&&<button className="pc-text-button" onClick={()=>choose(bfo||bki?'documents':'analysis')}>{action} →</button>}</aside>;
 }
-export function ExecutiveOverview({model,choose,retry}:{model:WorkspaceModelV1;choose:(v:string)=>void;retry:()=>void}){
- const r=model.full?.report,b=model.basic.bankingFacts;
+export function ExecutiveOverview({model,choose,retry,children}:{children?:ReactNode;model:WorkspaceModelV1;choose:(v:string)=>void;retry:()=>void}){
+ const r=model.full?.report;
  const all=r?[...r.primaryFactors,...r.contextHighlights,...r.readiness.constraints]:[];
  const risks=all.filter(f=>['critical','attention'].includes(f.status.tone));
  const strengths=all.filter(f=>f.status.tone==='positive');
- const next=r?.recommendations.primary[0]??r?.actionPlan.horizons.flatMap(h=>h.items).find(a=>r.actionPlan.focusIds.includes(a.id));
+ const actions=r?.recommendations.primary.slice(0,3)??[];
+ const broker=model.access.role==='ASSIGNED_BROKER';
+ const detail=(section:string)=> (broker?'/agent?view=dossier&dossierView=analysis&analysisId=':'/dashboard?view=analysis&analysisId=')+encodeURIComponent(model.analysisId)+'&section='+section;
  const hasCredit=model.full&&(model.full.canonical.prescoreIndex.value!==null||model.full.canonical.financingReadiness.level!=='UNKNOWN');
  return <>
-  <div className="pc-page-title"><div><h1>Обзор компании</h1><p>Единый кредитный профиль и следующие шаги</p></div><small>Расчёт: {date(model.basic.analysis.createdAt)}</small></div>
-  <section className="pc-verdict"><span>КРЕДИТНОЕ ЗАКЛЮЧЕНИЕ</span><h2>{hasCredit?r!.hero.headline:'Банковский профиль компании рассчитан'}</h2><p>{hasCredit?r!.hero.summary:'Выписки показывают движение денег, остатки и наблюдаемые платежи. Финансовая отчётность и кредитная история дополняют эти факты оценкой устойчивости и обязательств.'}</p>{r?.hero.globalStop&&<p className="pc-badge critical">Есть критичное ограничение — проверьте его до подачи заявки.</p>}{r&&<button className="pc-text-button" onClick={()=>choose('analysis')}>Открыть анализ Prescore →</button>}</section>
+  <div className="pc-page-title"><h1>Обзор компании</h1><small>Расчёт на {date(r?.meta.asOfDate??model.basic.analysis.createdAt)}</small></div>
+  {r&&(children??<ClientDecisionRoute model={model} choose={choose}/>)}
+  {!hasCredit&&<p>Банковский профиль компании рассчитан</p>}
+  {r&&<><CreditSummary model={model} section="index"/><p>Кредитное заключение · {r.hero.status}</p><Why model={model} ids={model.full!.canonical.explainability.claims.filter(c=>['INDEX_VALUE','READINESS'].includes(c.claimCode)).map(c=>c.claimId)}/></>}
+  {(strengths.length>0||risks.length>0)&&<div className="pc-columns">{strengths.length>0&&<Panel title="Что помогает получить финансирование"><FactorRows model={model} items={strengths} limit={3}/></Panel>}{risks.length>0&&<Panel title="Риски и стоп-факторы"><FactorRows model={model} items={risks} limit={3}/></Panel>}</div>}
   <BankingSnapshot model={model}/>
   <FinancialSnapshot model={model} choose={choose}/><PortfolioSnapshot model={model} choose={choose}/>
-  <CreditSummary model={model}/><AssessmentLimits model={model} choose={choose}/>
+  <Panel title="Денежный поток" action={<button className="pc-text-button" onClick={()=>choose('banking')}>Все финансы →</button>}><CashTrend model={model} compact/></Panel>
+  {r&&<>
+    {r.externalSummary?.length? <Panel title="Правовые сведения"><dl className="pc-definition">{r.externalSummary.map(f=><div key={f.code}><dt>{f.label}</dt><dd>{f.value}<br/><small>{f.source} {date(f.asOf)}</small></dd></div>)}</dl></Panel>:null}
+    <Panel title="Долговая ёмкость"><CreditSummary model={model} section="capacity"/><p>{r.capacity.text}</p><a href={detail('capacity')}>Основания и сценарии расчёта →</a></Panel>
+    <Panel title="Подходящее финансирование" action={<button className="pc-text-button" onClick={()=>choose('financing')}>Все варианты →</button>}>
+      {[...r.productFit.primary,...r.productFit.other].slice(0,3).map(p=><article className="pc-product-brief" key={p.id}><h3>{p.title}</h3><span>{p.fit}</span><p>{p.purpose}</p>{p.missing.length>0&&<p>Требуется уточнить · {p.missing.join(', ')}</p>}<Why model={model} ids={[p.claimId]}/></article>)}
+    </Panel>
+    <Panel title="Что делать сейчас">{actions.map(a=><article key={a.id}><h3>{a.title}</h3><p>{a.summary}</p><p>{a.recheck}</p><Why model={model} ids={[a.claimId]}/></article>)}
+      <a href={detail('plan')}>План на 7 / 30 / 60 дней →</a>
+    </Panel>
+    <Panel title="Ограничения оценки"><AssessmentLimits model={model} choose={broker?undefined:choose}/><FactorRows model={model} items={r.limitations} limit={3}/></Panel>
+    <Panel title="Почему Prescore сделал этот вывод"><details><summary>Показать основания и источники</summary><ExplanationLibrary key={model.analysisId} model={model}/></details></Panel>
+  </>}
   {!r&&<FullAccessNotice model={model} retry={retry}/>}
-  {(strengths.length>0||risks.length>0)&&<div className="pc-columns">{strengths.length>0&&<Panel title="Что помогает получить финансирование"><FactorRows model={model} items={strengths} limit={3}/></Panel>}{risks.length>0&&<Panel title="Риски и стоп-факторы"><FactorRows model={model} items={risks} limit={3}/></Panel>}</div>}
-  <div className="pc-columns pc-wide-left"><Panel title="Денежный поток" action={<button className="pc-text-button" onClick={()=>choose('banking')}>Все финансы →</button>}><CashTrend model={model} compact/></Panel><Panel title="Обязательства" action={<button className="pc-text-button" onClick={()=>choose('obligations')}>Портфель →</button>}><p className="pc-muted">Наблюдаемые платежи за период выписок</p><dl className="pc-definition">{[['Основной долг',b.loanPrincipalPayments],['Проценты',b.interestPayments],['Лизинг',b.leasingPayments],['Неразделённые платежи',b.unsplitDebtPayments]].map(([t,f])=><div key={String(t)}><dt>{String(t)}</dt><dd>{money((f as typeof b.grossInflow).status==='UNKNOWN'?null:(f as typeof b.grossInflow).value)}</dd></div>)}</dl><p className="pc-muted">Отсутствие сведений не подтверждает отсутствие долга.</p></Panel></div>
-  {r&&<div className="pc-columns"><Panel title="Подходящее финансирование" action={<button className="pc-text-button" onClick={()=>choose('financing')}>Все варианты →</button>}>{r.productFit.primary.slice(0,3).map(p=><div className="pc-product-brief" key={p.id}><h3>{p.title}</h3><span>{p.fit}</span><p>{p.purpose}</p></div>)}{!r.productFit.primary.length&&<p>Подбор продукта пока ограничен. Уточните цель и документы; это не отказ в финансировании.</p>}</Panel><Panel title="Что делать сейчас">{next?<><h3>{next.title}</h3><p>{next.summary}</p><button className="pc-text-button" onClick={()=>{const url=new URL(window.location.href);url.searchParams.set('section','plan');window.history.replaceState(null,'',url);choose('analysis');}}>Открыть план действий →</button></>:<p>Для следующего шага уточните цель финансирования и состав источников.</p>}</Panel></div>}
-  <div className="pc-columns"><Panel title="Источники анализа"><p className="pc-muted">{model.basic.sources.completeness===null?'Заполненность банковских данных не определена.':'Заполненность банковских данных: '+new Intl.NumberFormat('ru-RU',{maximumFractionDigits:0}).format(model.basic.sources.completeness)+'%: заполненные поля и покрытие выписок, а не полнота кредитной оценки.'}</p><SourceSummary model={model} choose={choose}/></Panel><Panel title="Заявки" action={<button className="pc-text-button" onClick={()=>choose('applications')}>Управление →</button>}><p>Всего: <b>{model.basic.operations.applications.count??'Не определено'}</b> · В работе: <b>{model.basic.operations.applications.activeCount??'Не определено'}</b></p><p className="pc-muted">Статусы и дальнейшие действия доступны в разделе заявок.</p></Panel></div>
  </>;
 }

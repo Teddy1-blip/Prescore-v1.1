@@ -1,3 +1,4 @@
+import {reviewed as decisionReview} from './fixtures/client-report/stage5-baseline.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
@@ -24,7 +25,8 @@ for (const {caseId} of businessCatalog()) test(caseId+' historical snapshot and 
     assert.deepEqual({...fresh,inputFingerprint:historical.inputFingerprint},historical);
     return;
   }
-  const [hash,ending]=reviewed[caseId];
+  const [,ending]=reviewed[caseId];
+  const hash=decisionReview[caseId].fresh;
   assert.equal(input.analysis.metricsV2.liquidity.endingBalance.value,ending);
   assert.equal(fresh.debtCapacity.liquidityDiagnostics.averageDailyBalance.value,null);
   assert.equal(fresh.debtCapacity.liquidityDiagnostics.minimumDailyBalance.value,null);

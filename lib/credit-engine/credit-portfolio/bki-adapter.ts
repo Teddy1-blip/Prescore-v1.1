@@ -49,6 +49,7 @@ export function adaptUploadedBki(report: CreditHistoryReport, context: UploadedB
       nextPaymentAmount: o.nextPaymentAmount, nextPaymentDate: validDate(o.nextPaymentDate) ? o.nextPaymentDate : null, annualRate: o.annualRate,
       openedAt: hints.openedAt ?? null, maturityDate: !["BANK_GUARANTEE", "GUARANTORSHIP"].includes(type) && validDate(o.scheduledCloseAt) ? o.scheduledCloseAt : null,
       guaranteeExpiry: ["BANK_GUARANTEE", "GUARANTORSHIP"].includes(type) && validDate(o.scheduledCloseAt) ? o.scheduledCloseAt : null,
+      ...(Number.isInteger(o.currentDelinquencyDays) && o.currentDelinquencyDays! >= 0 ? {currentDelinquencyDays: o.currentDelinquencyDays!} : {}),
       overdueAmount: o.overdueAmount, delinquencyDays: o.maxDelinquencyDays, collateralDescription: o.collateral, guaranteeAmount: o.guaranteeAmount, contingentExposure: guarantorship ? o.guaranteeAmount : null };
     const canonical = Object.fromEntries(Object.entries(fields).map(([field, rawValue]) => {
       const sourceField = field === "delinquencyDays" ? "maxDelinquencyDays" : field;

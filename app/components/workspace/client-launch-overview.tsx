@@ -149,7 +149,8 @@ function FreeOverview({model, retry}: Pick<Props, "model" | "retry">) {
 export function ClientOverview(props: Props) {
   if (!props.model.full) return <FreeOverview model={props.model} retry={props.retry}/>;
   return <>
-    <ExecutiveOverview {...props}/>
-    <ClientDecisionRoute model={props.model} choose={props.choose}/>
+    <ExecutiveOverview {...props}>
+      <ClientDecisionRoute model={props.model} choose={props.choose}/>
+    </ExecutiveOverview>
   </>;
 }

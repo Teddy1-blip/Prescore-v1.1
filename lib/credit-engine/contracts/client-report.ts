@@ -12,7 +12,7 @@ import type {CreditPortfolioV1} from './credit-portfolio.ts';
 export const CLIENT_REPORT_VERSION='PRESCORE-CLIENT-REPORT-1.0.0-SHADOW';
 export const CLIENT_REPORT_POLICY_VERSION='PRESCORE-CLIENT-REPORT-POLICY-1.0.0';
 export const CLIENT_REPORT_METHODOLOGY='PRESCORE_CLIENT_PRESENTATION_V1';
-export type ClientReportInputV1={explainability:ExplainabilityV1;actionPlan:ActionPlanV1;recommendationSet:RecommendationSetV1;productSelection:ProductSelectionV1;debtCapacity:DebtCapacityV1;creditAssessment:CreditAssessmentV1;financingReadiness:FinancingReadinessV1;prescoreIndex:PrescoreIndexV1;asOfDate:string;company?:{name:string;inn:string};creditPortfolio?:CreditPortfolioV1};
+export type ClientReportInputV1={riskAssessment?:import("./risk.ts").RiskAssessmentV1;explainability:ExplainabilityV1;actionPlan:ActionPlanV1;recommendationSet:RecommendationSetV1;productSelection:ProductSelectionV1;debtCapacity:DebtCapacityV1;creditAssessment:CreditAssessmentV1;financingReadiness:FinancingReadinessV1;prescoreIndex:PrescoreIndexV1;asOfDate:string;company?:{name:string;inn:string};creditPortfolio?:CreditPortfolioV1};
 export type PresentationTone='neutral'|'positive'|'attention'|'critical'|'info'|'data';
 export type PresentationStatusV1={label:string;tone:PresentationTone};
 export type PresentationMetricV1={id:string;label:string;value:string|number|boolean|null;display:string;unit:string;claimId:string;bindingCode:string};
@@ -28,6 +28,7 @@ export type ClientReportVisualV1={
  factorActions:Record<string,string[]>;
 };
 export type ClientReportModelV1={
+ externalSummary?:Array<{code:string;label:string;value:string;asOf:string|null;source:string}>;
  financialAnalysis?:import('../client-report/source-detail.ts').PublicFinancialAnalysis|null;
  reconciliation?:import('../client-report/source-detail.ts').PublicReconciliation;
  expertise?:PrescoreExpertiseV1;
@@ -35,7 +36,7 @@ export type ClientReportModelV1={
  visual:ClientReportVisualV1;
  meta:{version:string;policyVersion:string;policyFingerprint:string;methodology:string;mode:'INTERNAL_PREVIEW'|'SAVED_ANALYSIS';entitlement:'FREE'|'FULL';asOfDate:string};
  company:{name:string;inn:string};
- hero:{headline:string;summary:string;confidence:string;status:string;globalStop:boolean;cta:{label:string;target:string}};
+ hero:{route?:import('../client-report/route.ts').DecisionRouteCode;headline:string;summary:string;confidence:string;status:string;globalStop:boolean;cta:{label:string;target:string}};
  index:{value:PresentationMetricV1|null;status:string;confidence:string;components:{id:string;label:string;score:PresentationMetricV1;maximum:PresentationMetricV1}[]};
  readiness:{level:string;text:string;confidence:string;constraints:PresentationFactorV1[]};
  capacity:{headline:PresentationMetricV1|null;text:string;status:string;confidence:string;details:PresentationFactorV1[];disclaimer:string};

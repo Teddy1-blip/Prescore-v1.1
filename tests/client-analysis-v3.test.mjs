@@ -1,3 +1,4 @@
+import {reviewed,economicDigest} from './fixtures/client-report/stage5-baseline.mjs';
 import {historicalBusinessResult} from './fixtures/historical-bank-inputs.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -15,12 +16,13 @@ import {buildCanonicalCreditAnalysis} from '../lib/credit-engine/production/orch
 import {publicCanonicalModel} from '../lib/credit-engine/production/public-model.ts';
 import {analysisV3Presentation} from '../lib/credit-engine/client-report/analysis-v3.ts';
 import {buildClientReportModel} from '../lib/credit-engine/client-report/adapter.ts';
-const hashes=JSON.parse(fs.readFileSync('tests/fixtures/client-report/analysis-v3-canonical-hashes.json','utf8'));
+
 const cases=new Map();
 const render=m=>renderToStaticMarkup(createElement(AnalysisV3,{model:m,labId:'CL-RU-BUS-001'}));
 for(const c of businessCatalog()){
  const input=loadBusiness(c.caseId).input,result=buildCanonicalCreditAnalysis(input),model=publicCanonicalModel(result.model,result);cases.set(c.caseId,{result,model});
- test(c.caseId+' saved staging bank input reproduces the original full canonical golden',()=>assert.equal(crypto.createHash('sha256').update(JSON.stringify(historicalBusinessResult(c.caseId,input))).digest('hex'),hashes[c.caseId]));
+ test(c.caseId+' decision values and priorities reproduce the independently calculated Stage 4 parent',()=>assert.equal(economicDigest(result),reviewed[c.caseId].economics));
+ test(c.caseId+' saved staging bank input reproduces the full Stage 5 canonical golden',()=>assert.equal(crypto.createHash('sha256').update(JSON.stringify(historicalBusinessResult(c.caseId,input))).digest('hex'),reviewed[c.caseId].historical));
  test(c.caseId+' renders real computed model and all internal links resolve',()=>{const h=render(model);assert.ok(h.includes('CLIENT-ANALYSIS-V3'));assert.ok(h.includes(model.company.inn));if(model.index.value?.value!==null&&model.index.value)assert.ok(h.includes(model.index.value.display));const ids=[...h.matchAll(/\bid="([^"]+)"/g)].map(x=>x[1]);assert.equal(new Set(ids).size,ids.length,'duplicate IDs');for(const [,id]of h.matchAll(/href="#([^"]+)"/g))assert.ok(ids.includes(id),'missing anchor '+id);assert.ok(!/NaN|Infinity|undefined/.test(h));});
  test(c.caseId+' projection preserves scenario and portfolio semantics',()=>{const p=model.analysisV3;assert.ok(p);assert.equal(p.scenarios.length,result.debtCapacity.scenarioResults.length);for(let i=0;i<p.scenarios.length;i++){const s=result.debtCapacity.scenarioResults[i];assert.equal(p.scenarios[i].cautious,s.prudentialPrincipalEquivalent);assert.equal(p.scenarios[i].upper,s.maximumPolicyPrincipalEquivalent);assert.equal(p.scenarios[i].rate,s.annualRatePercent);assert.equal(p.scenarios[i].months,s.termMonths);}for(let i=0;i<p.portfolio.length;i++){const v=result.creditPortfolio.obligations[i].currentPosition.principalOutstanding;assert.equal(p.portfolio[i].principal.value,v.value);for(const k of ['knowledge','origin','verification','confidence'])assert.equal(p.portfolio[i].principal[k],v[k]);}assert.doesNotMatch(JSON.stringify(p),/rawValue|rawField|contractNumber|accountNumber|policyFingerprint|20_PERCENT|25_PERCENT/);});
  test(c.caseId+' print uses deduplicated presentation and current source appendix',()=>{const old=publicCanonicalModel(result.model);const withoutExpertise={...model};delete withoutExpertise.expertise;const core=m=>renderToStaticMarkup(createElement(ClientReportShell,{model:m,print:true}));assert.equal(core(withoutExpertise),core(old));const print=renderToStaticMarkup(createElement(PrintReport,{model:withoutExpertise}));assert.ok(print.startsWith(core(printPresentation(old))));assert.ok(print.includes(renderToStaticMarkup(createElement(SourceAppendix,{model:withoutExpertise}))));assert.equal((print.match(/cr-source-appendix/g)??[]).length,1);});

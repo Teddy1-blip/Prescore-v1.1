@@ -1,3 +1,4 @@
+import {reviewed,previousProvenanceCase} from './fixtures/client-report/stage5-baseline.mjs';
 import {historicalBusinessResult} from './fixtures/historical-bank-inputs.mjs';
 /** Exact review of two metadata-only changes, not a blanket golden refresh.
  * Actual bank parser and canonical engines; no provider calls or engine mocks.
@@ -19,7 +20,8 @@ const load=root ? caseId=>buildBusinessInput(root,caseId)
  : (await import('../lib/credit-engine/credit-lab/business-corpus.mjs')).loadBusiness;
 
 function assertReviewedDelta(result,entry){
- const before=digest(result),restored=structuredClone(result),seen=new Set();
+ const current=previousProvenanceCase(result,entry.caseId);
+ const before=digest(current),restored=structuredClone(current),seen=new Set();
  assert.equal(before,entry.reviewedOutputHash,'unexpected complete current output');
  for(const change of entry.changes){
   const path=change.path,key=JSON.stringify(path),last=path.at(-1);
@@ -36,7 +38,7 @@ function assertReviewedDelta(result,entry){
   target[last]=structuredClone(change.before);
  }
  assert.equal(digest(restored),entry.previousOutputHash,'an unreviewed output field changed');
- assert.equal(digest(result),before,'review must not mutate the current result');
+ assert.equal(digest(current),before,'review must not mutate the current result');
  return restored;
 }
 
@@ -48,7 +50,8 @@ for(const entry of audit.entries){
   assertReviewedDelta(historical,entry);
  });
  test(entry.caseId+' entire client report is byte-equivalent to its original baseline',()=>{
-  assert.equal(digest(result.model),entry.unchangedClientReportHash);
+  assert.equal(digest(result.model),reviewed[entry.caseId].model);
+  assert.equal(digest(previousProvenanceCase(historical,entry.caseId).model),entry.unchangedClientReportHash);
  });
  test(entry.caseId+' existing business assertions still pass',()=>{
   const checks=businessAssertions(fixture,result);

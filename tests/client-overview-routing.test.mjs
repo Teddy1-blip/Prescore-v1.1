@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import {assertClientOverviewRouting} from './fixtures/client-overview-contract.mjs';
 const source = fs.readFileSync('app/components/workspace/client-launch-overview.tsx', 'utf8');
 const guard = 'if (!props.model.full) return <FreeOverview model={props.model} retry={props.retry}/>;';
-const executive = '<ExecutiveOverview {...props}/>';
+const executive = '<ExecutiveOverview {...props}>';
 const decision = '<ClientDecisionRoute model={props.model} choose={props.choose}/>';
 function change(from, to) {
  assert.equal(source.split(from).length - 1, 1, 'mutation must change exactly one known source fragment');
@@ -15,8 +15,8 @@ test('real ClientOverview preserves FREE/FULL routing and original props inside 
  assertClientOverviewRouting(source);
 });
 test('routing contract accepts an equivalent container without depending on return spelling', () => {
- const from = `return <>\n    ${executive}\n    ${decision}\n  </>;`;
- const to = `return <section>\n    ${executive}\n    ${decision}\n  </section>;`;
+ const from = `return <>\n    ${executive}\n      ${decision}\n    </ExecutiveOverview>\n  </>;`;
+ const to = `return <section>\n    ${executive}\n      ${decision}\n    </ExecutiveOverview>\n  </section>;`;
  assertClientOverviewRouting(change(from, to));
 });
 for (const [name, from, to] of [

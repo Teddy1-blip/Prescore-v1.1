@@ -62,7 +62,7 @@ test("invalid explicit date rejected",()=>assert.throws(()=>evaluateRiskFacts({c
 test("future adverse fact not used",()=>assert.equal(single("RISK-FIN-EQUITY-NON-POSITIVE",{FIN_EQUITY:-1},{period:{from:null,to:null,asOf:"2027-01-01"}}).findings.length,0));
 test("identical facts deduplicated",()=>assert.equal(run([F("X",1),F("X",1)]).facts.length,1));
 test("conflicting fact ID rejected",()=>assert.throws(()=>run([F("X",1),{...F("X",1),value:2}]),/CONFLICT/));
-for(const r of RISK_RULE_REGISTRY) test(`${r.code} missing inputs audited`,()=>{const p=run([], [r]);assert.equal(p.evaluations.length,1);assert.equal(p.evaluations[0].status,"INSUFFICIENT_DATA");assert.equal(p.findings.length,0);});
+for(const r of RISK_RULE_REGISTRY) test(`${r.code} missing inputs audited`,()=>{const p=run(r.optionalSourceFact?[F(r.optionalSourceFact,null)]:[], [r]);assert.equal(p.evaluations.length,1);assert.equal(p.evaluations[0].status,"INSUFFICIENT_DATA");assert.equal(p.findings.length,0);});
 
 const boundaries = [
  ["RISK-FIN-EQUITY-NON-POSITIVE","FIN_EQUITY",[[-1,"CRITICAL"],[0,"HIGH"],[1,null]]],

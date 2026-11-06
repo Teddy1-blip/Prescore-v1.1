@@ -81,4 +81,4 @@ if(cs.length!==80)throw Error('Original Golden count must be 80, got '+cs.length
 cs.push({caseId:'REC-RU-DEFECT-001',description:'Постоянная цепочка regression: overdue >0, historical max =0 KNOWN, без выдуманных диапазонов дней',synthetic:true,reviewStatus:'GOLDEN',input:defect(),expectations:{required:[req('VERIFY_CURRENT_OVERDUE_BALANCE',{}, {sourceFindingCode:'RISK-BKI-CURRENT-OVERDUE'})],forbidden:['VERIFY_HISTORICAL_DELINQUENCY','MONITOR_SERVICING_AFTER_DELINQUENCY'],maximumPrimary:10}});
 return cs;}
 
-export function loadRecommendationPack(){const cs=buildRecommendationEntries(),hashes=JSON.parse(readFileSync(new URL('./fingerprints-v1.json',import.meta.url),'utf8'));for(const c of cs)if(hashes[c.caseId]!==id('recommendation-golden',canonical(c)))throw Error('RECOMMENDATION_GOLDEN_FINGERPRINT_MISMATCH:'+c.caseId);return cs;}
+export function loadRecommendationPack(){const cs=buildRecommendationEntries(),hashes=JSON.parse(readFileSync(new URL('./fingerprints-stage5.json',import.meta.url),'utf8'));for(const c of cs)if(hashes[c.caseId]!==id('recommendation-golden',canonical(c)))throw Error('RECOMMENDATION_GOLDEN_FINGERPRINT_MISMATCH:'+c.caseId);return cs;}
