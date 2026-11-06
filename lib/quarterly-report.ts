@@ -54,13 +54,13 @@ const labels: Record<keyof QuarterlyFinancialReport["values"], RegExp[]> = {
   revenue: [/^выручка\b/i, /выручка\s*\(нетто\)/i],
   netProfit: [/чистая прибыль/i, /чистый убыток/i, /чистая прибыль.*убыток/i],
   assets: [/^баланс\b.*актив/i, /^итого.*актив/i, /^активы всего/i],
-  nonCurrentAssets: [/внеоборотные активы/i],
+  nonCurrentAssets: [/^внеоборотные активы/i],
   currentAssets: [/оборотные активы/i],
   receivables: [/дебиторская задолженность/i],
   cash: [/денежные средства/i],
   equity: [/капитал и резервы/i, /собственный капитал/i],
   netAssets: [/чистые активы/i],
-  longTermLiabilities: [/долгосрочные обязательства/i],
+  longTermLiabilities: [/^долгосрочные обязательства/i],
   currentLiabilities: [/краткосрочные обязательства/i],
   payables: [/кредиторская задолженность/i],
 };
@@ -104,8 +104,17 @@ function valueAfterCode(lines: string[], code: string) {
   const line = lines[index];
   const codeIndex = line.search(new RegExp(`\\b${code}\\b`));
   const tail = line.slice(Math.max(0, codeIndex + code.length));
-  const sameLine = firstFinancialValue(tail);
-  if (sameLine !== null) return sameLine;
+  if (line.includes("\t") && tail.startsWith("\t")) {
+    const current = tail.split("\t")[1].trim().replace(/^"(.*)"$/, "$1");
+    if (/^[-–—]$/.test(current)) return 0;
+    if (!/^(?:-?\d+(?:[ \u00a0]\d{3})*(?:[.,]\d+)?|\(\s*\d+(?:[ \u00a0]\d{3})*(?:[.,]\d+)?\s*\))$/.test(current)) return null;
+    return parseNumber(current);
+  }
+  if (tail.trim()) {
+    const firstColumn = tail.trim().split(/ {2,}/)[0];
+    if (!standaloneFinancialLine(firstColumn)) return null;
+    return firstFinancialValue(firstColumn);
+  }
   for (let offset = 1; offset <= 2; offset += 1) {
     const nextLine = lines[index + offset] ?? "";
     if (!standaloneFinancialLine(nextLine)) break;
@@ -123,9 +132,19 @@ function valueAfterLabel(lines: string[], patterns: RegExp[], expectedCode?: str
     if (offset > 0 && !standaloneFinancialLine(candidate)) break;
     // Remove only this row's expected standalone code, not an amount such as
     // (1234), nor a code-shaped number in a label-only net-assets disclosure.
+    if (offset === 0 && expectedCode) {
+      // In a simplified form the displayed code can be the largest component.
+      // Its number is never an amount. Only the exact aggregate label establishes equity.
+      const coded = candidate.match(/^(.+?)\s+(1[1-7]\d0|2[1-4]\d0)\s{2,}(.+)$/u);
+      if (coded && coded[2] !== expectedCode) {
+        return expectedCode === "1300" && /^капитал и резервы$/iu.test(coded[1].trim())
+          ? firstFinancialValue(coded[3].trim().split(/\s{2,}/)[0]) : null;
+      }
+    }
     const withoutCode = expectedCode && offset === 0
       ? candidate.replace(new RegExp(`(?:^|\\s)${expectedCode}(?=\\s|$)`), " ")
       : candidate;
+    if (offset === 0 && expectedCode && new RegExp(`(?:^|\\s)${expectedCode}(?=\\s|$)`).test(candidate)) return null;
     const value = firstFinancialValue(withoutCode.replace(/^.*?(?=\(\s*-?\d|-?\d|[-–—])/u, ""));
     if (value !== null) return value;
   }
@@ -167,7 +186,7 @@ export function parseQuarterlyReportText(text: string, fileName: string): Quarte
   const normalized = text.replace(/[\u00a0\u202f\u2009]/g, " ")
     .replace(/[\u2212\ufe63\uff0d][ \t]*(?=\d)|[\u2012\u2013\u2014](?=\d)/g, "-")
     .replace(/\r/g, "");
-  const lines = normalized.split("\n").map((line) => line.replace(/\t/g, "    ").trim()).filter(Boolean);
+  const lines = normalized.split("\n").map((line) => line.trimStart().replace(/[ ]+$/, "")).filter(Boolean);
   const markerCount = ["баланс", "актив", "выруч", "прибыл", "дебитор", "кредитор"].filter((marker) => normalized.toLowerCase().includes(marker)).length;
   if (normalized.replace(/\s/g, "").length < 180 || markerCount < 2) {
     throw new Error("В файле не найден читаемый финансовый текст. PDF, вероятно, является сканом или фотографией. Выгрузите текстовый PDF либо Excel (.xlsx/.csv). OCR в этом модуле не используется.");

@@ -1,4 +1,5 @@
 "use client";
+import {FinancialDynamics} from './financial-dynamics';
 import type {WorkspaceModelV1} from '../../../lib/workspace/model';
 import type {PublicFinancialMetric} from '../../../lib/credit-engine/client-report/source-detail';
 import {FullAccessNotice,date} from './presentation';
@@ -67,6 +68,7 @@ export function FinancialStatements({model}:{model:WorkspaceModelV1}){
    <p>Показатели основаны на бухгалтерской и квартальной отчётности. Денежный поток по выпискам не заменяет бухгалтерскую выручку.</p>
    {!a?.history.length&&<div className="pc-empty-inline"><h3>Отчётность для финансового анализа не обработана</h3><p>Отсутствие показателей не означает нулевую выручку, прибыль или отсутствие активов.</p></div>}
   </Panel>
+  {a&&<FinancialDynamics history={a.history}/>}
   {a?.history.map((p,index)=><section className="pc-panel pc-financial-period" key={p.id}>
    <header><div><h2>{sourceLabel(p.source)}</h2><p>{date(p.period.from)} — {date(p.period.to)} · на {date(p.period.asOf)}</p></div><span className="pc-badge">{p.period.kind==='ANNUAL'?'Годовая':p.period.kind==='INTERIM'?'Промежуточная':'Период не уточнён'}</span></header>
    <div className="pc-quality-grid">

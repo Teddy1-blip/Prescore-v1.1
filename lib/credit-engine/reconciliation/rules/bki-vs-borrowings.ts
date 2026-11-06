@@ -7,7 +7,9 @@ export const bkiBorrowingsRule: ReconciliationRule = { code: "REC-BKI-1", evalua
   const candidates = data.facts.filter(f => f.semanticCode === "TOTAL_BORROWINGS" && !scopeReason(data.companyInn, [f]))
     .map(f => ({ fact: f, gap: gapDays(f.period.asOf, bki.period.asOf) })).filter(p => p.gap !== null)
     .sort((a, b) => a.gap! - b.gap! || a.fact.factId.localeCompare(b.fact.factId));
-  const financial = candidates[0]?.fact, gap = candidates[0]?.gap ?? null;
+  // A nearer blank balance cannot displace a usable dated amount inside the comparison window.
+  const selected = candidates.find(c => c.gap! <= MAX_NEAR_STOCK_GAP_DAYS && known(c.fact)) ?? candidates[0];
+  const financial = selected?.fact, gap = selected?.gap ?? null;
   const scope = scopeReason(data.companyInn, [bki, ...(financial ? [financial] : [])]);
   return [finding("REC-BKI-1", "STOCK_VS_STOCK", [bki], financial ? [financial] : [], scope || (gap !== null && gap > MAX_NEAR_STOCK_GAP_DAYS) ? "NOT_COMPARABLE" : !known(bki) || !known(financial) || gap === null ? "INSUFFICIENT_DATA" : "RELATIONSHIP_OBSERVED",
     scope || gap === null || gap > MAX_NEAR_STOCK_GAP_DAYS ? "NONE" : gap === 0 ? "EXACT_ASOF" : "NEAR_ASOF",

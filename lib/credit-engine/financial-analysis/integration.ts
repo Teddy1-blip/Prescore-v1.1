@@ -28,7 +28,7 @@ export function quarterlyFinancialShadow(report: QuarterlyFinancialReport, sourc
   try {
     const snapshot = adaptFinancialReport(report, source);
     const snapshots = [...existing.filter(s => !(s.sourceType === snapshot.sourceType
-      && s.period.kind === snapshot.period.kind && s.period.from === snapshot.period.from
+      && s.period.kind === snapshot.period.kind && s.period.flowPeriodType === snapshot.period.flowPeriodType && s.period.from === snapshot.period.from
       && s.period.to === snapshot.period.to && s.period.asOf === snapshot.period.asOf)), snapshot];
     const analysis = buildFinancialAnalysis(snapshots);
     return { financialStatementsV2: snapshots, financialAnalysisV2: analysis, financialMetricsComparison: compareFinancialMetrics(analysis, report.ratios, source.sourceType === "BFO" ? "BFO" : "QUARTERLY", snapshot.snapshotId), financialShadowWarnings: [] };

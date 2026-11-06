@@ -125,6 +125,8 @@ export function analysisView(result: AnalysisResult, tier: AnalysisTier) {
   };
   if (tier === "FULL") return { ...result, viewTier: tier, lockedSummary };
 
+  const sourceManifest = result.sourceManifest && {...result.sourceManifest};
+  if (sourceManifest) delete sourceManifest.retiredFinancialUploads;
   const transactions = result.transactions ?? [];
   const metrics = result.metrics;
   return {
@@ -134,7 +136,7 @@ export function analysisView(result: AnalysisResult, tier: AnalysisTier) {
     fileName: result.fileName,
     sourceFiles: result.sourceFiles,
     bankNames: result.bankNames,
-    sourceManifest: result.sourceManifest,
+    sourceManifest,
     integrity: result.integrity,
     screeningResults: result.screeningResults,
     deduplication: result.deduplication,

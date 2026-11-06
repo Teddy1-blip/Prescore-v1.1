@@ -44,7 +44,8 @@ export function adaptUploadedBki(report: CreditHistoryReport, context: UploadedB
       rawReference: s.rawReference, observedAt: asOf, description: `Uploaded bureau obligation: ${field}` });
     const fields: Record<string, string | number | null> = { creditorName: o.creditor, creditorInn: hints.creditorInn ?? null, contractNumber: hints.contractNumber ?? null, contractDate: hints.contractDate ?? null,
       accountNumber: o.accountNumber, productType: type === "UNKNOWN" ? null : type, status: obligationStatus(o.status) === "UNKNOWN" ? null : obligationStatus(o.status), originalAmount: o.originalAmount, creditLimit: o.creditLimit,
-      principalOutstanding: o.outstandingPrincipal, totalOutstanding: o.totalOutstanding, scheduledPaymentAmount: o.monthlyPayment,
+      principalOutstanding: o.outstandingPrincipal, totalOutstanding: o.totalOutstanding, scheduledPaymentAmount: o.contractualPayment ?? o.monthlyPayment,
+      ...(o.paymentFrequency ? {scheduledPaymentFrequency:o.paymentFrequency} : {}),
       nextPaymentAmount: o.nextPaymentAmount, nextPaymentDate: validDate(o.nextPaymentDate) ? o.nextPaymentDate : null, annualRate: o.annualRate,
       openedAt: hints.openedAt ?? null, maturityDate: !["BANK_GUARANTEE", "GUARANTORSHIP"].includes(type) && validDate(o.scheduledCloseAt) ? o.scheduledCloseAt : null,
       guaranteeExpiry: ["BANK_GUARANTEE", "GUARANTORSHIP"].includes(type) && validDate(o.scheduledCloseAt) ? o.scheduledCloseAt : null,

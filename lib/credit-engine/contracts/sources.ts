@@ -128,6 +128,8 @@ export type AnalysisSourceManifest = {
   bfo?: SourceEnvelope;
   /** Active uploaded financial periods; replacement retires only the matching period. */
   financialUploads?: SourceEnvelope[];
+  /** Inactive versions retained for source receipts, never passed to calculation. */
+  retiredFinancialUploads?: {source: SourceEnvelope; replacedBy: string; replacedAt: string}[];
   quarterly?: SourceEnvelope;
   bki?: SourceEnvelope;
   external?: SourceEnvelope[];

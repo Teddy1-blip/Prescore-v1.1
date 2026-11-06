@@ -217,7 +217,10 @@ test("Golden Company V1: statement → Checko → annual BFO → corporate BKI �
     assert.equal(obligation.reportedPrincipal.value, 120_000);
     assert.equal(obligation.reportedPrincipal.asOf, "2026-08-02");
     assert.equal(obligation.principal.value, null, "dated reported balance must not become an invented current balance");
-    assert.equal(obligation.payment.value, 9_000);
+    // The original PDF states only the next payment. It provides no regular schedule.
+    assert.equal(obligation.nextPayment.value, 9_000);
+    assert.equal(obligation.payment.value, null);
+    assert.equal(obligation.paymentFrequency.value, null);
     assert.equal(obligation.overdue.value, 0);
     assert.equal(obligation.overdue.knowledge, "KNOWN");
     assert.equal(sourceOps.buildSourceDelta("BKI", annualModel, bkiModel).next.code, "QUARTERLY");

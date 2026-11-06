@@ -1,0 +1,15 @@
+.section { min-width: 0; }
+.section h2:not(:first-child) { margin-top: 1.8rem; }
+.section h3 { margin: 1rem 0 .5rem; font-size: 1rem; }
+.periods { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,15rem),1fr)); gap:.75rem; }
+.period { min-width:0; border:1px solid #dbe3e8; border-radius:10px; padding:1rem; background:#fff; }
+.period h4,.period dl,.period dd {margin:0}
+.period h4 {color:#20394a;font-size:.94rem}
+.period small {color:#485d68}
+.period dl>div {display:grid;grid-template-columns:1fr auto;gap:.25rem .5rem;margin-top:.8rem;align-items:baseline;}
+.period dt {color:#384d58;font-size:.82rem;overflow-wrap:anywhere;}
+.period dd {font-variant-numeric:tabular-nums;font-weight:600;font-size:.88rem;overflow-wrap:anywhere;}
+.track {height:5px;grid-column:1/-1;background:#e7ecef;border-radius:4px;overflow:hidden;}
+.track i {display:block;height:100%;}
+.primary {background:#18686c}.secondary {background:#5e7a99}.loss {background:#a7443c}
+@media(max-width:450px){.period dl>div{grid-template-columns:1fr}.period{padding:.75rem}}

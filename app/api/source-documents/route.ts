@@ -18,6 +18,7 @@ import { extractDocumentText } from "../../../lib/credit-engine/server/document-
 import { compareCreditPortfolio, type CreditSubjectRelationship } from "../../../lib/credit-history";
 import { analysisForStorage, type AnalysisResult } from "../../../lib/prescore";
 import { analysisView, resolveAnalysisTier } from "../../../lib/entitlements";
+import { financialSources } from "../../../lib/credit-engine/financial-analysis/source-selection";
 import { quarterlyFinancialShadow } from "../../../lib/credit-engine/financial-analysis/integration";
 import { reconciliationForAnalysis } from "../../../lib/credit-engine/reconciliation/integration";
 import { portfolioForAnalysis } from "../../../lib/credit-engine/credit-portfolio/integration";
@@ -101,11 +102,14 @@ export async function POST(request: Request) {
     if(lowerName.endsWith('.xlsx'))validateZipBudget(bytes);if(file.name.length>180)return Response.json({error:'FILENAME_TOO_LONG'},{status:400});
     const contentHash = await sha256Hex(bytes);
     const existingSource = sourceType === "BKI" ? analysis.sourceManifest?.bki : sourceType === "BFO" ? analysis.sourceManifest?.bfo : analysis.sourceManifest?.quarterly;
-    if (existingSource?.contentHash === contentHash || analysis.sourceManifest?.financialUploads?.some(s => s.sourceType === sourceType && s.contentHash === contentHash)) {
-      return Response.json({ error: "Этот исходный файл уже прикреплён к анализу", duplicate: true, source: existingSource }, { status: 409 });
+    if (existingSource?.contentHash === contentHash || analysis.sourceManifest?.financialUploads?.some(s => s.contentHash === contentHash) || analysis.sourceManifest?.retiredFinancialUploads?.some(v => v.source.contentHash === contentHash)) {
+      return Response.json({ error: "Этот исходный файл уже прикреплён к анализу", duplicate: true }, { status: 409 });
     }
     const sourceId = `${sourceType.toLowerCase()}:${contentHash}`;
-    const text = await extractDocumentText(file.name, bytes);
+    let text: string;
+    try { text = await extractDocumentText(file.name, bytes, sourceType === "BKI" ? "bureau" : "financial"); }
+    catch { return Response.json({error:"Не удалось прочитать документ. Проверьте формат и целостность файла."}, {status:400}); }
+    if (!text.trim()) return Response.json({error:"В документе нет читаемого текста. Для скана нужен файл с текстовым слоем."}, {status:400});
     let updated: AnalysisResult;
     let verifiedReport: unknown;
     let verifiedSource: SourceEnvelope;
@@ -127,6 +131,7 @@ export async function POST(request: Request) {
         companyInn: analysis.companyInn,
         fileName: file.name,
         sourceName: report.source,
+        periodTo: report.reportDate || undefined,
         parserVersion: "PRESCORE-BKI-PARSER-1",
         confidence: report.parserConfidence,
         warnings: report.warnings,
@@ -170,12 +175,16 @@ export async function POST(request: Request) {
       const financial = quarterlyFinancialShadow(report, verifiedSource, analysis.financialStatementsV2);
       if (!financial.financialAnalysisV2 || !financial.financialStatementsV2) throw new Error("Не удалось проверить финансовую отчётность. Предыдущие данные сохранены.");
       const retainedIds = new Set(financial.financialStatementsV2.map(s => s.sourceId));
-      const financialUploads = [...(analysis.sourceManifest?.financialUploads ?? []).filter(s => retainedIds.has(s.sourceId)), verifiedSource];
+      const previous = financialSources(analysis.sourceManifest);
+      const financialUploads = [...previous.filter(s => retainedIds.has(s.sourceId)), verifiedSource];
+      const retired = previous.filter(s => s.sourceType === sourceType && !retainedIds.has(s.sourceId));
+      const history = [...(analysis.sourceManifest?.retiredFinancialUploads ?? []),
+        ...retired.map(source => ({source, replacedBy:sourceId, replacedAt:verifiedSource.receivedAt!}))];
       updated = withRefreshedIntegrity({
         ...analysis,
         ...(sourceType === "QUARTERLY" ? { quarterlyReport: report } : {}),
         ...financial,
-        sourceManifest: { ...manifestOf(analysis), [sourceType === "BFO" ? "bfo" : "quarterly"]: verifiedSource, financialUploads },
+        sourceManifest: { ...manifestOf(analysis), [sourceType === "BFO" ? "bfo" : "quarterly"]: verifiedSource, financialUploads, ...(history.length ? {retiredFinancialUploads:history} : {}) },
       });
       verifiedReport = report;
     }
@@ -195,10 +204,7 @@ export async function POST(request: Request) {
     const tier = await resolveAnalysisTier(db, { analysisId, userEmail: row.ownerEmail || user.email, companyInn: stored.companyInn, privileged: user.isAdmin });
     return Response.json({
       analysis: analysisView(applyAnalysisControls(stored, controls), tier),
-      report: sourceType !== "BKI" && tier === "FREE"
-        ? Object.fromEntries(Object.entries(verifiedReport as Record<string, unknown>).filter(([key]) => key !== "financialMetadataV2"))
-        : verifiedReport,
-      source: verifiedSource,
+      ...(tier === "FULL" ? {report:verifiedReport, source:verifiedSource} : {source:{sourceType,status:verifiedSource.status}}),
       processedBy: "server",
       originalFileStored: false,
     });

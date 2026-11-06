@@ -182,3 +182,15 @@ test("finite output on overflow", () => { const b = bank(); b.monthly.forEach(m 
 test("invalid BKI date unavailable", () => assert.equal(stock({ bki: bki({ reportDate: "2025-02-30" }) }).outcome, "INSUFFICIENT_DATA"));
 test("calendar gap rejects invalid date", () => assert.equal(gapDays("2025-02-30", "2025-03-01"), null));
 test("100 companies with bank, six periods and BKI performance measurement", () => { const i = input({ bki: bki(), snapshots: [...[2021, 2022, 2023, 2024, 2025].map(y => snapshot("BFO", annualPeriod(y))), snapshot("QUARTERLY")] }); const start = performance.now(); let count = 0; for (let n = 0; n < 100; n++) count += buildReconciliation(i).findings.length; console.log(`Block 6 performance: 100 companies, 6 periods, BKI: ${(performance.now() - start).toFixed(1)} ms; ${count} findings`); assert.ok(count > 0); });
+
+test("nearest known borrowings inside the window survive a closer incomplete balance", () => {
+  const knownDate = {...annualPeriod(2025), asOf:"2025-12-15"};
+  const comparable = snapshot("QUARTERLY", knownDate, {"1410":1200,"1510":300});
+  const blank = snapshot("BFO", annualPeriod(2025), {"1410":undefined});
+  const f = stock({snapshots:[blank, comparable]});
+  assert.equal(f.outcome,"RELATIONSHIP_OBSERVED");
+  assert.equal(f.temporalGapDays,16);
+  assert.equal(f.leftFacts[0].value,2000);
+  assert.equal(f.rightFacts[0].value,1500);
+  assert.equal(f.absoluteDifference,500);
+});

@@ -38,6 +38,7 @@ function economicPeriodKey(snapshot: FinancialStatementSnapshot) {
     snapshot.accountingStandard,
     snapshot.currency,
     snapshot.period.kind,
+    snapshot.period.flowPeriodType,
     snapshot.period.from ?? "",
     snapshot.period.to ?? "",
     snapshot.period.asOf ?? "",

@@ -153,13 +153,14 @@ for(const [overdue,expected] of [['нет данных',null],['0',0],['5000',50
 Просрочки (0 просроч.платежей)
 Предоставлен 02-08-2026`,'synthetic-nbki.pdf');
   const o=report.obligations[0];
-  assert.equal(o.overdueAmount,expected);assert.equal(o.nextPaymentAmount,nextExpected);assert.equal(o.monthlyPayment,nextExpected);
+  assert.equal(o.overdueAmount,expected);assert.equal(o.nextPaymentAmount,nextExpected);assert.equal(o.monthlyPayment,null);
   assert.equal(o.nextPaymentDate,'2026-09-01');assert.equal(o.scheduledCloseAt,'2028-01-01');
   assert.equal(o.paymentQuality,expected===null?'Недостаточно данных':expected===0?'Без просрочек':'Негативное обслуживание');
   const s=adaptUploadedBki(report,{companyInn:report.subjectInn,source:{...source,companyInn:report.subjectInn}});
   const p=buildCreditPortfolio({companyInn:report.subjectInn,asOfDate:report.reportDate,creditHistorySnapshots:[s],paymentObservations:[]});
   assert.equal(p.obligations.length,1);assert.equal(p.obligations[0].currentPosition.overdueAmount.value,expected);
   assert.equal(p.obligations[0].currentPosition.nextPaymentAmount.value,nextExpected);
+  assert.equal(p.obligations[0].currentTerms.scheduledPaymentAmount.value,null);
  });
 }
 test('two SB accounts do not share servicing values or an all-clean report verdict',()=>{
@@ -200,3 +201,18 @@ for(const token of ['нет данных','нет']) {
   else {assert.match(item.facts,/0 ₽/);assert.match(item.impact,/Отсутствие просрочки поддерживает/);}
  });
 }
+
+test('a stated quarterly installment stays distinct from the next payment and monthly debt service',()=>{
+ const report=parseCreditHistoryText([
+  'Субъект: Кредитная история юридического лица','ИНН','Номер','7701234567','Счет',
+  'Вид: Срочный кредит','Отношение: Заёмщик','Кредитор: Тест Банк','Счет: NB-1','Статус: Действующий',
+  'Плановый платёж: 15 000','Периодичность платежей: Ежеквартально',
+  'След.платеж: 9 000','Предоставлен 02-08-2026'
+ ].join('\n'),'synthetic.pdf');
+ const o=report.obligations[0];
+ assert.equal(o.monthlyPayment,null);assert.equal(o.nextPaymentAmount,9000);
+ const s=adaptUploadedBki(report,{companyInn:report.subjectInn,source:{...source,companyInn:report.subjectInn}});
+ const p=buildCreditPortfolio({companyInn:report.subjectInn,asOfDate:report.reportDate,creditHistorySnapshots:[s],paymentObservations:[]});
+ assert.equal(p.obligations[0].currentTerms.scheduledPaymentAmount.value,15000);
+ assert.equal(p.obligations[0].currentTerms.scheduledPaymentFrequency.value,'Ежеквартально');
+});

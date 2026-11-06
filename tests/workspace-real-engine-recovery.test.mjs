@@ -100,7 +100,7 @@ test('native annual BFO → replacement → corporate BKI → quarterly updates 
  const annual=m.full.report.financialAnalysis.history.find(h=>h.period.to==='2025-12-31');
  assert.equal(metrics(annual).REVENUE,1300000);assert.equal(metrics(annual).EQUITY,600000);assert.equal(metrics(annual).currentRatio,3);
  a=attachBki(a);m=await workspace(a);assert.equal(m.state,'READY_FULL');
- const o=m.full.report.analysisV3.portfolio[0];assert.equal(o.creditor.value,'Тест Банк');assert.equal(o.limit.value,200000);assert.equal(o.reportedPrincipal.value,120000);assert.equal(o.reportedPrincipal.asOf,'2026-08-02');assert.equal(o.principal.value,null);assert.equal(o.payment.value,9000);assert.equal(o.overdue.value,0);assert.equal(o.maturity.value,'2028-01-01');
+ const o=m.full.report.analysisV3.portfolio[0];assert.equal(o.creditor.value,'Тест Банк');assert.equal(o.limit.value,200000);assert.equal(o.reportedPrincipal.value,120000);assert.equal(o.reportedPrincipal.asOf,'2026-08-02');assert.equal(o.principal.value,null);assert.equal(o.nextPayment.value,9000);assert.equal(o.payment.value,null);assert.equal(o.overdue.value,0);assert.equal(o.maturity.value,'2028-01-01');
  a=attachFinancial(a,'QUARTERLY',financialText('Январь - Март 2026 г.',300));m=await workspace(a);
  assert.equal(m.state,'READY_FULL');assert.equal(m.full.report.financialAnalysis.history.length,3);
  const interim=m.full.report.financialAnalysis.history.find(h=>h.period.kind==='INTERIM');assert.equal(metrics(interim).REVENUE,300000);assert.equal(interim.period.monthsCovered,3);

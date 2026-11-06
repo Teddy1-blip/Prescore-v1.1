@@ -42,7 +42,7 @@ export type WorkspaceBasicV1 = {
     statements: { status: SourceStatus | "UNKNOWN"; count: number | null; bankNames: string[] | null; accountCount: number | null; periodFrom: string | null; periodTo: string | null };
     completeness: number | null;
     missingSources: string[] | null;
-    availability: Array<{ source: string; status: SourceStatus | "UNKNOWN"; periodFrom: string | null; periodTo: string | null; reportDate?: string | null }>;
+    availability: Array<{ source: string; status: SourceStatus | "UNKNOWN"; periodFrom: string | null; periodTo: string | null; confidence?: number | null; reportDate?: string | null }>;
   };
   bankingFacts: {
     operationListTruncated?:boolean;
@@ -154,6 +154,7 @@ function sourceAvailability(analysis: AnalysisResult): WorkspaceBasicV1["sources
   return sources.map(({ source, item }) => ({
     source,
     status: item.status,
+    ...(Number.isFinite(item.confidence) ? { confidence:item.confidence } : {}),
     periodFrom: item.periodFrom ?? null,
     periodTo: item.periodTo ?? null,
     ...(source === "CREDIT_HISTORY" ? { reportDate } : {}),

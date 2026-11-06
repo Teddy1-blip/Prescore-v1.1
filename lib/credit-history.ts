@@ -22,6 +22,8 @@ export type CreditObligation = {
   outstandingPrincipal: number | null;
   totalOutstanding: number | null;
   monthlyPayment: number | null;
+  contractualPayment?: number;
+  paymentFrequency?: string;
   nextPaymentAmount: number | null;
   nextPaymentDate: string;
   annualRate: number | null;
@@ -115,9 +117,10 @@ function numberValue(value?: string | null): number | null {
   if (!value) return null;
   const source = value.trim().toLowerCase();
   if (!source || source === "-" || source.includes("нет данных") || source.includes("отсутствует")) return null;
-  const cleaned = source.replace(/rub|₽|руб\.?/gi, "").replace(/\s/g, "").replace(",", ".").replace(/[^\d.-]/g, "");
+  const cleaned = source.replace(/^(?:rub|₽|руб\.?)\s*/i, "").replace(/\s*(?:rub|₽|руб\.?|%)\s*$/i, "").trim();
+  if (!/^-?(?:\d+|\d{1,3}(?:[ \u00a0\u2009\u202f]\d{3})+)(?:[,.]\d+)?$/.test(cleaned)) return null;
   if (!cleaned || cleaned === "-") return null;
-  const parsed = Number(cleaned);
+  const parsed = Number(cleaned.replace(/\s/g, "").replace(",", "."));
   return Number.isFinite(parsed) ? parsed : null;
 }
 
@@ -129,15 +132,15 @@ function intValue(value?: string | null): number | null {
 function dateValue(value?: string | null) {
   if (!value) return "";
   const exact = value.match(/(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})/);
-  if (exact) return `${exact[3]}-${exact[2].padStart(2, "0")}-${exact[1].padStart(2, "0")}`;
   const words = value.toLowerCase().match(/(\d{1,2})\s+([а-яё]+)\s+(\d{4})/i);
-  if (words && MONTHS[words[2]]) return `${words[3]}-${MONTHS[words[2]]}-${words[1].padStart(2, "0")}`;
-  return "";
+  const iso = exact ? [exact[3],exact[2].padStart(2,"0"),exact[1].padStart(2,"0")].join("-")
+    : words && MONTHS[words[2]] ? [words[3],MONTHS[words[2]],words[1].padStart(2,"0")].join("-") : "";
+  return iso && Number.isFinite(Date.parse(iso)) && new Date(iso).toISOString().slice(0,10) === iso ? iso : "";
 }
 
 // NBKI can place labelled fields on one row or separate PDF text lines.
 function nbkiField(block: string, label: string) {
-  const labels = "Финальн\\.платеж(?: %%)?|Вид|Размер/лимит|Открыт|Всего выплачено|Полная стоимость|Статус|Задолж-сть|Просрочено|След\\.платеж|Дата след\\.платежа|Кредитор|Счет|Отношение";
+  const labels = "Финальн\\.платеж(?: %%)?|Вид|Размер/лимит|Открыт|Всего выплачено|Полная стоимость|Статус|Задолж-сть|Просрочено|След\\.платеж|Дата след\\.платежа|Плановый плат[её]ж|Периодичность платежей|Кредитор|Счет|Отношение";
   return block.match(new RegExp(`(?:^|\\n|[ \\t]+)${label}[ \\t]*([^\\n]*?)(?=[ \\t]+(?:${labels}):|\\n|$)`, "i"))?.[1]?.trim() ?? "";
 }
 
@@ -171,6 +174,17 @@ function delinquencyQuality(days: number | null, overdue: number | null): DebtSe
   return "Недостаточно данных";
 }
 
+// Some SB reports print the arrears and next instalment side by side.
+function sbServicingColumns(block: string) {
+  const row = block.match(/^[ \t]*Текущая просрочка[ \t]+(?:Ближайший|Следующий) плат[её]ж[ \t]*\n(?:[ \t]*\n)*([^\n]+)/im)?.[1];
+  if (!row) return null;
+  const cells = row.trim().split(/[ \t]{2,}/);
+  const last = cells.at(-1) ?? "";
+  const nextDate = /^\d{2}\.\d{2}\.\d{4}$/.test(last) ? dateValue(last) : "";
+  return {overdue:sbServicingAmount(cells[0],true), nextDate,
+    nextPayment:nextDate && cells.length >= 3 ? sbServicingAmount(cells[cells.length-2]) : null};
+}
+
 function maxDelinquencyFromSbBlock(block: string) {
   const history = block.split("Своевременность платежей по договору")[1]?.split(/Уникальный идентификатор договора|Сведения об изменениях|Обеспечение/)[0] ?? "";
   const rows = [...history.matchAll(/^\s*20\d{2}\s+(.+)$/gm)].map((match) => match[1]);
@@ -182,29 +196,29 @@ function maxDelinquencyFromSbBlock(block: string) {
 }
 
 function extractSbBlocks(activeSection: string) {
-  const numbered = [...activeSection.matchAll(/(?:^|\n)\s*(\d{1,2})\s*\n\s*Банк:/g)];
+  const numbered = [...activeSection.matchAll(/(?:^|\n)\s*(\d{1,2})\s*\n\s*(?:Банк|Оператор сервиса рассрочки|МФО):/g)];
   const matches = numbered.length
     ? numbered
-    : [...activeSection.matchAll(/(?:^|\n)\s*Банк:/g)];
+    : [...activeSection.matchAll(/(?:^|\n)\s*(?:Банк|Оператор сервиса рассрочки|МФО):/g)];
   return matches.map((match, index) => activeSection.slice(match.index, matches[index + 1]?.index ?? activeSection.length));
 }
 
 function parseSbObligation(block: string, index: number): CreditObligation | null {
   const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
-  const bankIndex = lines.findIndex((line) => line.startsWith("Банк:"));
+  const bankIndex = lines.findIndex((line) => /^(?:Банк|Оператор сервиса рассрочки|МФО):/i.test(line));
   if (bankIndex < 0) return null;
   const bankLine = lines[bankIndex];
   const followingStatus = lines[bankIndex + 1]?.match(/^(Действующий|Закрыт[^\s]*)$/i)?.[1] ?? "";
   const bureauStatus = bankLine.match(/\s{2,}(Действующий|Закрыт[^\s]*)\s*$/i)?.[1]
     ?? (followingStatus || (bankLine.includes("Действующий") ? "Действующий" : "Статус не определён"));
-  const creditor = bankLine.replace(/^Банк:\s*/i, "").replace(/\s{2,}(Действующий|Закрыт[^\s]*)\s*$/i, "").trim();
+  const creditor = bankLine.replace(/^(?:Банк|Оператор сервиса рассрочки|МФО):\s*/i, "").replace(/\s{2,}(Действующий|Закрыт[^\s]*)\s*$/i, "").trim();
   const productLine = followingStatus ? lines[bankIndex + 2] : lines[bankIndex + 1];
   const product = productLine?.replace(/^\d{1,2}\s+/, "") && !productLine.startsWith("Данные обновлены") ? productLine.replace(/^\d{1,2}\s+/, "") : "Кредит";
   const conditions = block.match(/Взяли на таких условиях[\s\S]{0,500}?([\d][\d\s]*(?:[.,]\d{1,2})?)\s*₽\s+с\s+(\d{2}\.\d{2}\.\d{4})\s+по\s+(\d{2}\.\d{2}\.\d{4}|31\.12\.9999)/i);
   const payoutSection = block.match(/Выплатили[\s\S]*?Полная стоимость кредита/i)?.[0] ?? "";
   const payouts = moneyTokens(payoutSection);
   const totalOutstanding = payouts.length >= 2 ? payouts[1] : null;
-  const outstandingPrincipal = totalOutstanding === null ? null : payouts.length >= 3 ? payouts[payouts.length - 1] : totalOutstanding;
+  const outstandingPrincipal = totalOutstanding === null ? null : payouts.length >= 3 ? payouts[payouts.length - 1] : null;
   const costSection = block.match(/Полная стоимость кредита[\s\S]*?Текущая просрочка/i)?.[0] ?? "";
   const rate = numberValue(costSection.match(/([\d]+[.,]\d+)\s*%\s*годовых/i)?.[1]);
   const costAmounts = moneyTokens(costSection);
@@ -212,8 +226,9 @@ function parseSbObligation(block: string, index: number): CreditObligation | nul
   const overdueField = sbServicingField(block, "Текущая просрочка");
   const nextField = sbServicingField(block, "(?:Следующий|Ближайший) плат[её]ж");
   const nextDateField = sbServicingField(block, "Дата (?:следующего|ближайшего) платежа");
-  const overdue = sbServicingAmount(overdueField, true);
-  const nextPayment = sbServicingAmount(nextField);
+  const columns = sbServicingColumns(block);
+  const overdue = columns ? columns.overdue : sbServicingAmount(overdueField, true);
+  const nextPayment = columns ? columns.nextPayment : sbServicingAmount(nextField);
   const nextDate = nextDateField.match(/^(\d{2}\.\d{2}\.\d{4})(?:\s|$)/)?.[1]
     ?? nextField.match(/(?:^|\n)\s*(?:до\s+)?(\d{2}\.\d{2}\.\d{4})(?:\s|$)/i)?.[1] ?? "";
   const maxDays = maxDelinquencyFromSbBlock(block);
@@ -236,7 +251,7 @@ function parseSbObligation(block: string, index: number): CreditObligation | nul
     totalOutstanding,
     monthlyPayment,
     nextPaymentAmount: nextPayment,
-    nextPaymentDate: dateValue(nextDate),
+    nextPaymentDate: columns?.nextDate || dateValue(nextDate),
     annualRate: rate,
     rateLabel: rate === null ? "Ставка не указана" : "Полная стоимость кредита",
     overdueAmount: overdue,
@@ -256,7 +271,7 @@ function parseSbObligation(block: string, index: number): CreditObligation | nul
 
 function parseSbReport(source: string, fileName: string): CreditHistoryReport {
   const text = normalizedText(source);
-  const firstDetailedObligation = text.match(/(?:^|\n)\s*(?:1\s*\n\s*)?Банк:\s*[^\n]+/m);
+  const firstDetailedObligation = text.match(/(?:^|\n)\s*(?:1\s*\n\s*)?(?:Банк|Оператор сервиса рассрочки|МФО):\s*[^\n]+/m);
   const activeStart = firstDetailedObligation?.index ?? text.indexOf("Действующие кредиты, займы, карты");
   const closedStart = text.indexOf("Закрытые кредиты, займы, карты", Math.max(0, activeStart));
   const active = activeStart >= 0 ? text.slice(activeStart, closedStart > activeStart ? closedStart : undefined) : text;
@@ -274,7 +289,7 @@ function parseSbReport(source: string, fileName: string): CreditHistoryReport {
   const reportedClosedCount = intValue(summaryBlock.match(/(\d+)\s+закрытых кредитов\s*\/\s*займов/i)?.[1]);
   const summaryMoney = moneyTokens(summaryBlock);
   const summaryOutstanding = summaryMoney[0] ?? obligations.reduce((sum, item) => sum + (item.outstandingPrincipal ?? 0), 0);
-  const summaryPayment = summaryMoney[1] ?? obligations.reduce((sum, item) => sum + (item.monthlyPayment ?? item.nextPaymentAmount ?? 0), 0);
+  const summaryPayment = summaryMoney[1] ?? obligations.reduce((sum, item) => sum + (item.monthlyPayment ?? 0), 0);
   const inquiries12 = intValue(summaryBlock.match(/Интересовались вашей кредитной историей\s+(\d+)\s+раз\s+\d+\s+раз\s+\d+\s+раз/i)?.[1]);
   const selfBanSection = text.match(/Действующие запреты на заключение договоров[\s\S]*?(?:Снятые|Ранее действовавшие)/i)?.[0] ?? "";
   const selfBanActive = Boolean(selfBanSection && !/Отсутствуют/i.test(selfBanSection));
@@ -323,7 +338,7 @@ function parseNbkiObligation(block: string, index: number): CreditObligation | n
   const account = nbkiField(block, "Счет:") || "";
   if (!creditor && !account) return null;
   const kind = nbkiField(block, "Вид:");
-  const role = nbkiField(block, "Отношение:") || "Принципал";
+  const role = nbkiField(block, "Отношение:") || "Не указано";
   const limit = numberValue(nbkiField(block, "Размер\\/лимит:"));
   const rate = numberValue(nbkiField(block, "Полная стоимость:"));
   const opened = nbkiField(block, "Открыт:");
@@ -340,6 +355,9 @@ function parseNbkiObligation(block: string, index: number): CreditObligation | n
   const suretyAmount = numberValue(suretySection.match(/Сумма:\s*([^\n]+)/i)?.[1]);
   const product = guaranteeAmount !== null ? "Банковская гарантия" : suretyAmount !== null ? "Поручительство" : kind || "Кредитное обязательство";
   const maxDays = maxDelinquencyFromNbki(block);
+  const regular = numberValue(nbkiField(block, "Плановый плат[её]ж:"));
+  const frequency = nbkiField(block,"Периодичность платежей:").match(/^(ежемесячно|ежеквартально|еженедельно|ежегодно)$/i)?.[1];
+  const contingent = guaranteeAmount !== null || suretyAmount !== null || /поручител|гаранти/i.test(product);
   return {
     id: `nbki-${account || index + 1}`,
     creditor: creditor.replace(/\s{2,}.*$/, "").trim(),
@@ -351,9 +369,11 @@ function parseNbkiObligation(block: string, index: number): CreditObligation | n
     updatedAt: dateValue(block.match(/Последн\.обновление:\s*([^\n]+)/i)?.[1]),
     originalAmount: limit ?? guaranteeAmount ?? suretyAmount,
     creditLimit: limit,
-    outstandingPrincipal: debt,
-    totalOutstanding: debt,
-    monthlyPayment: nextPayment,
+    outstandingPrincipal: contingent ? null : debt,
+    totalOutstanding: contingent ? null : debt,
+    monthlyPayment: !contingent && frequency?.toLowerCase() === "ежемесячно" ? regular : null,
+    ...(!contingent && regular !== null ? {contractualPayment:regular} : {}),
+    ...(frequency ? {paymentFrequency:frequency} : {}),
     nextPaymentAmount: nextPayment,
     nextPaymentDate,
     annualRate: rate,
@@ -414,11 +434,12 @@ type FinishInput = Omit<CreditHistoryReport, "summary"> & {
 
 function finishReport(input: FinishInput): CreditHistoryReport {
   const active = input.obligations.filter((item) => !/закрыт|погашен|прекращ/i.test(item.status));
-  const originalAmount = active.reduce((sum, item) => sum + (item.originalAmount ?? 0), 0);
-  const outstandingPrincipal = active.reduce((sum, item) => sum + (item.outstandingPrincipal ?? 0), 0);
-  const totalOutstanding = active.reduce((sum, item) => sum + (item.totalOutstanding ?? item.outstandingPrincipal ?? 0), 0);
-  const monthlyPayment = active.reduce((sum, item) => sum + (item.monthlyPayment ?? item.nextPaymentAmount ?? 0), 0);
-  const overdueAmount = active.reduce((sum, item) => sum + (item.overdueAmount ?? 0), 0);
+  const loans = active.filter(o => !/гаранти|поручительств/i.test(o.product) && !/поручител|гарант/i.test(o.role));
+  const originalAmount = loans.reduce((sum, item) => sum + (item.originalAmount ?? 0), 0);
+  const outstandingPrincipal = loans.reduce((sum, item) => sum + (item.outstandingPrincipal ?? 0), 0);
+  const totalOutstanding = loans.reduce((sum, item) => sum + (item.totalOutstanding ?? item.outstandingPrincipal ?? 0), 0);
+  const monthlyPayment = loans.reduce((sum, item) => sum + (item.monthlyPayment ?? 0), 0);
+  const overdueAmount = loans.reduce((sum, item) => sum + (item.overdueAmount ?? 0), 0);
   const guaranteeExposure = active.reduce((sum, item) => sum + (item.guaranteeAmount ?? 0), 0);
   const rated = active.filter((item) => item.annualRate !== null && (item.outstandingPrincipal ?? item.originalAmount ?? 0) > 0);
   const rateWeight = rated.reduce((sum, item) => sum + (item.outstandingPrincipal ?? item.originalAmount ?? 0), 0);
@@ -450,11 +471,11 @@ function finishReport(input: FinishInput): CreditHistoryReport {
     weightedAnnualRate,
     debtServiceQuality,
     knownValues: {
-      originalAmount: active.some((item) => item.originalAmount !== null) || input.summaryOverrides?.originalAmount !== undefined,
-      outstandingPrincipal: active.some((item) => item.outstandingPrincipal !== null) || input.summaryOverrides?.outstandingPrincipal !== undefined,
-      totalOutstanding: active.some((item) => item.totalOutstanding !== null || item.outstandingPrincipal !== null) || input.summaryOverrides?.totalOutstanding !== undefined,
-      monthlyPayment: active.some((item) => item.monthlyPayment !== null || item.nextPaymentAmount !== null) || input.summaryOverrides?.monthlyPayment !== undefined,
-      overdueAmount: active.some((item) => item.overdueAmount !== null) || input.summaryOverrides?.overdueAmount !== undefined,
+      originalAmount: (loans.length > 0 && loans.every((item) => item.originalAmount !== null)) || input.summaryOverrides?.originalAmount !== undefined,
+      outstandingPrincipal: (loans.length > 0 && loans.every((item) => item.outstandingPrincipal !== null)) || input.summaryOverrides?.outstandingPrincipal !== undefined,
+      totalOutstanding: (loans.length > 0 && loans.every((item) => item.totalOutstanding !== null || item.outstandingPrincipal !== null)) || input.summaryOverrides?.totalOutstanding !== undefined,
+      monthlyPayment: (loans.length > 0 && loans.every((item) => item.monthlyPayment !== null)) || input.summaryOverrides?.monthlyPayment !== undefined,
+      overdueAmount: (loans.length > 0 && loans.every((item) => item.overdueAmount !== null)) || input.summaryOverrides?.overdueAmount !== undefined,
       guaranteeExposure: active.some((item) => item.guaranteeAmount !== null) || input.summaryOverrides?.guaranteeExposure !== undefined,
     },
   };
@@ -477,7 +498,7 @@ export function compareCreditPortfolio(input: {
   limitConfidence: number;
 }): { comparison: CreditPortfolioComparison; insights: CreditHistoryInsight[] } {
   const affectsCompanyDebt = input.report.subjectType === "Юридическое лицо" || input.report.affectsCompanyDebt;
-  const bureauMonthlyPaymentKnown = affectsCompanyDebt && input.report.obligations.some((item) => item.monthlyPayment !== null || item.nextPaymentAmount !== null);
+  const bureauMonthlyPaymentKnown = affectsCompanyDebt && input.report.obligations.some((item) => item.monthlyPayment !== null);
   const bureauOutstandingKnown = affectsCompanyDebt && input.report.obligations.some((item) => item.outstandingPrincipal !== null || item.totalOutstanding !== null);
   const bureauPayment = affectsCompanyDebt ? input.report.summary.monthlyPayment : 0;
   const confirmedPayment = Math.max(input.statementMonthlyDebtPayment, bureauPayment);
