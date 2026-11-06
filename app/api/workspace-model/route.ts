@@ -1,6 +1,6 @@
+import {cachedProfile} from "../../../lib/external/checko-profile";
 import { getRuntime } from "../../../lib/platform/runtime";
 import { resolveAnalysisTier, type EntitlementDatabase } from "../../../lib/entitlements";
-import type { CompanyProfileData } from "../../../lib/company-profile";
 import { loadWorkspaceModelV1, parseSavedAnalysis, readWorkspaceOperations, type WorkspaceServiceDependencies } from "../../../lib/workspace/service.ts";
 import { readableAnalysis, requireApiUser } from "../api-auth";
 
@@ -48,7 +48,7 @@ export async function GET(request: Request) {
       readProfile: async (inn) => {
         const row = await db.prepare("SELECT payload FROM checko_profiles WHERE inn = ? LIMIT 1").bind(inn).first<{ payload: string }>();
         if (!row) return undefined;
-        try { return JSON.parse(row.payload) as CompanyProfileData; } catch { return undefined; }
+        try { return cachedProfile(row.payload,inn); } catch { return undefined; }
       },
       readOperations: (id, access) => readWorkspaceOperations(db, id, access.row.companyInn, user),
     };

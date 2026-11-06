@@ -2,6 +2,7 @@ import type { SourceEnvelope } from "./credit-engine/contracts/sources";
 import type { FinancialShadowFields } from "./credit-engine/financial-analysis/integration";
 
 export type CompanyProfileData = FinancialShadowFields & {
+  externalFacts?: import("./external/records.ts").ExternalFacts;
   inn: string;
   source: string;
   fetchedAt: string;

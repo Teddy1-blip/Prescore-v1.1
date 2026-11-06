@@ -141,7 +141,7 @@ export default function CheckoProfile({ analysis, onAttachQuarterly }: { analysi
 
       {Boolean(profile.externalBanks?.length) && <section className="ps-card ps-company-details wide"><div className="ps-card-title"><span><b>Банковские реквизиты во внешних данных</b><small>Реестровая связь не подтверждает, что счёт действует сейчас</small></span></div><div>{profile.externalBanks?.map((bank, index) => <p key={`${bank.bik}-${bank.account}-${index}`}><small>{bank.status}</small><b>{bank.name}{bank.bik ? ` · БИК ${bank.bik}` : ""}{bank.account ? ` · ${bank.account}` : ""}</b><span>{bank.evidence}</span></p>)}</div></section>}
 
-      <div className="ps-checko-source"><ShieldCheck /><span><b>Официальные и открытые источники</b><small>{profile.cached ? "Показан сохранённый профиль — повторные запросы не выполнялись." : "Получены свежие данные и сохранены на 24 часа."} Обновлено {new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium", timeStyle: "short" }).format(new Date(profile.fetchedAt))}.</small></span>{profile.failedMethods.length > 0 && <em>Частично недоступны: {profile.failedMethods.join(", ")}</em>}</div>
+      <div className="ps-checko-source"><ShieldCheck /><span><b>Checko · сведения реестров</b><small>{profile.cached ? "Показан сохранённый профиль — повторные запросы не выполнялись." : "Получены свежие данные и сохранены на 24 часа."} Обновлено {new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium", timeStyle: "short" }).format(new Date(profile.fetchedAt))}.</small></span>{profile.failedMethods.length > 0 && <em>Частично недоступны: {profile.failedMethods.join(", ")}</em>}</div>
     </>}
   </>;
 }

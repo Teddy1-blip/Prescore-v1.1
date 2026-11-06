@@ -331,13 +331,6 @@ export function SourceUpload({analysisId,kind,saved}:{analysisId:string;kind:Ana
  </form>;
 }
 
-type Profile={fetchedAt?:string;source?:string;company?:{name?:string;ogrn?:string;status?:string;registrationDate?:string;okved?:string;region?:string};contracts?:{items?:Array<{number?:string;subject?:string;amount?:number}>};error?:string};
-export function CompanyData({id,inn,updated}:{id:string;inn:string;updated:()=>void|Promise<void>}) {
- const [data,setData]=useState<Profile|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false);
- async function load(){setBusy(true);setError('');try{const r=await fetch(`/api/checko?inn=${encodeURIComponent(inn)}&analysisId=${encodeURIComponent(id)}`);const body=await r.json();if(!r.ok)throw Error(body.error||'Источник недоступен');setData(body);await updated();}catch(e){setError(e instanceof Error?e.message:'Источник недоступен');}finally{setBusy(false);}}
- return <section className="ws-section"><h2>Компания и открытая отчётность</h2><p>Регистрационные сведения и БФО из официальных источников. Кредитная интерпретация доступна в подробном анализе.</p><button disabled={busy} onClick={load}>{busy?'Получаем сведения…':'Получить открытые сведения'}</button>{!data&&<p>Открытые сведения в этом просмотре ещё не запрошены. Получение может обратиться к внешнему сервису.</p>}{data?.fetchedAt&&<p>Сведения получены: {data.fetchedAt.slice(0,10)}. Дата получения не гарантирует актуальность каждого факта.</p>}{error&&<p role="alert">{error}</p>}{data?.company&&<><dl className="ws-detail-list">{[['Компания',data.company.name],['ОГРН',data.company.ogrn],['Статус',data.company.status],['Регистрация',data.company.registrationDate],['Деятельность',data.company.okved],['Регион',data.company.region]].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value||'Не указано'}</dd></div>)}</dl></>}{data?.contracts?.items?.map((x,i)=><p key={i}>Контракт {x.number} · {x.subject}</p>)}</section>;
-}
-
 export function RecipientApplications({analysis,saved}:{analysis:{id:string;companyName:string;companyInn:string};saved:()=>void|Promise<void>}) {
  const pending=useRef(false),request=useRef<{key:string;id:string}|null>(null);
  const [busy,setBusy]=useState(false),[message,setMessage]=useState('');

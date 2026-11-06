@@ -1,4 +1,5 @@
 import * as brokerAuthorization from '../lib/auth/broker-authorizations.ts';
+import * as checkoProfile from "../lib/external/checko-profile.ts";
 import * as releaseSecurity from '../lib/release/security.ts';
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -62,6 +63,7 @@ for (const ownerFull of [false, true]) test(ownerFull
     "../../../lib/release/security": releaseSecurity,
   });
   const workspaceRoute = load("app/api/workspace-model/route.ts", {
+    "../../../lib/external/checko-profile": checkoProfile,
     "../../../lib/platform/runtime": { getRuntime: () => ({ DB: db }) },
     "../../../lib/entitlements": entitlements,
     "../../../lib/release/security": releaseSecurity,

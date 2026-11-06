@@ -14,21 +14,23 @@ function profileLegalFacts(input: RiskShadowInput, financial: RiskFact[]): RiskF
   const date = p.fetchedAt?.slice(0, 10), sources = p.sourceManifest?.external ?? [];
   const source = (endpoint: string) => sources.find(s => s.rawReference?.startsWith(`external:/${endpoint}:`) || s.sourceId.startsWith(`external:${endpoint}:`));
   const read = (code: string, value: RiskFact["value"], endpoint: string, details?: string): RiskFact => {
-    const s = source(endpoint), valid = s?.status === "READY" && s.companyInn === a.companyInn && freshness(date, asOfDate, age.legal) && !p.failedMethods.includes(endpoint);
+    const s = source(endpoint), valid = (s?.status === "READY" || s?.status === "EMPTY" && !!p.externalFacts) && s.companyInn === a.companyInn && freshness(date, asOfDate, age.legal) && !p.failedMethods.includes(endpoint);
     const f = fact(a.companyInn, code, "LEGAL", valid ? value : null, { confidence: s?.confidence == null && valid ? "HIGH" : sourceConfidence(s?.confidence), sourceTypes: s ? [s.sourceType] : [], sourceIds: s ? [s.sourceId] : [], period: { from: null, to: null, asOf: date ?? null }, calculationBasis: details ?? `Current canonical company profile /${endpoint}; no legacy signals`, warnings: valid ? [] : ["LEGAL_SOURCE_NOT_CURRENT_OR_AVAILABLE"] });
     f.evidence = f.evidence.map(e => ({ ...e, rawReference: s?.rawReference })); return f;
   };
-  const lifecycle = normalizeLifecycle(p.company.status), out = [read("LEGAL_LIFECYCLE", lifecycle === "UNKNOWN" || lifecycle === "OTHER" ? null : lifecycle, "company", `Exact lifecycle normalization of current status: ${p.company.status}`),
-    read("LEGAL_ADDRESS_UNRELIABLE", p.company.addressUnreliable === true ? true : source("company")?.fieldAvailability?.addressUnreliable === "KNOWN" ? false : null, "company")];
+  const facts=p.externalFacts, base=p.inn.length===12?"entrepreneur":"company";
+  const covered=(method:string)=>{const receipt=facts?.receipts.find(r=>r.method===method);return !facts || !!receipt && receipt.total===receipt.visible && ["READY","EMPTY"].includes(receipt.status);};
+  const lifecycle = facts?.identity.lifecycle ?? normalizeLifecycle(p.company.status), out = [read("LEGAL_LIFECYCLE", lifecycle === "UNKNOWN" || lifecycle === "OTHER" ? null : lifecycle, base, `Exact lifecycle normalization of current status: ${p.company.status}`),
+    read("LEGAL_ADDRESS_UNRELIABLE", facts?facts.identity.unreliable:p.company.addressUnreliable === true ? true : source(base)?.fieldAvailability?.addressUnreliable === "KNOWN" ? false : null, base)];
   const active = p.enforcementItems?.filter(e => e.active);
-  const amount = active && active.every(e => validDate(e.date?.slice(0, 10)) && e.date.slice(0, 10) <= asOfDate && e.amount !== null && Number.isFinite(e.amount)) ? active.reduce((n, e) => n + e.amount!, 0) : null;
+  const amount = p.externalFacts ? p.externalFacts.activeEnforcementRub : active && active.every(e => validDate(e.date?.slice(0, 10)) && e.date.slice(0, 10) <= asOfDate && e.amount !== null && Number.isFinite(e.amount)) ? active.reduce((n, e) => n + e.amount!, 0) : null;
   const enforcement = read("LEGAL_ACTIVE_ENFORCEMENT_AMOUNT", amount, "enforcements", `Detailed active enforcement amounts; source records: ${active?.map(e => `${e.number}@${e.date}`).join(", ") ?? "unavailable"}`); enforcement.unit = "RUB"; out.push(enforcement);
   const revenue = financial.find(f => f.semanticCode === "FIN_ANNUAL_REVENUE");
   const ratio = usable(enforcement) && usable(revenue) && typeof revenue.value === "number" && revenue.value > 0 && revenue.period.to && freshness(revenue.period.to, asOfDate, age.annual) ? Number(enforcement.value) / revenue.value : null;
   out.push(fact(a.companyInn, "LEGAL_ENFORCEMENT_REVENUE_RATIO", "LEGAL", ratio, { unit: "RATIO", origin: "DERIVED", confidence: weakest(enforcement.confidence, revenue?.confidence ?? "UNKNOWN"), period: enforcement.period, sourceTypes: [...enforcement.sourceTypes, ...(revenue?.sourceTypes ?? [])], sourceIds: [...enforcement.sourceIds, ...(revenue?.sourceIds ?? [])], evidence: [...enforcement.evidence, ...(revenue?.evidence ?? [])], calculationBasis: "Current active enforcement amount / latest applicable annual accounting revenue; annual flow scaling only, never debt equivalence" }));
-  out.push(read("LEGAL_DEFENDANT_CASES", p.legalCaseItems?.filter(e => e.role === "DEFENDANT" && e.date.slice(0, 10) <= asOfDate).length ?? null, "legal-cases", `Reported defendant claims, not established debt; ${p.legalCaseItems?.map(e => `${e.number}@${e.date}`).join(", ") ?? "unavailable"}`));
-  out.push(read("LEGAL_REGISTRY_REVIEW", p.legal.bankruptcyMessages > 0 ? Math.max(p.legal.bankruptcyMessages, p.registryMessages?.filter(m => m.date.slice(0, 10) <= asOfDate && (m.classification !== "INFORMATIONAL" || /банкрот/i.test(m.title))).length ?? 0) : p.registryMessages?.filter(m => m.date.slice(0, 10) <= asOfDate && (m.classification !== "INFORMATIONAL" || /банкрот/i.test(m.title))).length ?? null, source("fedresurs") ? "fedresurs" : "bankruptcy-messages", `Registry messages do not prove active bankruptcy; ${p.registryMessages?.map(m => `${m.sourceId}@${m.date}: ${m.title}`).join("; ") ?? "aggregate message count only"}`));
-  out.push(read("LEGAL_VIOLATIONS_REPORTED", p.inspectionItems?.filter(e => e.date.slice(0, 10) <= asOfDate && e.violations.trim() && !/^(нет|не выявлено|отсутствуют)$/i.test(e.violations.trim())).length ?? null, "inspections"));
+  out.push(read("LEGAL_DEFENDANT_CASES", !covered("legal-cases") || facts?.cases.some(e=>!e.date||e.role==="UNKNOWN") ? null : p.legalCaseItems?.filter(e => e.role === "DEFENDANT" && e.date.slice(0, 10) <= asOfDate).length ?? null, "legal-cases", `Reported defendant claims, not established debt; ${p.legalCaseItems?.map(e => `${e.number}@${e.date}`).join(", ") ?? "unavailable"}`));
+  out.push(read("LEGAL_REGISTRY_REVIEW", !covered("fedresurs") || !covered("bankruptcy-messages") ? null : p.legal.bankruptcyMessages > 0 ? Math.max(p.legal.bankruptcyMessages, p.registryMessages?.filter(m => m.date.slice(0, 10) <= asOfDate && (m.classification !== "INFORMATIONAL" || /банкрот/i.test(m.title))).length ?? 0) : p.registryMessages?.filter(m => m.date.slice(0, 10) <= asOfDate && (m.classification !== "INFORMATIONAL" || /банкрот/i.test(m.title))).length ?? null, source("fedresurs") ? "fedresurs" : "bankruptcy-messages", `Registry messages do not prove active bankruptcy; ${p.registryMessages?.map(m => `${m.sourceId}@${m.date}: ${m.title}`).join("; ") ?? "aggregate message count only"}`));
+  out.push(read("LEGAL_VIOLATIONS_REPORTED", !covered("inspections") || facts?.inspections.some(e=>!e.date||!e.violations) ? null : p.inspectionItems?.filter(e => e.date.slice(0, 10) <= asOfDate && e.violations.trim() && !/^(нет|не выявлено|отсутствуют)$/i.test(e.violations.trim())).length ?? null, "inspections"));
   return out;
 }
 
@@ -46,11 +48,11 @@ export function legalFacts(input: RiskShadowInput, financial: RiskFact[]): RiskF
     warnings:conflict?['SAME_DATE_LIFECYCLE_CONFLICT']:current?[]:['LEGAL_SOURCE_NOT_CURRENT_OR_AVAILABLE']
   });
   const previous = out.find(f => f.semanticCode === 'LEGAL_LIFECYCLE');
-  if (previous?.status === 'KNOWN' && current && previous.period.asOf === r.informationDate && previous.value !== registry.value) {
+  if (previous?.status === 'KNOWN' && current && (input.companyProfile?.externalFacts ? input.companyProfile.externalFacts.identity.informationDate : previous.period.asOf) === r.informationDate && previous.value !== registry.value) {
     return [...out.filter(f => f.semanticCode !== 'LEGAL_LIFECYCLE'), fact(input.analysis.companyInn, 'LEGAL_LIFECYCLE', 'LEGAL', null, {
       confidence:'UNKNOWN', period:registry.period, sourceTypes:[...registry.sourceTypes,...previous.sourceTypes], sourceIds:[...registry.sourceIds,...previous.sourceIds],
       evidence:[...registry.evidence,...previous.evidence], warnings:['LEGAL_LIFECYCLE_SOURCE_CONFLICT'], calculationBasis:'Verified current sources disagree; neither status selected'
     })];
-  } else if (!conflict && previous?.status === 'KNOWN' && (!current || previous.period.asOf! > r.informationDate!)) return out;
+  } else if (!conflict && previous?.status === 'KNOWN' && (!current || !input.companyProfile?.externalFacts && previous.period.asOf! > r.informationDate!)) return out;
   return [...out.filter(f => f.semanticCode !== 'LEGAL_LIFECYCLE'), registry];
 }

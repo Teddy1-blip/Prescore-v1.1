@@ -1,8 +1,8 @@
+import {cachedProfile} from "../../../lib/external/checko-profile";
 import {getRuntime} from "../../../lib/platform/runtime";
 import { notFound, redirect } from "next/navigation";
 import { requireChatGPTUser } from "../../chatgpt-auth";
 import type { AnalysisResult } from "../../../lib/prescore";
-import type { CompanyProfileData } from "../../../lib/company-profile";
 import { buildUnifiedRiskContext, type UnifiedRiskContext } from "../../../lib/risk-context";
 import PrintButton from "./print-button";
 import { applyAnalysisControls, metricEnabled, readControlState } from "../../../lib/admin-controls";
@@ -33,7 +33,7 @@ export default async function DynamicReportPage({ params }: { params: Promise<{ 
   const controls = await readControlState(db);
   const analysis = applyAnalysisControls(JSON.parse(row.payload) as AnalysisResult, controls);
   const profileRow = await db.prepare("SELECT payload FROM checko_profiles WHERE inn = ? LIMIT 1").bind(row.companyInn).first<{ payload: string }>();
-  const profile = profileRow ? JSON.parse(profileRow.payload) as CompanyProfileData : null;
+  const profile = profileRow ? cachedProfile(profileRow.payload,row.companyInn)??null : null;
   const unified: UnifiedRiskContext | null = profile ? buildUnifiedRiskContext(profile, analysis, controls) : null;
   const conclusion = unified?.finalConclusion;
   const factors = unified?.factors ?? analysis.factors;

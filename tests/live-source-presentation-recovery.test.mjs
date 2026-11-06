@@ -21,6 +21,7 @@ function load(file,basis=0){
   './expertise.tsx':{ExpertiseMemo:()=>null},
   './presentation':{date:isoDate},
   './credit-depth':{sourceLabel:s=>s,sourceState:s=>s},
+  './external-sources':{ExternalSourceCards:()=>null},
   './client-insights':{Panel:p=>jsx('section',p)},
   '../credit-engine/financial-analysis/source-selection.ts':{financialSources:m=>[m?.bfo,m?.quarterly].filter(Boolean)},
  };

@@ -1,4 +1,5 @@
 "use client";
+import {ExternalSourceCards} from './external-sources';
 import {LegalRegistrySource} from "./legal-registry-source";
 import type {WorkspaceModelV1} from '../../../lib/workspace/model';
 import {date} from './presentation';
@@ -13,7 +14,7 @@ const sources=[
  {key:'EXTERNAL_SOURCE',types:['CHECKO','EIS','LEGAL_SOURCE'],benefit:'Регистрационные сведения, правовые ограничения и контракты, когда доступны.',action:'Получите открытые сведения компании; проверьте дату каждого источника.'}
 ] as const;
 
-export function DocumentSources({model,saved}:{model:WorkspaceModelV1;saved?:()=>Promise<void>}){
+export function DocumentSources({model,saved,externalEnabled=true}:{externalEnabled?:boolean;model:WorkspaceModelV1;saved?:()=>Promise<void>}){
  const observations=model.full?.report.analysisV3?.observations??[];
  return <><Panel title="Источники кредитного досье">
   <p className="pc-muted">Статус обработки и дата получения относятся к источнику. Они не подтверждают актуальность всех его сведений сегодня.</p>
@@ -25,5 +26,5 @@ export function DocumentSources({model,saved}:{model:WorkspaceModelV1;saved?:()=
   <dl className="pc-definition"><div><dt>Сведения компании</dt><dd>{model.basic.analysis.company.name} · ИНН {model.basic.analysis.company.inn}</dd></div><div><dt>Файлы компании</dt><dd>{model.basic.operations.documents.count??'Недостаточно данных'}</dd></div><div><dt>Файлы выбранного анализа</dt><dd>{model.basic.operations.documents.analysisCount??'Недостаточно данных'}</dd></div></dl>
   {model.basic.financingRequest&&<p className="pc-muted">Заявленные параметры финансирования сохранены {date(model.basic.financingRequest.receivedAt)}. Они используются как сведения клиента, без независимого документального подтверждения.</p>}
   <p>Бухгалтерская отчётность, кредитная история и квартальные данные дополняют общую финансовую картину через формы ниже. Произвольные файлы сохраняются в досье и не меняют оценку автоматически.</p>
- </Panel><LegalRegistrySource key={model.basic.analysis.id} model={model} saved={saved}/></>;
+ </Panel>{externalEnabled&&<ExternalSourceCards key={model.analysisId+model.entitlement} model={model} saved={saved}/>}<LegalRegistrySource key={model.basic.analysis.id} model={model} saved={saved}/></>;
 }

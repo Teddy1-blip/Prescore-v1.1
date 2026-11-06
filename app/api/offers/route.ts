@@ -1,9 +1,9 @@
+import {cachedProfile} from "../../../lib/external/checko-profile";
 import {safeErrorText} from '../../../lib/release/security';
 import {getRuntime} from "../../../lib/platform/runtime";
 import { evaluateBankRoutes, type BankRoute } from "../../../lib/bank-offers";
 import { buildUnifiedRiskContext } from "../../../lib/risk-context";
 import type { AnalysisResult } from "../../../lib/prescore";
-import type { CompanyProfileData } from "../../../lib/company-profile";
 import type { FinancingNeed, FundingKind } from "../../../lib/financing-types";
 import { productTermsDate } from "../../../lib/financing-offers";
 import { applyAnalysisControls, filterOfferProducts, readControlState } from "../../../lib/admin-controls";
@@ -49,7 +49,7 @@ export async function GET(request: Request) {
     const controls = await readControlState(db);
     const profileRow = await db.prepare("SELECT payload FROM checko_profiles WHERE inn = ? LIMIT 1").bind(row.companyInn).first<{ payload: string }>();
     const analysis = applyAnalysisControls(JSON.parse(row.payload) as AnalysisResult, controls);
-    const profile = profileRow ? JSON.parse(profileRow.payload) as CompanyProfileData : null;
+    const profile = profileRow ? cachedProfile(profileRow.payload,row.companyInn)??null : null;
     const evaluated = evaluateBankRoutes(analysis, profile, need);
     const risk = profile ? buildUnifiedRiskContext(profile, analysis, controls) : null;
     const blocked = Boolean(risk?.finalConclusion.hardStop);

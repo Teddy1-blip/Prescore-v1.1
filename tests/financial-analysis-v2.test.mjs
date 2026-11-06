@@ -1,8 +1,6 @@
-import * as releaseSecurity from '../lib/release/security.ts';
+import {latestFinances,normalizeProfile,profileView} from "../lib/external/checko-profile.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
-import fs from "node:fs";
-import ts from "typescript";
 import { adaptCheckoBfo } from "../lib/credit-engine/financial-analysis/checko-bfo-adapter.ts";
 import { adaptQuarterlyReport } from "../lib/credit-engine/financial-analysis/quarterly-adapter.ts";
 import { annualPeriod, parseFinancialPeriod, comparePeriods } from "../lib/credit-engine/financial-analysis/periods.ts";
@@ -29,9 +27,8 @@ test("ordinary documented Checko response preserves exact RUB without unit metad
   assert.equal(s.balance.ASSETS_TOTAL.value, 987654321); assert.equal(s.balance.ASSETS_TOTAL.status, "KNOWN");
   assert.equal(s.income.REVENUE.value, 123456789.25); assert.equal(s.income.REVENUE.status, "KNOWN");
   assert.equal(s.income.REVENUE.rawCode, "2110");
-  const h = checkoRouteHarness();
-  const before = h.latestFinances(raw); checkoFinancialShadow(raw, source(), before);
-  assert.deepEqual(h.latestFinances(raw), before);
+  const before = latestFinances(raw); checkoFinancialShadow(raw, source(), before);
+  assert.deepEqual(latestFinances(raw), before);
 });
 for (const meta of [{ scale: null }, { scale: 100 }, { currency: "USD" }]) test(`Checko explicit invalid metadata remains strict ${JSON.stringify(meta)}`, () => {
   assert.equal(adaptCheckoBfo({ data: { 2025: rows }, meta }, source())[0].income.REVENUE.status, "UNKNOWN");
@@ -224,34 +221,19 @@ test("100 companies x six years deterministic performance workload", t => {
   assert.equal(count, 600); t.diagnostic(`600 periods: ${(performance.now() - started).toFixed(1)} ms (measurement only; no time gate)`);
 });
 
-// Exercise actual route normalizers without HTTP, credentials, runtime DB or external requests.
-function checkoRouteHarness() {
-  const sourceText = fs.readFileSync(new URL("../app/api/checko/route.ts", import.meta.url), "utf8");
-  const code = ts.transpileModule(sourceText + "\nexport { latestFinances, normalizeProfile, profileView };", { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
-  const exports = {};
-  new Function("exports", "require", code)(exports, name => {
-    if (name.includes("financial-analysis/integration")) return { checkoFinancialShadow };
-    if (name.includes("contracts/sources")) return { INFRASTRUCTURE_VERSIONS: { integrity: "PRESCORE-INTEGRITY-1" } };
-    if (name.includes("api-auth") || name.includes("entitlements")) return {};
-    if (name.includes("platform/runtime")) return { getRuntime() { throw new Error("UNEXPECTED_RUNTIME_ACCESS"); } };
-    if (name === "../../../lib/release/security") return releaseSecurity;
-    throw new Error(`Unexpected import: ${name}`);
-  });
-  return exports;
-}
 test("existing latestFinances values unchanged including legacy zero semantics", () => {
-  const r = checkoRouteHarness().latestFinances({ data: { 2025: { ...rows, "1410": null }, 2024: { ...rows, "2110": 1000 } } });
+  const r = latestFinances({ data: { 2025: { ...rows, "1410": null }, 2024: { ...rows, "2110": 1000 } } });
   assert.equal(r.revenue, 2000); assert.equal(r.revenueGrowth, 100); assert.equal(r.currentLiquidity, 2);
   assert.equal(r.autonomy, 50); assert.equal(r.returnOnSales, 16); assert.equal(r.workingCapital, 300);
   assert.equal(r.debtToEquity, .2); assert.equal(r.interestCoverage, 10); assert.equal(r.costOfSales, -1200);
-  const missing = checkoRouteHarness().latestFinances({ data: { 2025: {} } }); assert.equal(missing.revenue, 0); assert.equal(missing.currentAssets, 0);
+  const missing = latestFinances({ data: { 2025: {} } }); assert.equal(missing.revenue, 0); assert.equal(missing.currentAssets, 0);
 });
 test("Checko profile integrates shadow alongside unchanged finances", () => {
-  const h = checkoRouteHarness(), input = { finances: { data: { 2025: rows, 2024: rows }, meta: { scale: 1, currency: "RUB" } } };
-  const profile = h.normalizeProfile("7701234567", input, []);
-  assert.deepEqual(profile.finances, h.latestFinances(input.finances)); assert.equal(profile.financialStatementsV2.length, 2);
+  const input = { company:{data:{ИНН:"7701234567"}}, finances: { company:{ИНН:"7701234567"}, data: { 2025: rows, 2024: rows }, meta: { scale: 1, currency: "RUB" } } };
+  const profile = normalizeProfile("7701234567", input, {}, "2026-08-01T00:00:00Z");
+  assert.deepEqual(profile.finances, latestFinances(input.finances)); assert.equal(profile.financialStatementsV2.length, 2);
   assert.equal(profile.financialAnalysisV2.latestAnnual.liquidity.currentRatio.value, 2);
-  const free = h.profileView(profile, "FREE"); assert.equal(free.financialAnalysisV2, undefined); assert.equal(free.financialStatementsV2, undefined); assert.equal(free.financialMetricsComparison, undefined);
+  const free = profileView(profile, "FREE"); assert.equal(free.financialAnalysisV2, undefined); assert.equal(free.financialStatementsV2, undefined); assert.equal(free.financialMetricsComparison, undefined);
 });
 test("Checko shadow never changes raw input", () => { const raw = { data: { 2025: rows } }, before = structuredClone(raw); checkoFinancialShadow(raw, source(), {}); assert.deepEqual(raw, before); });
 test("legacy financial comparison aligns units and exposes missing semantics", () => {

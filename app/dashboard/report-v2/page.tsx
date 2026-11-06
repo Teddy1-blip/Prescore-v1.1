@@ -1,10 +1,10 @@
+import {cachedProfile} from "../../../lib/external/checko-profile";
 import {projectPrintBanking} from '../../../lib/workspace/print-banking.ts';
 import {notFound, redirect} from 'next/navigation';
 import Link from 'next/link';
 import {AnalysisV3} from './analysis-v3.tsx';
 import {PrintReport} from './print-report.tsx';
 import type {ClientReportModelV1} from '../../../lib/credit-engine/contracts/client-report.ts';
-import type {CompanyProfileData} from '../../../lib/company-profile';
 import {getRuntime} from '../../../lib/platform/runtime';
 import {requireApiUser, readableAnalysis} from '../../api/api-auth';
 import {resolveAnalysisTier, type EntitlementDatabase} from '../../../lib/entitlements';
@@ -26,7 +26,7 @@ export default async function ReportPage({searchParams}: {searchParams: Promise<
    readOperations: (id, access) => readWorkspaceOperations(db,id,access.row.companyInn,user),
    readProfile: async inn => {
     const row = await db.prepare('SELECT payload FROM checko_profiles WHERE inn = ? LIMIT 1').bind(inn).first<{payload:string}>();
-    return row ? JSON.parse(row.payload) as CompanyProfileData : undefined;
+    return row ? cachedProfile(row.payload,inn) : undefined;
    },
   });
   if(result.state === 'NOT_FOUND') notFound();

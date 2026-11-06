@@ -22,6 +22,10 @@ export type KnownValue<T> =
   | { status: "UNKNOWN"; value: null };
 
 export type SourceEnvelope = {
+  provider?: "CHECKO" | "EIS_DIRECT" | "FNS_DIRECT";
+  upstream?: import("../../external/records.ts").Authority;
+  direct?: boolean;
+  informationDate?: string|null;
   sourceId: string;
   sourceType: SourceType;
   status: SourceStatus;

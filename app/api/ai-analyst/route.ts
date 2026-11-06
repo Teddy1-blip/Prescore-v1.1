@@ -1,9 +1,9 @@
+import {cachedProfile} from "../../../lib/external/checko-profile";
 import {configuredProvider, generateWithFallback} from "../../../lib/ai/providers";
 import {getRuntime} from "../../../lib/platform/runtime";
 import { createHash } from "node:crypto";
 import { loadWorkspaceModelV1, readWorkspaceOperations } from "../../../lib/workspace/service.ts";
 import type { WorkspaceModelV1 } from "../../../lib/workspace/model.ts";
-import type { CompanyProfileData } from "../../../lib/company-profile";
 import { AI_ANALYST_PROMPT_VERSION, AI_ANALYST_SYSTEM_PROMPT, ANALYST_QUESTIONS, analystTopic, buildLocalAnalystAnswer, buildSanitizedCreditContext } from "../../../lib/ai-credit-analyst";
 import { readableAnalysis, requireApiUser, unauthorized } from "../api-auth";
 import { resolveAnalysisTier } from "../../../lib/entitlements";
@@ -55,7 +55,7 @@ async function ownedContext(db: Database, analysisId: string, user: { email: str
     readProfile: async inn => {
       const row = await db.prepare("SELECT payload FROM checko_profiles WHERE inn = ? LIMIT 1").bind(inn).first<{payload:string}>();
       if (!row) return undefined;
-      try { return JSON.parse(row.payload) as CompanyProfileData; } catch { return undefined; }
+      try { return cachedProfile(row.payload,inn); } catch { return undefined; }
     },
     readOperations: (id, access) => readWorkspaceOperations(db, id, access.row.companyInn, user),
   });
