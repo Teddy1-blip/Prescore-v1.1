@@ -48,14 +48,14 @@ test('control page checks ADMIN on server and the old route is unavailable for e
  const old=load('app/admin/page.tsx',{'next/navigation':navigation});await assert.rejects(old.default(),/NOT_FOUND/);
  for(const file of ['app/login/page.tsx','app/components/landing-v3/landing.tsx'])assert.doesNotMatch(fs.readFileSync(file,'utf8'),/href=["']\/(?:admin|prescore-control)/);
 });
-test('shared shell has explicit unavailable counterparties and no admin link in client or broker navigation',async()=>{
+test('shared shell exposes only released navigation and no admin link in client or broker navigation',async()=>{
  const rt=await createWorkspaceRuntime();try{
   const {ClientShell,CLIENT_NAV,BROKER_NAV}=rt.load('app/components/workspace/client-shell.tsx');
   for(const broker of [false,true]){
    const html=renderToStaticMarkup(React.createElement(ClientShell,{view:'home',choose(){},broker,availableViews:(broker?BROKER_NAV:CLIENT_NAV).map(x=>x.id),context:'Synthetic'},'Test'));
    assert.doesNotMatch(html,/href="\/(?:admin|prescore-control)"/);
    assert.match(html,/href="\/logout">Сменить аккаунт/);
-   if(!broker)assert.match(html,/<button[^>]*disabled=""[^>]*title="Проверка контрагентов появится на следующем этапе"/);
+   if(!broker){assert.doesNotMatch(html,/Контрагенты|Оплата/);assert.match(html,/Анализ Prescore/);assert.match(html,/Финансы/);}
   }
  }finally{await rt.close();}
 });

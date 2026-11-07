@@ -89,7 +89,7 @@ test('clicking Finance without an analysis changes content, not only the highlig
  assert.equal(new URL(h.window.location.href).searchParams.get('view'),'banking');
  assert.equal(named(tree,'EmptyHome').length,0);
  assert.ok(named(tree,'Panel').some(n=>n.props.title==='Финансы'));
- assert.match(text(tree),/Выберите сохранённый анализ/);
+ assert.match(text(tree),/Создайте первый кредитный профиль по банковской выписке/);
 });
 for(const [view,title]of Object.entries({analysis:'Анализ Prescore',banking:'Финансы',obligations:'Обязательства',financing:'Финансирование',documents:'Документы',applications:'Заявки',analyst:'Кредитный аналитик',billing:'Подписка компании'})){
  test(`unselected ${view} has its own section title and explicit company selection`,()=>{
@@ -142,7 +142,7 @@ test('a missing explicit analysis ID never selects another saved analysis',()=>{
  const h=harness({view:'documents',selectedId:'not-owned'}),tree=h.render();
  assert.equal(h.values[2],'not-owned');
  assert.equal(named(tree,'SourceUpload').length,0);
- assert.match(text(tree),/другой анализ автоматически не подставляется/);
+ assert.match(text(tree),/Этот анализ больше недоступен/);
 });
 test('disabled module is not opened by the document recovery path',()=>{
  const tree=harness({view:'documents',selectedId:company.id,modules:{documents:false},modelError:'Model unavailable'}).render();
@@ -164,22 +164,17 @@ test('read-only user cannot open the statement upload form',()=>{
  assert.equal(named(tree,'Analyze').length,0);
 });
 
-test('choosing a company opens the requested Finance section without changing company implicitly',()=>{
- const h=harness({view:'banking'});
- const button=nodes(h.render()).find(n=>n.type==='button'&&text(n).includes(company.companyName));
- assert.ok(button);
- button.props.onClick();
- h.modelState.model=readyModel();
- const tree=h.render();
+test('an explicitly selected company opens Finance without any history selector',()=>{
+ const model=readyModel(),h=harness({view:'banking',selectedId:company.id,model}),tree=h.render();
  assert.equal(h.values[2],company.id);
  assert.equal(h.values[3],'banking');
- assert.equal(new URL(h.window.location.href).searchParams.get('analysisId'),company.id);
  assert.equal(named(tree,'BankingLedger').length,1);
  assert.equal(named(tree,'EmptyHome').length,0);
+ assert.equal(named(tree,'select').length,0);
 });
 test('an empty Documents section offers a working route to statement upload',()=>{
  const h=harness({view:'documents',analyses:[]});
- const button=nodes(h.render()).find(n=>n.type==='button'&&text(n).includes('Создать анализ по выписке'));
+ const button=nodes(h.render()).find(n=>n.type==='button'&&text(n).includes('Новый анализ'));
  assert.ok(button);
  button.props.onClick();
  assert.equal(named(h.render(),'Analyze').length,1);
@@ -199,10 +194,11 @@ test('model-provided read-only access is still enforced in operational sections'
 });
 
 
-test('diagnostic is visible in Documents without hiding the three analytical upload forms',()=>{
+test('internal diagnostic copy is hidden in Documents while recovery controls remain usable',()=>{
  const h=harness({view:'documents',selectedId:company.id,modelError:'Model unavailable',diagnostic:'Safe processing diagnostic'}),tree=h.render();
- assert.equal(nodes(tree).filter(n=>n.props?.['data-workspace-diagnostic']).length,1);
- assert.match(text(tree),/Safe processing diagnostic/);
+ assert.equal(nodes(tree).filter(n=>n.props?.['data-workspace-diagnostic']).length,0);
+ assert.doesNotMatch(text(tree),/Safe processing diagnostic/);
+ assert.match(text(tree),/Model unavailable/);
  assert.deepEqual(named(tree,'SourceUpload').map(n=>n.props.kind).sort(),['BFO','BKI','QUARTERLY']);
 });
 test('no diagnostic is shown for an unselected or inaccessible analysis',()=>{
@@ -212,9 +208,10 @@ test('no diagnostic is shown for an unselected or inaccessible analysis',()=>{
   assert.doesNotMatch(text(tree),/Previous analysis diagnostic/);
  }
 });
-test('read-only diagnostic does not expose mutation controls',()=>{
+test('read-only model failure stays user-facing and exposes no diagnostic or mutation controls',()=>{
  const tree=harness({view:'documents',selectedId:company.id,readOnly:true,modelError:'Model unavailable',diagnostic:'Safe processing diagnostic'}).render();
- assert.match(text(tree),/Safe processing diagnostic/);
+ assert.match(text(tree),/Model unavailable/);
+ assert.doesNotMatch(text(tree),/Safe processing diagnostic/);
  assert.equal(named(tree,'SourceUpload').length,0);
  assert.equal(named(tree,'CompanyData').length,0);
 });
@@ -230,15 +227,13 @@ test('removed or unselected analysis cannot leak a cached company into the heade
  }
 });
 
-test('QA lives in a separate disclosure and explicit selector group; work with QA in its name remains work',()=>{
+test('CLIENT never exposes work or QA history in the visible cabinet',()=>{
  const control={...company,id:'test-control',companyName:'Control company',historyPurpose:'QA'};
  const work={...company,companyName:'QA real working company',historyPurpose:'WORK'};
  const tree=harness({analyses:[control,work]}).render();
- const history=named(tree,'Panel').find(n=>n.props.title==='Последние активные анализы');
- assert.match(text(history),/QA real working company/);assert.doesNotMatch(text(history),/Control company/);
- const disclosure=named(tree,'details').find(n=>n.props.className==='pc-test-history');
- assert.match(text(disclosure),/Control company/);assert.match(text(disclosure),/Тестовые данные/);
- assert.deepEqual(named(tree,'optgroup').map(n=>n.props.label),['Рабочие компании','Тестовые данные']);
+ assert.doesNotMatch(text(tree),/Control company|QA real working company|Тестовые данные/);
+ assert.equal(named(tree,'optgroup').length,0);
+ assert.equal(nodes(tree).filter(n=>n.props?.className==='pc-test-history').length,0);
 });
 test('starting a new analysis clears the selected company and does not persist a phantom record',()=>{
  const h=harness({selectedId:company.id,model:readyModel()});
@@ -248,5 +243,5 @@ test('starting a new analysis clears the selected company and does not persist a
  assert.equal(named(tree,'Analyze').length,1);
  const header=nodes(tree).find(n=>n.props.className==='pc-company');
  assert.doesNotMatch(text(header),/Owned company/);
- assert.equal(named(tree,'select')[0].props.value,'');
+ assert.equal(named(tree,'select').length,0);
 });

@@ -8,7 +8,7 @@ import {publicText as clientText} from '../../../lib/credit-engine/client-report
 import {sourceLabel,sourceState,label} from './credit-depth';
 import {CashMovement, cashMoney} from './cash-movement';
 import {receiptLabel} from '../../../lib/credit-engine/explainability/receipts';
-import {concentrationPercent,factValue} from './data-panel';
+import {FinancialSnapshot} from './client-financials';
 export function Panel({title,action,children,id}:{title:string;action?:ReactNode;children:ReactNode;id?:string}){return <section className="pc-panel" id={id}><header><h2>{title}</h2>{action}</header>{children}</section>;}
 export function Why({model,ids}:{model:WorkspaceModelV1;ids:string[]}){
  const dialog=useRef<HTMLDialogElement>(null),e=model.full?.canonical.explainability;
@@ -55,9 +55,11 @@ export function AssessmentLimits({model,choose}:{model:WorkspaceModelV1;choose?:
  const action=bfo?'Добавить бухгалтерскую отчётность':bki?'Добавить кредитную историю':'Проверить основания оценки';
  return <aside className="pc-assessment-limit"><h2>Предварительная оценка</h2><p>Пока не определены: {missing.join(', ')}. Подтверждённые банковские данные показаны в обзоре.</p><p>{reason}</p><p>{bfo?'Отчётность дополнит денежный поток финансовым состоянием компании.':bki?'Кредитный отчёт позволит сопоставить обязательства с наблюдаемыми платежами.':'Уточнение источников позволит перепроверить ограниченные выводы; изменение оценки не гарантируется.'}</p>{choose&&<button className="pc-text-button" onClick={()=>choose(bfo||bki?'documents':'analysis')}>{action} →</button>}</aside>;
 }
+function dashboardFactValue(f:WorkspaceModelV1['basic']['bankingFacts']['grossInflow']){return f.status==='UNKNOWN'||f.value===null||!Number.isFinite(f.value)?null:f.value;}
+function dashboardConcentration(f:WorkspaceModelV1['basic']['bankingFacts']['directCustomerTop1']){const v=dashboardFactValue(f);return v===null||!['RATIO','PERCENT'].includes(f.unit)?null:v*(f.unit==='RATIO'?100:1);}
 function bankDashboardSignals(model:WorkspaceModelV1){
  const b=model.basic.bankingFacts;
- const net=factValue(b.netCashFlow),low=factValue(b.lowLiquidityDays),top1=concentrationPercent(b.directCustomerTop1),individuals=factValue(b.transfersToIndividuals),principal=factValue(b.loanPrincipalPayments);
+ const net=dashboardFactValue(b.netCashFlow),low=dashboardFactValue(b.lowLiquidityDays),top1=dashboardConcentration(b.directCustomerTop1),individuals=dashboardFactValue(b.transfersToIndividuals),principal=dashboardFactValue(b.loanPrincipalPayments);
  const strengths:Array<{title:string;text:string}>=[];
  const attention:Array<{title:string;text:string}>=[];
  if(net!==null) (net>=0?strengths:attention).push({title:net>=0?'Положительный чистый денежный поток':'Списания превышают поступления',text:net>=0?`Внешние поступления превышают списания на ${money(net)} за анализируемый период.`:`Внешние списания превышают поступления на ${money(Math.abs(net))} за анализируемый период.`});
@@ -69,7 +71,7 @@ function bankDashboardSignals(model:WorkspaceModelV1){
  if(!attention.length) attention.push({title:'Критичных банковских сигналов в сводке не выделено',text:'Детальная проверка факторов и источников доступна в разделе «Анализ Prescore».'});
  return {strengths:strengths.slice(0,3),attention:attention.slice(0,3)};
 }
-function dashboardValue(f:WorkspaceModelV1['basic']['bankingFacts']['grossInflow']){const v=factValue(f);return v===null?'—':money(v);}
+function dashboardValue(f:WorkspaceModelV1['basic']['bankingFacts']['grossInflow']){const v=dashboardFactValue(f);return v===null?'—':money(v);}
 export function ExecutiveOverview({model,choose,retry,children}:{children?:ReactNode;model:WorkspaceModelV1;choose:(v:string)=>void;retry:()=>void}){
  const r=model.full?.report,b=model.basic.bankingFacts,bank=bankDashboardSignals(model);
  const index=model.full?.canonical.prescoreIndex.value??null;
@@ -85,7 +87,7 @@ export function ExecutiveOverview({model,choose,retry,children}:{children?:React
  return <div className="pc-dashboard" data-prescore-dashboard="v1">
   <header className="pc-dashboard-heading">
    <div><span>КРЕДИТНЫЙ ПРОФИЛЬ</span><h1>Финансово-кредитный профиль</h1><p>{model.basic.analysis.company.name} · ИНН {model.basic.analysis.company.inn} · {period}</p></div>
-   <button className="pc-secondary" onClick={()=>choose('analysis')}>Открыть полный анализ →</button>
+   <button className="pc-secondary" onClick={()=>choose('analysis')}>Открыть заключение →</button>
   </header>
   <section className="pc-dashboard-summary" aria-label="Кредитная сводка">
    <article className="pc-score-card"><small>Prescore Index</small>{index!==null?<strong data-credit-index>{index}<em>/ 1000</em></strong>:<strong className="is-text">Банковский профиль</strong>}<p>{index!==null?(r?.index.status||'Расчёт сформирован'):'Анализ по выпискам сформирован'}</p></article>
@@ -118,6 +120,7 @@ export function ExecutiveOverview({model,choose,retry,children}:{children?:React
     <div className="pc-dashboard-actions">{actions.map((a,i)=><article key={a.id}><small>{String(i+1).padStart(2,'0')}</small><div><h3>{a.title}</h3><p>{a.summary}</p></div><Why model={model} ids={[a.claimId]}/></article>)}</div>
    </section>
   </div>}
+  {r?.financialAnalysis?.history.length?<FinancialSnapshot model={model} choose={choose}/>:null}
   {r?.externalSummary?.length?<section className="pc-dashboard-section pc-dashboard-external"><header><div><span>ВНЕШНИЙ КОНТЕКСТ</span><h2>Юридические и внешние сведения</h2></div></header><dl>{r.externalSummary.map(f=><div key={f.code}><dt>{f.label}</dt><dd>{f.value}<small>{f.source} · {date(f.asOf)}</small></dd></div>)}</dl></section>:null}
   <section className="pc-dashboard-sources"><span>Выписки <b>✓</b></span><button onClick={()=>choose('documents')}>БФО +</button><button onClick={()=>choose('obligations')}>БКИ +</button><button onClick={()=>choose('analysis')}>Основания и заключение →</button></section>
   {children&&r?.hero.route!=='INSUFFICIENT_DATA'?<div className="pc-dashboard-route">{children}</div>:null}
