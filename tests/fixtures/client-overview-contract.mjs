@@ -69,6 +69,7 @@ export function assertClientOverviewRouting(source) {
   assert.equal(result?.type?.name, 'FreeOverview', 'no full model: use FreeOverview');
   assert.equal(result.props.model, model, 'FREE receives the original model');
   assert.equal(result.props.retry, retry, 'FREE retains retry');
+  assert.equal(result.props.choose, choose, 'FREE retains navigation');
   assert.equal(elements(result).filter(n => n.type === ExecutiveOverview || n.type === ClientDecisionRoute).length, 0, 'no paid children in FREE route');
   assert.equal(JSON.stringify(model), before, 'FREE must not mutate the model');
  }

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {assertClientOverviewRouting} from './fixtures/client-overview-contract.mjs';
 const source = fs.readFileSync('app/components/workspace/client-launch-overview.tsx', 'utf8');
-const guard = 'if (!props.model.full) return <FreeOverview model={props.model} retry={props.retry}/>;';
+const guard = 'if (!props.model.full) return <FreeOverview {...props}/>;';
 const executive = '<ExecutiveOverview {...props}>';
 const decision = '<ClientDecisionRoute model={props.model} choose={props.choose}/>';
 function change(from, to) {
@@ -32,8 +32,7 @@ for (const [name, from, to] of [
  ['cloned model in decision route', decision, '<ClientDecisionRoute model={{...props.model}} choose={props.choose}/>'],
  ['lost decision navigation', decision, '<ClientDecisionRoute model={props.model}/>'],
  ['lost executive callbacks', executive, '<ExecutiveOverview model={props.model}/>'],
- ['lost FREE retry', guard, guard.replace(' retry={props.retry}', '')],
- ['FREE model substitution', guard, guard.replace('model={props.model}', 'model={{...props.model}}')],
+ ['lost FREE props', guard, guard.replace('{...props}', 'model={props.model} retry={props.retry}')],
  ['mutation of canonical input', executive, '<ExecutiveOverview {...props} model={(props.model.full.canonical.prescoreIndex.value=999, props.model)}/>'],
 ]) test('routing guard rejects ' + name, () => {
  assert.throws(() => assertClientOverviewRouting(change(from, to)));
