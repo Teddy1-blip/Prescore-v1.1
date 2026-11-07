@@ -305,6 +305,16 @@ function normalizeInn(value?: string) {
 
 function field(record: Record<string, string>, ...names: string[]) {
   for (const name of names) if (record[name]) return record[name].trim();
+  // Some bank 1C exporters vary only the key casing. Keep exact aliases
+  // authoritative, then fall back to a case-insensitive lookup without
+  // widening the accepted field names.
+  const entries = Object.entries(record);
+  for (const name of names) {
+    const normalizedName = name.toLocaleLowerCase("ru-RU").replace(/ё/g, "е");
+    const matched = entries.find(([key, value]) =>
+      Boolean(value) && key.trim().toLocaleLowerCase("ru-RU").replace(/ё/g, "е") === normalizedName);
+    if (matched) return matched[1].trim();
+  }
   return "";
 }
 
@@ -507,8 +517,14 @@ function deriveIdentity(documents: ParsedDocument[], accounts: AccountBlock[], h
       addCandidate(recipientAccount, recipientInn, companySideName(doc, "recipient"));
     }
   }
-  if (accounts.some(a=>!evidencedAccounts.has(a.account))) {
-    throw new Error("По одному из заявленных счетов нет подтверждения владельца по ИНН и стороне операции.");
+  // Require owner evidence only for accounts that actually have postings in
+  // this export. A declared but inactive account must not invalidate an
+  // otherwise valid statement batch.
+  const activeAccounts = new Set(documents
+    .map((doc) => normalizeAccount(doc.__account))
+    .filter((account): account is string => Boolean(account)));
+  if (accounts.some(a=>activeAccounts.has(a.account) && !evidencedAccounts.has(a.account))) {
+    throw new Error("По одному из активных счетов нет подтверждения владельца по ИНН и стороне операции.");
   }
   if (candidates.size > 1) throw new Error("По указанным счетам найдены разные ИНН владельцев. Проверьте состав файла.");
   const selected = [...candidates.values()][0];

@@ -31,6 +31,39 @@ test("recognizes the servicing bank from the company side of a generic 1C export
   assert.equal(inspection.bankName, "Уралсиб");
 });
 
+test("accepts a declared inactive account when active postings prove the same owner", () => {
+  const active = statement({ account: "40702810111110000001", inn: "5032333146", company: "ООО СИТИМЭЙТС", bank: "ПАО БАНК УРАЛСИБ" });
+  const inactive = [
+    "СекцияРасчСчет",
+    "ДатаНачала=01.07.2026",
+    "ДатаКонца=31.07.2026",
+    "РасчСчет=40702810999990000003",
+    "НачальныйОстаток=0.00",
+    "ВсегоПоступило=0.00",
+    "ВсегоСписано=0.00",
+    "КонечныйОстаток=0.00",
+    "КонецРасчСчет",
+  ].join("\n");
+  const text = active.replace("КонецФайла", inactive + "\nКонецФайла");
+  const inspection = inspectBankStatement(text, "statement.txt");
+  assert.equal(inspection.companyInn, "5032333146");
+  assert.deepEqual(inspection.accounts.sort(), ["40702810111110000001", "40702810999990000003"].sort());
+});
+
+test("accepts case-only variants of known 1C field names", () => {
+  const text = statement({ account: "40702810111110000001", inn: "5032333146", company: "ООО СИТИМЭЙТС", bank: "ПАО БАНК УРАЛСИБ" })
+    .replace("ПолучательИНН=5032333146", "получательинн=5032333146")
+    .replace("ПолучательСчет=40702810111110000001", "получательсчет=40702810111110000001");
+  const inspection = inspectBankStatement(text, "statement.txt");
+  assert.equal(inspection.companyInn, "5032333146");
+});
+
+test("still rejects an active account when owner evidence is missing", () => {
+  const text = statement({ account: "40702810111110000001", inn: "5032333146", company: "ООО СИТИМЭЙТС", bank: "ПАО БАНК УРАЛСИБ" })
+    .replace("ПолучательИНН=5032333146", "ПолучательИНН=");
+  assert.throws(() => inspectBankStatement(text, "statement.txt"), /активных счетов/);
+});
+
 test("combines several statements of one company", () => {
   const first = statement({ account: "40702810111110000001", inn: "5032333146", company: "ООО СИТИМЭЙТС", bank: "ПАО БАНК УРАЛСИБ", date: "01.07.2026" });
   const second = statement({ account: "40702810222220000002", inn: "5032333146", company: "ООО СИТИМЭЙТС", bank: "АО ТИНЬКОФФ БАНК", date: "02.07.2026", amount: "200000.00" });
