@@ -175,6 +175,46 @@ function delinquencyQuality(days: number | null, overdue: number | null): DebtSe
   return "Недостаточно данных";
 }
 
+function fundedObligation(item: CreditObligation) {
+  return !/гаранти|поручительств/i.test(item.product) && !/поручител|гарант/i.test(item.role);
+}
+
+function parserCompleteness(obligations: CreditObligation[]) {
+  const funded = obligations.filter(fundedObligation);
+  const active = funded.filter((item) => !/закрыт|погашен|прекращ/i.test(item.status));
+  const relevant = active.length ? active : funded;
+  if (!relevant.length) return { ratio: 1, missingPrincipalShare: 0, missingPaymentShare: 0, missingRateShare: 0 };
+  const known = relevant.reduce((sum, item) => sum
+    + Number(item.originalAmount !== null)
+    + Number(item.outstandingPrincipal !== null || item.totalOutstanding !== null)
+    + Number(item.monthlyPayment !== null || item.contractualPayment !== undefined)
+    + Number(item.annualRate !== null)
+    + Number(item.overdueAmount !== null), 0);
+  const ratio = known / (relevant.length * 5);
+  const share = (predicate: (item: CreditObligation) => boolean) => relevant.filter(predicate).length / relevant.length;
+  return {
+    ratio,
+    missingPrincipalShare: share((item) => item.outstandingPrincipal === null && item.totalOutstanding === null),
+    missingPaymentShare: share((item) => item.monthlyPayment === null && item.contractualPayment === undefined),
+    missingRateShare: share((item) => item.annualRate === null),
+  };
+}
+
+function parserConfidenceFromCompleteness(base: number, emptyFallback: number, obligations: CreditObligation[]) {
+  if (!obligations.length) return emptyFallback;
+  const { ratio } = parserCompleteness(obligations);
+  return Math.min(base, Math.max(emptyFallback, Math.round(emptyFallback + ratio * (base - emptyFallback))));
+}
+
+function parserCompletenessWarnings(obligations: CreditObligation[]) {
+  const completeness = parserCompleteness(obligations);
+  const warnings: string[] = [];
+  if (completeness.missingPrincipalShare > 0.5) warnings.push("По большинству кредитных обязательств не распознан текущий остаток; проверьте исходный отчёт БКИ.");
+  if (completeness.missingPaymentShare > 0.5) warnings.push("По большинству кредитных обязательств не распознан регулярный платёж; проверьте исходный отчёт БКИ.");
+  if (completeness.missingRateShare > 0.5) warnings.push("По большинству кредитных обязательств не распознана ставка; проверьте исходный отчёт БКИ.");
+  return warnings;
+}
+
 // Some SB reports print the arrears and next instalment side by side.
 function sbServicingColumns(block: string) {
   const row = block.match(/^[ \t]*Текущая просрочка[ \t]+(?:Ближайший|Следующий) плат[её]ж[ \t]*\n(?:[ \t]*\n)*([^\n]+)/im)?.[1];
@@ -269,6 +309,8 @@ function parseSbObligation(block: string, index: number): CreditObligation | nul
       ...(maxDays === 0 ? {maxDelinquencyDays:{origin:"REPORTED" as const,value:0,reference:"Explicit bureau payment-history codes/count"}} : {}),
       ...(overdue === 0 ? {overdueAmount:{origin:"REPORTED" as const,value:0,reference:"SB Текущая просрочка: explicit absence or zero"}} : {}),
       ...(nextPayment === 0 ? {nextPaymentAmount:{origin:"REPORTED" as const,value:0,reference:"SB next-payment field: explicit zero"}} : {}),
+      ...(totalOutstanding !== null ? {totalOutstanding:{origin:"ESTIMATED" as const,value:totalOutstanding,reference:"SB «Выплатили»: позиционная эвристика без однозначной метки поля"}} : {}),
+      ...(outstandingPrincipal !== null ? {principalOutstanding:{origin:"ESTIMATED" as const,value:outstandingPrincipal,reference:"SB «Выплатили»: позиционная эвристика без однозначной метки поля"}} : {}),
     },
     paymentQuality: delinquencyQuality(maxDays, overdue),
     collateral,
@@ -302,7 +344,7 @@ function parseSbReport(source: string, fileName: string): CreditHistoryReport {
   const inquiries12 = intValue(summaryBlock.match(/Интересовались вашей кредитной историей\s+(\d+)\s+раз\s+\d+\s+раз\s+\d+\s+раз/i)?.[1]);
   const selfBanSection = text.match(/Действующие запреты на заключение договоров[\s\S]*?(?:Снятые|Ранее действовавшие)/i)?.[0] ?? "";
   const selfBanActive = Boolean(selfBanSection && !/Отсутствуют/i.test(selfBanSection));
-  const warnings: string[] = [];
+  const warnings: string[] = [...parserCompletenessWarnings(obligations)];
   if (selfBanActive) warnings.push("В отчёте указан действующий самозапрет на заключение потребительских кредитов и займов.");
   if (!obligations.length) warnings.push("Детальные действующие обязательства не распознаны; проверьте формат отчёта.");
   return finishReport({
@@ -318,7 +360,7 @@ function parseSbReport(source: string, fileName: string): CreditHistoryReport {
     bureauScore: score,
     bureauScoreMax: score === null ? null : 999,
     selfBanActive,
-    parserConfidence: obligations.length ? 94 : 55,
+    parserConfidence: parserConfidenceFromCompleteness(94, 55, obligations),
     fileName,
     obligations,
     summaryOverrides: { reportedOpenCount, reportedClosedCount, inquiries12Months: inquiries12, outstandingPrincipal: summaryOutstanding, monthlyPayment: summaryPayment },
@@ -413,7 +455,7 @@ function parseNbkiReport(source: string, fileName: string): CreditHistoryReport 
   const parsed = headers.map((match, index) => parseNbkiObligation(text.slice(match.index, headers[index + 1]?.index ?? text.length), index)).filter((item): item is CreditObligation => Boolean(item));
   const obligations = [...new Map(parsed.map((item) => [item.accountNumber || item.id, item])).values()];
   const summary = text.match(/Сводка\s+Счета[\s\S]*?(?=Субъект:\s*Кредитная история)/i)?.[0] ?? "";
-  const warnings: string[] = [];
+  const warnings: string[] = [...parserCompletenessWarnings(obligations)];
   if (obligations.some((item) => item.totalOutstanding === null || item.monthlyPayment === null || item.annualRate === null)) warnings.push("В части старых записей НБКИ отсутствуют остаток, платёж или ставка; Прескор показывает «нет данных» и ничего не рассчитывает вместо бюро.");
   if (!obligations.length) warnings.push("Счета из корпоративного отчёта НБКИ не распознаны; нужна ручная проверка формата.");
   return finishReport({
@@ -427,7 +469,7 @@ function parseNbkiReport(source: string, fileName: string): CreditHistoryReport 
     bureauScore: null,
     bureauScoreMax: null,
     selfBanActive: false,
-    parserConfidence: obligations.length ? 88 : 48,
+    parserConfidence: parserConfidenceFromCompleteness(88, 48, obligations),
     fileName,
     obligations,
     summaryOverrides: {
