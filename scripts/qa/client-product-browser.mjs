@@ -137,7 +137,7 @@ try{
  await page.getByRole('alert').waitFor();assert.match(await page.getByRole('alert').innerText(),/Повторить/);
  await page.unroute(workspaceURL,unavailableWorkspace);
  const recoveredResponse=page.waitForResponse(workspaceResponse);await page.getByRole('button',{name:'Повторить',exact:true}).click();
- assert.equal((await recoveredResponse).status(),200);await page.getByRole('button',{name:'Создать новый анализ',exact:true}).waitFor();
+ assert.equal((await recoveredResponse).status(),200);await page.getByRole('heading',{name:'Финансово-кредитный профиль',exact:true}).waitFor();
  await page.waitForFunction(()=>document.querySelector('[role="alert"]')===null);
  checks.push('intercepted summary 503: visible alert and successful retry');
  assert.deepEqual(errors,[]);checks.push('no browser runtime errors');console.log('PASS',checks.length);
