@@ -15,7 +15,7 @@ import time
 import urllib.request
 
 REPOSITORY = 'Teddy1-blip/Prescore-v1.1'
-EXPECTED_URL_HASH = '8c555e0feb51544f403fa64b5524d995fd1db297515ac014ebfa16178eeb8e5f'
+EXPECTED_URL_HASH = '95c8b8a8a66257a3b8cf960a4cd59ea7d12ecca14e9dec5337094c07209fb58f'
 EXPECTED_USERNAME_HASH = '1836883e26077edebe552d31af4d4475b979862e78bd0fb22af6da7c17a8063f'
 SHA = re.compile(r'^[0-9a-f]{40}$')
 
@@ -154,7 +154,7 @@ def push(workspace, state_dir, env, observed):
 
 
 def verify_history_purge():
-    url = 'https://prescore-staging-dorogovab.amvera.io/api/health'
+    url = 'https://prescore-staging-dorogovab.msk1.amvera.tech/api/health'
     last = 'unavailable'
     for _ in range(6):
         try:
