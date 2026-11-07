@@ -10,12 +10,12 @@ type Props = {
   retry: () => void;
 };
 
-function FreeOverview({model,retry}: Pick<Props, "model" | "retry">) {
-  return <ExecutiveOverview model={model} choose={()=>{}} retry={retry}/>;
+function FreeOverview({model,choose,retry}: Props) {
+  return <ExecutiveOverview model={model} choose={choose} retry={retry}/>;
 }
 
 export function ClientOverview(props: Props) {
-  if (!props.model.full) return <FreeOverview model={props.model} retry={props.retry}/>;
+  if (!props.model.full) return <FreeOverview {...props}/>;
   return <>
     <ExecutiveOverview {...props}>
       <ClientDecisionRoute model={props.model} choose={props.choose}/>
