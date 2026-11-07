@@ -10,7 +10,6 @@ import {CashTrend,Panel} from './client-insights';
 import {ClientOverview} from './client-launch-overview';
 import {FullCreditAnalysis,FinancingProducts,DebtPortfolio} from './client-analysis';
 import {FinancialStatements} from './client-financials';
-import {sourceState} from './credit-depth';
 import {BankingLedger} from './banking-ledger';
 import {FinancingRequest} from './financing-request';
 import {BrokerPermissions} from './client-operations';
@@ -40,7 +39,7 @@ export function clientSectionTitle(view:string){
 }
 export default function ClientWorkspace(){
  const [analyses,setAnalyses]=useState<StoredAnalysis[]>([]),[deals,setDeals]=useState<Deal[]>([]),[selectedId,setSelectedId]=useState(''),[view,setView]=useState('home'),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState(''),[readOnly,setReadOnly]=useState(false),[revision,setRevision]=useState(0),[modules,setModules]=useState<Record<string,boolean>>({}),[modulesLoading,setModulesLoading]=useState(true);
- const [operationsError,setOperationsError]=useState(''),[operationsLoading,setOperationsLoading]=useState(false),[uploadReceipt,setUploadReceipt]=useState<{id:string;receipt:UploadReceipt}|null>(null);
+ const [operationsError,setOperationsError]=useState(''),[operationsLoading,setOperationsLoading]=useState(false),[,setUploadReceipt]=useState<{id:string;receipt:UploadReceipt}|null>(null);
  const operationsRequest=useRef(0),scope=useRef(''),selection=useRef(''),draftRequests=useRef(new Map<string,string>()),openDataRequests=useRef(new Set<string>());
  const state=useWorkspaceModel(selectedId,revision);
  const unavailable=state.error==='Эта версия анализа недоступна.'||state.error.startsWith('Сессия завершена');

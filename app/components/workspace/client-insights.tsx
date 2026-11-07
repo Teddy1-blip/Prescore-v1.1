@@ -5,7 +5,7 @@ import type {WorkspaceModelV1} from '../../../lib/workspace/model';
 import type {PresentationFactorV1,PresentationActionV1} from '../../../lib/credit-engine/contracts/client-report';
 import {money,date,FullAccessNotice} from './presentation';
 import {publicText as clientText} from '../../../lib/credit-engine/client-report/copy';
-import {sourceLabel,sourceState,label,PortfolioSnapshot} from './credit-depth';
+import {sourceLabel,sourceState,label} from './credit-depth';
 import {CashMovement, cashMoney} from './cash-movement';
 import {receiptLabel} from '../../../lib/credit-engine/explainability/receipts';
 import {concentrationPercent,factValue} from './data-panel';
