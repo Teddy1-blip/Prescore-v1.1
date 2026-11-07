@@ -10,8 +10,8 @@ test('commercial client uses one navigation and separate executive/analysis path
  const rt=await createWorkspaceRuntime();try{
  const shell=rt.load('app/components/workspace/client-shell.tsx'),insights=rt.load('app/components/workspace/client-insights.tsx'),analysis=rt.load('app/components/workspace/client-analysis.tsx'),routing=rt.load('app/components/workspace/client.tsx');
  const {model}=conclusionFixture(),before=JSON.stringify(model),props={model,choose:()=>{},retry:()=>{}};
- assert.deepEqual(shell.CLIENT_NAV.map(i=>i.label),['Обзор','Анализ Prescore','Финансы','Обязательства','Финансирование','Документы','Контрагенты','Заявки','Кредитный аналитик','Оплата']);
- const overview=render(insights.ExecutiveOverview,props);assert.match(overview,/Обзор компании/);assert.doesNotMatch(overview,/av-scenario-grid|pc-memo|CLIENT.*ANALYSIS V3/);
+ assert.deepEqual(shell.CLIENT_NAV.map(i=>i.label),['Обзор','Анализ Prescore','Финансы','Обязательства','Финансирование','Документы','Заявки','Кредитный аналитик']);
+ const overview=render(insights.ExecutiveOverview,props);assert.match(overview,/Финансово-кредитный профиль/);assert.match(overview,/БАНКОВСКОЕ ЗАКЛЮЧЕНИЕ/);assert.doesNotMatch(overview,/av-scenario-grid|pc-memo|CLIENT.*ANALYSIS V3/);
  for(const section of ['conclusion','factors','capacity','financials','obligations','financing','reconciliation','plan','evidence'])await t.test(section,()=>{const html=render(analysis.FullCreditAnalysis,{...props,initialSection:section});assert.doesNotMatch(html,/NaN|undefined|Infinity/);assert.match(html,/Анализ Prescore/);});
  for(const C of [analysis.FinancingProducts,analysis.DebtPortfolio])assert.doesNotMatch(render(C,props),/NaN|undefined|Infinity/);
  assert.equal(JSON.stringify(model),before,'presentation must not mutate canonical results');
@@ -35,10 +35,10 @@ test('bank-first overview retains known zero and groups unknown credit outputs w
  model.basic.bankingFacts.taxPayments={...model.basic.bankingFacts.taxPayments,value:0,status:'KNOWN'};
  model.basic.bankingFacts.endingBalance={...model.basic.bankingFacts.endingBalance,value:987654321,status:'UNKNOWN'};
  const before=JSON.stringify(model),html=render(ExecutiveOverview,{model,choose:()=>{},retry:()=>{}});
- assert.match(html,/Что уже известно по выпискам/);assert.match(html,/Банковский профиль компании рассчитан/);
- assert.equal((html.match(/class="pc-assessment-limit"/g)||[]).length,1);
+ assert.match(html,/Финансово-кредитный профиль/);assert.match(html,/БАНКОВСКОЕ ЗАКЛЮЧЕНИЕ/);
+ assert.equal((html.match(/class="pc-assessment-limit"/g)||[]).length,0);
  assert.doesNotMatch(html,/data-credit-index|data-credit-readiness|data-prudential-capacity|987\s*654\s*321/);
- assert.match(html,/data-banking-fact="taxPayments"[^]*?0 ₽/);
+ assert.match(html,/Анализ по выпискам сформирован/);
  assert.equal(JSON.stringify(model),before);
  model.full.canonical.prescoreIndex.value=0;
  assert.match(render(ExecutiveOverview,{model,choose:()=>{},retry:()=>{}}),/data-credit-index="true">0/);
@@ -59,4 +59,13 @@ test('public explanations replace implementation wording and print deduplicates 
  assert.equal(rows.filter(x=>x.title===f.title&&x.text===f.text&&x.status.tone===f.status.tone).length,1);
  assert.equal(JSON.stringify(report),before);
  }finally{await rt.close();}
+});
+
+test('CLIENT product recovery keeps history out of the visible cabinet and protects the 19-block engine boundary',()=>{
+ const client=fs.readFileSync('app/components/workspace/client.tsx','utf8');
+ const overview=fs.readFileSync('app/components/workspace/client-insights.tsx','utf8');
+ assert.doesNotMatch(client,/Версия анализа|Последние активные анализы|Тестовые данные · \{qaAnalyses/);
+ assert.match(client,/const latest=rows\.filter\(a=>a\.historyPurpose!==['"]QA['"]\)/);
+ for(const required of ['Финансово-кредитный профиль','БАНКОВСКОЕ ЗАКЛЮЧЕНИЕ','КРЕДИТНЫЕ ФАКТОРЫ','ФИНАНСИРОВАНИЕ','РЕКОМЕНДАЦИИ'])assert.ok(overview.includes(required),required);
+ assert.doesNotMatch(overview,/buildPrescoreIndex|buildFinancingReadiness|buildCreditAssessment|buildDebtCapacity|estimatedLimit|stressLimit|baseMonthlyPaymentCapacity/);
 });
