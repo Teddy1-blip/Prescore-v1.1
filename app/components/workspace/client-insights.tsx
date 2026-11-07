@@ -6,7 +6,8 @@ import type {PresentationFactorV1,PresentationActionV1} from '../../../lib/credi
 import {money,date,FullAccessNotice} from './presentation';
 import {publicText as clientText} from '../../../lib/credit-engine/client-report/copy';
 import {sourceLabel,sourceState,label} from './credit-depth';
-import {CashMovement, cashMoney} from './cash-movement';
+import {CashMovement} from './cash-movement';
+import {ClientDecisionRoute} from './client-decision-route';
 import {receiptLabel} from '../../../lib/credit-engine/explainability/receipts';
 import {FinancialSnapshot} from './client-financials';
 export function Panel({title,action,children,id}:{title:string;action?:ReactNode;children:ReactNode;id?:string}){return <section className="pc-panel" id={id}><header><h2>{title}</h2>{action}</header>{children}</section>;}
@@ -26,16 +27,8 @@ export function Why({model,ids}:{model:WorkspaceModelV1;ids:string[]}){
 }
 export function FactorRows({model,items,limit}:{model:WorkspaceModelV1;items:PresentationFactorV1[];limit?:number}){const groups=new Map<string,{factor:PresentationFactorV1;claims:string[]}>();for(const f of items){const key=clientText(f.title+'|'+f.text).trim().toLocaleLowerCase('ru')+'|'+f.status.tone;const old=groups.get(key);if(old){old.claims.push(f.claimId);old.factor={...old.factor,actionIds:[...new Set([...old.factor.actionIds,...f.actionIds])]};}else groups.set(key,{factor:f,claims:[f.claimId]});}const distinct=[...groups.values()].slice(0,limit);const r=model.full?.report,actions=r?[...r.recommendations.primary,...r.recommendations.backlog,...r.actionPlan.horizons.flatMap(h=>h.items)]:[];return <div className="pc-factor-list">{distinct.map(({factor:f,claims})=><article key={f.id} className={'pc-factor tone-'+f.status.tone}><div><small>{f.status.label}</small><h3>{clientText(f.title)}</h3><p>{clientText(f.text)}</p>{f.impact&&f.impact!==f.text&&<p className="pc-muted">{clientText(f.impact)}</p>}{actions.filter((a,i,list)=>list.findIndex(other=>other.canonicalId===a.canonicalId)===i&&[...f.actionIds,...(r?.visual.factorActions[f.id]??[])].includes(a.id)).map(a=><p key={a.id}><a className="pc-text-button" href={(model.access.role==='ASSIGNED_BROKER'?'/agent?view=dossier&dossierView=analysis&analysisId=':'/dashboard?view=analysis&analysisId=')+encodeURIComponent(model.analysisId)+'&section=plan#'+a.id}>Что сделать: {a.title} →</a></p>)}</div><Why model={model} ids={claims}/></article>)}{!distinct.length&&<p className="pc-muted">Отдельные факторы не выделены в текущем анализе.</p>}</div>;}
 export function ActionItem({item,model}:{item:PresentationActionV1;model:WorkspaceModelV1}){const r=model.full!.report,all=[...r.recommendations.primary,...r.recommendations.backlog,...r.actionPlan.horizons.flatMap(h=>h.items)];return <article className="pc-action" id={item.id}><small>{item.group} · {item.status}</small><h3>{clientText(item.title)}</h3><p>{clientText(item.summary)}</p>{item.why!==item.summary&&<p>{clientText(item.why)}</p>}{item.steps.length>0&&<ol>{item.steps.map((s,i)=><li key={i}>{s}</li>)}</ol>}{item.prerequisites.length>0&&<p><b>Сначала: </b>{item.prerequisites.map(id=>all.find(a=>a.id===id||a.canonicalId===id)?.title??'Уточнить связанное условие').join('; ')}</p>}<p><b>Проверка результата: </b>{clientText(item.recheck)}</p>{item.evidence.length>0&&<p><b>Подтверждения: </b>{item.evidence.join('; ')}</p>}<Why model={model} ids={[item.claimId]}/></article>;}
-const coverageLabels:Record<string,string>={FULL:'Полный месяц',PARTIAL:'Неполный месяц',MISSING:'Нет покрытия',OVERLAP:'Перекрытие выписок'};
-export function CashTrend({model,compact=false}:{model:WorkspaceModelV1;compact?:boolean}){
- if (!compact) return <CashMovement model={model}/>;
- const rows=model.basic.bankingFacts.monthly??[],shown=compact?rows.slice(-6):rows;
- const max=Math.max(1,...shown.flatMap(r=>[r.externalInflows,r.externalOutflows]).filter((n):n is number=>n!==null).map(Math.abs));
- return <div className="pc-trend"><p className="pc-muted">Внешние поступления <i className="pc-key in"/> · списания <i className="pc-key out"/> {compact&&rows.length>6?'· Последние 6 месяцев':''}</p>
- {shown.length?<>
-  {shown.map(r=><div className="pc-trend-row" key={r.month}><span>{r.month.split('-').reverse().join('.')}<small>{r.coverage==='FULL'?'':coverageLabels[r.coverage]??'Покрытие не определено'}</small></span><div className="pc-bars" aria-hidden="true">{[r.externalInflows,r.externalOutflows].map((v,i)=><i key={i} className={v!==null&&v<0?'negative':''} style={{width:v===null?'0%':Math.abs(v)/max*100+'%'}}/>)}</div><span>{cashMoney(r.externalInflows)}<small>{cashMoney(r.externalOutflows)}</small></span></div>)}
-
- </>:<p>Для помесячного графика недостаточно данных. Добавьте выписку с датами операций.</p>}</div>;
+export function CashTrend({model, compact=false}:{model:WorkspaceModelV1;compact?:boolean}) {
+  return <CashMovement model={model} overview={compact}/>;
 }
 export function SourceSummary({model,choose}:{model:WorkspaceModelV1;choose?:(v:string)=>void}){return <div className="pc-source-list">{['BANK_STATEMENTS','FINANCIAL_STATEMENTS','QUARTERLY_REPORT','CREDIT_HISTORY','EXTERNAL_SOURCE'].map(key=>{const rows=model.basic.sources.availability.filter(s=>s.source===key);return <div key={key}><span>{sourceLabel(key)}</span><b>{rows.length?[...new Set(rows.map(s=>sourceState(s.status)))].join(', '):'Не добавлен'}</b></div>;})}{choose&&<button className="pc-text-button" onClick={()=>choose('documents')}>Дополнить документы →</button>}</div>;}
 export function CreditSummary({model,section}:{model:WorkspaceModelV1;section?:"index"|"capacity"}){
@@ -55,23 +48,21 @@ export function AssessmentLimits({model,choose}:{model:WorkspaceModelV1;choose?:
  const action=bfo?'Добавить бухгалтерскую отчётность':bki?'Добавить кредитную историю':'Проверить основания оценки';
  return <aside className="pc-assessment-limit"><h2>Предварительная оценка</h2><p>Пока не определены: {missing.join(', ')}. Подтверждённые банковские данные показаны в обзоре.</p><p>{reason}</p><p>{bfo?'Отчётность дополнит денежный поток финансовым состоянием компании.':bki?'Кредитный отчёт позволит сопоставить обязательства с наблюдаемыми платежами.':'Уточнение источников позволит перепроверить ограниченные выводы; изменение оценки не гарантируется.'}</p>{choose&&<button className="pc-text-button" onClick={()=>choose(bfo||bki?'documents':'analysis')}>{action} →</button>}</aside>;
 }
-function dashboardFactValue(f:WorkspaceModelV1['basic']['bankingFacts']['grossInflow']){return f.status==='UNKNOWN'||f.value===null||!Number.isFinite(f.value)?null:f.value;}
+function dashboardFactValue(f:WorkspaceModelV1['basic']['bankingFacts']['grossInflow']){return f.status==='UNKNOWN'||f.status==='NOT_APPLICABLE'||f.value===null||!Number.isFinite(f.value)?null:f.value;}
 function dashboardConcentration(f:WorkspaceModelV1['basic']['bankingFacts']['directCustomerTop1']){const v=dashboardFactValue(f);return v===null||!['RATIO','PERCENT'].includes(f.unit)?null:v*(f.unit==='RATIO'?100:1);}
 function bankDashboardSignals(model:WorkspaceModelV1){
  const b=model.basic.bankingFacts;
  const net=dashboardFactValue(b.netCashFlow),low=dashboardFactValue(b.lowLiquidityDays),top1=dashboardConcentration(b.directCustomerTop1),individuals=dashboardFactValue(b.transfersToIndividuals),principal=dashboardFactValue(b.loanPrincipalPayments);
  const strengths:Array<{title:string;text:string}>=[];
  const attention:Array<{title:string;text:string}>=[];
- if(net!==null) (net>=0?strengths:attention).push({title:net>=0?'Положительный чистый денежный поток':'Списания превышают поступления',text:net>=0?`Внешние поступления превышают списания на ${money(net)} за анализируемый период.`:`Внешние списания превышают поступления на ${money(Math.abs(net))} за анализируемый период.`});
+ if(net!==null && net!==0) (net>0?strengths:attention).push({title:net>0?'Положительный чистый денежный поток':'Списания превышают поступления',text:net>0?`Внешние поступления превышают списания на ${money(net)} за анализируемый период.`:`Внешние списания превышают поступления на ${money(Math.abs(net))} за анализируемый период.`});
  if(top1!==null&&top1>=50) attention.push({title:'Высокая концентрация поступлений',text:`На крупнейшего прямого покупателя приходится ${new Intl.NumberFormat('ru-RU',{maximumFractionDigits:1}).format(top1)}% идентифицированных операционных поступлений.`});
  if(low!==null&&low>0) attention.push({title:'Периоды низкой ликвидности',text:`Зафиксировано ${new Intl.NumberFormat('ru-RU',{maximumFractionDigits:0}).format(low)} дней с низким денежным запасом.`});
  if(individuals!==null&&individuals>0) attention.push({title:'Существенные переводы физическим лицам',text:`По выпискам классифицировано ${money(individuals)} переводов физическим лицам. Их назначение стоит проверить перед финансированием.`});
  if(principal!==null&&principal>0) strengths.push({title:'Наблюдается обслуживание долга',text:`По выпискам подтверждены платежи основного долга на ${money(principal)} за период.`});
- if(!strengths.length) strengths.push({title:'Банковский профиль сформирован',text:'Prescore обработал движение денег, обязательные платежи, ликвидность и структуру поступлений по представленным счетам.'});
- if(!attention.length) attention.push({title:'Критичных банковских сигналов в сводке не выделено',text:'Детальная проверка факторов и источников доступна в разделе «Анализ Prescore».'});
  return {strengths:strengths.slice(0,3),attention:attention.slice(0,3)};
 }
-function dashboardValue(f:WorkspaceModelV1['basic']['bankingFacts']['grossInflow']){const v=dashboardFactValue(f);return v===null?'—':money(v);}
+function dashboardValue(f:WorkspaceModelV1['basic']['bankingFacts']['grossInflow']){const v=dashboardFactValue(f);return f.status==='NOT_APPLICABLE'?'Не применимо':v===null?'Нет данных':money(v);}
 export function ExecutiveOverview({model,choose,retry,children}:{children?:ReactNode;model:WorkspaceModelV1;choose:(v:string)=>void;retry:()=>void}){
  const r=model.full?.report,b=model.basic.bankingFacts,bank=bankDashboardSignals(model);
  const index=model.full?.canonical.prescoreIndex.value??null;
@@ -80,19 +71,32 @@ export function ExecutiveOverview({model,choose,retry,children}:{children?:React
  const factors=r?[...r.primaryFactors,...r.contextHighlights,...r.readiness.constraints]:[];
  const strengths=factors.filter(f=>f.status.tone==='positive').slice(0,3);
  const risks=factors.filter(f=>['critical','attention'].includes(f.status.tone)).slice(0,3);
+ const dataLimits=r ? [...r.readiness.constraints, ...r.dataQuality, ...r.limitations].filter(
+   (f,i,items)=>f.status.tone==='data' && items.findIndex(other=>other.claimId===f.claimId)===i
+ ).slice(0, Math.max(0,3-risks.length)) : [];
  const actions=r?.recommendations.primary.slice(0,3)??[];
  const products=r?[...r.productFit.primary,...r.productFit.other].slice(0,3):[];
  const period=`${date(model.basic.analysis.period.from)} — ${date(model.basic.analysis.period.to)}`;
+ function openAnalysis(section:'conclusion'|'plan') {
+   const url = new URL(window.location.href);
+   url.searchParams.set('section',section);
+   url.hash='';
+   window.history.replaceState(null,'',url);
+   choose('analysis');
+ }
  const bankName=model.basic.sources.statements.bankNames?.join(' · ')||'Банковские выписки';
  return <div className="pc-dashboard" data-prescore-dashboard="v1">
   <header className="pc-dashboard-heading">
    <div><span>КРЕДИТНЫЙ ПРОФИЛЬ</span><h1>Финансово-кредитный профиль</h1><p>{model.basic.analysis.company.name} · ИНН {model.basic.analysis.company.inn} · {period}</p></div>
-   <button className="pc-secondary" onClick={()=>choose('analysis')}>Открыть заключение →</button>
+   <button className="pc-primary" onClick={()=>openAnalysis('conclusion')}>Открыть заключение →</button>
   </header>
+  {r && <div className="pc-dashboard-route">
+    {children ?? <ClientDecisionRoute model={model} choose={choose}/>}
+  </div>}
   <section className="pc-dashboard-summary" aria-label="Кредитная сводка">
-   <article className="pc-score-card"><small>Prescore Index</small>{index!==null?<strong data-credit-index>{index}<em>/ 1000</em></strong>:<strong className="is-text">Банковский профиль</strong>}<p>{index!==null?(r?.index.status||'Расчёт сформирован'):'Анализ по выпискам сформирован'}</p></article>
-   <article className="pc-summary-card"><small>Готовность к финансированию</small><strong data-credit-readiness={readiness&&readiness!=='UNKNOWN'?true:undefined}>{readiness&&readiness!=='UNKNOWN'?(r?.readiness.level||readiness):'Следующий уровень оценки'}</strong><p>{readiness&&readiness!=='UNKNOWN'?(r?.readiness.text||'Открыть анализ для деталей'):'БФО и БКИ уточнят кредитную готовность, не отменяя банковский анализ.'}</p></article>
-   <article className="pc-capacity-card"><small>Дополнительное обслуживание долга</small>{capacity!==null?<strong data-prudential-capacity>{money(capacity)}<em>/ месяц</em></strong>:<strong className="is-text">Расчёт после долгового контура</strong>}<p>{capacity!==null?(r?.capacity.text||'Осторожная оценка способности обслуживать новый платёж'):'Добавление БКИ и отчётности позволит рассчитать запас нового ежемесячного платежа.'}</p></article>
+   <article className="pc-score-card"><small>Prescore Index</small>{index!==null?<strong data-credit-index>{index}<em>/ 1000</em></strong>:<strong className="is-text">Индекс не определён</strong>}<p>{index!==null?(r?.index.status||'Расчёт сформирован'):model.basic.sources.statements.status==='READY'?'Анализ по выпискам сформирован':sourceState(model.basic.sources.statements.status)}</p></article>
+   <article className="pc-summary-card"><small>Готовность к финансированию</small><strong data-credit-readiness={readiness&&readiness!=='UNKNOWN'?true:undefined}>{readiness&&readiness!=='UNKNOWN'?(r?.readiness.level||readiness):'Недостаточно данных'}</strong><p>{readiness&&readiness!=='UNKNOWN'?(r?.readiness.text||'Открыть анализ для деталей'):'Ограничения и доступные документы указаны в досье.'}</p></article>
+   <article className="pc-capacity-card"><small>Дополнительное обслуживание долга</small>{capacity!==null?<strong data-prudential-capacity>{money(capacity)}<em>/ месяц</em></strong>:<strong className="is-text">Пока не определён</strong>}<p>{capacity!==null?(r?.capacity.text||'Осторожная оценка способности обслуживать новый платёж'):'Добавление БКИ и отчётности позволит рассчитать запас нового ежемесячного платежа.'}</p></article>
   </section>
   <section className="pc-bank-kpis" aria-label="Банковская картина">
    <article><small>Внешние поступления</small><strong>{dashboardValue(b.grossInflow)}</strong></article>
@@ -101,14 +105,16 @@ export function ExecutiveOverview({model,choose,retry,children}:{children?:React
    <article><small>Средний остаток</small><strong>{dashboardValue(b.averageDailyBalance)}</strong></article>
   </section>
   <div className="pc-dashboard-grid pc-dashboard-grid-main">
-   <section className="pc-dashboard-section"><header><div><span>БАНКОВСКОЕ ЗАКЛЮЧЕНИЕ</span><h2>Что показывает движение денег</h2></div><button className="pc-text-button" onClick={()=>choose('banking')}>Все финансы →</button></header>
-    <div className="pc-bank-conclusion"><p><b>{bankName}</b> · {period}</p><p>{bank.strengths[0].text}</p>{bank.attention[0]&&<p>{bank.attention[0].text}</p>}</div>
+   <section className="pc-dashboard-section"><header><div><span>БАНКОВСКОЕ ЗАКЛЮЧЕНИЕ</span><h2>Движение денег</h2></div><button className="pc-text-button" onClick={()=>choose('banking')}>Все финансы →</button></header>
+    <p className="pc-bank-source">{bankName} · {period}</p>
     <CashTrend model={model} compact/>
    </section>
    <section className="pc-dashboard-section"><header><div><span>КРЕДИТНЫЕ ФАКТОРЫ</span><h2>Что важно сейчас</h2></div></header>
     <div className="pc-dashboard-factors">
-     {(strengths.length?strengths.map(f=>({title:clientText(f.title),text:clientText(f.text),tone:'positive',ids:[f.claimId]})):bank.strengths.map(f=>({...f,tone:'positive',ids:[]}))).map((f,i)=><article key={'s'+i} data-tone={f.tone}><small>Сильная сторона</small><h3>{f.title}</h3><p>{f.text}</p>{f.ids.length>0&&<Why model={model} ids={f.ids}/>}</article>)}
-     {(risks.length?risks.map(f=>({title:clientText(f.title),text:clientText(f.text),tone:'attention',ids:[f.claimId]})):bank.attention.map(f=>({...f,tone:'attention',ids:[]}))).map((f,i)=><article key={'r'+i} data-tone={f.tone}><small>Требует внимания</small><h3>{f.title}</h3><p>{f.text}</p>{f.ids.length>0&&<Why model={model} ids={f.ids}/>}</article>)}
+     {!strengths.length && !risks.length && !dataLimits.length && (r || (!bank.strengths.length && !bank.attention.length)) && <p className="pc-muted">По имеющимся данным отдельные факторы не выделены.</p>}
+     {(r?strengths.map(f=>({title:clientText(f.title),text:clientText(f.text),tone:'positive',ids:[f.claimId]})):bank.strengths.map(f=>({...f,tone:'positive',ids:[]}))).map((f,i)=><article key={'s'+i} data-tone={f.tone}><small>Сильная сторона</small><h3>{f.title}</h3><p>{f.text}</p>{f.ids.length>0&&<Why model={model} ids={f.ids}/>}</article>)}
+     {(r?risks.map(f=>({title:clientText(f.title),text:clientText(f.text),tone:f.status.tone,ids:[f.claimId]})):bank.attention.map(f=>({...f,tone:'attention',ids:[]}))).map((f,i)=><article key={'r'+i} data-tone={f.tone}><small>Требует внимания</small><h3>{f.title}</h3><p>{f.text}</p>{f.ids.length>0&&<Why model={model} ids={f.ids}/>}</article>)}
+     {dataLimits.map(f=><article key={f.id} data-tone="data"><small>Ограничение данных</small><h3>{clientText(f.title)}</h3><p>{clientText(f.text)}</p><Why model={model} ids={[f.claimId]}/></article>)}
     </div>
    </section>
   </div>
@@ -116,14 +122,15 @@ export function ExecutiveOverview({model,choose,retry,children}:{children?:React
    <section className="pc-dashboard-section"><header><div><span>ФИНАНСИРОВАНИЕ</span><h2>Подходящие механизмы</h2></div><button className="pc-text-button" onClick={()=>choose('financing')}>Все варианты →</button></header>
     <div className="pc-dashboard-products">{products.map((p,i)=><article key={p.id}><small>{String(i+1).padStart(2,'0')}</small><h3>{p.title}</h3><p>{p.purpose}</p><Why model={model} ids={[p.claimId]}/></article>)}</div>
    </section>
-   <section className="pc-dashboard-section"><header><div><span>РЕКОМЕНДАЦИИ</span><h2>Что делать сейчас</h2></div><button className="pc-text-button" onClick={()=>choose('analysis')}>План 7 / 30 / 60 →</button></header>
+   <section className="pc-dashboard-section"><header><div><span>РЕКОМЕНДАЦИИ</span><h2>Что делать сейчас</h2></div><button className="pc-text-button" onClick={()=>openAnalysis('plan')}>План 7 / 30 / 60 →</button></header>
     <div className="pc-dashboard-actions">{actions.map((a,i)=><article key={a.id}><small>{String(i+1).padStart(2,'0')}</small><div><h3>{a.title}</h3><p>{a.summary}</p></div><Why model={model} ids={[a.claimId]}/></article>)}</div>
    </section>
   </div>}
   {r?.financialAnalysis?.history.length?<FinancialSnapshot model={model} choose={choose}/>:null}
   {r?.externalSummary?.length?<section className="pc-dashboard-section pc-dashboard-external"><header><div><span>ВНЕШНИЙ КОНТЕКСТ</span><h2>Юридические и внешние сведения</h2></div></header><dl>{r.externalSummary.map(f=><div key={f.code}><dt>{f.label}</dt><dd>{f.value}<small>{f.source} · {date(f.asOf)}</small></dd></div>)}</dl></section>:null}
-  <section className="pc-dashboard-sources"><span>Выписки <b>✓</b></span><button onClick={()=>choose('documents')}>БФО +</button><button onClick={()=>choose('obligations')}>БКИ +</button><button onClick={()=>choose('analysis')}>Основания и заключение →</button></section>
-  {children&&r?.hero.route!=='INSUFFICIENT_DATA'?<div className="pc-dashboard-route">{children}</div>:null}
+  <section className="pc-dashboard-section"><header><h2>Источники досье</h2>
+    <button className="pc-text-button" onClick={()=>choose('documents')}>Открыть документы →</button>
+  </header><SourceSummary model={model}/></section>
   {!r&&<FullAccessNotice model={model} retry={retry}/>}
  </div>;
 }

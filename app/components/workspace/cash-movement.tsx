@@ -23,6 +23,11 @@ const coverage = {FULL:'Полный месяц', PARTIAL:'Неполный ме
 const formatAmount = new Intl.NumberFormat('ru-RU', {maximumFractionDigits:2});
 export const cashMoney = (value:number|null) => value===null ? 'Нет данных' : formatAmount.format(value)+' ₽';
 const monthLabel = (month:string) => month==='all' ? 'весь период выписки' : month.split('-').reverse().join('.');
+const shortMonth = new Intl.DateTimeFormat('ru-RU',{month:'short',timeZone:'UTC'});
+function monthTick(month: string) {
+  const date = new Date(month+'-01T00:00:00Z');
+  return Number.isFinite(date.getTime()) ? shortMonth.format(date) : month;
+}
 const eventName = 'prescore-cash-filter';
 const currentQuery = () => window.location.search;
 const serverQuery = () => '';
@@ -113,14 +118,57 @@ function BalanceSummary({model}:{model:WorkspaceModelV1}) {
   </section>;
 }
 
-export function CashMovement({model}:{model:WorkspaceModelV1}) {
+type MonthlyRow = NonNullable<WorkspaceModelV1['basic']['bankingFacts']['monthly']>[number];
+
+function CashColumns({rows, series, allowDetails, onSelect, selectedMonth, selectedSeries}: {
+  rows: MonthlyRow[];
+  series: readonly CashSeries[];
+  allowDetails: boolean;
+  onSelect: (month: string, series: CashSeries) => void;
+  selectedMonth: string | null;
+  selectedSeries: string | null;
+}) {
+  const amounts = rows.flatMap(row => series.map(key => cashValue(row,key))).filter((v): v is number => v !== null);
+  const low = Math.min(0, ...amounts);
+  const high = Math.max(0, ...amounts);
+  const span = high - low || 1;
+  const zero = -low / span * 100;
+
+  return <div className={styles.columns} aria-label="Движение денег по месяцам">
+    <div className={styles.axis} aria-hidden="true">
+      <span>{cashMoney(high)}</span>
+      {high !== low && <span>{cashMoney(low)}</span>}
+    </div>
+    <div className={styles.plot} style={{'--zero': zero+'%'} as CSSProperties}>
+      {rows.map(row => <div className={styles.columnMonth} key={row.month}>
+        <div className={styles.columnGroup}>{series.map((key,index) => {
+          const value = cashValue(row,key);
+          const label = cashLabels[key]+' · '+monthLabel(row.month)+' · '+cashMoney(value);
+          const fill = value === null ? null : <i data-color={index} style={{
+            bottom:(zero + Math.min(0,value)/span*100)+'%',
+            height:Math.abs(value)/span*100+'%',
+          }}/>;
+          return allowDetails && value !== null
+            ? <button key={key} className={styles.column} type="button" title={label} aria-label={label}
+                aria-pressed={selectedMonth===row.month && selectedSeries===key} onClick={()=>onSelect(row.month,key)}>{fill}</button>
+            : <span key={key} className={styles.column} role="img" aria-label={label} title={label}>{fill}</span>;
+        })}</div>
+        <b title={monthLabel(row.month)}>{monthTick(row.month)}</b>
+        {row.coverage !== 'FULL' && <small>{coverage[row.coverage]}</small>}
+      </div>)}
+    </div>
+  </div>;
+}
+
+export function CashMovement({model, overview=false}:{model:WorkspaceModelV1;overview?:boolean}) {
   const query = useSyncExternalStore(subscribe,currentQuery,serverQuery);
   const params = new URLSearchParams(query);
   const sameAnalysis = params.get('cashFor')===model.analysisId;
   const candidate = sameAnalysis && params.get('cashMode');
   const mode:Mode = candidate && Object.hasOwn(modes,candidate) ? candidate as Mode : 'flow';
   const series:readonly CashSeries[] = modes[mode].series;
-  const rows = model.basic.bankingFacts.monthly??[];
+  const allRows = model.basic.bankingFacts.monthly??[];
+  const rows = overview ? allRows.slice(-6) : allRows;
   const selectedMonth = sameAnalysis ? params.get('cashMonth') : null;
   const selectedSeries = sameAnalysis ? params.get('cashSeries') : null;
   const selected = rows.find(r=>r.month===selectedMonth);
@@ -128,16 +176,19 @@ export function CashMovement({model}:{model:WorkspaceModelV1}) {
   const max = rows.reduce((scale,r)=>Math.max(scale,...series.map(s=>cashValue(r,s)??0)),1);
   if (!rows.length) return <p>Для помесячного графика недостаточно данных. Добавьте выписку с датами операций.</p>;
   return <div className={styles.panel} style={{"--amount-width": Math.max(cashMoney(max).length, "Нет данных".length)+1+"ch"} as CSSProperties}>
-    <p className={styles.note}>{model.basic.analysis.company.name} · {model.basic.sources.statements.bankNames?.join(", ") || "Банк не определён"} · {model.basic.analysis.period.from} — {model.basic.analysis.period.to}</p>
-    <BalanceSummary model={model}/>
+    {!overview && <p className={styles.note}>{model.basic.analysis.company.name} · {model.basic.sources.statements.bankNames?.join(", ") || "Банк не определён"} · {model.basic.analysis.period.from} — {model.basic.analysis.period.to}</p>}
+    {!overview && <BalanceSummary model={model}/>}
     <div className={styles.modes} role="group" aria-label="Режим графика">{modeKeys.map(key=>
       <button type="button" key={key} aria-pressed={key===mode}
         disabled={!rows.some(r=>modes[key].series.some(s=>cashValue(r,s)!==null))}
         onClick={()=>select(model.analysisId,key)}>{modes[key].title}</button>)}</div>
-    <h3>{questions[mode]}</h3>
-    <p className={styles.note}>{model.basic.analysis.period.from} — {model.basic.analysis.period.to} · По представленным счетам · ₽</p>
+    {!overview && <h3>{questions[mode]}</h3>}
+    <p className={styles.note}>{overview ? monthLabel(rows[0].month)+' — '+monthLabel(rows[rows.length-1].month) : model.basic.analysis.period.from+' — '+model.basic.analysis.period.to} · По представленным счетам · ₽</p>
     <div className={styles.legend}>{series.map((s,i)=><span key={s}><i data-color={i}/>{cashLabels[s]}</span>)}</div>
-    {rows.map(r=><div className={styles.month} key={r.month}>
+    {overview ? <CashColumns rows={rows} series={series} allowDetails={allowDetails}
+      selectedMonth={selectedMonth} selectedSeries={selectedSeries}
+      onSelect={(month,key)=>select(model.analysisId,mode,month,key)}/>
+    : rows.map(r=><div className={styles.month} key={r.month}>
       <div className={styles.period}><b>{monthLabel(r.month)}</b><small>{coverage[r.coverage]}</small></div>
       <div className={styles.series}>{series.map((s,i)=>{
         const value=cashValue(r,s);
@@ -151,8 +202,14 @@ export function CashMovement({model}:{model:WorkspaceModelV1}) {
     {model.basic.bankingFacts.operationListTruncated && <p className={styles.note}>Итоги рассчитаны по полной загрузке. Сохранён сокращённый список операций, полная расшифровка недоступна.</p>}
     {!allowDetails && <p className={styles.note}>Список операций доступен в полном анализе.</p>}
     <details className="pc-chart-data"><summary>Данные графика в таблице</summary><div className="pc-table-scroll" tabIndex={0} aria-label="Помесячное движение денег">
-      <table><caption>Суммы в рублях за каждый месяц выписки</caption><thead><tr><th>Месяц</th>{series.map(s=><th key={s}>{cashLabels[s]}</th>)}<th>Покрытие</th></tr></thead>
-        <tbody>{rows.map(r=><tr key={r.month}><th scope="row">{monthLabel(r.month)}</th>{series.map(s=><td key={s}>{cashMoney(cashValue(r,s))}</td>)}<td>{coverage[r.coverage]}</td></tr>)}</tbody></table>
+      <table><caption>{overview ? 'Суммы в рублях за показанные месяцы' : 'Суммы в рублях за каждый месяц выписки'}</caption><thead><tr><th>Месяц</th>{series.map(s=><th key={s}>{cashLabels[s]}</th>)}<th>Покрытие</th></tr></thead>
+        <tbody>{rows.map(r=><tr key={r.month}><th scope="row">{monthLabel(r.month)}</th>{series.map(s=>{
+          const value=cashValue(r,s);
+          return <td key={s}>{overview && allowDetails && value!==null
+            ? <button className={styles.tableValue} type="button" aria-label={cashLabels[s]+' за '+monthLabel(r.month)+' · '+cashMoney(value)}
+                onClick={()=>select(model.analysisId,mode,r.month,s)}>{cashMoney(value)}</button>
+            : cashMoney(value)}</td>;
+        })}<td>{coverage[r.coverage]}</td></tr>)}</tbody></table>
     </div></details>
     {allowDetails && selected && isCashSeries(selectedSeries) && series.includes(selectedSeries) && cashValue(selected,selectedSeries)!==null &&
       <CashOperations key={[model.analysisId,selected.month,selectedSeries].join('/')} analysisId={model.analysisId} month={selected.month} series={selectedSeries}/>}

@@ -69,3 +69,32 @@ test('CLIENT product recovery keeps history out of the visible cabinet and prote
  for(const required of ['Финансово-кредитный профиль','БАНКОВСКОЕ ЗАКЛЮЧЕНИЕ','КРЕДИТНЫЕ ФАКТОРЫ','ФИНАНСИРОВАНИЕ','РЕКОМЕНДАЦИИ'])assert.ok(overview.includes(required),required);
  assert.doesNotMatch(overview,/buildPrescoreIndex|buildFinancingReadiness|buildCreditAssessment|buildDebtCapacity|estimatedLimit|stressLimit|baseMonthlyPaymentCapacity/);
 });
+
+test('the dashboard keeps the incomplete FULL decision visible and limits cash drilldown to covered FULL values',async()=>{
+ const rt=await createWorkspaceRuntime();
+ try {
+  const {model}=conclusionFixture();
+  const {ClientOverview}=rt.load('app/components/workspace/client-launch-overview.tsx');
+  const {CashTrend}=rt.load('app/components/workspace/client-insights.tsx');
+  model.full.report.hero.route='INSUFFICIENT_DATA';
+  model.full.canonical.prescoreIndex.value=null;
+  const props={model,choose:()=>{},retry:()=>{}};
+  const home=render(ClientOverview,props);
+  assert.equal((home.match(/data-client-route="INSUFFICIENT_DATA"/g)||[]).length,1);
+  assert.doesNotMatch(home,/data-credit-index/);
+
+  const sample=model.basic.bankingFacts.monthly[0];
+  model.basic.bankingFacts.monthly=[
+   {...sample,month:'2026-01',coverage:'MISSING',externalInflows:98123456},
+   {...sample,month:'2026-02',coverage:'FULL',externalInflows:0},
+  ];
+  const fullChart=render(CashTrend,{model,compact:true});
+  assert.match(fullChart,/Нет покрытия/);
+  assert.doesNotMatch(fullChart,/98.?123.?456|aria-label="Внешние поступления · 01.2026 · 0/);
+  assert.match(fullChart,/aria-label="Внешние поступления · 02.2026 · 0 ₽"/);
+  model.entitlement='BASIC';delete model.full;
+  const basicChart=render(CashTrend,{model,compact:true});
+  assert.doesNotMatch(basicChart,/<button[^>]*aria-label="Внешние поступления/);
+  assert.doesNotMatch(render(ClientOverview,props),/data-client-route=/);
+ } finally { await rt.close(); }
+});

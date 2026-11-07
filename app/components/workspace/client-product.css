@@ -252,3 +252,52 @@
 .pc-dashboard .pc-trend-row{grid-template-columns:64px minmax(40px,1fr) 135px;margin-top:10px}
 @media(max-width:1150px){.pc-dashboard-summary,.pc-dashboard-grid,.pc-dashboard-grid-main{grid-template-columns:1fr}.pc-bank-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.pc-bank-kpis article:nth-child(2){border-right:0}.pc-bank-kpis article:nth-child(-n+2){border-bottom:1px solid var(--pc-line)}}
 @media(max-width:620px){.pc-dashboard-heading{display:block}.pc-dashboard-heading>button{margin-top:12px}.pc-dashboard-heading h1{font-size:26px}.pc-dashboard-summary{gap:10px}.pc-dashboard-summary article{min-height:0;padding:18px}.pc-score-card strong{font-size:46px}.pc-bank-kpis{grid-template-columns:1fr}.pc-bank-kpis article{border-right:0;border-bottom:1px solid var(--pc-line)}.pc-bank-kpis article:last-child{border-bottom:0}.pc-dashboard-products{grid-template-columns:1fr}.pc-dashboard-section{padding:16px}.pc-dashboard .pc-trend-row{grid-template-columns:50px minmax(30px,1fr) 112px}}
+
+/* Company overview: the decision and its next action share the first panel. */
+.pc-dashboard { gap: 16px; }
+.pc-dashboard .pc-bank-source { margin: 0 0 14px; color: var(--pc-muted); font-size: 12px; }
+.pc-dashboard .pc-dashboard-route { margin: 0; }
+.pc-dashboard-route .pc-decision-route {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 20px;
+  padding: 18px 22px;
+  margin: 0;
+  color: #fff;
+  background: #263550;
+  border: 0;
+  border-radius: 14px;
+}
+.pc-dashboard-route .pc-decision-route > header { display: flex; gap: 12px; align-items: start; margin: 0; }
+.pc-dashboard-route .pc-decision-route > header small,
+.pc-dashboard-route .pc-decision-route .pc-muted { color: #d3d9e8; }
+.pc-dashboard-route .pc-decision-route h2 { color: #fff; }
+.pc-dashboard-route .pc-decision-route > p,
+.pc-dashboard-route .pc-route-basis { grid-column: 1; margin: 0; color: #eef2ff; font-size: 13px; }
+.pc-dashboard-route .pc-route-basis summary { cursor: pointer; width: fit-content; padding: 3px 0; }
+.pc-dashboard-route .pc-route-basis li { margin-left: 1.2rem; }
+.pc-dashboard-route .pc-route-basis summary:focus-visible { outline: 2px solid #b8b0ff; outline-offset: 2px; }
+.pc-dashboard-route .pc-decision-route > p { color: #e5eaf4; }
+.pc-dashboard-route .pc-decision-route > button { grid-column: 2; grid-row: 1 / 4; align-self: center; }
+.pc-dashboard-route .pc-status { color: #eeedff; background: #475376; border-radius: 6px; padding: 3px 7px; font-size: 10px; }
+.pc-dashboard-summary article { min-height: 116px; padding: 16px 18px; }
+.pc-dashboard-summary strong { margin: 6px 0; }
+.pc-bank-kpis { gap: 10px; background: none; border: 0; border-radius: 0; }
+.pc-bank-kpis article, .pc-bank-kpis article:last-child { border: 1px solid var(--pc-line); border-radius: 12px; background: #fff; }
+.pc-dashboard-grid-main { grid-template-columns: minmax(0, 1.65fr) minmax(230px, 1fr); }
+.pc-dashboard-section { min-width: 0; }
+@media (max-width: 1150px) {
+  .pc-dashboard-summary { grid-template-columns: repeat(auto-fit, minmax(min(190px, 100%), 1fr)); }
+  .pc-bank-kpis article:nth-child(n) { border: 1px solid var(--pc-line); }
+  .pc-dashboard-grid-main { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 620px) {
+  .pc-bank-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pc-bank-kpis article { padding: 12px; }
+  .pc-bank-kpis strong { font-size: 16px; overflow-wrap: anywhere; }
+  .pc-dashboard-route .pc-decision-route { grid-template-columns: minmax(0, 1fr); padding: 16px; }
+  .pc-dashboard-route .pc-decision-route > header { flex-wrap: wrap; }
+  .pc-dashboard-route .pc-decision-route > button { grid-column: 1; grid-row: auto; justify-self: start; }
+}
+
+.pc-dashboard-factors article[data-tone="data"] { border-left: 3px solid #9b8cc9; }

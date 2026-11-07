@@ -164,7 +164,10 @@ export function ClientDecisionRoute({ model, choose }: { model: WorkspaceModelV1
       <span className="pc-status">{route.label}</span>
     </header>
     <p>{route.summary}</p>
-    {route.details.length > 0 && <ul>{route.details.map((detail) => <li key={detail}>{detail}</li>)}</ul>}
+    {route.details.length > 0 && <details className="pc-route-basis">
+      <summary>Основания заключения</summary>
+      <ul>{route.details.map((detail) => <li key={detail}>{detail}</li>)}</ul>
+    </details>}
     <button className="pc-primary" data-client-route-cta={route.code} onClick={broker?()=>choose('analysis'):openRoute}>{broker?'Открыть заключение':route.cta.label}</button>
     <p className="pc-muted">Это маршрут подготовки, а не решение банка и не гарантия одобрения.</p>
   </section>;
