@@ -23,14 +23,14 @@ export function DocumentSources({model,saved,externalEnabled=true}:{externalEnab
  return <><Panel title="Источники кредитного досье">
   <h3>Подключённые источники</h3>
   {connected.map(s=><section className="pc-source-entry" key={s.key}><header><h4>{sourceLabel(s.key)}</h4><small>{[...new Set(s.rows.map(r=>sourceState(r.status)))].join(' · ')}</small></header>
-   <p>{s.benefit}</p>{s.rows.map((r,i)=><small key={i}>{[r.reportDate&&'Отчёт на '+date(r.reportDate),r.periodFrom&&r.periodTo&&date(r.periodFrom)+' — '+date(r.periodTo)].filter(Boolean).join(' · ')}</small>)}
-   {s.observed.some(o=>o.receivedAt)&&<small>Получен · {[...new Set(s.observed.filter(o=>o.receivedAt).map(o=>date(o.receivedAt)))].join(', ')}</small>}
+   <p>{s.benefit}</p>{s.rows.map((r,i)=><small key={i}>{[s.key==='CREDIT_HISTORY'?(r.reportDate?'Дата отчёта: '+date(r.reportDate):'Дата отчёта не подтверждена'):null,r.periodFrom&&r.periodTo&&date(r.periodFrom)+' — '+date(r.periodTo)].filter(Boolean).join(' · ')}</small>)}
+   {s.observed.some(o=>o.receivedAt)&&<small>{'Получен: '+[...new Set(s.observed.filter(o=>o.receivedAt).map(o=>date(o.receivedAt)))].join(', ')}</small>}
   </section>)}
   {!connected.length&&<p>Начните с банковской выписки, чтобы увидеть движение денег.</p>}
  </Panel>
  {model.access.role!=='ASSIGNED_BROKER'&&entries.some(s=>targets[s.key]&&!connected.includes(s))&&<Panel title="Что можно добавить"><div className="pc-source-choices">
   {entries.filter(s=>targets[s.key]&&!connected.includes(s)).map(s=><a key={s.key} href={'#'+targets[s.key]}><strong>{sourceLabel(s.key)}</strong><span>{s.benefit}</span><b>К загрузке →</b></a>)}</div></Panel>}
- <Panel title="Файлы досье"><p>Здесь собраны приложения к анализу и к заявкам компании.</p>
+ <Panel title="Файлы досье"><p>Счётчики относятся к дополнительным файлам досье. Обработанные выписки, БФО и БКИ перечислены в источниках.</p>
   <dl className="pc-definition">{model.basic.operations.documents.count!=null&&<div><dt>Файлы компании</dt><dd>{model.basic.operations.documents.count}</dd></div>}
    {model.basic.operations.documents.analysisCount!=null&&<div><dt>В этом анализе</dt><dd>{model.basic.operations.documents.analysisCount}</dd></div>}</dl>
   {model.basic.financingRequest&&<p className="pc-muted">Запрос на финансирование сохранён {date(model.basic.financingRequest.receivedAt)}.</p>}

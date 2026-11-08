@@ -22,7 +22,11 @@ test('complete CLIENT renders current business corpus with field coverage and im
   assert.doesNotMatch(html,/NaN|undefined|Infinity/);
   for(const key of Object.keys(model.basic.bankingFacts))assert.ok(key==='monthly'||key==='topCounterparties'||key==='seasonality'||key==='balanceCheck'||key==='operationListTruncated'||key in bankingFieldLabels,'unclassified basic banking field '+key);
   assert.ok(html.includes('Устойчивость поступлений и сезонность'));
-  for(const key of Object.keys(bankingFieldLabels))assert.ok(html.includes('data-banking-fact="'+key+'"'),key);
+  for(const key of Object.keys(bankingFieldLabels)){
+   const fact=model.basic.bankingFacts[key];
+   const published=fact.value!==null&&Number.isFinite(fact.value)&&!['UNKNOWN','NOT_APPLICABLE'].includes(fact.status);
+   assert.equal(html.includes('data-banking-fact="'+key+'"'),published,key);
+  }
   for(const f of [...r.primaryFactors,...r.contextHighlights,...r.readiness.constraints,...r.capacity.details,...r.dataQuality,...r.limitations,...r.detailedSections.flatMap(s=>s.factors),...r.actionPlan.rerun].filter(f=>model.full.canonical.explainability.claims.find(c=>c.claimId===f.claimId)?.claimKind!=='INDEX_CONTRIBUTION'))assert.ok(html.includes(escape(f.title)),'factor missing '+f.id);
   for(const c of r.index.components){assert.ok(html.includes(escape(c.label)));assert.ok(html.includes(escape(c.score.value===null?'Не определено':c.score.display)));assert.ok(html.includes(escape(c.maximum.value===null?'Не опубликован':c.maximum.display)));}
   for(const a of [...r.recommendations.primary,...r.recommendations.backlog,...r.actionPlan.horizons.flatMap(h=>h.items)]){assert.ok(html.includes(escape(a.title)));for(const text of [a.summary,a.why,...a.steps,...a.evidence,a.recheck])assert.ok(html.includes(escape(text)),'action text missing '+a.id);}
