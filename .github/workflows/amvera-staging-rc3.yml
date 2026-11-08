@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 90
     defaults:
       run:
-        shell: pwsh
+        shell: powershell
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -33,22 +33,44 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Allow runner-local PowerShell setup scripts
-        run: Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy Bypass -Force
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+      - name: Resolve Python runtime
+        run: |
+          $python = Get-Command python -ErrorAction SilentlyContinue
+          if ($python) {
+            "PRESCORE_PYTHON=$($python.Source)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            & $python.Source --version
+            exit 0
+          }
+          $py = Get-Command py -ErrorAction SilentlyContinue
+          if ($py) {
+            "PRESCORE_PYTHON=$($py.Source)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            "PRESCORE_PYTHON_ARGS=-3" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            & $py.Source -3 --version
+            exit 0
+          }
+          $root = Join-Path $env:RUNNER_TEMP 'prescore-python'
+          $zip = Join-Path $env:RUNNER_TEMP 'python-embed.zip'
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          Invoke-WebRequest -Uri 'https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip' -OutFile $zip
+          Expand-Archive -LiteralPath $zip -DestinationPath $root -Force
+          $exe = Join-Path $root 'python.exe'
+          if (-not (Test-Path $exe)) { throw 'Portable Python extraction failed.' }
+          "PRESCORE_PYTHON=$exe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          & $exe --version
 
       - name: Authenticated read-only Amvera access check
         env:
           AMVERA_USERNAME: ${{ secrets.AMVERA_USERNAME }}
           AMVERA_PASSWORD: ${{ secrets.AMVERA_PASSWORD }}
           AMVERA_GIT_URL: ${{ secrets.AMVERA_GIT_URL }}
-        run: python scripts/deploy/amvera.py access
+        run: |
+          if ($env:PRESCORE_PYTHON_ARGS) { & $env:PRESCORE_PYTHON $env:PRESCORE_PYTHON_ARGS scripts/deploy/amvera.py access }
+          else { & $env:PRESCORE_PYTHON scripts/deploy/amvera.py access }
 
       - name: Delivery script tests
-        run: python -m unittest discover -s tests/deploy -p 'test_*.py'
+        run: |
+          if ($env:PRESCORE_PYTHON_ARGS) { & $env:PRESCORE_PYTHON $env:PRESCORE_PYTHON_ARGS -m unittest discover -s tests/deploy -p 'test_*.py' }
+          else { & $env:PRESCORE_PYTHON -m unittest discover -s tests/deploy -p 'test_*.py' }
 
       - name: Install dependencies
         run: npm ci
@@ -70,7 +92,9 @@ jobs:
           AMVERA_PASSWORD: ${{ secrets.AMVERA_PASSWORD }}
           AMVERA_GIT_URL: ${{ secrets.AMVERA_GIT_URL }}
           GH_READ_TOKEN: ${{ github.token }}
-        run: python scripts/deploy/amvera.py prepare
+        run: |
+          if ($env:PRESCORE_PYTHON_ARGS) { & $env:PRESCORE_PYTHON $env:PRESCORE_PYTHON_ARGS scripts/deploy/amvera.py prepare }
+          else { & $env:PRESCORE_PYTHON scripts/deploy/amvera.py prepare }
 
       - name: Verify local staging rollback bundle
         run: |
@@ -87,7 +111,9 @@ jobs:
           AMVERA_PASSWORD: ${{ secrets.AMVERA_PASSWORD }}
           AMVERA_GIT_URL: ${{ secrets.AMVERA_GIT_URL }}
           GH_READ_TOKEN: ${{ github.token }}
-        run: python scripts/deploy/amvera.py push
+        run: |
+          if ($env:PRESCORE_PYTHON_ARGS) { & $env:PRESCORE_PYTHON $env:PRESCORE_PYTHON_ARGS scripts/deploy/amvera.py push }
+          else { & $env:PRESCORE_PYTHON scripts/deploy/amvera.py push }
 
       - name: Verify live staging runtime
         env:
@@ -95,4 +121,6 @@ jobs:
           AMVERA_USERNAME: ${{ secrets.AMVERA_USERNAME }}
           AMVERA_PASSWORD: ${{ secrets.AMVERA_PASSWORD }}
           AMVERA_GIT_URL: ${{ secrets.AMVERA_GIT_URL }}
-        run: python scripts/deploy/amvera.py live
+        run: |
+          if ($env:PRESCORE_PYTHON_ARGS) { & $env:PRESCORE_PYTHON $env:PRESCORE_PYTHON_ARGS scripts/deploy/amvera.py live }
+          else { & $env:PRESCORE_PYTHON scripts/deploy/amvera.py live }
