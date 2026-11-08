@@ -1,6 +1,6 @@
 import { CREDIT_PORTFOLIO_VERSION, type PortfolioInput, type CreditPortfolioV1, type PortfolioObligation, type PortfolioObservation, type PortfolioExposureClass, type PortfolioObligationType, type ObligationMatch } from "../contracts/credit-portfolio.ts";
 import { adequate, dedupe, evidence, id, known, reported, stable, unique, unknown, validDate, weakest } from "./common.ts";
-import { creditHistoryObservations, documentObservations, companyScope } from "./observations.ts";
+import { creditHistoryObservations, documentObservations, companyScope, provisionalSchedule, PROVISIONAL_BKI_SCHEDULE } from "./observations.ts";
 import { ObligationIndex, identityKeys, obligationId } from "./obligation-matcher.ts";
 import { buildTerms, buildPosition, field, effectiveDates, termFields, positionFields } from "./terms.ts";
 import { buildSchedule, applyScheduleMatches } from "./schedule.ts";
@@ -31,7 +31,9 @@ export function buildCreditPortfolio(input: PortfolioInput): CreditPortfolioV1 {
   const previous = input.previousPortfolio;
   if (previous && previous.companyInn !== input.companyInn) throw Error("PORTFOLIO_COMPANY_MISMATCH");
   const snapshots = dedupe([...(previous?.creditHistorySnapshots ?? []), ...(input.creditHistorySnapshots ?? [])], s => s.snapshotId);
-  const rawObservations = [...(previous?.observationHistory ?? []), ...snapshots.flatMap(creditHistoryObservations), ...(input.observations ?? []), ...(input.documents ?? []).flatMap(documentObservations)];
+  const bureauObservations = snapshots.flatMap(creditHistoryObservations);
+  const bureauIds = new Set(bureauObservations.map(o => o.observationId));
+  const rawObservations = [...(previous?.observationHistory ?? []), ...bureauObservations, ...(input.observations ?? []), ...(input.documents ?? []).flatMap(documentObservations)];
   const observations = dedupe(rawObservations, o => o.observationId);
   if (observations.some(o => o.companyInn !== input.companyInn)) throw Error("OBSERVATION_COMPANY_MISMATCH");
   for (const o of observations) {
@@ -43,19 +45,27 @@ export function buildCreditPortfolio(input: PortfolioInput): CreditPortfolioV1 {
   for (const o of observations) if (validDate(o.observedAt) && o.observedAt <= input.asOfDate) groups.set(o.observationGroupId, [...(groups.get(o.observationGroupId) ?? []), o]);
   const sorted = [...groups.values()].sort((a, b) => a[0].observedAt!.localeCompare(b[0].observedAt!) || a[0].observationGroupId.localeCompare(b[0].observationGroupId));
   const index = new ObligationIndex(), obligations = new Map<string, PortfolioObligation>(), resolved = new Map<string, PortfolioObservation[]>(), matches: ObligationMatch[] = [];
-  for (const group of sorted) {
-    const match = index.match(group);
-    if (group.some(x => x.warnings.includes("BKI_AMBIGUOUS_SOURCE_ROWS"))) { match.outcome = "AMBIGUOUS"; match.obligationId = null; match.confidence = "LOW"; match.reasonCodes.push("OBLIGATION_MATCH_AMBIGUOUS"); }
+  for (const observations of sorted) {
+    const match = index.match(observations);
+    if (observations.some(x => x.warnings.includes("BKI_AMBIGUOUS_SOURCE_ROWS"))) { match.outcome = "AMBIGUOUS"; match.obligationId = null; match.confidence = "LOW"; match.reasonCodes.push("OBLIGATION_MATCH_AMBIGUOUS"); }
     matches.push(match);
-    if (["AMBIGUOUS", "POSSIBLE_MATCH"].includes(match.outcome) || !group.some(o => o.knowledge === "KNOWN" && adequate(o.confidence))) continue;
+    if (["AMBIGUOUS", "POSSIBLE_MATCH"].includes(match.outcome)) continue;
+    const supported = observations.some(o => o.knowledge === "KNOWN" && adequate(o.confidence));
+    const group = supported ? observations : provisionalSchedule(observations, bureauIds);
+    if (!group.length) continue;
     const oid = match.obligationId ?? obligationId(input.companyInn, group[0].obligationHints, group[0].observationGroupId);
     let o = obligations.get(oid);
     if (o && !match.obligationId) { match.outcome = "AMBIGUOUS"; match.reasonCodes.push("OBLIGATION_MATCH_AMBIGUOUS"); continue; }
     if (!o) {
       o = makeObligation(group, input.companyInn, oid, identityKeys(group[0].obligationHints).length ? match.confidence : "LOW", input.asOfDate);
+      if (!supported) o.warnings.push(PROVISIONAL_BKI_SCHEDULE);
       obligations.set(oid, o); match.obligationId = oid; match.outcome = "NEW_OBLIGATION";
       o.events.push(event(oid, "NEW_OBLIGATION_DETECTED", group[0].observedAt, group.flatMap(x => x.evidence), "NEW_OBLIGATION_DETECTED", o.identityConfidence));
       o.events.push(event(oid, "OBLIGATION_DETECTED", group[0].observedAt, group.flatMap(x => x.evidence), "OBLIGATION_DETECTED", o.identityConfidence));
+    }
+    if (supported && adequate(match.confidence) && o.warnings.includes(PROVISIONAL_BKI_SCHEDULE)) {
+      o.identityConfidence = match.confidence;
+      o.warnings = o.warnings.filter(w => w !== PROVISIONAL_BKI_SCHEDULE);
     }
     if (o.type === "UNKNOWN" && group[0].obligationHints.productType && group[0].obligationHints.productType !== "UNKNOWN") { o.type = group[0].obligationHints.productType; o.exposureClass = exposures[o.type]; }
     o.identityAliases = unique([...o.identityAliases, ...identityKeys(group[0].obligationHints)]);

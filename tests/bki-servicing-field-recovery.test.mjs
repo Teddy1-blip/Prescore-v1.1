@@ -202,19 +202,67 @@ for(const token of ['нет данных','нет']) {
  });
 }
 
-test('a stated quarterly installment stays distinct from the next payment and monthly debt service',()=>{
- const report=parseCreditHistoryText([
-  'Субъект: Кредитная история юридического лица','ИНН','Номер','7701234567','Счет',
-  'Вид: Срочный кредит','Отношение: Заёмщик','Кредитор: Тест Банк','Счет: NB-1','Статус: Действующий',
-  'Плановый платёж: 15 000','Периодичность платежей: Ежеквартально',
-  'След.платеж: 9 000','Предоставлен 02-08-2026'
- ].join('\n'),'synthetic.pdf');
- const o=report.obligations[0];
- assert.equal(o.monthlyPayment,null);assert.equal(o.nextPaymentAmount,9000);
- const s=adaptUploadedBki(report,{companyInn:report.subjectInn,source:{...source,companyInn:report.subjectInn}});
- const p=buildCreditPortfolio({companyInn:report.subjectInn,asOfDate:report.reportDate,creditHistorySnapshots:[s],paymentObservations:[]});
- assert.equal(p.obligations[0].currentTerms.scheduledPaymentAmount.value,15000);
- assert.equal(p.obligations[0].currentTerms.scheduledPaymentFrequency.value,'Ежеквартально');
+function quarterlyReport({ creditor = 'Тест Банк', account = 'NB-1', day = '02', extra = [] } = {}) {
+  return parseCreditHistoryText([
+    'Субъект: Кредитная история юридического лица', 'ИНН', 'Номер', '7701234567', 'Счет',
+    'Вид: Срочный кредит', 'Отношение: Заёмщик', ...(creditor ? ['Кредитор: ' + creditor] : []),
+    ...(account ? ['Счет: ' + account] : []), 'Статус: Действующий',
+    'Плановый платёж: 15 000', 'Периодичность платежей: Ежеквартально',
+    'След.платеж: 9 000', 'Дата след.платежа: 01-09-2026', ...extra, 'Предоставлен ' + day + '-08-2026',
+  ].join('\n'), 'synthetic.pdf');
+}
+
+function quarterlyPortfolio(report, envelope = {}, previousPortfolio) {
+  const companyInn = '7701234567';
+  const snapshot = adaptUploadedBki(report, {companyInn, source: {...source, companyInn, ...envelope}});
+  return buildCreditPortfolio({companyInn, asOfDate: report.reportDate, creditHistorySnapshots: [snapshot], paymentObservations: [], previousPortfolio});
+}
+
+test('a stated quarterly installment stays distinct from the next payment and monthly debt service', () => {
+  const report = quarterlyReport();
+  assert.equal(report.obligations[0].monthlyPayment, null);
+  assert.equal(report.obligations[0].nextPaymentAmount, 9000);
+  const portfolio = quarterlyPortfolio(report);
+  assert.equal(portfolio.creditHistorySnapshots[0].confidence, 'LOW');
+  assert.equal(portfolio.obligations.length, 1);
+  const obligation = portfolio.obligations[0];
+  const installment = obligation.currentTerms.scheduledPaymentAmount;
+  assert.equal(installment.value, 15000);
+  assert.equal(installment.verification, 'UNCONFIRMED');
+  assert.equal(installment.confidence, 'LOW');
+  assert.ok(installment.evidence.some(ref => ref.sourceKind === 'BKI' && ref.rawValue === 15000));
+  assert.equal(obligation.currentTerms.scheduledPaymentFrequency.value, 'Ежеквартально');
+  assert.equal(obligation.currentPosition.nextPaymentAmount.value, 9000);
+  assert.equal(obligation.identityConfidence, 'LOW');
+  assert.equal(obligation.currentPosition.principalOutstanding.value, null);
+  assert.equal(portfolio.summary.fundedDebt.value, null);
+  assert.equal(portfolio.summary.scheduledPayments30d.value, null);
+  assert.equal(portfolio.summary.scheduledPayments30d.knownAmount, 0);
+});
+
+test('an incomplete installment needs a fresh scoped source and a strong identity', () => {
+  const report = quarterlyReport();
+  for (const input of [
+    quarterlyPortfolio(report, {status: 'STALE'}),
+    quarterlyPortfolio(report, {status: 'NOT_CONFIGURED'}),
+    quarterlyPortfolio({...report, affectsCompanyDebt: false}),
+    quarterlyPortfolio(quarterlyReport({creditor: ''})),
+    quarterlyPortfolio(quarterlyReport({account: ''})),
+  ]) assert.equal(input.obligations.length, 0);
+});
+
+test('a subsequent complete report confirms the same obligation without revising the earlier result', () => {
+  const first = quarterlyPortfolio(quarterlyReport());
+  const before = JSON.stringify(first);
+  const second = quarterlyPortfolio(quarterlyReport({day: '03', extra: [
+    'Размер/лимит: 300 000', 'Задолж-сть: 180 000', 'Полная стоимость: 15', 'Просрочено: 0',
+  ]}), {sourceId: 'bki-confirmed'}, first);
+  assert.equal(second.obligations.length, 1);
+  assert.equal(second.obligations[0].obligationId, first.obligations[0].obligationId);
+  assert.equal(second.obligations[0].currentPosition.principalOutstanding.value, 180000);
+  assert.equal(second.summary.fundedDebt.value, 180000);
+  assert.notEqual(second.obligations[0].identityConfidence, 'LOW');
+  assert.equal(JSON.stringify(first), before);
 });
 
 test('explicit current duration is separate from the payment history and ambiguous labels',()=>{

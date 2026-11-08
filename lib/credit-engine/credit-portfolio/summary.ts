@@ -1,7 +1,8 @@
 import type { PortfolioAggregate, PortfolioObligation, PortfolioValue, CreditPortfolioSummary } from "../contracts/credit-portfolio.ts";
+import { PROVISIONAL_BKI_SCHEDULE } from "./observations.ts";
 import { finite, known, unknown, weakest, validDate } from "./common.ts";
 export function aggregate(rows: Array<{ o: PortfolioObligation; v: PortfolioValue<number> }>, basis: string): PortfolioAggregate {
-  const good = rows.filter(r => known(r.v) && finite(r.v.value)), sum = good.reduce((n, r) => n + r.v.value!, 0), missing = rows.length - good.length;
+  const good = rows.filter(r => !r.o.warnings.includes(PROVISIONAL_BKI_SCHEDULE) && known(r.v) && finite(r.v.value)), sum = good.reduce((n, r) => n + r.v.value!, 0), missing = rows.length - good.length;
   return { value: rows.length && !missing && finite(sum) ? sum : null, knownAmount: finite(sum) ? sum : 0, knownObligationCount: good.length, unknownObligationCount: missing,
     coverage: rows.length ? good.length / rows.length : null, confidence: weakest(...rows.map(r => weakest(r.o.identityConfidence, r.v.confidence))), calculationBasis: basis,
     obligationIds: rows.map(r => r.o.obligationId).sort(), warnings: [...(missing ? ["OUTSTANDING_COVERAGE_PARTIAL"] : []), ...(!finite(sum) ? ["NON_FINITE_RESULT"] : [])] };
