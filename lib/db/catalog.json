@@ -828,5 +828,24 @@
     "primaryKey": [
       "id"
     ]
+  },
+  {
+    "table": "analysis_decision_revisions",
+    "columns": [
+      "snapshot_id",
+      "analysis_id",
+      "owner_email",
+      "company_inn",
+      "as_of_date",
+      "input_fingerprint",
+      "engine_version",
+      "report_version",
+      "public_model",
+      "decision_digest",
+      "created_at"
+    ],
+    "primaryKey": [
+      "snapshot_id"
+    ]
   }
 ]

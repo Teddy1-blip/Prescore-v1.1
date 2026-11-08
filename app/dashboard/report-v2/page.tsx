@@ -9,6 +9,7 @@ import {getRuntime} from '../../../lib/platform/runtime';
 import {requireApiUser, readableAnalysis} from '../../api/api-auth';
 import {resolveAnalysisTier, type EntitlementDatabase} from '../../../lib/entitlements';
 import {loadWorkspaceModelV1,readWorkspaceOperations} from '../../../lib/workspace/service.ts';
+import {persistDecisionRevision,type DecisionRevisionDatabase} from '../../../lib/credit-engine/production/decision-history.ts';
 import './report-v2.css';
 import './analysis-v3.css';
 export const dynamic = 'force-dynamic';
@@ -24,6 +25,7 @@ export default async function ReportPage({searchParams}: {searchParams: Promise<
    readAccess: id => readableAnalysis(db, id, user),
    readTier: (id, access) => resolveAnalysisTier(db, {analysisId:id,userEmail:access.row.ownerEmail ?? '',companyInn:access.row.companyInn,privileged:user.isAdmin || access.access === 'agent',readOnly: true}),
    readOperations: (id, access) => readWorkspaceOperations(db,id,access.row.companyInn,user),
+   recordDecision: ({canonical,report,access}) => persistDecisionRevision(db as unknown as DecisionRevisionDatabase,{canonical,report,access}).then(()=>undefined),
    readProfile: async inn => {
     const row = await db.prepare('SELECT payload FROM checko_profiles WHERE inn = ? LIMIT 1').bind(inn).first<{payload:string}>();
     return row ? cachedProfile(row.payload,inn) : undefined;

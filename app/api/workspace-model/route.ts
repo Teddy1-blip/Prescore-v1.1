@@ -6,6 +6,7 @@ import { readableAnalysis, requireApiUser } from "../api-auth";
 
 import {cashEvidence} from "../../../lib/workspace/cash-evidence.ts";
 import {isCashSeries} from "../../../lib/workspace/cash-series.ts";
+import {compareDecisionRevisions,listDecisionRevisions,persistDecisionRevision,readDecisionRevision,type DecisionRevisionDatabase} from "../../../lib/credit-engine/production/decision-history.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,7 @@ export async function GET(request: Request) {
         bind: (...values: unknown[]) => {
           first: <T = unknown>() => Promise<T | null>;
           all: <T = unknown>() => Promise<{ results?: T[] }>;
+          run: () => Promise<unknown>;
         };
       };
     };
@@ -51,7 +53,25 @@ export async function GET(request: Request) {
         try { return cachedProfile(row.payload,inn); } catch { return undefined; }
       },
       readOperations: (id, access) => readWorkspaceOperations(db, id, access.row.companyInn, user),
+      recordDecision: ({canonical,report,access}) => persistDecisionRevision(db as unknown as DecisionRevisionDatabase,{canonical,report,access}).then(()=>undefined),
     };
+    if (params.get("projection") === "decision-history" || params.get("projection") === "decision-revision" || params.get("projection") === "decision-diff") {
+      const access=await dependencies.readAccess(analysisId);
+      if(!access)return json({error:"Анализ недоступен."},404);
+      if(await dependencies.readTier(analysisId,access)!=="FULL")return json({error:"История решений доступна в полном анализе."},403);
+      const historyDb=db as unknown as DecisionRevisionDatabase;
+      if(params.get("projection")==="decision-history")return json({analysisId,revisions:await listDecisionRevisions(historyDb,analysisId)});
+      if(params.get("projection")==="decision-revision"){
+        const snapshotId=params.get("snapshotId")??"";
+        if(!/^sha256:[0-9a-f]{64}$/.test(snapshotId))return json({error:"Некорректная версия решения."},400);
+        const revision=await readDecisionRevision(historyDb,analysisId,snapshotId);
+        return revision?json({analysisId,snapshotId,model:revision.model}):json({error:"Версия решения не найдена."},404);
+      }
+      const from=params.get("from")??"",to=params.get("to")??"";
+      if(!/^sha256:[0-9a-f]{64}$/.test(from)||!/^sha256:[0-9a-f]{64}$/.test(to))return json({error:"Укажите две корректные версии решения."},400);
+      const diff=await compareDecisionRevisions(historyDb,analysisId,from,to);
+      return diff?json({analysisId,...diff}):json({error:"Одна из версий решения не найдена."},404);
+    }
     if (params.get("projection") === "cash-operations") {
       const month = params.get("month") ?? "";
       const series = params.get("series");

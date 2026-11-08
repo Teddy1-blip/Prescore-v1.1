@@ -16,6 +16,7 @@ export type WorkspaceServiceDependencies = {
   readTier: (analysisId: string, access: ReportAccess) => Promise<AnalysisTier>;
   readProfile: (companyInn: string) => Promise<CompanyProfileData | undefined>;
   readOperations: (analysisId: string, access: ReportAccess) => Promise<WorkspaceOperationalInput>;
+  recordDecision?: (input:{canonical:ReturnType<typeof buildCanonicalCreditAnalysis>;report:ClientReportModelV1;access:ReportAccess}) => Promise<void>;
 };
 
 function accessRole(access: ReportAccess["access"]): WorkspaceAccessRoleV1 {
@@ -107,6 +108,10 @@ export async function loadWorkspaceModelV1(analysisId: string, dependencies: Wor
     const canonical = buildCanonicalCreditAnalysis(savedCanonicalInput(analysis,companyProfile));
     stage = "PUBLIC_MODEL";
     const report: ClientReportModelV1 = publicCanonicalModel(canonical.model, canonical);
+    if (dependencies.recordDecision) {
+      try { await dependencies.recordDecision({canonical,report,access}); }
+      catch { console.error("decision_revision_unavailable", {analysisId, snapshotId: report.meta.snapshot?.snapshotId ?? null}); }
+    }
     return {
       ...base,
       // Publish the same source set that the canonical calculation actually read,

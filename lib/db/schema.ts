@@ -29,6 +29,23 @@ export const analysisArchiveBatches = pgTable("analysis_archive_batches", {
 },table=>[check("analysis_archive_batches_record_count_check",sql`${table.recordCount} >= 0`)]);
 
 
+export const analysisDecisionRevisions = pgTable("analysis_decision_revisions", {
+  snapshotId:text("snapshot_id").primaryKey(),
+  analysisId:text("analysis_id").notNull().references(()=>analyses.id),
+  ownerEmail:text("owner_email").notNull(),
+  companyInn:text("company_inn").notNull(),
+  asOfDate:text("as_of_date").notNull(),
+  inputFingerprint:text("input_fingerprint").notNull(),
+  engineVersion:text("engine_version").notNull(),
+  reportVersion:text("report_version").notNull(),
+  publicModel:text("public_model").notNull(),
+  decisionDigest:text("decision_digest").notNull(),
+  createdAt:timestamp("created_at",{withTimezone:true}).notNull().defaultNow(),
+},table=>[
+  index("analysis_decision_revisions_analysis_date").on(table.analysisId,table.createdAt.desc(),table.snapshotId),
+]);
+
+
 export const deals = pgTable("deals", {
   id: text("id").primaryKey(),
   analysisId: text("analysis_id").notNull(),

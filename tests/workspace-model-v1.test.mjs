@@ -15,6 +15,7 @@ import * as entitlements from "../lib/entitlements.ts";
 import * as cashEvidence from '../lib/workspace/cash-evidence.ts';
 import * as cashSeries from '../lib/workspace/cash-series.ts';
 import * as workspaceService from "../lib/workspace/service.ts";
+import * as decisionHistory from "../lib/credit-engine/production/decision-history.ts";
 import { buildCanonicalCreditAnalysis } from "../lib/credit-engine/production/orchestrator.ts";
 import { publicCanonicalModel } from "../lib/credit-engine/production/public-model.ts";
 import { statementFixture } from "./fixtures/block1-statements.mjs";
@@ -71,11 +72,12 @@ for (const ownerFull of [false, true]) test(ownerFull
     "../../../lib/workspace/service.ts": workspaceService,
     "../../../lib/workspace/cash-evidence.ts": cashEvidence,
     "../../../lib/workspace/cash-series.ts": cashSeries,
+    "../../../lib/credit-engine/production/decision-history.ts": decisionHistory,
     "../api-auth": { requireApiUser: async () => current, readableAnalysis: apiAuth.readableAnalysis },
   });
 
   try {
-    for (const migration of ["0001_product.sql", "0002_platform_auth.sql", "0003_runtime_indexes.sql", "0009_analysis_archive.sql"]) {
+    for (const migration of ["0001_product.sql", "0002_platform_auth.sql", "0003_runtime_indexes.sql", "0009_analysis_archive.sql", "0010_decision_revisions.sql"]) {
       await pg.exec(fs.readFileSync("lib/db/migrations/" + migration, "utf8"));
     }
 
@@ -171,6 +173,15 @@ for (const ownerFull of [false, true]) test(ownerFull
       const full = await fullResponse.json();
       assert.equal(full.access.readOnly, false);
       assertCanonical(full);
+      assert.equal((await db.prepare("SELECT COUNT(*) AS count FROM analysis_decision_revisions WHERE analysis_id = ?").bind(analysisId).first()).count, 1);
+      const historyResponse=await workspaceRoute.GET(new Request("https://prescore.test/api/workspace-model?analysisId="+encodeURIComponent(analysisId)+"&projection=decision-history"));
+      assert.equal(historyResponse.status,200);
+      const history=await historyResponse.json();
+      assert.equal(history.revisions.length,1);
+      assert.equal(history.revisions[0].snapshotId,full.full.report.meta.snapshot.snapshotId);
+      const revisionResponse=await workspaceRoute.GET(new Request("https://prescore.test/api/workspace-model?analysisId="+encodeURIComponent(analysisId)+"&projection=decision-revision&snapshotId="+encodeURIComponent(history.revisions[0].snapshotId)));
+      assert.equal(revisionResponse.status,200);
+      assert.deepEqual((await revisionResponse.json()).model,full.full.report);
     }
 
     await db.prepare("INSERT INTO agent_accounts (user_email, agent_code, name) VALUES (?, ?, ?)")
@@ -190,6 +201,7 @@ for (const ownerFull of [false, true]) test(ownerFull
     assert.equal(broker.access.role, "ASSIGNED_BROKER");
     assert.equal(broker.access.readOnly, true);
     assertCanonical(broker);
+    assert.equal((await db.prepare("SELECT COUNT(*) AS count FROM analysis_decision_revisions WHERE analysis_id = ?").bind(analysisId).first()).count, 1);
     assert.equal((await db.prepare("SELECT tier FROM analysis_entitlements WHERE analysis_id = ?")
       .bind(analysisId).first()).tier, ownerFull ? "FULL" : "FREE");
     assert.deepEqual(await apiAuth.readableAnalysis(db, analysisId, current), brokerBefore);
