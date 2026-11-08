@@ -21,6 +21,23 @@ import { createWorkspaceRuntime } from './fixtures/workspace-runtime.mjs';
 import { statementFixture } from './fixtures/block1-statements.mjs';
 const acquire = (d, id = inn) => acquireChecko(id, 'isolated-fixture', d.fetcher);
 const r = (facts, m) => facts.receipts.find((x) => x.method === m);
+test('Checko contract filters use v2 JSON strings and retain only safe HTTP failure codes', async () => {
+  const { fetcher } = checkoDouble({ fail: [] });
+  const laws = [];
+  const { profile, raw } = await acquire({
+    fetcher(input, options) {
+      if (!input.endsWith('/contracts')) return fetcher(input, options);
+      const params = JSON.parse(options.body);
+      laws.push(params.law);
+      if (params.law === '223') return new Response('private provider error', { status: 429 });
+      return fetcher(input, options);
+    },
+  });
+  assert.deepEqual(laws.sort(), ['223', '44']);
+  assert.equal(r(profile.externalFacts, 'contracts:44').status, 'READY');
+  assert.deepEqual(r(profile.externalFacts, 'contracts:223').warnings, ['PROVIDER_HTTP_429']);
+  assert.doesNotMatch(raw, /private provider error/);
+});
 const sample = {
   inn,
   retrievedAt: '2026-08-01T10:00:00Z',

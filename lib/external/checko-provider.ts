@@ -8,7 +8,9 @@ const SAFE_ERRORS = new Set([
   'SOURCE_SHAPE_UNSUPPORTED',
 ]);
 export function providerError(e: unknown) {
-  return e instanceof Error && SAFE_ERRORS.has(e.message) ? e.message : 'PROVIDER_RESPONSE_FAILED';
+  return e instanceof Error && (SAFE_ERRORS.has(e.message) || /^PROVIDER_HTTP_[45]\d{2}$/.test(e.message))
+    ? e.message
+    : 'PROVIDER_RESPONSE_FAILED';
 }
 export async function acquireChecko(inn: string, key: string, fetcher: typeof fetch = fetch) {
   const methods = checkoMethods(inn),
@@ -17,7 +19,7 @@ export async function acquireChecko(inn: string, key: string, fetcher: typeof fe
   async function request(method: string) {
     const [path, law] = method.split(':');
     const params: Record<string, unknown> = { key, inn };
-    if (law) Object.assign(params, { law: Number(law), page: 1, limit: 100, sort: '-date' });
+    if (law) Object.assign(params, { law, sort: '-date' });
     const res = await fetcher('https://api.checko.ru/v2/' + path, {
       method: 'POST',
       redirect: 'error',
@@ -26,6 +28,10 @@ export async function acquireChecko(inn: string, key: string, fetcher: typeof fe
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify(params),
     });
+    if (!res.ok) {
+      await res.body?.cancel();
+      throw Error('PROVIDER_HTTP_' + res.status);
+    }
     const bytes = await boundedBytes(res, 2 * 1024 * 1024);
     const body = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
     if (body?.meta?.status !== 'ok') throw Error('PROVIDER_RESPONSE_FAILED');
