@@ -18,7 +18,7 @@ jobs:
   validate-and-deliver:
     if: github.repository == 'Teddy1-blip/Prescore-v1.1' && github.ref == 'refs/heads/staging'
     runs-on: ubuntu-latest
-    timeout-minutes: 230
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -111,7 +111,6 @@ jobs:
         run: python3 scripts/deploy/amvera.py push
 
       - name: Verify live staging runtime
-        timeout-minutes: 155
         env:
           GH_READ_TOKEN: ${{ github.token }}
           AMVERA_USERNAME: ${{ secrets.AMVERA_USERNAME }}
