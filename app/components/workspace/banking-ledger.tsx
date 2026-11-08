@@ -35,7 +35,7 @@ type BankingField=keyof typeof bankingFieldLabels;
 const groups:Array<{title:string;hint:string;fields:BankingField[]}>= [
  {title:'Денежный поток',hint:'Сколько денег поступило от внешних контрагентов и сколько им перечислено?',fields:['operatingInflow','observedMonthlyOperatingAverage','fullMonthOperatingAverage','grossInflow','grossOutflow','netCashFlow']},
  {title:'Ликвидность',hint:'До какого уровня опускался остаток по представленным счетам?',fields:['endingBalance','averageDailyBalance','minimumDailyBalance','lowLiquidityDays']},
- {title:'Долг и обязательные платежи',hint:'Сколько компания фактически перечислила кредиторам и в бюджет?',fields:['loanPrincipalPayments','interestPayments','unsplitDebtPayments','leasingPayments','taxPayments','socialContributions','transfersToIndividuals']},
+ {title:'Долг и обязательные платежи',hint:'Сколько компания фактически перечислила кредиторам и в бюджет?',fields:['debtService','loanPrincipalPayments','interestPayments','unsplitDebtPayments','leasingPayments','taxPayments','socialContributions','transfersToIndividuals']},
  {title:'Концентрация покупателей',hint:'Какая доля операционных поступлений приходится на идентифицированных прямых покупателей?',fields:['directCustomerTop1','directCustomerTop3']}
 ];
 

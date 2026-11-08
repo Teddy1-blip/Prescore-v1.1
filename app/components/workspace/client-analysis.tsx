@@ -103,7 +103,8 @@ export function FullCreditAnalysis({model,retry,initialSection='conclusion'}:{mo
  if(!r)return <FullAccessNotice model={model} retry={retry}/>;
  const snapshot=r.meta.snapshot;
  const tabs=[['conclusion','Заключение'],['factors','Стоп-факторы и риски'],['expertise','Экспертная оценка'],['capacity','Долговая ёмкость'],['financials','Финансовое состояние'],['obligations','Кредитный портфель'],['financing','Финансирование'],['reconciliation','Сверка'],['recommendations','Рекомендации'],['plan','План 7 / 30 / 60'],['evidence','Основания'],['history','История']];
- const topConstraint=r.primaryFactors.find(f=>model.full?.canonical.explainability.claims.some(c=>c.claimId===f.claimId&&['GLOBAL_STOP','CREDIT_RISK'].includes(c.status??'')));
+ const economic=r.primaryFactors?.find(f=>model.full?.canonical.explainability.claims.some(c=>c.claimId===f.claimId&&['GLOBAL_STOP','CREDIT_RISK'].includes(c.status??'')));
+ const topConstraint=economic??r.readiness.constraints[0]??r.limitations[0]??r.dataQuality[0];
  function select(next:string){setTab(next);const url=new URL(window.location.href);url.searchParams.set('section',next);window.history.replaceState(null,'',url);}
  return <>
   <div className="pc-page-title"><div><h1>Кредитный профиль</h1><p>Заключение Prescore на {date(r.meta.asOfDate)}</p>{snapshot && <details><summary>Версия расчёта</summary><code style={{overflowWrap:"anywhere"}}>{snapshot.snapshotId}</code></details>}</div><a className="pc-secondary" href={'/dashboard/report-v2?analysisId='+encodeURIComponent(model.analysisId)+(snapshot&&model.full?.revisionAvailable?'&snapshotId='+encodeURIComponent(snapshot.snapshotId):'')+'&print=1'} target="_blank" rel="noreferrer">Печать / PDF</a></div>
@@ -112,7 +113,7 @@ export function FullCreditAnalysis({model,retry,initialSection='conclusion'}:{mo
   {tab==='conclusion'&&<>
    <section className="pc-analysis-hero">
     <div><span className="pc-kicker">ЭКСПЕРТНОЕ ЗАКЛЮЧЕНИЕ</span><h2>{r.hero.headline}</h2><p>{r.hero.summary}</p><div className="pc-statusline"><span className={'pc-badge'+(r.hero.globalStop?' critical':'')}>{r.hero.globalStop?'Есть критичное ограничение':'Общий стоп-фактор не выявлен в доступных сведениях'}</span><span className="pc-badge">{r.hero.confidence}</span></div></div>
-    <aside><span>Ключевое ограничение</span><strong>{publicText(topConstraint?whyTitle(model.full?.canonical.explainability,topConstraint.claimId,topConstraint.title):'Отдельное ограничение не выделено')}</strong><small>{publicText(topConstraint?.text??'Проверьте комплект источников и готовность к финансированию.')}</small>{topConstraint&&<Why model={model} ids={[topConstraint.claimId]}/>}</aside>
+    <aside><span>{economic?'Ключевой фактор':'Что требует проверки'}</span><strong>{publicText(topConstraint?whyTitle(model.full?.canonical.explainability,topConstraint.claimId,topConstraint.title):'Отдельное ограничение не выделено')}</strong><small>{publicText(topConstraint?.text??'Проверьте комплект источников и готовность к финансированию.')}</small>{topConstraint&&<Why model={model} ids={[topConstraint.claimId]}/>}</aside>
    </section>
    {model.full?.canonical.creditAssessment.bankObservations?.length?<Panel title="Факторы заключения">{model.full.canonical.explainability.claims.filter(c=>c.claimCode.startsWith('PROFILE:')).map(c=><article key={c.claimId}><p>{publicText(c.textRu)}</p><Why model={model} ids={[c.claimId]}/></article>)}</Panel>:null}
    <BankingSnapshot model={model}/><CreditSummary model={model}/><AssessmentLimits model={model}/><details><summary>Основания числовой оценки</summary><IndexEvidenceGaps model={model}/></details>

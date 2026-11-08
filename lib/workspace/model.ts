@@ -1,3 +1,5 @@
+import {bankCoverageGaps} from '../credit-engine/credit-assessment/coverage.ts';
+import {observedNetTitle} from '../credit-engine/credit-assessment/bank-profile.ts';
 import {legalRegistryView} from "../legal-registry.ts";
 import {financialSources} from "../credit-engine/financial-analysis/source-selection.ts";
 import type { AnalysisResult } from "../prescore.ts";
@@ -30,6 +32,7 @@ export type WorkspaceOperationalStateV1 = {
 };
 
 export type WorkspaceBasicV1 = {
+  observedNetTitle?:string|null;
   checko?:import("../external/checko-cache.ts").CheckoState;
   coverageGaps?:ReturnType<typeof import("../credit-engine/credit-assessment/coverage.ts").bankCoverageGaps>;
   legalRegistry?: import("../legal-registry.ts").LegalRegistryV1;
@@ -165,7 +168,7 @@ function sourceAvailability(analysis: AnalysisResult): WorkspaceBasicV1["sources
   }));
 }
 
-import {bankCoverageGaps} from '../credit-engine/credit-assessment/coverage.ts';
+
 export function projectWorkspaceBasic(
   analysis: AnalysisResult,
   operations: WorkspaceOperationalInput = {
@@ -178,6 +181,7 @@ export function projectWorkspaceBasic(
   const statementPeriodFrom = metrics?.period.from ?? (statements?.length ? statements.map((item) => item.periodFrom).filter((value): value is string => !!value).sort()[0] ?? null : null);
   const statementPeriodTo = metrics?.period.to ?? (statements?.length ? statements.map((item) => item.periodTo).filter((value): value is string => !!value).sort().at(-1) ?? null : null);
   return {
+    observedNetTitle:metrics?.cashFlow.netExternalCashFlow.status==='KNOWN'?observedNetTitle(metrics.cashFlow.netExternalCashFlow.value):null,
     coverageGaps:bankCoverageGaps(analysis),
     ...(analysis.checkoAttempt?{checko:analysis.checkoAttempt}:{}),
     ...(analysis.legalRegistryV1 ? {legalRegistry: legalRegistryView(analysis)} : {}),

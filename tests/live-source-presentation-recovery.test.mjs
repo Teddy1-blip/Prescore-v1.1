@@ -16,6 +16,7 @@ function load(file,basis=0){
  const exports={};let state=0;
  const imports={
   '../legal-registry.ts':{legalRegistryView},
+  '../credit-engine/credit-assessment/bank-profile.ts':require('../lib/credit-engine/credit-assessment/bank-profile.ts'),
   '../credit-engine/credit-assessment/coverage.ts':require('../lib/credit-engine/credit-assessment/coverage.ts'),
   '../../../lib/external/checko-summary.ts':require('../lib/external/checko-summary.ts'),
   'react/jsx-runtime':{jsx,jsxs:jsx,Fragment:Symbol.for('fragment')},

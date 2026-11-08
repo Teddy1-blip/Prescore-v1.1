@@ -18,9 +18,11 @@ export function checkoKey(env:Record<string,unknown>) {
   return typeof env.CHECKO_API_KEY==='string'?env.CHECKO_API_KEY.trim():'';
 }
 
-export type CheckoState={status:'READY'|'PARTIAL'|'STALE'|'NOT_CONFIGURED'|'NOT_REQUESTED'|'RETRY_LATER'|'FAILED';fetchedAt:string|null};
+export type CheckoState={status:'READY'|'PARTIAL'|'STALE'|'NOT_CONFIGURED'|'NOT_REQUESTED'|'RETRY_LATER'|'FAILED';fetchedAt:string|null;identity?:{status:string|null;registered:string|null;sourceId:string}};
 export function checkoState(result:Result):CheckoState {
-  return {status:result.status==='READY' && result.profile?.failedMethods?.length?'PARTIAL':result.status,fetchedAt:result.profile?.fetchedAt??null};
+  const f=result.profile?.externalFacts;
+  const base=f?.receipts.find(r=>r.status==='READY'&&['company','entrepreneur'].includes(r.method));
+  return {...(base&&f?{identity:{status:f.identity.status,registered:f.identity.registered,sourceId:base.id}}:{}),status:result.status==='READY' && result.profile?.failedMethods?.length?'PARTIAL':result.status,fetchedAt:result.profile?.fetchedAt??null};
 }
 type Row = { payload: string; updated_at: string; fetched_at: string };
 type Result = {

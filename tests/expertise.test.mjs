@@ -24,7 +24,17 @@ for(const {caseId}of businessCatalog()){
 }
 const get=n=>cases.get(n);const text=n=>JSON.stringify(get(n).m.expertise);
 test('001 strength is evidence of recurring capacity, not 1000 guarantee',()=>{const {m,r}=get('001');assert.ok(m.expertise.strengthIds.length);const s=m.expertise.items.find(i=>i.id===m.expertise.strengthIds[0]);assert.equal(r.debtCapacity.recurringView.incrementalHeadroom.state,'POSITIVE');assert.equal(s.knowledge,'KNOWN');assert.ok(s.limitation.includes('частичным'));assert.ok(!s.claimIds.includes(r.explainability.claims.find(c=>c.claimCode==='INDEX_VALUE').claimId));});
-for(const n of ['011','016','022'])test(n+' missing/contradictory capacity never fabricated as strength',()=>assert.equal(get(n).m.expertise.strengthIds.length,0));
+for(const n of ['011','016','022'])test(n+' missing capacity never becomes a strength; each independent strength has its own known source',()=>{
+ const {r,m}=get(n);
+ const items=m.expertise.items.filter(i=>m.expertise.strengthIds.includes(i.id));
+ assert.ok(items.every(i=>i.knowledge==='KNOWN'&&i.confidence==='HIGH'&&i.sourceReferenceIds.length));
+ for(const i of items){
+   const proof=r.explainability.claims.find(c=>i.claimIds.includes(c.claimId)&&c.claimCode.startsWith('PROFILE:')&&c.claimRole==='POSITIVE_CONTEXT');
+   assert.ok(proof,n+' strength requires a specific positive observation');
+   assert.ok(proof.valueBindings.some(b=>b.rawValue!==null));
+   assert.ok(!i.claimIds.some(id=>r.explainability.claims.some(c=>c.claimId===id&&c.claimKind==='CAPACITY')));
+ }
+});
 test('017 global stop no optimistic products or principal scenarios',()=>{const {m,r}=get('017');assert.equal(m.expertise.strengthIds.length,0);for(const id of m.expertise.structureIds){const i=m.expertise.items.find(x=>x.id===id);assert.ok(i.limitation.includes('Глобальное ограничение'));assert.ok(i.claimIds.every(cid=>!r.explainability.claims.some(c=>c.claimId===cid&&(c.claimKind==='PRODUCT_FIT'||c.claimCode==='CAPACITY_SCENARIO'))));}});
 test('013 current 1000 RUB and historical zero DAYS remain separate',()=>{const s=text('013');assert.match(s,/Текущая просроченная сумма/);assert.match(s,/1[\s\u00a0\u202f]000/);assert.match(s,/0 дней/);assert.doesNotMatch(s,/идеальн.*истори/);});
 test('022 conflict 11.8m remains subtotal; dependent capacity UNKNOWN',()=>{const {m}=get('022');const cap=m.expertise.items.find(i=>i.title==='Расчетный запас обслуживания долга');assert.ok(cap.fact.includes('Конфликт версий операции'));assert.match(cap.fact,/11[\s\u00a0\u202f]800[\s\u00a0\u202f]000/);assert.match(cap.fact,/не полный/);assert.equal(cap.knowledge,'UNKNOWN');assert.equal(m.capacity.headline.value,null);assert.equal(m.expertise.structureIds.length,9);});
@@ -83,11 +93,14 @@ for(const [n,{m}]of cases){
 }
 test('summary fact status never reuses CLARIFY checklist label; confidence preserved',()=>{
  for(const {m}of cases.values())for(const i of m.expertise.items.filter(i=>i.category==='SUMMARY'||i.category==='STRENGTH'))assert.notEqual(expertiseStatementStatus(i),'Требуется документ или уточнение');
- const i=get('001').m.expertise.items[0];assert.equal(i.confidence,'UNKNOWN');assert.equal(i.knowledge,'PARTIAL');assert.equal(expertiseStatementStatus(i),'Оценка ограничена данными');
+ const m=get('001').m,i=m.expertise.items.find(i=>i.category==='SUMMARY'&&i.claimIds.includes(m.index.value.claimId));assert.equal(i.confidence,'UNKNOWN');assert.equal(i.knowledge,'PARTIAL');assert.equal(expertiseStatementStatus(i),'Оценка ограничена данными');
  assert.equal(expertiseStatementStatus({...i,knowledge:'KNOWN',confidence:'HIGH'}),'Рассчитано по доступным данным');
 });
 test('editorial thesis retains global stop and conflicting-source constraints, without positive invention',()=>{
- for(const n of ['011','017','022'])assert.ok(!expertiseEditorial(get(n).m).sentences.some(s=>s.role==='STRENGTH'));
+ assert.ok(!expertiseEditorial(get('017').m).sentences.some(s=>s.role==='STRENGTH'));
+ for(const n of ['011','022'])for(const sentence of expertiseEditorial(get(n).m).sentences.filter(s=>s.role==='STRENGTH')){
+  assert.ok(sentence.claimIds.some(id=>get(n).r.explainability.claims.some(c=>c.claimId===id&&c.claimRole==='POSITIVE_CONTEXT'&&c.confidence==='HIGH')));
+ }
  assert.match(expertiseEditorial(get('017').m).sentences.find(s=>s.role==='LIMITATION').text,/глобального ограничения/);
  assert.match(expertiseEditorial(get('022').m).sentences.find(s=>s.role==='LIMITATION').text,/Расхождение версий/);
 });

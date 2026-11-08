@@ -95,6 +95,7 @@ export function ExecutiveOverview({model,choose,retry,children}:{children?:React
    <div><span>ВАША КОМПАНИЯ</span><h1>Финансовая картина</h1><p>{model.basic.analysis.company.name} · ИНН {model.basic.analysis.company.inn} · {period}{r?.meta.asOfDate && <> · на {date(r.meta.asOfDate)}</>}</p></div>
    {r&&<button className="pc-primary" onClick={()=>openAnalysis('conclusion')}>Кредитный профиль →</button>}
   </header>
+  {!r&&model.basic.observedNetTitle&&dashboardFactValue(b.netCashFlow)!==null&&<section className="pc-dashboard-section"><h2>{model.basic.observedNetTitle}</h2><p>Чистый денежный поток за период — {dashboardValue(b.netCashFlow)}.</p></section>}
   {r && <div className="pc-dashboard-route">
     {children ?? <ClientDecisionRoute model={model} choose={choose}/>}
   </div>}

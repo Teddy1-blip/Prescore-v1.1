@@ -8,6 +8,9 @@ export type BankObservation = {
   confidence:MetricResult['confidence']; sourceIds:string[]; sourceTypes:string[]; sourceMetricCodes:string[];
   period:{from:string|null;to:string|null;asOf:string|null}; calculationBasis:string;
 };
+export function observedNetTitle(value:number|null) {
+  return value===null?null:value>0?'Поступления превысили списания':value<0?'Списания превысили поступления':'Поступления равны списаниям';
+}
 export function observedBankProfile(a:{sourceManifest?:AnalysisSourceManifest}, bank:BankStatementMetricsV2, risk:RiskAssessmentV1, portfolio:CreditPortfolioV1) {
   const sourceIds=(a.sourceManifest?.bankStatements??[]).map(s=>s.sourceId);
   const period={from:bank.period.from,to:bank.period.to,asOf:bank.period.to};
@@ -18,7 +21,7 @@ export function observedBankProfile(a:{sourceManifest?:AnalysisSourceManifest}, 
       confidence:m.confidence,period,sourceIds,sourceTypes:['BANK_STATEMENT'],sourceMetricCodes:[m.code],calculationBasis:m.calculationBasis});
   }
   const net=bank.cashFlow.netExternalCashFlow;
-  record('NET',net.value!==null && net.value>0?'Поступления превысили списания':net.value!==null && net.value<0?'Списания превысили поступления':'Поступления равны списаниям',net,(net.value??0)>0);
+  record('NET',observedNetTitle(net.value)??'Чистый денежный поток',net,(net.value??0)>0);
   record('OPERATING','Операционные поступления',bank.operating.operatingCashReceipts);
   record('DEBT','Выплаты по долгу',bank.debtService.debtServiceCashOutflow);
   const rule=(code:string)=>risk.evaluations.find(e=>e.ruleCode===code)?.status;

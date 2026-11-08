@@ -32,13 +32,13 @@ export function expertiseEditorial(m:ClientReportModelV1){
  const structureOther=e.structureIds.filter(id=>!structurePrimary.includes(id));
  const sentences:ExpertiseSentence[]=[];
  function sentence(role:ExpertiseSentence['role'],text:string,items:ExpertiseItemV1[]){sentences.push({role,text:text+'.',itemIds:items.map(i=>i.id),claimIds:unique(items.flatMap(i=>i.claimIds)),sourceReferenceIds:unique(items.flatMap(i=>i.sourceReferenceIds))});}
- // Existing summary order is Index / Readiness / Capacity / canonical focus.
+ // Subject and follow-up come from the memo. Locate capacity by its canonical claim.
  if(memo[0])sentence('POSITION',firstSentence(memo[0].fact)+(memo[1]?'; '+firstSentence(memo[1].fact).replace(/^Аналитическая готовность/u,'готовность'):''),memo.slice(0,2));
  const strength=e.strengthIds[0]&&item(e.strengthIds[0]);
  if(strength)sentence('STRENGTH',firstSentence(strength.interpretation).replace('В регулярном виде Debt Capacity','В расчёте по регулярной базе'),[strength]);
  // Preserve existing exceptional capacity attention (global stop/conflict),
  // otherwise follow the report's primary factor order, without a new risk rank.
- const capacity=memo[2];
+ const capacity=m.capacity.headline && memo.find(i=>i.claimIds.includes(m.capacity.headline!.claimId));
  const attention=capacity&&e.attentionIds.includes(capacity.id)?capacity:m.primaryFactors.map(f=>e.attentionIds.map(item).find(i=>i.factorIds.includes(f.id))).find(Boolean)??(e.attentionIds[0]?item(e.attentionIds[0]):undefined);
  const limit=capacity?.knowledge==='UNKNOWN'?capacity:attention??(capacity?.knowledge!=='KNOWN'?capacity:memo.find(i=>i.knowledge!=='KNOWN'));
  if(limit)sentence('LIMITATION','Ограничение оценки: '+firstSentence(limit===capacity?limit.interpretation:limit.fact).replace(/^Данные показывают:\s*/u,''),[limit]);
