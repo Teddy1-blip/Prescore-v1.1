@@ -301,3 +301,32 @@
 }
 
 .pc-dashboard-factors article[data-tone="data"] { border-left: 3px solid #9b8cc9; }
+
+
+/* CLIENT V1.1 — friendly financial control center */
+.pc-nav-section{display:block;margin:20px 10px 7px;padding-top:17px;border-top:1px solid #2a4058;color:#718b99;font-size:9px;letter-spacing:1.15px;text-transform:uppercase}
+.pc-sidebar nav button[data-later="true"]{color:#7f96a2;background:transparent;opacity:1;cursor:default}
+.pc-sidebar nav button[data-later="true"]:hover{background:transparent;color:#7f96a2}
+.pc-nav-later{margin-left:auto;color:#9bb0ba!important;border:1px solid #425a6d;border-radius:999px;padding:2px 7px;font-size:9px!important;line-height:1.4}
+.pc-ask{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:42px;padding:9px 13px;border-radius:8px;border:1px solid #ddd8f7;background:#f5f3fd;color:#574cb2;font-weight:650;font-size:12px;flex:none}
+.pc-ask:hover{background:#eeebfb}.pc-ask svg{flex:none}
+.pc-dashboard-heading{padding-top:8px}
+.pc-dashboard-heading>div>span{color:#6559c7}
+.pc-dashboard-heading h1{font-size:34px}
+.pc-dashboard-heading p{font-size:13px;max-width:760px}
+.pc-dashboard-summary{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+.pc-dashboard-route .pc-decision-route{color:var(--pc-ink);background:#f3f1fc;border:1px solid #e2def8}
+.pc-dashboard-route .pc-decision-route > header small,
+.pc-dashboard-route .pc-decision-route .pc-muted{color:#746f8b}
+.pc-dashboard-route .pc-decision-route h2{color:var(--pc-ink)}
+.pc-dashboard-route .pc-decision-route > p,
+.pc-dashboard-route .pc-route-basis{color:#435064}
+.pc-dashboard-route .pc-decision-route > p{color:#435064}
+.pc-dashboard-route .pc-status{color:#574cb2;background:#fff;border:1px solid #ddd8f7}
+.pc-dashboard-grid-main.is-single{grid-template-columns:minmax(0,1fr)}
+.pc-dashboard-section>header span{color:#6559c7}
+.pc-dashboard-factors article[data-tone="data"] small{color:#6f61af}
+.pc-dashboard-factors article[data-tone="data"]{border-left-color:#8f82ca}
+.pc-dashboard-sources{border-radius:14px}
+@media(max-width:850px){.pc-ask span{display:none}.pc-ask{padding-inline:10px}}
+@media(max-width:560px){.pc-dashboard-heading h1{font-size:28px}.pc-ask{margin-left:auto}.pc-new span{display:none}}

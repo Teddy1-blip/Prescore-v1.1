@@ -34,7 +34,7 @@ export function clientViewNeedsModel(view:string){
  return !['upload','documents','obligations','applications','billing'].includes(view);
 }
 export function clientSectionTitle(view:string){
- const titles:Record<string,string>={home:'Обзор',analysis:'Анализ Prescore',banking:'Финансы',obligations:'Обязательства',financing:'Финансирование',documents:'Документы',applications:'Заявки',analyst:'Кредитный аналитик',billing:'Подписка компании'};
+ const titles:Record<string,string>={home:'Обзор',analysis:'Кредитный профиль',banking:'Финансы',obligations:'Кредитный портфель',financing:'Финансирование',documents:'Документы',applications:'Заявки',analyst:'Спросить Prescore',billing:'Подписка компании'};
  return Object.hasOwn(titles,view)?titles[view]:'Раздел кабинета';
 }
 export default function ClientWorkspace(){

@@ -83,7 +83,7 @@ export function FullCreditAnalysis({model,retry,initialSection='conclusion'}:{mo
  const r=model.full?.report;
  if(!r)return <FullAccessNotice model={model} retry={retry}/>;
  const snapshot=r.meta.snapshot;
- const tabs=[['conclusion','Заключение'],['factors','Оценка и риски'],['capacity','Долговая ёмкость'],['financials','Финансовое состояние'],['obligations','Обязательства'],['financing','Финансирование'],['reconciliation','Сопоставление данных'],['plan','План действий'],['evidence','Источники'],['history','История']];
+ const tabs=[['conclusion','Заключение'],['factors','Стоп-факторы и риски'],['capacity','Долговая ёмкость'],['financials','Финансовое состояние'],['obligations','Кредитный портфель'],['financing','Финансирование'],['reconciliation','Сверка'],['plan','Рекомендации 7 / 30 / 60'],['evidence','Основания'],['history','История']];
  const all=[...r.primaryFactors,...r.contextHighlights,...r.readiness.constraints,...r.detailedSections.flatMap(s=>s.factors)];
  const topConstraint=r.readiness.constraints[0]??r.limitations[0]??r.dataQuality[0];
  const expertise=r.expertise;
@@ -92,17 +92,17 @@ export function FullCreditAnalysis({model,retry,initialSection='conclusion'}:{mo
  const memoIds=new Set(expertise?.memoIds??[]);
  function select(next:string){setTab(next);const url=new URL(window.location.href);url.searchParams.set('section',next);window.history.replaceState(null,'',url);}
  return <>
-  <div className="pc-page-title"><div><h1>Анализ Prescore</h1><p>Кредитное заключение на {date(r.meta.asOfDate)}</p>{snapshot && <details><summary>Версия расчёта</summary><code style={{overflowWrap:"anywhere"}}>{snapshot.snapshotId}</code></details>}</div><a className="pc-secondary" href={'/dashboard/report-v2?analysisId='+encodeURIComponent(model.analysisId)+'&print=1'} target="_blank" rel="noreferrer">Печать / PDF</a></div>
+  <div className="pc-page-title"><div><h1>Кредитный профиль</h1><p>Заключение Prescore на {date(r.meta.asOfDate)}</p>{snapshot && <details><summary>Версия расчёта</summary><code style={{overflowWrap:"anywhere"}}>{snapshot.snapshotId}</code></details>}</div><a className="pc-secondary" href={'/dashboard/report-v2?analysisId='+encodeURIComponent(model.analysisId)+'&print=1'} target="_blank" rel="noreferrer">Печать / PDF</a></div>
   <nav className="pc-tabs" aria-label="Разделы анализа">{tabs.map(([id,title])=><button key={id} aria-current={tab===id?'page':undefined} onClick={()=>select(id)}>{title}</button>)}</nav>
 
   {tab==='conclusion'&&<>
    <section className="pc-analysis-hero">
-    <div><span className="pc-kicker">КРЕДИТНОЕ ЗАКЛЮЧЕНИЕ</span><h2>{r.hero.headline}</h2><p>{r.hero.summary}</p><div className="pc-statusline"><span className={'pc-badge'+(r.hero.globalStop?' critical':'')}>{r.hero.globalStop?'Есть критичное ограничение':'Критичного общего стоп-фактора нет'}</span><span className="pc-badge">{r.hero.confidence}</span></div></div>
+    <div><span className="pc-kicker">ЭКСПЕРТНОЕ ЗАКЛЮЧЕНИЕ</span><h2>{r.hero.headline}</h2><p>{r.hero.summary}</p><div className="pc-statusline"><span className={'pc-badge'+(r.hero.globalStop?' critical':'')}>{r.hero.globalStop?'Есть критичное ограничение':'Критичного общего стоп-фактора нет'}</span><span className="pc-badge">{r.hero.confidence}</span></div></div>
     <aside><span>Ключевое ограничение</span><strong>{publicText(topConstraint?whyTitle(model.full?.canonical.explainability,topConstraint.claimId,topConstraint.title):'Отдельное ограничение не выделено')}</strong><small>{publicText(topConstraint?.text??'Проверьте комплект источников и готовность к финансированию.')}</small>{topConstraint&&<Why model={model} ids={[topConstraint.claimId]}/>}</aside>
    </section>
    <BankingSnapshot model={model}/><CreditSummary model={model}/><AssessmentLimits model={model}/><IndexEvidenceGaps model={model}/>
    {model.full!.canonical.financingReadiness.level!=='UNKNOWN'&&<Panel title="Готовность к финансированию"><h3>{r.readiness.level}</h3><p>{r.readiness.text}</p><FactorRows model={model} items={r.readiness.constraints}/></Panel>}
-   {expertise&&<Panel title="Экспертный разбор">
+   {expertise&&<Panel title="Экспертная оценка">
     <p className="pc-analysis-section-note">Факты и интерпретация разделены: сначала вывод, затем детали и подтверждения.</p>
     <div className="pc-expertise-grid">{expertise.items.filter(i=>memoIds.has(i.id)||strengthIds.has(i.id)||attentionIds.has(i.id)).map(i=>{const tone=strengthIds.has(i.id)?'positive':attentionIds.has(i.id)?'attention':'memo';return <article className="pc-expertise-card" data-tone={tone} key={i.id}><span>{tone==='positive'?'Сильная сторона':tone==='attention'?'Требует внимания':'Взгляд кредитора'}</span><h3>{i.title}</h3><p><b>Факт.</b> {i.fact}</p><p>{i.interpretation}</p><details><summary>Влияние и следующий шаг</summary><p><b>Влияние.</b> {i.impact}</p>{i.limitation&&<p><b>Ограничение.</b> {i.limitation}</p>}{i.nextStep&&<p><b>Следующий шаг.</b> {i.nextStep}</p>}{i.closure.length>0&&<ul>{i.closure.map((s,n)=><li key={n}>{s}</li>)}</ul>}<Why model={model} ids={i.claimIds}/></details></article>;})}</div>
    </Panel>}

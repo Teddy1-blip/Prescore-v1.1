@@ -91,7 +91,7 @@ test('clicking Finance without an analysis changes content, not only the highlig
  assert.ok(named(tree,'Panel').some(n=>n.props.title==='Финансы'));
  assert.match(text(tree),/Создайте первый кредитный профиль по банковской выписке/);
 });
-for(const [view,title]of Object.entries({analysis:'Анализ Prescore',banking:'Финансы',obligations:'Обязательства',financing:'Финансирование',documents:'Документы',applications:'Заявки',analyst:'Кредитный аналитик',billing:'Подписка компании'})){
+for(const [view,title]of Object.entries({analysis:'Кредитный профиль',banking:'Финансы',obligations:'Кредитный портфель',financing:'Финансирование',documents:'Документы',applications:'Заявки',analyst:'Спросить Prescore',billing:'Подписка компании'})){
  test(`unselected ${view} has its own section title and explicit company selection`,()=>{
   const tree=harness({view}).render();
   assert.equal(named(tree,'EmptyHome').length,0);

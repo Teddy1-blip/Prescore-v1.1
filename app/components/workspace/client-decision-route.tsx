@@ -66,12 +66,12 @@ function missingDataDecision(model: WorkspaceModelV1): ClientDecisionRouteV1 {
   const details = report
     ? uniqueFactorDetails([...report.dataQuality, ...report.limitations, ...report.readiness.constraints])
     : [];
-  if (!details.length) details.push("Для надёжного заключения не хватает подтверждённых финансовых или долговых данных.");
+  if (!details.length) details.push("Для полного заключения нужны дополнительные подтверждения финансового состояния или долговой нагрузки.");
   return {
     code: "INSUFFICIENT_DATA",
-    label: "НЕДОСТАТОЧНО ДАННЫХ",
-    title: "Сначала дополните кредитное досье",
-    summary: "Prescore сохранил подтверждённые факты, но пока не может надёжно завершить оценку готовности и долговой нагрузки.",
+    label: "ДОПОЛНИТЬ ПРОФИЛЬ",
+    title: "Добавьте несколько источников — и картина станет точнее",
+    summary: "Уже доступные факты сохранены. Дополните досье, чтобы Prescore точнее оценил готовность и долговую нагрузку.",
     tone: "data",
     details,
     tasks: [],
@@ -113,7 +113,7 @@ function readyDecision(model: WorkspaceModelV1): ClientDecisionRouteV1 {
   if (!details.length) details.push("Кредитный профиль позволяет перейти к подготовке заявки с учётом опубликованных ограничений.");
   return {
     code: "READY_FOR_FINANCING",
-    label: "ГОТОВ К ФИНАНСИРОВАНИЮ",
+    label: "МОЖНО ГОТОВИТЬ ЗАЯВКУ",
     title: readiness.level === "HIGH" ? "Можно переходить к подготовке финансирования" : "Можно готовить заявку с учётом ограничений",
     summary: clientText(report.hero.summary),
     tone: "positive",
@@ -158,7 +158,7 @@ export function ClientDecisionRoute({ model, choose }: { model: WorkspaceModelV1
   return <section className={`pc-panel pc-decision-route tone-${route.tone}`} data-client-route={route.code}>
     <header>
       <div>
-        <small>ИТОГОВЫЙ МАРШРУТ PRESCORE</small>
+        <small>ГЛАВНЫЙ ВЫВОД</small>
         <h2>{route.title}</h2>
       </div>
       <span className="pc-status">{route.label}</span>
@@ -169,6 +169,6 @@ export function ClientDecisionRoute({ model, choose }: { model: WorkspaceModelV1
       <ul>{route.details.map((detail) => <li key={detail}>{detail}</li>)}</ul>
     </details>}
     <button className="pc-primary" data-client-route-cta={route.code} onClick={broker?()=>choose('analysis'):openRoute}>{broker?'Открыть заключение':route.cta.label}</button>
-    <p className="pc-muted">Это маршрут подготовки, а не решение банка и не гарантия одобрения.</p>
+    <p className="pc-muted">Prescore помогает подготовиться к финансированию. Окончательное решение принимает кредитор.</p>
   </section>;
 }

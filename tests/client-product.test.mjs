@@ -10,14 +10,14 @@ test('commercial client uses one navigation and separate executive/analysis path
  const rt=await createWorkspaceRuntime();try{
  const shell=rt.load('app/components/workspace/client-shell.tsx'),insights=rt.load('app/components/workspace/client-insights.tsx'),analysis=rt.load('app/components/workspace/client-analysis.tsx'),routing=rt.load('app/components/workspace/client.tsx');
  const {model}=conclusionFixture(),before=JSON.stringify(model),props={model,choose:()=>{},retry:()=>{}};
- assert.deepEqual(shell.CLIENT_NAV.map(i=>i.label),['Обзор','Анализ Prescore','Финансы','Обязательства','Финансирование','Документы','Заявки','Кредитный аналитик']);
- const overview=render(insights.ExecutiveOverview,props);assert.match(overview,/Финансово-кредитный профиль/);assert.match(overview,/БАНКОВСКОЕ ЗАКЛЮЧЕНИЕ/);assert.doesNotMatch(overview,/av-scenario-grid|pc-memo|CLIENT.*ANALYSIS V3/);
- for(const section of ['conclusion','factors','capacity','financials','obligations','financing','reconciliation','plan','evidence'])await t.test(section,()=>{const html=render(analysis.FullCreditAnalysis,{...props,initialSection:section});assert.doesNotMatch(html,/NaN|undefined|Infinity/);assert.match(html,/Анализ Prescore/);});
+ assert.deepEqual(shell.CLIENT_NAV.map(i=>i.label),['Обзор','Финансы','Кредитный профиль','Финансирование','Документы','Заявки','Мониторинг','Контрагенты','Контракты']);
+ const overview=render(insights.ExecutiveOverview,props);assert.match(overview,/Финансовая картина/);assert.match(overview,/ДЕНЬГИ/);assert.doesNotMatch(overview,/av-scenario-grid|pc-memo|CLIENT.*ANALYSIS V3/);
+ for(const section of ['conclusion','factors','capacity','financials','obligations','financing','reconciliation','plan','evidence'])await t.test(section,()=>{const html=render(analysis.FullCreditAnalysis,{...props,initialSection:section});assert.doesNotMatch(html,/NaN|undefined|Infinity/);assert.match(html,/Кредитный профиль/);});
  for(const C of [analysis.FinancingProducts,analysis.DebtPortfolio])assert.doesNotMatch(render(C,props),/NaN|undefined|Infinity/);
  assert.equal(JSON.stringify(model),before,'presentation must not mutate canonical results');
  const basic=structuredClone(model);delete basic.full;basic.entitlement='BASIC';basic.state='READY_BASIC';basic.fullAvailability='LOCKED';basic.basic.bankingFacts.grossInflow={...basic.basic.bankingFacts.grossInflow,value:0,status:'KNOWN'};basic.basic.bankingFacts.operatingInflow={...basic.basic.bankingFacts.operatingInflow,value:987654321,status:'UNKNOWN'};
  const html=render(insights.ExecutiveOverview,{...props,model:basic});assert.match(html,/0 ₽/);assert.doesNotMatch(html,/987|data-credit-index|data-prudential-capacity/);
- assert.match(html,/Кредитные факторы формируются только каноническим анализом Prescore/);
+ assert.doesNotMatch(html,/Индекс не определён|Недостаточно данных|Пока не определён|Кредитные факторы формируются только каноническим анализом Prescore/);
  for(const localDecision of ['Высокая концентрация поступлений','Наблюдается обслуживание долга','Периоды низкой ликвидности','Существенные переводы физическим лицам'])assert.doesNotMatch(html,new RegExp(localDecision));
  for(const C of [analysis.FullCreditAnalysis,analysis.FinancingProducts]){const locked=render(C,{...props,model:basic});assert.match(locked,/Открыть полный анализ/);assert.doesNotMatch(locked,/data-credit-index/);}
  assert.equal(routing.resolveClientView('sources'),'documents');assert.equal(routing.resolveClientView('company'),'documents');assert.equal(routing.resolveClientView('reconciliation'),'analysis');assert.equal(routing.resolveClientView('recommendations'),'analysis');
@@ -37,10 +37,9 @@ test('bank-first overview retains known zero and groups unknown credit outputs w
  model.basic.bankingFacts.taxPayments={...model.basic.bankingFacts.taxPayments,value:0,status:'KNOWN'};
  model.basic.bankingFacts.endingBalance={...model.basic.bankingFacts.endingBalance,value:987654321,status:'UNKNOWN'};
  const before=JSON.stringify(model),html=render(ExecutiveOverview,{model,choose:()=>{},retry:()=>{}});
- assert.match(html,/Финансово-кредитный профиль/);assert.match(html,/БАНКОВСКОЕ ЗАКЛЮЧЕНИЕ/);
+ assert.match(html,/Финансовая картина/);assert.match(html,/ДЕНЬГИ/);
  assert.equal((html.match(/class="pc-assessment-limit"/g)||[]).length,0);
  assert.doesNotMatch(html,/data-credit-index|data-credit-readiness|data-prudential-capacity|987\s*654\s*321/);
- assert.match(html,/Анализ по выпискам сформирован/);
  assert.equal(JSON.stringify(model),before);
  model.full.canonical.prescoreIndex.value=0;
  assert.match(render(ExecutiveOverview,{model,choose:()=>{},retry:()=>{}}),/data-credit-index="true">0/);
@@ -68,7 +67,7 @@ test('CLIENT product recovery keeps history out of the visible cabinet and prote
  const overview=fs.readFileSync('app/components/workspace/client-insights.tsx','utf8');
  assert.doesNotMatch(client,/Версия анализа|Последние активные анализы|Тестовые данные · \{qaAnalyses/);
  assert.match(client,/const latest=rows\.filter\(a=>a\.historyPurpose!==['"]QA['"]\)/);
- for(const required of ['Финансово-кредитный профиль','БАНКОВСКОЕ ЗАКЛЮЧЕНИЕ','КРЕДИТНЫЕ ФАКТОРЫ','ФИНАНСИРОВАНИЕ','РЕКОМЕНДАЦИИ'])assert.ok(overview.includes(required),required);
+ for(const required of ['Финансовая картина','ДЕНЬГИ','СЕЙЧАС В ФОКУСЕ','ФИНАНСИРОВАНИЕ','РЕКОМЕНДАЦИИ'])assert.ok(overview.includes(required),required);
  assert.doesNotMatch(overview,/buildPrescoreIndex|buildFinancingReadiness|buildCreditAssessment|buildDebtCapacity|estimatedLimit|stressLimit|baseMonthlyPaymentCapacity/);
 });
 
