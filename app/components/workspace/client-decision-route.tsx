@@ -9,7 +9,7 @@ import { orderedNextSource } from "./source-operations";
 
 export type ClientDecisionCode = "READY_FOR_FINANCING" | "NEEDS_PREPARATION" | "INSUFFICIENT_DATA";
 
-type ClientDecisionTarget = "applications" | "analysis" | "documents" | "obligations";
+type ClientDecisionTarget = "applications" | "analysis" | "documents" | "obligations" | "financing";
 
 type ClientDecisionCta = {
   label: string;
@@ -60,7 +60,11 @@ function uniqueFactorDetails(factors: PresentationFactorV1[]): string[] {
 function missingDataDecision(model: WorkspaceModelV1): ClientDecisionRouteV1 {
   const report = model.full?.report;
   const next = orderedNextSource(model);
-  const cta: ClientDecisionCta = next.code === "ANALYSIS"
+  const full=model.full;
+  const needsPurpose=full&&full.canonical.prescoreIndex.value!==null && full.canonical.financingReadiness.caseDefinition?.status!=='DEFINED';
+  const cta: ClientDecisionCta = needsPurpose
+    ? {label:"Указать цель финансирования",view:"financing"}
+    : next.code === "ANALYSIS"
     ? { label: "Проверить ограничения данных", view: "analysis" }
     : { label: next.label, view: next.view, anchor: next.anchor };
   const details = report
@@ -114,7 +118,7 @@ function readyDecision(model: WorkspaceModelV1): ClientDecisionRouteV1 {
   return {
     code: "READY_FOR_FINANCING",
     label: "МОЖНО ГОТОВИТЬ ЗАЯВКУ",
-    title: readiness.level === "HIGH" ? "Можно переходить к подготовке финансирования" : "Можно готовить заявку с учётом ограничений",
+    title: report.hero.headline,
     summary: clientText(report.hero.summary),
     tone: "positive",
     details,

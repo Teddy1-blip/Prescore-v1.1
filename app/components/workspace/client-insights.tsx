@@ -76,9 +76,9 @@ export function ExecutiveOverview({model,choose,retry,children}:{children?:React
   {label:'Списания',fact:b.grossOutflow},
   {label:'Чистый денежный поток',fact:b.netCashFlow},
   {label:'Операционные поступления',fact:b.operatingInflow},
-  {label:'Долговые платежи',fact:b.debtService??b.loanPrincipalPayments},
+  {label:'Долговые платежи',fact:b.debtService},
   {label:'Налоги',fact:b.taxPayments},{label:'Лизинг',fact:b.leasingPayments},{label:'Крупнейший покупатель',fact:b.directCustomerTop1},
- ].filter(({fact})=>dashboardFactValue(fact)!==null);
+ ].filter(({fact})=>fact&&dashboardFactValue(fact)!==null);
  const hasSummary=index!==null||ready||capacity!==null;
  function openAnalysis(section:'conclusion'|'plan'|'expertise'|'history') {
    const url = new URL(window.location.href);

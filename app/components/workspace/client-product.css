@@ -362,6 +362,7 @@
 .pc-compare-select{display:flex;align-items:center;flex-wrap:wrap;gap:8px 16px;margin-bottom:16px}
 .pc-compare-select select{max-width:100%;padding:8px;border:1px solid var(--pc-line);border-radius:8px;color:var(--pc-ink);background:#fff}
 
+.pc-app .pc-skip:not(:focus){clip-path:inset(50%);height:1px;width:1px;overflow:hidden}
 .pc-statement-upload{max-width:960px;width:100%;min-width:0}
 .pc-app .pc-statement-upload .ps-upload-card{display:block;min-width:0;padding:clamp(16px,3vw,32px)}
 .pc-app .pc-statement-upload .ps-dropzone{position:relative;display:grid;justify-items:center;align-content:center;min-height:170px;height:auto;padding:24px 16px;border:1px dashed #70a5a0;border-radius:14px;background:#f4faf9;text-align:center}
@@ -372,7 +373,8 @@
 .pc-upload-queue article span{min-width:0;flex:1}
 .pc-upload-queue article b,.pc-upload-queue article small{display:block;overflow-wrap:anywhere}
 .pc-upload-queue article button{flex:none}
-.pc-app .pc-bank-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(155px,100%),1fr))}
+.pc-app .pc-bank-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
+@media(max-width:900px){.pc-app .pc-bank-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .pc-banking-charts,.pc-dashboard-grid>section{min-width:0}
 .pc-amount-bars>div{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:5px 12px;margin:15px 0}
 .pc-amount-bars>div span{overflow-wrap:anywhere}
