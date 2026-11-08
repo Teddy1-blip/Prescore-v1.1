@@ -17,6 +17,8 @@ test('commercial client uses one navigation and separate executive/analysis path
  assert.equal(JSON.stringify(model),before,'presentation must not mutate canonical results');
  const basic=structuredClone(model);delete basic.full;basic.entitlement='BASIC';basic.state='READY_BASIC';basic.fullAvailability='LOCKED';basic.basic.bankingFacts.grossInflow={...basic.basic.bankingFacts.grossInflow,value:0,status:'KNOWN'};basic.basic.bankingFacts.operatingInflow={...basic.basic.bankingFacts.operatingInflow,value:987654321,status:'UNKNOWN'};
  const html=render(insights.ExecutiveOverview,{...props,model:basic});assert.match(html,/0 ₽/);assert.doesNotMatch(html,/987|data-credit-index|data-prudential-capacity/);
+ assert.match(html,/Кредитные факторы формируются только каноническим анализом Prescore/);
+ for(const localDecision of ['Высокая концентрация поступлений','Наблюдается обслуживание долга','Периоды низкой ликвидности','Существенные переводы физическим лицам'])assert.doesNotMatch(html,new RegExp(localDecision));
  for(const C of [analysis.FullCreditAnalysis,analysis.FinancingProducts]){const locked=render(C,{...props,model:basic});assert.match(locked,/Открыть полный анализ/);assert.doesNotMatch(locked,/data-credit-index/);}
  assert.equal(routing.resolveClientView('sources'),'documents');assert.equal(routing.resolveClientView('company'),'documents');assert.equal(routing.resolveClientView('reconciliation'),'analysis');assert.equal(routing.resolveClientView('recommendations'),'analysis');
  assert.ok(!routing.clientAvailableViews({},true).includes('upload'));assert.ok(!routing.clientAvailableViews({report:false},false).includes('analysis'));

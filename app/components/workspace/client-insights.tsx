@@ -49,22 +49,9 @@ export function AssessmentLimits({model,choose}:{model:WorkspaceModelV1;choose?:
  return <aside className="pc-assessment-limit"><h2>Предварительная оценка</h2><p>Пока не определены: {missing.join(', ')}. Подтверждённые банковские данные показаны в обзоре.</p><p>{reason}</p><p>{bfo?'Отчётность дополнит денежный поток финансовым состоянием компании.':bki?'Кредитный отчёт позволит сопоставить обязательства с наблюдаемыми платежами.':'Уточнение источников позволит перепроверить ограниченные выводы; изменение оценки не гарантируется.'}</p>{choose&&<button className="pc-text-button" onClick={()=>choose(bfo||bki?'documents':'analysis')}>{action} →</button>}</aside>;
 }
 function dashboardFactValue(f:WorkspaceModelV1['basic']['bankingFacts']['grossInflow']){return f.status==='UNKNOWN'||f.status==='NOT_APPLICABLE'||f.value===null||!Number.isFinite(f.value)?null:f.value;}
-function dashboardConcentration(f:WorkspaceModelV1['basic']['bankingFacts']['directCustomerTop1']){const v=dashboardFactValue(f);return v===null||!['RATIO','PERCENT'].includes(f.unit)?null:v*(f.unit==='RATIO'?100:1);}
-function bankDashboardSignals(model:WorkspaceModelV1){
- const b=model.basic.bankingFacts;
- const net=dashboardFactValue(b.netCashFlow),low=dashboardFactValue(b.lowLiquidityDays),top1=dashboardConcentration(b.directCustomerTop1),individuals=dashboardFactValue(b.transfersToIndividuals),principal=dashboardFactValue(b.loanPrincipalPayments);
- const strengths:Array<{title:string;text:string}>=[];
- const attention:Array<{title:string;text:string}>=[];
- if(net!==null && net!==0) (net>0?strengths:attention).push({title:net>0?'Положительный чистый денежный поток':'Списания превышают поступления',text:net>0?`Внешние поступления превышают списания на ${money(net)} за анализируемый период.`:`Внешние списания превышают поступления на ${money(Math.abs(net))} за анализируемый период.`});
- if(top1!==null&&top1>=50) attention.push({title:'Высокая концентрация поступлений',text:`На крупнейшего прямого покупателя приходится ${new Intl.NumberFormat('ru-RU',{maximumFractionDigits:1}).format(top1)}% идентифицированных операционных поступлений.`});
- if(low!==null&&low>0) attention.push({title:'Периоды низкой ликвидности',text:`Зафиксировано ${new Intl.NumberFormat('ru-RU',{maximumFractionDigits:0}).format(low)} дней с низким денежным запасом.`});
- if(individuals!==null&&individuals>0) attention.push({title:'Существенные переводы физическим лицам',text:`По выпискам классифицировано ${money(individuals)} переводов физическим лицам. Их назначение стоит проверить перед финансированием.`});
- if(principal!==null&&principal>0) strengths.push({title:'Наблюдается обслуживание долга',text:`По выпискам подтверждены платежи основного долга на ${money(principal)} за период.`});
- return {strengths:strengths.slice(0,3),attention:attention.slice(0,3)};
-}
 function dashboardValue(f:WorkspaceModelV1['basic']['bankingFacts']['grossInflow']){const v=dashboardFactValue(f);return f.status==='NOT_APPLICABLE'?'Не применимо':v===null?'Нет данных':money(v);}
 export function ExecutiveOverview({model,choose,retry,children}:{children?:ReactNode;model:WorkspaceModelV1;choose:(v:string)=>void;retry:()=>void}){
- const r=model.full?.report,b=model.basic.bankingFacts,bank=bankDashboardSignals(model);
+ const r=model.full?.report,b=model.basic.bankingFacts;
  const index=model.full?.canonical.prescoreIndex.value??null;
  const readiness=model.full?.canonical.financingReadiness.level;
  const capacity=model.full?.canonical.debtCapacity.headlineCapacity.monthlyIncrementalDebtServiceCapacity.prudential??null;
@@ -111,9 +98,10 @@ export function ExecutiveOverview({model,choose,retry,children}:{children?:React
    </section>
    <section className="pc-dashboard-section"><header><div><span>КРЕДИТНЫЕ ФАКТОРЫ</span><h2>Что важно сейчас</h2></div></header>
     <div className="pc-dashboard-factors">
-     {!strengths.length && !risks.length && !dataLimits.length && (r || (!bank.strengths.length && !bank.attention.length)) && <p className="pc-muted">По имеющимся данным отдельные факторы не выделены.</p>}
-     {(r?strengths.map(f=>({title:clientText(f.title),text:clientText(f.text),tone:'positive',ids:[f.claimId]})):bank.strengths.map(f=>({...f,tone:'positive',ids:[]}))).map((f,i)=><article key={'s'+i} data-tone={f.tone}><small>Сильная сторона</small><h3>{f.title}</h3><p>{f.text}</p>{f.ids.length>0&&<Why model={model} ids={f.ids}/>}</article>)}
-     {(r?risks.map(f=>({title:clientText(f.title),text:clientText(f.text),tone:f.status.tone,ids:[f.claimId]})):bank.attention.map(f=>({...f,tone:'attention',ids:[]}))).map((f,i)=><article key={'r'+i} data-tone={f.tone}><small>Требует внимания</small><h3>{f.title}</h3><p>{f.text}</p>{f.ids.length>0&&<Why model={model} ids={f.ids}/>}</article>)}
+     {!r && <p className="pc-muted">Кредитные факторы формируются только каноническим анализом Prescore. В BASIC доступны фактические банковские показатели без локальной кредитной интерпретации.</p>}
+     {r && !strengths.length && !risks.length && !dataLimits.length && <p className="pc-muted">По имеющимся данным отдельные факторы не выделены.</p>}
+     {strengths.map((f,i)=><article key={'s'+i} data-tone="positive"><small>Сильная сторона</small><h3>{clientText(f.title)}</h3><p>{clientText(f.text)}</p><Why model={model} ids={[f.claimId]}/></article>)}
+     {risks.map((f,i)=><article key={'r'+i} data-tone={f.status.tone}><small>Требует внимания</small><h3>{clientText(f.title)}</h3><p>{clientText(f.text)}</p><Why model={model} ids={[f.claimId]}/></article>)}
      {dataLimits.map(f=><article key={f.id} data-tone="data"><small>Ограничение данных</small><h3>{clientText(f.title)}</h3><p>{clientText(f.text)}</p><Why model={model} ids={[f.claimId]}/></article>)}
     </div>
    </section>
