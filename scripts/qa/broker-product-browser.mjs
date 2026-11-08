@@ -79,18 +79,18 @@ try{
  // through the form; switching to BROKER never borrows ADMIN authority.
  await context.addCookies([{name:'qa-role',value:'owner',url:origin}]);
  await page.goto(origin+'/dashboard?view=documents&analysisId='+seed.id);
- const permissions=page.locator('section.ps-card').filter({has:page.getByRole('heading',{name:'Разрешения брокеру',exact:true})});
+ const permissions=page.locator('section.ps-card').filter({has:page.getByRole('heading',{name:'Разрешения агенту',exact:true})});
  await permissions.getByRole('button',{name:'Отозвать',exact:true}).waitFor();
  let permissionResponse=page.waitForResponse(r=>r.url()===origin+'/api/workspace'&&r.request().method()==='POST');
  await permissions.getByRole('button',{name:'Отозвать',exact:true}).click();assert.equal((await permissionResponse).status(),200);
- await page.reload();await permissions.getByRole('heading',{name:'Разрешения брокеру',exact:true}).waitFor();
+ await page.reload();await permissions.getByRole('heading',{name:'Разрешения агенту',exact:true}).waitFor();
  assert.equal(await permissions.getByRole('button',{name:'Отозвать',exact:true}).count(),0);
  await context.addCookies([{name:'qa-role',value:'broker',url:origin}]);
  assert.equal((await get(origin+'/api/workspace-model?analysisId='+seed.id)).status(),404);
  assert.equal((await get(origin+'/api/workspace?client='+seed.id)).status(),404);
  await context.addCookies([{name:'qa-role',value:'owner',url:origin}]);
  await page.goto(origin+'/dashboard?view=documents&analysisId='+seed.id);
- await permissions.getByLabel('Почта брокера',{exact:true}).fill('broker@workspace.test');
+ await permissions.getByLabel('Почта агента',{exact:true}).fill('broker@workspace.test');
  await permissions.getByRole('combobox',{name:'Вид разрешения',exact:true}).selectOption('DOSSIER');
  await permissions.getByRole('checkbox').check();
  for(const width of [1440,390,360]){await page.setViewportSize({width,height:1000});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'owner permission form overflow '+width);await permissions.screenshot({path:out+'/owner-permission-'+width+'.png'});}
@@ -101,7 +101,7 @@ try{
  await context.addCookies([{name:'qa-role',value:'broker',url:origin}]);
  await page.goto(origin+company+'/documents');await page.getByRole('navigation',{name:'Разделы досье'}).waitFor();await page.reload();await page.getByRole('navigation',{name:'Разделы досье'}).waitFor();
  assert.equal((await get(origin+'/api/workspace-model?analysisId='+seed.id)).status(),200);
- assert.equal(await page.getByRole('heading',{name:'Разрешения брокеру',exact:true}).count(),0);
+ assert.equal(await page.getByRole('heading',{name:'Разрешения агенту',exact:true}).count(),0);
  checks.push('owner permission form at desktop/390/360, revoke stale broker, separate dossier grant, reload, no ADMIN');
  assert.deepEqual(errors,[]);fs.writeFileSync(out+'/result.json',JSON.stringify({checks,errors},null,2));console.log(JSON.stringify({passed:checks.length,errors}));
 }catch(error){console.error(error);const pages=browser?.contexts().flatMap(c=>c.pages())??[];if(pages[0]){await pages[0].screenshot({path:out+'/failure.png',fullPage:true});fs.writeFileSync(out+'/failure.txt',await pages[0].locator('body').innerText());}fs.writeFileSync(out+'/result.json',JSON.stringify({checks,errors,failure:String(error)},null,2));throw error;}finally{await browser?.close();server.kill('SIGTERM');}

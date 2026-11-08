@@ -112,7 +112,7 @@ export default function BankOffers({ analysis, onSubmitApplications }: { analysi
 
     {!result.readOnly && <section className={`ps-application-tray ps-card ${selectedItems.length ? "active" : ""}`}>
       <div><Send /><span><small>ПАКЕТНАЯ ПОДАЧА</small><h2>{selectedItems.length ? `Выбрано маршрутов: ${selectedItems.length}` : "Выберите банки в карточках выше"}</h2><p>{selectedItems.length ? selectedItems.map((item) => `${item.bank} — ${item.product}`).join(" · ") : "Банк, продукт и расчётная сумма попадут в раздел «Заявки в банки» и одновременно в кабинет агента."}</p></span></div>
-      <label className="ps-application-consent"><input type="checkbox" checked={applicationConsent} onChange={(event) => setApplicationConsent(event.target.checked)} /><span><b>Подтверждаю создание заявок выбранным получателям</b><small>Я вправе действовать по данным компании и согласен(на) на подготовку передачи выбранным банкам/партнёрам. Фактическую отправку документов брокер выполняет после проверки комплекта и полномочий.</small></span></label>
+      <label className="ps-application-consent"><input type="checkbox" checked={applicationConsent} onChange={(event) => setApplicationConsent(event.target.checked)} /><span><b>Подтверждаю создание заявок выбранным получателям</b><small>Я вправе действовать по данным компании и согласен(на) на подготовку передачи выбранным банкам/партнёрам. Фактическую отправку документов агент выполняет после проверки комплекта и полномочий.</small></span></label>
       <button disabled={!selectedItems.length || !applicationConsent || submitting} onClick={() => void submitApplications()}>{submitting ? <><LoaderCircle className="spin" /> Создаём…</> : <><Send /> Подать выбранные заявки</>}</button>
     </section>}
 

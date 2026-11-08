@@ -28,7 +28,7 @@ export default async function LoginPage({ searchParams }: { searchParams?: Promi
           <Link className={requested === "/dashboard" ? "active" : ""} href="/dashboard"><UserRound /><span><b>Кабинет клиента</b><small>Анализ, отчёты и заявки</small></span><ArrowRight /></Link>
           <Link className={requested === "/agent" ? "active" : ""} href="/agent"><BriefcaseBusiness /><span><b>Кабинет агента</b><small>CRM, воронка, клиенты и куратор</small></span><ArrowRight /></Link>
         </div>
-        {(requested.split(/[?#]/)[0] === "/agent" || requested.startsWith("/agent/")) && <p>Уже есть клиентский аккаунт? Войдите с той же почтой и паролем. Затем подтвердите подключение брокерского профиля; повторная регистрация не нужна.</p>}
+        {(requested.split(/[?#]/)[0] === "/agent" || requested.startsWith("/agent/")) && <p>Уже есть клиентский аккаунт? Войдите с той же почтой и паролем. Затем подтвердите подключение агентского профиля. Повторная регистрация не нужна.</p>}
         {user ? <Link className="button button-primary login-submit" href={requested}>Открыть выбранный кабинет <ArrowRight /></Link> : <Credentials returnTo={requested} verified={params?.verified === "1" && !params?.error} verificationError={Boolean(params?.error)}/> }
         {user && <p className="login-session-note"><ShieldCheck /> Вы уже авторизованы. Выберите нужный кабинет выше.</p>}
         <div className="demo-note"><ShieldCheck /><span><b>Доступ изолирован.</b> Данные одного пользователя не выдаются другому кабинету.</span></div>

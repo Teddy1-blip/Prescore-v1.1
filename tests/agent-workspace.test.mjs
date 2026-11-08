@@ -32,6 +32,9 @@ test('agent route projections preserve authorization and expose only actual fact
     assert.ok((await read('notifications')).events.some(e=>e.applicationId===id));
     assert.equal((await read('pipeline')).applications[0].id,id);
     assert.equal((await read('clients',{q:'no such company'})).leads.length,0);
+    const {PartnerBilling}=rt.load('app/components/workspace/billing.tsx');
+    const billingCopy=renderToStaticMarkup(React.createElement(PartnerBilling));
+    assert.match(billingCopy,/Комиссии/);assert.doesNotMatch(billingCopy,/брокер/i);
     assert.ok(Array.isArray((await read('network')).agents));
     assert.ok(Array.isArray((await read('partners')).guaranteePolicies));
     const user2={...rt.stranger,roles:['AGENT']};

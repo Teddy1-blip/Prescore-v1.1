@@ -67,7 +67,7 @@ export async function GET(request: Request) {
   if (!user.roles.includes("AGENT") && !user.isAdmin) return Response.json({error:"Нет доступа к кабинету агента"},{status:403});
   try {
     const db = await database(); await ensureSchema(db); if (!await moduleAvailable(db)) return Response.json({ error: "Модуль базы для прозвона отключён администратором" }, { status: 403 }); const agentCode = await accountFor(db, user);
-    if (!agentCode) return Response.json({ error: "Сначала подключите свой брокерский профиль в /agent" }, { status: 409 });
+    if (!agentCode) return Response.json({ error: "Сначала подключите свой профиль агента в /agent" }, { status: 409 });
     const url = new URL(request.url); const status = String(url.searchParams.get("status") || "all");
     const query = String(url.searchParams.get("q") || "").trim().toLowerCase();
     const region = String(url.searchParams.get("region") || "").trim().toLowerCase();
@@ -99,7 +99,7 @@ export async function POST(request: Request) {
   if (!user.roles.includes("AGENT") && !user.isAdmin) return Response.json({error:"Нет доступа к кабинету агента"},{status:403});
   try {
     const db = await database(); await ensureSchema(db); if (!await moduleAvailable(db)) return Response.json({ error: "Модуль базы для прозвона отключён администратором" }, { status: 403 }); const agentCode = await accountFor(db, user);
-    if (!agentCode) return Response.json({ error: "Сначала подключите свой брокерский профиль в /agent" }, { status: 409 });
+    if (!agentCode) return Response.json({ error: "Сначала подключите свой профиль агента в /agent" }, { status: 409 });
     const body = await request.json() as Record<string, unknown>; const type = String(body.type || ""); const now = new Date().toISOString();
     if (type === "import") {
       const records = Array.isArray(body.records) ? body.records.slice(0, 75) as Gold44Record[] : [];
