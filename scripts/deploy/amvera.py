@@ -153,6 +153,33 @@ def push(workspace, state_dir, env, observed):
 
 
 
+def verify_live(expected_commit):
+    """Wait until the public staging runtime serves the exact Amvera deployment commit."""
+    health_url = 'https://prescore-staging-dorogovab.msk1.amvera.tech/api/health'
+    ready_url = 'https://prescore-staging-dorogovab.msk1.amvera.tech/api/ready'
+    last = 'unavailable'
+    for attempt in range(24):
+        try:
+            request = urllib.request.Request(health_url, headers={'User-Agent': 'Prescore-staging-live-verifier'})
+            with urllib.request.urlopen(request, timeout=20) as response:
+                payload = json.load(response)
+            version = payload.get('version') or {}
+            source_sha = str(version.get('sourceSha') or '')
+            last = source_sha or 'missing-source-sha'
+            if source_sha == expected_commit:
+                ready_request = urllib.request.Request(ready_url, headers={'User-Agent': 'Prescore-staging-live-verifier'})
+                with urllib.request.urlopen(ready_request, timeout=20) as ready_response:
+                    ready_payload = json.load(ready_response)
+                if ready_response.status == 200 and ready_payload.get('ready') is True:
+                    print(f'LIVE_STAGING_VERIFIED deployment={expected_commit} ready=true attempt={attempt + 1}.')
+                    return
+                last = 'runtime-current-but-not-ready'
+        except Exception:
+            last = 'request-failed'
+        time.sleep(15)
+    raise DeliveryError('Live staging did not switch to the expected deployment commit; last=' + last + '.')
+
+
 def verify_history_purge():
     url = 'https://prescore-staging-dorogovab.msk1.amvera.tech/api/health'
     last = 'unavailable'
@@ -194,6 +221,8 @@ def main():
             prepare(workspace, state_dir, env, observed)
         elif sys.argv[1] == 'push':
             push(workspace, state_dir, env, observed)
+        elif sys.argv[1] == 'live':
+            verify_live(observed)
         else:
             raise DeliveryError('Unknown delivery operation.')
 

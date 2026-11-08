@@ -109,3 +109,10 @@ jobs:
           AMVERA_GIT_URL: ${{ secrets.AMVERA_GIT_URL }}
           GH_READ_TOKEN: ${{ github.token }}
         run: python3 scripts/deploy/amvera.py push
+
+      - name: Verify live staging runtime
+        env:
+          AMVERA_USERNAME: ${{ secrets.AMVERA_USERNAME }}
+          AMVERA_PASSWORD: ${{ secrets.AMVERA_PASSWORD }}
+          AMVERA_GIT_URL: ${{ secrets.AMVERA_GIT_URL }}
+        run: python3 scripts/deploy/amvera.py live
