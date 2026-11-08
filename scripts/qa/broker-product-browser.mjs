@@ -4,7 +4,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import {chromium} from 'playwright';
 const out=path.resolve(process.argv[2]??'/tmp/broker-product-qa');fs.mkdirSync(out,{recursive:true});
-const server=spawn(process.execPath,['--experimental-strip-types','scripts/qa/workspace-harness.mjs',out+'/harness','4190'],{stdio:['ignore','pipe','inherit'],env:{...process.env,PRESCORE_STORAGE_ROOT:out+'/storage'}});
+const server=spawn(process.execPath,['--experimental-strip-types','scripts/qa/workspace-harness.mjs',out+'/harness','4190'],{stdio:['ignore','pipe','inherit'],env:{...process.env,AGENT_PRODUCT_QA:'1',PRESCORE_STORAGE_ROOT:out+'/storage'}});
 await new Promise((resolve,reject)=>{server.stdout.on('data',b=>{if(String(b).includes('listening'))resolve();});server.on('error',reject);server.on('exit',c=>reject(Error('Harness exit '+c)));});
 let browser;const checks=[],errors=[];
 try{
@@ -29,7 +29,7 @@ try{
    ...['','comments','documents','history','prescore','partner'].map(s=>[application+(s?'/'+s:''),seed.companyName])];
  async function ready(path,title){
    await page.goto(origin+path);await page.locator('main').waitFor();
-   if(path==='/agent/leads')await page.locator('.gp-shell').waitFor();
+   if(path==='/agent/leads')await page.locator('.gp-kpis').waitFor();
    else await page.getByRole('heading',{name:title,exact:true}).first().waitFor();
    await page.waitForFunction(()=>!['Загружаем раздел…','Загружаем комиссии…'].some(s=>document.querySelector('main')?.innerText.includes(s)));
    assert.equal(new URL(page.url()).pathname,path, 'real pathname');
@@ -74,6 +74,21 @@ try{
  await ready('/agent/documents','Документы');await page.getByRole('link',{name:'agent-qa.txt'}).waitFor();checks.push('chat, attachment and authorised document centre');
  await page.getByRole('button',{name:'Открыть меню'}).click();await page.keyboard.press('Escape');assert.equal(await page.getByRole('button',{name:'Открыть меню'}).getAttribute('aria-expanded'),'false');
  await page.getByRole('button',{name:'Открыть меню'}).click();await page.getByRole('navigation',{name:'Разделы кабинета'}).getByRole('link',{name:'Воронка'}).click();await page.waitForURL(origin+'/agent/pipeline');checks.push('keyboard drawer and mobile navigation');
+ await ready('/agent/leads','Лиды и база для прозвона');
+ await page.locator('.gp-shell input[type=file]').setInputFiles(out+'/harness/agent-leads.xlsx');
+ await page.getByText(/Загружено 51 строк/).waitFor();await page.locator('.gp-list article').first().waitFor();
+ assert.equal(await page.locator('.gp-list article').count(),50);
+ for(const width of [1440,1280,1024,768,390,360]){
+   await page.setViewportSize({width,height:900});
+   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'populated lead overflow '+width);
+ }
+ await page.getByRole('button',{name:'Далее',exact:true}).click();await page.getByRole('heading',{name:'Синтетический лид 0',exact:true}).waitFor();
+ assert.equal(await page.locator('.gp-list article').count(),1);
+ await page.getByRole('button',{name:'В CRM + БГ',exact:true}).click();const draft=page.getByRole('link',{name:'Открыть заявку БГ'});
+ await draft.waitFor();await draft.click();await page.getByRole('navigation',{name:'Разделы заявки'}).waitFor();
+ assert.match(new URL(page.url()).pathname,/^\/agent\/applications\/[^/]+$/);
+ await page.reload();await page.getByRole('heading',{name:'Синтетический лид 0',exact:true}).waitFor();
+ checks.push('Gold44 XLSX, 51 persisted leads, second page, six populated widths, conversion to CRM and guarantee draft');
  await context.addCookies([{name:'qa-role',value:'stranger',url:origin}]);assert.equal((await get(origin+'/api/workspace-model?analysisId='+seed.id)).status(),404);checks.push('stranger forbidden');
  // Real components and real API on isolated data: owner confirmation is exercised
  // through the form; switching to BROKER never borrows ADMIN authority.

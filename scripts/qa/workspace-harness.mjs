@@ -1,6 +1,7 @@
 // Isolated QA server: real production components and API handlers, synthetic data only.
 // No application route, deployment, external service, or production database.
 import fs from 'node:fs';
+import {buildXlsx} from '../../lib/excel-export.ts';
 import {agentFixtureRoutes} from './agent-route-harness.mjs';
 import path from 'node:path';
 import http from 'node:http';
@@ -21,6 +22,12 @@ return `import './app/globals.css';import './app/landing-ru.css';import './app/c
 async function bundle(sourceRoot,filename){const entry=fixtureEntry(sourceRoot);await req('esbuild').build({stdin:{contents:entry,resolveDir:sourceRoot,sourcefile:'workspace-qa.tsx',loader:'tsx'},external:['/report-v2/*'],conditions:['style','browser'],bundle:true,jsx:'automatic',platform:'browser',outfile:out+'/'+filename+'.js',define:{'process.env.NODE_ENV':'"production"'},plugins:[{name:'root-css',setup(b){b.onLoad({filter:/globals\.css$/},async args=>({contents:(await req('postcss')([req('@tailwindcss/postcss')()]).process(fs.readFileSync(args.path,'utf8'),{from:args.path})).css,loader:'css',resolveDir:path.dirname(args.path)}));}},{name:'isolated-next-link',setup(b){b.onResolve({filter:/^next\/navigation$/},()=>({path:'navigation',namespace:'qa-nav'}));b.onLoad({filter:/.*/,namespace:'qa-nav'},()=>({contents:"export const useSearchParams=()=>new URLSearchParams(location.search);export const usePathname=()=>location.pathname;export const redirect=path=>{location.replace(path);return null;};",loader:'js'}));b.onResolve({filter:/^next\/link$/},()=>({path:'link',namespace:'qa'}));b.onLoad({filter:/.*/,namespace:'qa'},()=>({contents:"import React from 'react';export default function Link({children,...props}){return React.createElement('a',props,children)}",loader:'js',resolveDir:root}));}}]});}
 await bundle(root,'bundle');
 if(process.env.WORKSPACE_QA_BASELINE_ROOT)await bundle(process.env.WORKSPACE_QA_BASELINE_ROOT,'before');
+if(process.env.AGENT_PRODUCT_QA==='1'){
+ const columns=['Номер извещения','Победитель','ИНН','Обеспечение исполнения','Предмет тендера','Телефон','Лот'];
+ const entries=Array.from({length:51},(_,i)=>['QA-'+String(i).padStart(2,'0'),'Синтетический лид '+i,
+   String(9905000000+i),1000000+i,'Тестовый договор','','1']);
+ fs.writeFileSync(out+'/agent-leads.xlsx',buildXlsx([{name:'Контракты',rows:[columns,...entries]}]));
+}
 fs.writeFileSync(out+'/statement.txt',statementFixture({openingBalance:null,endingBalance:null}));
 const html='<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/bundle.css"><title>Workspace isolated QA</title></head><body class="prescore-v2"><div id="root"></div><script src="/bundle.js"></script></body></html>';
 async function seed(caseId='CL-RU-BUS-001',unavailable=false,stage5Ready=false){if(!['001','011','013','016','017','022'].some(n=>caseId==='CL-RU-BUS-'+n))throw Error('Unknown synthetic case');const b=loadBusiness(caseId);const r=await rt.request('/api/analysis',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({statements:b.statements})});const payload=await r.json();if(!r.ok)throw Error(JSON.stringify(payload));// Attach normalized synthetic BFO/BKI source bundle; all metrics were computed by the corpus pipeline.
