@@ -19,7 +19,7 @@ export function FinancingProducts({model,embedded=false,showHeading=true}:{model
  const r=model.full?.report;
  if(!r)return <FullAccessNotice model={model}/>;
  const candidates=model.full!.canonical.productSelection.candidates;
- const products=[...r.productFit.primary,...r.productFit.other].filter(p=>candidates.some(c=>c.productFamily===p.family && !['UNKNOWN','NOT_APPLICABLE'].includes(c.fitLevel)));
+ const products=[...r.productFit.primary,...r.productFit.other].filter(p=>candidates.some(c=>c.productFamily===p.family && (c.preliminary||!['UNKNOWN','NOT_APPLICABLE'].includes(c.fitLevel))));
  return <>
   {showHeading&&<div className="pc-page-title"><div>{embedded?<h2>Финансирование</h2>:<h1>Финансирование</h1>}<p>Какие механизмы подходят профилю компании и что нужно уточнить до обращения к кредитору</p></div></div>}
   <p className="pc-analysis-section-note">{r.productFit.bankSeparation}</p>
@@ -103,7 +103,7 @@ export function FullCreditAnalysis({model,retry,initialSection='conclusion'}:{mo
  if(!r)return <FullAccessNotice model={model} retry={retry}/>;
  const snapshot=r.meta.snapshot;
  const tabs=[['conclusion','Заключение'],['factors','Стоп-факторы и риски'],['expertise','Экспертная оценка'],['capacity','Долговая ёмкость'],['financials','Финансовое состояние'],['obligations','Кредитный портфель'],['financing','Финансирование'],['reconciliation','Сверка'],['recommendations','Рекомендации'],['plan','План 7 / 30 / 60'],['evidence','Основания'],['history','История']];
- const topConstraint=r.readiness.constraints[0]??r.limitations[0]??r.dataQuality[0];
+ const topConstraint=r.primaryFactors.find(f=>model.full?.canonical.explainability.claims.some(c=>c.claimId===f.claimId&&['GLOBAL_STOP','CREDIT_RISK'].includes(c.status??'')));
  function select(next:string){setTab(next);const url=new URL(window.location.href);url.searchParams.set('section',next);window.history.replaceState(null,'',url);}
  return <>
   <div className="pc-page-title"><div><h1>Кредитный профиль</h1><p>Заключение Prescore на {date(r.meta.asOfDate)}</p>{snapshot && <details><summary>Версия расчёта</summary><code style={{overflowWrap:"anywhere"}}>{snapshot.snapshotId}</code></details>}</div><a className="pc-secondary" href={'/dashboard/report-v2?analysisId='+encodeURIComponent(model.analysisId)+(snapshot&&model.full?.revisionAvailable?'&snapshotId='+encodeURIComponent(snapshot.snapshotId):'')+'&print=1'} target="_blank" rel="noreferrer">Печать / PDF</a></div>
@@ -111,10 +111,11 @@ export function FullCreditAnalysis({model,retry,initialSection='conclusion'}:{mo
 
   {tab==='conclusion'&&<>
    <section className="pc-analysis-hero">
-    <div><span className="pc-kicker">ЭКСПЕРТНОЕ ЗАКЛЮЧЕНИЕ</span><h2>{r.hero.headline}</h2><p>{r.hero.summary}</p><div className="pc-statusline"><span className={'pc-badge'+(r.hero.globalStop?' critical':'')}>{r.hero.globalStop?'Есть критичное ограничение':'Критичного общего стоп-фактора нет'}</span><span className="pc-badge">{r.hero.confidence}</span></div></div>
+    <div><span className="pc-kicker">ЭКСПЕРТНОЕ ЗАКЛЮЧЕНИЕ</span><h2>{r.hero.headline}</h2><p>{r.hero.summary}</p><div className="pc-statusline"><span className={'pc-badge'+(r.hero.globalStop?' critical':'')}>{r.hero.globalStop?'Есть критичное ограничение':'Общий стоп-фактор не выявлен в доступных сведениях'}</span><span className="pc-badge">{r.hero.confidence}</span></div></div>
     <aside><span>Ключевое ограничение</span><strong>{publicText(topConstraint?whyTitle(model.full?.canonical.explainability,topConstraint.claimId,topConstraint.title):'Отдельное ограничение не выделено')}</strong><small>{publicText(topConstraint?.text??'Проверьте комплект источников и готовность к финансированию.')}</small>{topConstraint&&<Why model={model} ids={[topConstraint.claimId]}/>}</aside>
    </section>
-   <BankingSnapshot model={model}/><CreditSummary model={model}/><AssessmentLimits model={model}/><IndexEvidenceGaps model={model}/>
+   {model.full?.canonical.creditAssessment.bankObservations?.length?<Panel title="Факторы заключения">{model.full.canonical.explainability.claims.filter(c=>c.claimCode.startsWith('PROFILE:')).map(c=><article key={c.claimId}><p>{publicText(c.textRu)}</p><Why model={model} ids={[c.claimId]}/></article>)}</Panel>:null}
+   <BankingSnapshot model={model}/><CreditSummary model={model}/><AssessmentLimits model={model}/><details><summary>Основания числовой оценки</summary><IndexEvidenceGaps model={model}/></details>
    {model.full!.canonical.financingReadiness.level!=='UNKNOWN'&&<Panel title="Готовность к финансированию"><h3>{r.readiness.level}</h3><p>{r.readiness.text}</p><FactorRows model={model} items={r.readiness.constraints}/></Panel>}
   </>}
 
@@ -144,7 +145,7 @@ export function ActionPlan({model}:{model:WorkspaceModelV1}){
  const r=model.full!.report,scheduled=new Set(r.actionPlan.horizons.flatMap(h=>h.items.map(a=>a.canonicalId))),now=r.recommendations.primary.filter(a=>!scheduled.has(a.canonicalId)),shown=new Set<string>();
  return <>
   <Panel title="Сейчас">{now.length?now.map(a=><ActionItem key={a.id} item={a} model={model}/>):<p>Приоритетные действия включены в ближайший этап плана ниже.</p>}</Panel>
-  {r.actionPlan.horizons.map(h=><Panel key={h.id} title={h.title+' · '+date(h.date)}>{h.items.filter(a=>{if(shown.has(a.canonicalId))return false;shown.add(a.canonicalId);return true;}).map(a=><ActionItem key={a.id} item={a} model={model}/>)}{!h.items.length&&<p>Отдельные действия на этот срок не назначены.</p>}</Panel>)}
+  {r.actionPlan.horizons.map(h=><Panel key={h.id} title={h.title+' · '+date(h.date)}><ol className="pc-timeline">{h.items.filter(a=>{const key=a.title.trim()+'|'+a.summary.trim();if(shown.has(key))return false;shown.add(key);return true;}).map(a=><li key={a.id} id={a.id}><b>{publicText(a.title)}</b><p>{publicText(a.steps[0]??a.summary)}</p><small>{publicText(a.recheck)}</small><Why model={model} ids={[a.claimId]}/></li>)}</ol>{!h.items.length&&<p>Отдельные действия на этот срок не назначены.</p>}</Panel>)}
 
   <p className="pc-muted">{r.actionPlan.disclaimer}</p>
  </>;

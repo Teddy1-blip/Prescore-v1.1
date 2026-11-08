@@ -28,6 +28,8 @@ export type ClientReportVisualV1={
  factorActions:Record<string,string[]>;
 };
 export type ClientReportModelV1={
+ bankRuleCoverage?:{code:string;reasons:string[]}[];
+ checko?:ReturnType<typeof import("../../external/checko-summary.ts").checkoSummary>;
  externalSummary?:Array<{code:string;label:string;value:string;asOf:string|null;source:string}>;
  financialAnalysis?:import('../client-report/source-detail.ts').PublicFinancialAnalysis|null;
  reconciliation?:import('../client-report/source-detail.ts').PublicReconciliation;

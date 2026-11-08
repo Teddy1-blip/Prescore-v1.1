@@ -1,3 +1,4 @@
+import {boundaryFacts} from "./boundary.ts";
 import type { RiskFact, RiskShadowInput } from "../../contracts/risk.ts";
 import type { MetricResult } from "../../contracts/metrics.ts";
 import { fact, freshness, RISK_SOURCE_FRESHNESS_DAYS as age, weakest, finite, adequate, validDate } from "../common.ts";
@@ -23,5 +24,6 @@ export function bankFacts({ analysis: a, asOfDate }: RiskShadowInput): RiskFact[
   const usable = full && days !== null && days > 0 && days <= 740 && low.status === "KNOWN" && near.status === "KNOWN" && finite(low.value) && finite(near.value) && low.value >= 0 && near.value >= 0 && Math.max(low.value, near.value) <= days && adequate(low.confidence) && adequate(near.confidence)
     && ![...low.warnings, ...near.warnings].some(w => /MISMATCH|INCOMPLETE/.test(w));
   out.push(fact(a.companyInn, "BANK_LOW_LIQUIDITY_SHARE", "CASH_FLOW", usable ? Math.max(low.value!, near.value!) / days! : null, { ...base, unit: "RATIO", confidence: weakest(low.confidence, near.confidence), origin: "DERIVED", calculationBasis: "max(lowLiquidityDays, nearZeroBalanceDays) / inclusive reconstructed period days; nested day sets; <=740-day Block 4 cap; full supplied period only", warnings: [...low.warnings, ...near.warnings] }));
-  return out;
+  const scoped=current&&!full?boundaryFacts(a,bank,base.sourceIds):[];
+  return out.map(f=>scoped.find(s=>s.semanticCode===f.semanticCode)??f);
 }

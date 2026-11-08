@@ -284,8 +284,10 @@ test('Real dossier route: concurrent acquisition, FREE/FULL parity, read-only br
     assert.equal((await rt.request(url, {}, null)).status, 401);
     assert.equal((await rt.request(url, {}, rt.stranger)).status, 403);
     assert.equal((await rt.request(url.replace(inn, '5032333146'))).status, 403);
-    assert.equal((await (await rt.request(url + '&cacheOnly=1')).json()).providerStatus, 'NOT_REQUESTED');
-    assert.equal(d.calls.length, 0);
+    const cached=await (await rt.request(url + '&cacheOnly=1')).json();
+    assert.equal(cached.providerStatus, 'READY');
+    assert.equal(a.checkoAttempt.status,'PARTIAL');
+    assert.equal(d.calls.length, 10);
     const three = await Promise.all(Array.from({ length: 3 }, () => rt.request(url + '&refresh=1')));
     const views = await Promise.all(three.map((v) => v.json()));
     assert.equal(three[0].status, 200, JSON.stringify(views[0]));

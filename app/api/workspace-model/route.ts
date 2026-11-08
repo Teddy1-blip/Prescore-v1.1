@@ -1,3 +1,4 @@
+import {checkoKey,checkoState,loadChecko,validInn} from "../../../lib/external/checko-cache";
 import {cachedProfile} from "../../../lib/external/checko-profile";
 import { getRuntime } from "../../../lib/platform/runtime";
 import { resolveAnalysisTier, type EntitlementDatabase } from "../../../lib/entitlements";
@@ -38,8 +39,9 @@ export async function GET(request: Request) {
         };
       };
     };
+    let ownerRead=false;
     const dependencies: WorkspaceServiceDependencies = {
-      readAccess: (id) => readableAnalysis(db, id, user, user.isAdmin && new URL(request.url).pathname === '/api/admin' && new URL(request.url).searchParams.get('archive') === 'archived'),
+      readAccess: async (id) => {const access=await readableAnalysis(db, id, user, user.isAdmin && new URL(request.url).pathname === '/api/admin' && new URL(request.url).searchParams.get('archive') === 'archived');ownerRead=access?.access==='owner';return access;},
       readTier: (id, access) => resolveAnalysisTier(db, {
         analysisId: id,
         userEmail: access.row.ownerEmail ?? user.email,
@@ -48,6 +50,11 @@ export async function GET(request: Request) {
         readOnly: true,
       }),
       readProfile: async (inn) => {
+        const env=getRuntime(),key=checkoKey(env);
+        if(key&&validInn(inn)){
+          const selected=await loadChecko(env.DB,inn,{key,cacheOnly:!ownerRead});
+          return {profile:selected.profile,state:checkoState(selected)};
+        }
         const row = await db.prepare("SELECT payload FROM checko_profiles WHERE inn = ? LIMIT 1").bind(inn).first<{ payload: string }>();
         if (!row) return undefined;
         try { return cachedProfile(row.payload,inn); } catch { return undefined; }

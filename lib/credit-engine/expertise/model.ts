@@ -58,6 +58,12 @@ function derive(r:CanonicalCreditAnalysisV1,m:ClientReportModelV1):PrescoreExper
   return id;
  }
  const memoIds:string[]=[],strengthIds:string[]=[],attentionIds:string[]=[],structureIds:string[]=[],checklistIds:string[]=[];
+ const profileClaims=e.claims.filter(c=>c.claimCode.startsWith('PROFILE:'));
+ if(profileClaims.length){
+  const lead=e.claims.find(c=>c.titleRu===e.executiveSummary.statusHeadlineRu)??profileClaims[0];
+  memoIds.push(add(lead,'SUMMARY',{title:m.hero.headline,interpretation:lead.textRu,fact:lead.textRu}));
+  for(const c of profileClaims.filter(c=>['PROFILE:DEBT','PROFILE:TREND','PROFILE:TOP1','PROFILE:LEGAL','PROFILE:UNMATCHED'].includes(c.claimCode)))memoIds.push(add(c,'SUMMARY',{interpretation:c.textRu}));
+ }
  for(const code of ['INDEX_VALUE','READINESS','CAPACITY']){
   const c=byCode(code);if(!c)continue;
   const interpretation=code==='INDEX_VALUE'

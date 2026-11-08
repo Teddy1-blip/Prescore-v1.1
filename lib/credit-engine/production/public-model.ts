@@ -20,6 +20,21 @@ export function publicCanonicalModel(model: ClientReportModelV1, result?: Canoni
   }
   visit(copy);
   if (result) { const projection = analysisV3Presentation(result, copy); if (projection) copy.analysisV3 = projection; }
+  if(result&&copy.meta.entitlement==='FULL') {
+    const risk=result.riskAssessment;
+    copy.bankRuleCoverage=risk.evaluations.filter(e=>e.ruleCode.startsWith('RISK-CF-')&&e.status==='INSUFFICIENT_DATA').map(e=>({
+      code:e.ruleCode,
+      reasons:[...new Set([...e.reasonCodes,...e.requiredFactCodes.flatMap(code=>{
+        const f=risk.facts.find(v=>v.semanticCode===code);
+        if(!f)return [code+':MISSING'];
+        const reasons=[...f.warnings];
+        if(f.status!=='KNOWN')reasons.push(f.status);
+        if(!['HIGH','MEDIUM'].includes(f.confidence))reasons.push('CONFIDENCE_'+f.confidence);
+        if(code==='BANK_COVERAGE_ADEQUATE'&&f.value===false)reasons.push('INCOMPLETE_PERIOD');
+        return reasons.map(reason=>code+':'+reason);
+      })])]
+    }));
+  }
   delete copy.expertise;
   delete copy.financialAnalysis;
   delete copy.reconciliation;

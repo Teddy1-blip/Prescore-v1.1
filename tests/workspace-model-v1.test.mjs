@@ -1,5 +1,6 @@
 import { decisionSnapshot } from "../lib/credit-engine/production/snapshot.ts";
 import * as brokerAuthorization from '../lib/auth/broker-authorizations.ts';
+import * as checkoCache from "../lib/external/checko-cache.ts";
 import * as checkoProfile from "../lib/external/checko-profile.ts";
 import * as releaseSecurity from '../lib/release/security.ts';
 import test from "node:test";
@@ -56,6 +57,7 @@ for (const ownerFull of [false, true]) test(ownerFull
   let current = { email: "workspace-owner@test.invalid", isAdmin: false };
   const apiAuth = load("app/api/api-auth.ts", { "../chatgpt-auth": { getChatGPTUser: async () => null } });
   const analysisRoute = load("app/api/analysis/route.ts", {
+    "../../../lib/external/checko-cache":checkoCache,
     "../../../lib/platform/runtime": { getRuntime: () => ({ DB: db }) },
     "../../../lib/prescore": prescore,
     "../../../lib/credit-engine/source-foundation": sources,
@@ -65,6 +67,7 @@ for (const ownerFull of [false, true]) test(ownerFull
     "../../../lib/release/security": releaseSecurity,
   });
   const workspaceRoute = load("app/api/workspace-model/route.ts", {
+    "../../../lib/external/checko-cache":checkoCache,
     "../../../lib/external/checko-profile": checkoProfile,
     "../../../lib/platform/runtime": { getRuntime: () => ({ DB: db }) },
     "../../../lib/entitlements": entitlements,

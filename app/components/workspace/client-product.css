@@ -361,3 +361,26 @@
 }
 .pc-compare-select{display:flex;align-items:center;flex-wrap:wrap;gap:8px 16px;margin-bottom:16px}
 .pc-compare-select select{max-width:100%;padding:8px;border:1px solid var(--pc-line);border-radius:8px;color:var(--pc-ink);background:#fff}
+
+.pc-statement-upload{max-width:960px;width:100%;min-width:0}
+.pc-app .pc-statement-upload .ps-upload-card{display:block;min-width:0;padding:clamp(16px,3vw,32px)}
+.pc-app .pc-statement-upload .ps-dropzone{position:relative;display:grid;justify-items:center;align-content:center;min-height:170px;height:auto;padding:24px 16px;border:1px dashed #70a5a0;border-radius:14px;background:#f4faf9;text-align:center}
+.pc-statement-upload .ps-dropzone input[type=file]{position:absolute;width:1px;height:1px;opacity:0}
+.pc-app .pc-statement-upload .ps-statement-list{display:block;min-width:0;margin-top:16px}
+.pc-upload-queue{max-height:21rem;overflow:auto}
+.pc-app .pc-upload-queue article{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid #dce6e5;min-width:0}
+.pc-upload-queue article span{min-width:0;flex:1}
+.pc-upload-queue article b,.pc-upload-queue article small{display:block;overflow-wrap:anywhere}
+.pc-upload-queue article button{flex:none}
+.pc-app .pc-bank-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(155px,100%),1fr))}
+.pc-banking-charts,.pc-dashboard-grid>section{min-width:0}
+.pc-amount-bars>div{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:5px 12px;margin:15px 0}
+.pc-amount-bars>div span{overflow-wrap:anywhere}
+.pc-amount-bars i{grid-column:1/-1;height:7px;background:#24877f;border-radius:4px}
+.pc-checko{border-bottom:1px solid #dae5e6;padding-bottom:14px}
+.pc-app .pc-dashboard-section h2{letter-spacing:-.025em}
+@media(max-width:560px){.pc-app .pc-statement-upload .ps-dropzone{min-height:145px}.pc-app .pc-statement-upload .ps-dropzone h2{font-size:1.25rem}.pc-app .pc-bank-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.pc-upload-queue{max-height:17rem}}
+.pc-timeline{margin:0;padding:0 0 0 1.2rem}
+.pc-timeline li{padding:12px 0;border-bottom:1px solid #dce6e5}
+.pc-timeline li small{display:block;color:#51656b}
+.pc-index-coverage{padding:14px 18px;border:1px solid #dce6e5;border-radius:12px}

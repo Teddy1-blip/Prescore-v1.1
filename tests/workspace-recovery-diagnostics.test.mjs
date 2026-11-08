@@ -83,7 +83,7 @@ test('entitlement lookup failure never grants FULL or sends user to repeat payme
 });
 test('optional operations read failure remains UNKNOWN while analytics can succeed',async()=>{const r=await fixture({operationsError:Error('db down')}).run();assert.equal(r.state,'READY_FULL');assert.equal(r.basic.operations.documents.status,'UNKNOWN');assert.equal(r.basic.operations.documents.count,null);});
 test('profile read failure keeps bank facts and identifies the read stage',async()=>{
- const f=fixture({profileError:Error('SELECT secret_table')}),r=await f.run();assert.equal(r.state,'READY_BASIC');assert.equal(r.basic.bankingFacts.grossInflow.value,100000);assert.equal(r.diagnostic.stage,'PROFILE_READ');assert.ok(!f.calls.includes('engine'));assert.doesNotMatch(JSON.stringify(r)+JSON.stringify(f.logs),/secret_table/);
+ const f=fixture({profileError:Error('SELECT secret_table')}),r=await f.run();assert.equal(r.state,'READY_FULL');assert.equal(r.basic.bankingFacts.grossInflow.value,100000);assert.equal(r.basic.checko.status,'FAILED');assert.ok(f.calls.includes('engine'));assert.doesNotMatch(JSON.stringify(r)+JSON.stringify(f.logs),/secret_table/);
 });
 test('canonical validator stage and exact reason reach the existing workspace response',async()=>{
  const f=fixture({engineError:new CanonicalUnavailable('CAPACITY','FULL_MONTH_OUTSIDE_BANK_PERIOD')}),r=await f.run();assert.equal(r.fullAvailability,'UNAVAILABLE');assert.equal(r.diagnostic.stage,'CAPACITY');assert.equal(r.diagnostic.reason,'FULL_MONTH_OUTSIDE_BANK_PERIOD');assert.equal(r.full,undefined);assert.equal(r.basic.bankingFacts.grossInflow.value,100000);safe(r.diagnostic);

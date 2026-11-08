@@ -9,7 +9,7 @@ import {sourceLabel,sourceState,label} from './credit-depth';
 import {CashMovement} from './cash-movement';
 import {ClientDecisionRoute} from './client-decision-route';
 import {receiptLabel} from '../../../lib/credit-engine/explainability/receipts';
-import {DecisionHistory} from './client-decision-history';
+import {BankProfileDetails,CheckoOverview,FlowComposition} from './profile-overview';
 import {FinancialSnapshot} from './client-financials';
 import {Panel} from './panel';
 export {Panel};
@@ -62,21 +62,22 @@ export function ExecutiveOverview({model,choose,retry,children}:{children?:React
  const readiness=model.full?.canonical.financingReadiness.level;
  const ready=Boolean(readiness&&readiness!=='UNKNOWN');
  const capacity=model.full?.canonical.debtCapacity.headlineCapacity.monthlyIncrementalDebtServiceCapacity.prudential??null;
- const factors=r?[...r.primaryFactors,...r.contextHighlights,...r.readiness.constraints]:[];
- const strengths=factors.filter(f=>f.status.tone==='positive').slice(0,3);
- const risks=factors.filter(f=>['critical','attention'].includes(f.status.tone)).slice(0,3);
- const dataLimits=r ? [...r.readiness.constraints, ...r.dataQuality, ...r.limitations].filter(
-   (f,i,items)=>f.status.tone==='data' && items.findIndex(other=>other.claimId===f.claimId)===i
- ).slice(0, Math.max(0,3-risks.length)) : [];
+ const findings=model.full?.canonical.explainability.claims??[];
+ const risks=findings.filter(f=>f.status==='CREDIT_RISK').slice(0,3);
+ const stops=findings.filter(f=>f.status==='GLOBAL_STOP');
+ const dataLimits=findings.filter(f=>f.status==='DATA_REVIEW'&&!f.claimCode.includes('SOURCE-MISSING')).slice(0,2);
+ const strengths=r?.expertise?.items.filter(i=>r.expertise!.strengthIds.includes(i.id)).slice(0,3)??[];
  const actions=r?.recommendations.primary.slice(0,3)??[];
  const candidates=model.full?.canonical.productSelection.candidates??[];
- const products=r?[...r.productFit.primary,...r.productFit.other].filter(p=>candidates.some(c=>c.productFamily===p.family&&['STRONG_MATCH','MODERATE_MATCH','CONDITIONAL_MATCH'].includes(c.fitLevel))).slice(0,3):[];
+ const products=r?[...r.productFit.primary,...r.productFit.other].filter(p=>candidates.some(c=>c.productFamily===p.family&&(c.preliminary?.fit==='Условно подходит'||['STRONG_MATCH','MODERATE_MATCH','CONDITIONAL_MATCH'].includes(c.fitLevel)))).slice(0,3):[];
  const period=`${date(model.basic.analysis.period.from)} — ${date(model.basic.analysis.period.to)}`;
  const bankKpis=[
   {label:'Поступления',fact:b.grossInflow},
   {label:'Списания',fact:b.grossOutflow},
   {label:'Чистый денежный поток',fact:b.netCashFlow},
-  {label:'Средний остаток',fact:b.averageDailyBalance},
+  {label:'Операционные поступления',fact:b.operatingInflow},
+  {label:'Долговые платежи',fact:b.debtService??b.loanPrincipalPayments},
+  {label:'Налоги',fact:b.taxPayments},{label:'Лизинг',fact:b.leasingPayments},{label:'Крупнейший покупатель',fact:b.directCustomerTop1},
  ].filter(({fact})=>dashboardFactValue(fact)!==null);
  const hasSummary=index!==null||ready||capacity!==null;
  function openAnalysis(section:'conclusion'|'plan'|'expertise'|'history') {
@@ -102,24 +103,25 @@ export function ExecutiveOverview({model,choose,retry,children}:{children?:React
    {ready&&<article className="pc-summary-card"><small>Готовность к финансированию</small><strong data-credit-readiness>{r?.readiness.level||readiness}</strong><p>{r?.readiness.text||'Откройте профиль, чтобы увидеть основания.'}</p></article>}
    {capacity!==null&&<article className="pc-capacity-card"><small>Запас для нового долга</small><strong data-prudential-capacity>{money(capacity)}<em>/ месяц</em></strong><p>{r?.capacity.text||'Осторожная оценка дополнительного долгового платежа.'}</p></article>}
   </section>}
-  {r?.meta.snapshot&&<DecisionHistory key={model.analysisId+r.meta.snapshot.snapshotId} analysisId={model.analysisId} currentSnapshotId={r.meta.snapshot.snapshotId} compact openHistory={()=>openAnalysis('history')}/>}
+
   {bankKpis.length>0&&<section className="pc-bank-kpis" aria-label="Банковская картина">
-   {bankKpis.map(({label,fact})=><article key={label}><small>{label}</small><strong>{dashboardValue(fact)}</strong></article>)}
+   {bankKpis.map(({label,fact})=><article key={label}><small>{label}</small><strong>{fact.unit==='RATIO'?new Intl.NumberFormat('ru-RU',{style:'percent',maximumFractionDigits:1}).format(fact.value!):dashboardValue(fact)}</strong></article>)}
   </section>}
   <div className={'pc-dashboard-grid pc-dashboard-grid-main'+(!r?' is-single':'')}>
    <section className="pc-dashboard-section"><header><div><span>ДЕНЬГИ</span><h2>Движение денег</h2></div><button className="pc-text-button" onClick={()=>choose('banking')}>Открыть финансы →</button></header>
     <p className="pc-bank-source">{bankName} · {period}</p>
     <CashTrend model={model} compact/>
    </section>
-   {r&&<section className="pc-dashboard-section"><header><div><span>СЕЙЧАС В ФОКУСЕ</span><h2>Что важно сейчас</h2></div></header>
+   {r&&<section className="pc-dashboard-section"><header><div><span>СЕЙЧАС В ФОКУСЕ</span><h2>Топ-факторы</h2></div></header>
     <div className="pc-dashboard-factors">
      {!strengths.length && !risks.length && !dataLimits.length && <p className="pc-muted">Существенных факторов для отдельного акцента сейчас нет.</p>}
-     {strengths.map((f,i)=><article key={'s'+i} data-tone="positive"><small>Сильная сторона</small><h3>{clientText(f.title)}</h3><p>{clientText(f.text)}</p><Why model={model} ids={[f.claimId]}/></article>)}
-     {risks.map((f,i)=><article key={'r'+i} data-tone={f.status.tone}><small>{f.status.tone==='critical'?'Критическое ограничение':'Требует внимания'}</small><h3>{clientText(f.title)}</h3><p>{clientText(f.text)}</p><Why model={model} ids={[f.claimId]}/></article>)}
-     {dataLimits.map(f=><article key={f.id} data-tone="data"><small>Можно уточнить</small><h3>{clientText(f.title)}</h3><p>{clientText(f.text)}</p><Why model={model} ids={[f.claimId]}/></article>)}
+     {stops.map(f=><article key={f.claimId} data-tone="critical"><small>Стоп-фактор</small><h3>{clientText(f.titleRu)}</h3><Why model={model} ids={[f.claimId]}/></article>)}
+     {strengths.map(f=><article key={f.id} data-tone="positive"><small>Сильная сторона</small><h3>{clientText(f.title)}</h3><p>{clientText(f.fact)}</p><Why model={model} ids={f.claimIds}/></article>)}
+     {[...risks,...dataLimits].map(f=><article key={f.claimId} data-tone={f.status==='CREDIT_RISK'?'attention':'data'}><small>{f.status==='CREDIT_RISK'?'Существенный риск':'Требует проверки'}</small><h3>{clientText(f.titleRu)}</h3><p>{clientText(f.textRu)}</p><Why model={model} ids={[f.claimId]}/></article>)}
     </div>
    </section>}
   </div>
+  <FlowComposition model={model}/>
   {preview&&<section className="pc-dashboard-section pc-expert-preview"><header><h2>Экспертная оценка</h2><button className="pc-text-button" onClick={()=>openAnalysis('expertise')}>В кредитный профиль →</button></header><h3>{clientText(preview.title)}</h3><p>{clientText(preview.interpretation)}</p>{preview.nextStep&&<p><b>Следующий шаг.</b> {clientText(preview.nextStep)}</p>}{preview.claimIds.length>0&&<Why model={model} ids={preview.claimIds}/>}</section>}
   {r&&<div className="pc-dashboard-grid">
    <section className="pc-dashboard-section"><header><div><span>ФИНАНСИРОВАНИЕ</span><h2>Что подходит бизнесу</h2></div><button className="pc-text-button" onClick={()=>choose('financing')}>Все варианты →</button></header>
@@ -133,7 +135,8 @@ export function ExecutiveOverview({model,choose,retry,children}:{children?:React
   {r?.externalSummary?.length?<section className="pc-dashboard-section pc-dashboard-external"><header><div><span>ВНЕШНИЙ КОНТЕКСТ</span><h2>Юридические и внешние сведения</h2></div></header><dl>{r.externalSummary.map(f=><div key={f.code}><dt>{f.label}</dt><dd>{f.value}<small>{f.source} · {date(f.asOf)}</small></dd></div>)}</dl></section>:null}
   <section className="pc-dashboard-section"><header><div><span>ИСТОЧНИКИ</span><h2>Что уже подключено</h2></div>
     <button className="pc-text-button" onClick={()=>choose('documents')}>Документы →</button>
-  </header><SourceSummary model={model} onlyConnected/></section>
+  </header><CheckoOverview model={model}/><SourceSummary model={model}/></section>
+  {r&&<BankProfileDetails model={model} choose={choose}/>}
   {!r&&<FullAccessNotice model={model} retry={retry}/>}
  </div>;
 }

@@ -30,6 +30,8 @@ export type WorkspaceOperationalStateV1 = {
 };
 
 export type WorkspaceBasicV1 = {
+  checko?:import("../external/checko-cache.ts").CheckoState;
+  coverageGaps?:ReturnType<typeof import("../credit-engine/credit-assessment/coverage.ts").bankCoverageGaps>;
   legalRegistry?: import("../legal-registry.ts").LegalRegistryV1;
   financingRequest?: import("./financing-request.ts").FinancingRequestV1;
   analysis: {
@@ -54,6 +56,7 @@ export type WorkspaceBasicV1 = {
     observedMonthlyOperatingAverage: WorkspaceFactV1;
     fullMonthOperatingAverage: WorkspaceFactV1;
     seasonality?: {status:string;trend:WorkspaceFactV1;volatility:WorkspaceFactV1;peakToAverage:WorkspaceFactV1};
+    debtService:WorkspaceFactV1;
     loanPrincipalPayments: WorkspaceFactV1;
     interestPayments: WorkspaceFactV1;
     unsplitDebtPayments: WorkspaceFactV1;
@@ -162,6 +165,7 @@ function sourceAvailability(analysis: AnalysisResult): WorkspaceBasicV1["sources
   }));
 }
 
+import {bankCoverageGaps} from '../credit-engine/credit-assessment/coverage.ts';
 export function projectWorkspaceBasic(
   analysis: AnalysisResult,
   operations: WorkspaceOperationalInput = {
@@ -174,6 +178,8 @@ export function projectWorkspaceBasic(
   const statementPeriodFrom = metrics?.period.from ?? (statements?.length ? statements.map((item) => item.periodFrom).filter((value): value is string => !!value).sort()[0] ?? null : null);
   const statementPeriodTo = metrics?.period.to ?? (statements?.length ? statements.map((item) => item.periodTo).filter((value): value is string => !!value).sort().at(-1) ?? null : null);
   return {
+    coverageGaps:bankCoverageGaps(analysis),
+    ...(analysis.checkoAttempt?{checko:analysis.checkoAttempt}:{}),
     ...(analysis.legalRegistryV1 ? {legalRegistry: legalRegistryView(analysis)} : {}),
     financingRequest: analysis.financingRequestV1 ? structuredClone(analysis.financingRequestV1) : undefined,
     analysis: {
@@ -205,6 +211,7 @@ export function projectWorkspaceBasic(
       observedMonthlyOperatingAverage: fact(metrics?.operating.observedMonthlyOperatingAverage),
       fullMonthOperatingAverage: fact(metrics?.operating.fullMonthOperatingAverage),
       seasonality: {status:metrics?.operating.seasonalityStatus??'INSUFFICIENT_HISTORY',trend:fact(metrics?.operating.operatingReceiptsTrend,'RATIO'),volatility:fact(metrics?.operating.operatingReceiptsVolatility,'RATIO'),peakToAverage:fact(metrics?.operating.peakToAverageRatio,'RATIO')},
+      debtService:fact(metrics?.debtService.debtServiceCashOutflow),
       loanPrincipalPayments: fact(metrics?.debtService.loanPrincipalPaid),
       interestPayments: fact(metrics?.debtService.interestPaid),
       unsplitDebtPayments: fact(metrics?.debtService.unsplitDebtService),

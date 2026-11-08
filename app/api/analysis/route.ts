@@ -1,4 +1,5 @@
 import type { StatementScreeningResult } from "../../../lib/credit-engine/contracts/sources";
+import {loadChecko,checkoKey,checkoState,validInn} from "../../../lib/external/checko-cache";
 import {safeErrorText} from '../../../lib/release/security';
 import {getRuntime} from "../../../lib/platform/runtime";
 import { analysisForStorage, analyzeBankStatements, screenBankStatements, type StatementInput } from "../../../lib/prescore";
@@ -61,6 +62,13 @@ export async function POST(request: Request) {
       readiness TEXT NOT NULL, payload TEXT NOT NULL, owner_email TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`).run();
     try { await db.prepare("ALTER TABLE analyses ADD COLUMN owner_email TEXT NOT NULL DEFAULT ''").run(); } catch { /* already migrated */ }
+    // Commit the external observation before the first read of the new decision.
+    try {
+      const acquired=validInn(result.companyInn)
+        ? await loadChecko(env.DB,result.companyInn,{key:checkoKey(env),cacheOnly:false})
+        : {status:'FAILED' as const};
+      result.checkoAttempt=checkoState(acquired);
+    } catch { result.checkoAttempt={status:'FAILED',fetchedAt:null}; }
     const stored = analysisForStorage(result);
     await db.prepare(`INSERT INTO analyses (id, company_name, company_inn, file_name, period_from, period_to, score, grade, readiness, payload, owner_email, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)

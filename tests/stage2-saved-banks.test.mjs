@@ -1,4 +1,4 @@
-import {reviewed as decisionReview} from './fixtures/client-report/stage5-baseline.mjs';
+import {bankProfileHashes as decisionReview} from './fixtures/historical-bank-inputs.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
@@ -7,7 +7,7 @@ import {buildCanonicalCreditAnalysis} from '../lib/credit-engine/production/orch
 import {buildDebtCapacity} from '../lib/credit-engine/debt-capacity/engine.ts';
 import {entries} from './fixtures/debt-capacity/golden-debt-capacity-pack-v1.mjs';
 import {expectations,compareCapacity} from './fixtures/debt-capacity/lab.mjs';
-import {historicalBusinessResult} from './fixtures/historical-bank-inputs.mjs';
+import {currentHistoricalBusinessResult as historicalBusinessResult} from './fixtures/historical-bank-inputs.mjs';
 
 // Only these three synthetic inputs change the downstream evidence as well as
 // the input identity. Preserve the original goldens alongside the exact upgrade.

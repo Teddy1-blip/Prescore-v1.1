@@ -28,7 +28,7 @@ export function validateClientReportModel(x:ClientReportInputV1,m:ClientReportMo
  for(const id of m.actionPlan.focusIds)if(!actions.some(i=>i.id===id))fail('ORPHAN_OVERVIEW_FOCUS');
  const products=[...m.productFit.primary,...m.productFit.other];
  const ids=[...allFactors(m).map(v=>v.id),...metrics.map(v=>v.id),...actions.map(v=>v.id),...recs.map(v=>v.id),...products.map(v=>v.id),...m.detailedSections.map(v=>v.id),...m.index.components.map(v=>v.id),...m.sources.map(v=>v.id)];if(new Set(ids).size!==ids.length)fail('DUPLICATE_ID');
- for(const pr of products){const source=x.productSelection.candidates.find(c=>c.productFamily===pr.family);if(!source||source.rank!==pr.rank||p.fitDisplayMap[source.fitLevel]!==pr.fit||!claims.has(pr.claimId))fail('PRODUCT_CHANGED');}
+ for(const pr of products){const source=x.productSelection.candidates.find(c=>c.productFamily===pr.family);if(!source||source.rank!==pr.rank||(source.preliminary?.fit??p.fitDisplayMap[source.fitLevel])!==pr.fit||!claims.has(pr.claimId))fail('PRODUCT_CHANGED');}
  if(JSON.stringify(m.productFit.primary.map(v=>v.family))!==JSON.stringify(x.productSelection.primaryCandidateProducts.slice(0,p.productCardLimit)))fail('PRODUCT_RERANK');
  if(m.primaryFactors.length>p.executiveFactorLimit||m.productFit.primary.length>p.productCardLimit||m.actionPlan.focusIds.length>p.overviewActionLimit)fail('OVERVIEW_LIMIT');
  if(m.capacity.disclaimer!==COPY.capacityDisclaimer||m.actionPlan.disclaimer!==COPY.checkpoint||m.printMeta.disclaimer!==COPY.reportDisclaimer)fail('DISCLAIMER');

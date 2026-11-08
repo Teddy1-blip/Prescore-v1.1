@@ -18,6 +18,7 @@ export const bankingFieldLabels={
  averageDailyBalance:'Среднедневной остаток',
  minimumDailyBalance:'Минимальный остаток',
  lowLiquidityDays:'Дни низкой ликвидности',
+ debtService:'Долговое обслуживание',
  loanPrincipalPayments:'Платежи основного долга',
  interestPayments:'Проценты',
  unsplitDebtPayments:'Неразделённые долговые платежи',
@@ -98,7 +99,7 @@ export function BankingLedger({model}:{model:WorkspaceModelV1}){
   <details className="pc-disclosure">
    <summary>Качество и период каждого банковского показателя</summary>
    <p>Этот реестр нужен для проверки исходных данных и периода расчёта. Для принятия решения используйте сгруппированную картину выше и кредитное заключение Prescore.</p>
-   <div className="pc-table-scroll"><table><thead><tr><th>Показатель</th><th>Значение</th><th>Статус / достоверность</th><th>Период</th></tr></thead><tbody>{Object.entries(bankingFieldLabels).map(([key,title])=>{const f=b[key as BankingField];return <tr key={key}><th scope="row">{title}</th><td>{display(f)}</td><td>{label(f.status)} · {label(f.confidence)}</td><td>{date(f.periodFrom)} — {date(f.periodTo)}</td></tr>;})}</tbody></table></div>
+   <div className="pc-table-scroll"><table><thead><tr><th>Показатель</th><th>Значение</th><th>Статус / достоверность</th><th>Период</th></tr></thead><tbody>{Object.entries(bankingFieldLabels).map(([key,title])=>{const f=b[key as BankingField];if(!f)return null;return <tr key={key}><th scope="row">{title}</th><td>{display(f)}</td><td>{label(f.status)} · {label(f.confidence)}</td><td>{date(f.periodFrom)} — {date(f.periodTo)}</td></tr>;})}</tbody></table></div>
   </details>
  </>;
 }

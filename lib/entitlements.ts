@@ -135,6 +135,7 @@ export function analysisView(result: AnalysisResult, tier: AnalysisTier) {
     companyInn: result.companyInn,
     fileName: result.fileName,
     sourceFiles: result.sourceFiles,
+    checkoAttempt:result.checkoAttempt,
     bankNames: result.bankNames,
     sourceManifest,
     integrity: result.integrity,

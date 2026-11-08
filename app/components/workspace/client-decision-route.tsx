@@ -69,12 +69,12 @@ function missingDataDecision(model: WorkspaceModelV1): ClientDecisionRouteV1 {
   if (!details.length) details.push("Для полного заключения нужны дополнительные подтверждения финансового состояния или долговой нагрузки.");
   return {
     code: "INSUFFICIENT_DATA",
-    label: "ДОПОЛНИТЬ ПРОФИЛЬ",
-    title: "Добавьте несколько источников — и картина станет точнее",
-    summary: "Уже доступные факты сохранены. Дополните досье, чтобы Prescore точнее оценил готовность и долговую нагрузку.",
+    label: report?"ПРЕДВАРИТЕЛЬНОЕ ЗАКЛЮЧЕНИЕ":"ДОПОЛНИТЬ ПРОФИЛЬ",
+    title: report?.hero.headline??"Добавьте выписку для первого анализа",
+    summary: report?.hero.summary??"Профиль строится по выпискам компании.",
     tone: "data",
     details,
-    tasks: [],
+    tasks: uniqueActions(model),
     cta,
   };
 }
@@ -88,7 +88,7 @@ function preparationDecision(model: WorkspaceModelV1, globalStop: boolean): Clie
   return {
     code: "NEEDS_PREPARATION",
     label: "НУЖНА ПОДГОТОВКА",
-    title: globalStop ? "Сначала устраните критичное ограничение" : "Перед подачей заявки нужна подготовка",
+    title: report.hero.headline || (globalStop ? "Сначала устраните критичное ограничение" : "Перед подачей заявки нужна подготовка"),
     summary: clientText(report.hero.summary),
     tone: globalStop ? "critical" : "attention",
     details,

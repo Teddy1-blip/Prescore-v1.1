@@ -14,16 +14,17 @@ export function RiskSections({model}:{model:WorkspaceModelV1}){
   ['DATA_REVIEW','Требует проверки'],['INFORMATION','Контекст и информация'],
  ] as const;
  return <>{groups.map(([scope,title])=>{
-  const items=claims.filter(c=>c.status===scope);
+  const items=claims.filter(c=>c.status===scope&&!c.claimCode.includes('SOURCE-MISSING'));
   if(!items.length)return null;
-  return <Panel key={scope} title={title}><div className="pc-factor-list">
+  const content=<Panel key={scope} title={title}><div className="pc-factor-list">
    {items.map(c=><article className={'pc-factor '+(scope==='GLOBAL_STOP'?'tone-critical':scope==='CREDIT_RISK'?'tone-attention':'tone-info')} key={c.claimId}>
     <div><h3>{publicText(c.titleRu)}</h3><p>{publicText(c.textRu)}</p>
      {actions.filter(a=>c.recommendationIds.includes(a.canonicalId)||full.canonical.recommendations.recommendations.some(rec=>rec.recommendationId===a.canonicalId&&rec.riskFindingIds.some(id=>c.riskFindingIds.includes(id)))).slice(0,1).map(a=><p key={a.id}>Следующий шаг · {publicText(a.title)}</p>)}
     </div><Why model={model} ids={[c.claimId]}/>
    </article>)}
   </div></Panel>;
- })}{!claims.length&&<Panel title="Результат проверки"><p>В этом выпуске отдельные факторы риска не выделены. Основания доступны в заключении.</p></Panel>}</>;
+  return scope==='INFORMATION'?<details key={scope}><summary>Контекст и информация</summary>{content}</details>:content;
+ })}{claims.some(c=>c.claimCode==='RISK-DATA-SOURCE-MISSING')&&<Panel title="Дополнить профиль"><p>БФО уточняет капитал и прибыль, кредитная история раскрывает графики и остатки долга.</p><Why model={model} ids={claims.filter(c=>c.claimCode==='RISK-DATA-SOURCE-MISSING').map(c=>c.claimId)}/></Panel>}{!!model.basic.coverageGaps?.length&&<Panel title="Покрытие по счетам">{model.basic.coverageGaps.map((g,i)=><p key={i}>{g.bank}{g.account?' · счёт …'+g.account:''} · {g.month} · {{PARTIAL:'Часть месяца',MISSING:'Пропуск месяца',OVERLAP:'Пересечение периодов',FULL:'Полный месяц'}[g.status]}</p>)}</Panel>}{!!full.report.bankRuleCoverage?.length&&<details><summary>Основания ограничений банковских правил</summary>{full.report.bankRuleCoverage.map(e=><p key={e.code}><b>{e.code}</b> · {e.reasons.join(', ')}</p>)}</details>}{!claims.length&&<Panel title="Результат проверки"><p>В этом выпуске отдельные факторы риска не выделены. Основания доступны в заключении.</p></Panel>}</>;
 }
 
 export function ExpertiseSection({model}:{model:WorkspaceModelV1}){

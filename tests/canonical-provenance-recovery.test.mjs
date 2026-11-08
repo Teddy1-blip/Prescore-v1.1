@@ -1,5 +1,5 @@
 import {reviewed,previousProvenanceCase} from './fixtures/client-report/stage5-baseline.mjs';
-import {historicalBusinessResult} from './fixtures/historical-bank-inputs.mjs';
+import {bankProfileHashes,historicalBusinessResult} from './fixtures/historical-bank-inputs.mjs';
 /** Exact review of two metadata-only changes, not a blanket golden refresh.
  * Actual bank parser and canonical engines; no provider calls or engine mocks.
  * Optional extracted corpus uses the same hash-verified synthetic source files.
@@ -49,8 +49,9 @@ for(const entry of audit.entries){
   assert.equal(goldens[entry.caseId],entry.reviewedOutputHash);
   assertReviewedDelta(historical,entry);
  });
- test(entry.caseId+' entire client report is byte-equivalent to its original baseline',()=>{
-  assert.equal(digest(result.model),reviewed[entry.caseId].model);
+ test(entry.caseId+' published bank profile and original report match both reviewed versions',()=>{
+  assert.equal(digest(result.model),bankProfileHashes[entry.caseId].model);
+  assert.equal(digest(historical.model),reviewed[entry.caseId].model);
   assert.equal(digest(previousProvenanceCase(historical,entry.caseId).model),entry.unchangedClientReportHash);
  });
  test(entry.caseId+' existing business assertions still pass',()=>{

@@ -1,6 +1,6 @@
 "use client";
 import { ChangeEvent, DragEvent, ReactNode, useEffect, useRef, useState } from "react";
-import { AlertTriangle, ArrowRight, BriefcaseBusiness, Gauge, LockKeyhole, MessageSquareText, Plus, Search, ShieldCheck, Trash2, UploadCloud, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, BriefcaseBusiness, Gauge, MessageSquareText, Plus, Search, ShieldCheck, Trash2, UploadCloud, X } from "lucide-react";
 import { type AnalysisResult } from "../../../lib/prescore";
 import type {StatementScreeningResult} from "../../../lib/credit-engine/contracts/sources";
 import ApplicationChat from "../../dashboard/application-chat";
@@ -34,7 +34,7 @@ function PageHeading({ kicker, title, body, action }: { kicker: string; title: s
   return <div className="ps-heading"><div><span>{kicker}</span><h1>{title}</h1><p>{body}</p></div>{action}</div>;
 }
 
-type BankUpload = {fileName:string; base64:string};
+type BankUpload = {fileName:string; base64:string;preview:string};
 export type UploadReceipt={screeningResults?:StatementScreeningResult[];rejectedFiles?:string[]};
 const screeningLabels:Record<string,string>={ACCEPTED:'Принят',DUPLICATE:'Дубликат',COMPANY_MISMATCH:'Другой ИНН',UNSUPPORTED:'Формат не поддерживается',UNRECOGNIZED:'Не распознан',INVALID:'Некорректный файл'};
 export function ScreeningSummary({receipt,open=false}:{receipt:UploadReceipt;open?:boolean}){
@@ -46,6 +46,14 @@ export function ScreeningSummary({receipt,open=false}:{receipt:UploadReceipt;ope
 }
 export function AnalysisHistory({analyses,selectedId,select}:{analyses:StoredAnalysis[];selectedId:string;select:(id:string)=>void}){
  return <details className="ws-analysis-history ws-section"><summary>История анализов ({analyses.length})</summary><p>Сохранённые версии. Доступ и периоды указаны по данным сервера.</p>{analyses.map(a=><article key={a.id} aria-current={a.id===selectedId?'true':undefined}><div><strong>{a.companyName}</strong><p>ИНН {a.companyInn} · {formatDate(a.periodFrom??'')} — {formatDate(a.periodTo??'')}</p><small>Создан: {a.createdAt?new Date(a.createdAt).toLocaleString('ru-RU'):'Дата не указана'} · {a.viewTier==='FULL'?'FULL':a.viewTier==='FREE'||a.viewTier==='BASIC'?'BASIC':'Доступ не уточнён'}</small>{a.bankNames?.length?<p>{a.bankNames.join(' · ')}</p>:null}</div><button onClick={()=>select(a.id)} disabled={a.id===selectedId}>{a.id===selectedId?'Выбран':'Открыть'}</button></article>)}</details>;
+}
+function statementPreview(text:string) {
+ const header=text.split(/^СекцияДокумент=/m,1)[0];
+ const field=(name:string)=>header.match(new RegExp('^'+name+'=(.+)$','m'))?.[1].trim();
+ const accounts=new Set([...header.matchAll(/^РасчСчет=(.+)$/gm)].map(m=>m[1].trim()));
+ const range=[field('ДатаНачала'),field('ДатаКонца')].filter(Boolean).join(' — ');
+ const bank=field('Отправитель');
+ return [bank,range,accounts.size?'Счетов: '+accounts.size:''].filter(Boolean).join(' · ')||'Реквизиты уточнит сервер';
 }
 export function Analyze({onResult}:{onResult:(result:AnalysisResult,receipt?:UploadReceipt)=>void|Promise<void>}){
  const input=useRef<HTMLInputElement>(null),pending=useRef(false),reading=useRef(false);
@@ -60,25 +68,27 @@ export function Analyze({onResult}:{onResult:(result:AnalysisResult,receipt?:Upl
     const buffer=await file.arrayBuffer();
     const bytes=new Uint8Array(buffer), chunks:string[]=[];
     for(let i=0;i<bytes.length;i+=32768) chunks.push(String.fromCharCode(...bytes.subarray(i,i+32768)));
-    candidates.push({fileName:file.name,base64:btoa(chunks.join(''))});
+    let text:string;
+    try {text=new TextDecoder('utf-8',{fatal:true}).decode(bytes);} catch {text=new TextDecoder('windows-1251').decode(bytes);}
+    candidates.push({fileName:file.name,base64:btoa(chunks.join('')),preview:statementPreview(text)});
    } catch { rejected.push({fileName:file.name,reason:'Не удалось прочитать файл. Выберите его повторно.'}); }
   }setStatements(current=>[...current,...candidates]);setLocalRejected(rejected);}finally{reading.current=false;setAdding(false);if(input.current)input.current.value='';}
  }
  async function calculate(){
   if(pending.current||reading.current||!statements.length)return;pending.current=true;setProcessing(true);setError('');setReceipt({});
-  try{const response=await fetch('/api/analysis',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({statements})});const body=await response.json() as UploadReceipt&{analysis?:AnalysisResult;error?:string};setReceipt(body);
+  try{const response=await fetch('/api/analysis',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({statements:statements.map(({fileName,base64})=>({fileName,base64}))})});const body=await response.json() as UploadReceipt&{analysis?:AnalysisResult;error?:string};setReceipt(body);
    if(!response.ok||!body.analysis)throw Error(body.error||'Серверный расчёт не выполнен');await onResult(body.analysis,body);
   }catch(e){setError(e instanceof TypeError?'Нет подтверждения сохранения. Проверьте историю анализов перед повторным запросом.':e instanceof Error?e.message:'Не удалось выполнить анализ');}
   finally{pending.current=false;setProcessing(false);}
  }
- return <><PageHeading kicker="БАНКОВСКИЕ ВЫПИСКИ" title="Соберите банковский поток компании" body="Каждый серверный расчёт сохраняется отдельным анализом. Проверку одного ИНН, формата и дубликатов выполняет сервер."/>
- <div className="ps-upload-layout"><section className="ps-card ps-upload-card"><div className="ps-dropzone" onDragOver={(e:DragEvent)=>e.preventDefault()} onDrop={(e:DragEvent)=>{e.preventDefault();void addFiles(Array.from(e.dataTransfer.files));}}>
+ return <><PageHeading kicker="БАНКОВСКИЕ ВЫПИСКИ" title="Загрузить банковские выписки" body="Выберите выписки одной компании за нужный период. Можно добавить несколько банков и счетов."/>
+ <div className="pc-statement-upload"><section className="ps-card ps-upload-card"><div className="ps-dropzone" onDragOver={(e:DragEvent)=>e.preventDefault()} onDrop={(e:DragEvent)=>{e.preventDefault();void addFiles(Array.from(e.dataTransfer.files));}}>
  <input ref={input} multiple type="file" disabled={processing||adding} accept=".txt,text/plain" onChange={(e:ChangeEvent<HTMLInputElement>)=>void addFiles(Array.from(e.target.files??[]))}/>
- <UploadCloud/><h2>{processing?'Сервер проверяет и рассчитывает анализ…':adding?'Читаем файлы…':'Выберите банковские выписки'}</h2><p>TXT 1CClientBankExchange (UTF-8 или Windows-1251). До 30 файлов по 15 МБ.</p><button disabled={processing||adding} onClick={()=>input.current?.click()}>Выбрать выписки</button></div>
- {statements.length>0&&<div className="ps-statement-list"><div className="ps-statement-list-head"><strong>Готовы к отправке: {statements.length}</strong><button disabled={processing||adding} onClick={()=>{setStatements([]);setReceipt({});setError('');}}>Очистить</button></div><p>Одинаковые имена и счета не исключаются заранее. Принятие каждого документа подтвердит сервер.</p>{statements.map((s,i)=><article key={i}><span><b>{s.fileName}</b><small>Ожидает серверной проверки</small></span><button disabled={processing||adding} aria-label={'Удалить '+s.fileName} onClick={()=>setStatements(current=>current.filter((_,n)=>n!==i))}><Trash2/></button></article>)}<button className="ps-analyze-files-button" disabled={processing||adding} onClick={()=>void calculate()}><Gauge/>{processing?'Проверяем и рассчитываем…':'Рассчитать по выбранным файлам'}</button></div>}
+ <UploadCloud/><h2>{processing?'Сервер проверяет и рассчитывает анализ…':adding?'Читаем файлы…':'Выберите банковские выписки'}</h2><p>TXT 1CClientBankExchange (UTF-8 или Windows-1251). До 30 файлов по 15 МБ.</p><button disabled={processing||adding} onClick={()=>input.current?.click()}>{statements.length?'Добавить ещё':'Выбрать файлы'}</button></div>
+ {statements.length>0&&<div className="ps-statement-list"><div className="ps-statement-list-head"><strong>Готовы к отправке: {statements.length}</strong><button disabled={processing||adding} onClick={()=>{setStatements([]);setLocalRejected([]);setReceipt({});setError('');}}>Очистить</button></div><div className="pc-upload-queue">{statements.map((s,i)=><article key={i}><span><b>{s.fileName}</b><small>{s.preview}</small></span><button disabled={processing||adding} aria-label={'Удалить '+s.fileName} onClick={()=>setStatements(current=>current.filter((_,n)=>n!==i))}><Trash2/></button></article>)}</div><button className="ps-analyze-files-button" disabled={processing||adding} onClick={()=>void calculate()}><Gauge/>{processing?'Проверяем и рассчитываем…':'Рассчитать по выбранным файлам'}</button></div>}
  {localRejected.length>0&&<section role="status"><h3>Не отправлены на сервер</h3>{localRejected.map((r,i)=><p key={i}><strong>{r.fileName}</strong>: {r.reason}</p>)}</section>}
  <ScreeningSummary receipt={receipt} open/>{error&&<div className="ps-upload-error" role="alert"><AlertTriangle/><span><b>Нет подтверждённого результата</b><p>{error}</p><p>Ранее сохранённые анализы доступны в истории. Выбранные файлы сохранены в форме для проверки и повторной попытки.</p></span></div>}</section>
- <aside className="ps-upload-side"><div className="ps-card"><LockKeyhole/><h3>Серверная обработка</h3><p>Расчёт выполняется по принятым файлам одного ИНН. Исключённые файлы будут показаны отдельно.</p></div><div className="ps-card"><h3>Другие документы</h3><p>БКИ и квартальная отчётность добавляются через отдельные разделы. Documents Hub хранит досье; загрузка туда не запускает банковский расчёт.</p></div></aside></div></>;
+ </div></>;
 }
 
 export function Crm({ deals, analyses, selected, addDeal, updateDeal, readOnly=false }: { deals: Deal[]; analyses: StoredAnalysis[]; selected: StoredAnalysis | null; addDeal: (deal: Omit<Deal, "id">) => Promise<void>; updateDeal: (id: string, status: string) => Promise<void>; readOnly?:boolean }) {

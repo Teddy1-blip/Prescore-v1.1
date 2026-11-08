@@ -12,7 +12,7 @@ export function economicDigest(c){
     priorities:c.recommendationSet.primaryRecommendationIds.map(id=>c.recommendationSet.recommendations.find(r=>r.recommendationId===id).definitionCode),
     plan:['day7','day30','day60'].map(k=>c.actionPlan[k].focusItems.map(i=>i.recommendationCode))});
 }
-function restore(current,delta){
+export function restore(current,delta){
   if(!delta)return current;
   if(Object.hasOwn(delta,'replace'))return delta.replace;
   const children=new Map(delta.children);

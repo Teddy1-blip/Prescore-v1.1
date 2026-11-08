@@ -26,6 +26,17 @@ try{
  for(const view of ['home','analysis','banking','obligations','financing','documents','applications','analyst','upload']){
  await page.goto(origin+'/dashboard?analysisId='+seed.id+'&view='+view);await page.locator('.pc-company b').waitFor();await page.waitForFunction(()=>!document.body.innerText.includes('Загружаем финансовую картину')&&!document.body.innerText.includes('Загружаем кабинет'));
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'overflow '+view+' '+width);
+ if(view==='upload'){
+   const files=Array.from({length:10},(_,i)=>({name:'Банк-выписка-'+i+'-длинное-название.txt',mimeType:'text/plain',buffer:Buffer.from('1CClientBankExchange\nОтправитель=Учебный банк\nДатаНачала=01.06.2026\nДатаКонца=30.06.2026\nРасчСчет=40702810900000000001\n')}));
+   await page.locator('.pc-statement-upload input[type=file]').setInputFiles(files);
+   await page.locator('.pc-upload-queue article').nth(9).waitFor();
+   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'ten files overflow '+width);
+   assert.ok(await page.locator('.pc-upload-queue').evaluate(el=>el.clientHeight<=350 && el.scrollWidth<=el.clientWidth+1));
+   await page.getByRole('button',{name:'Удалить '+files[4].name}).click();
+   assert.equal(await page.locator('.pc-upload-queue article').count(),9);
+   await page.getByRole('button',{name:'Очистить',exact:true}).click();
+   assert.equal(await page.locator('.pc-upload-queue article').count(),0);
+ }
  if(view==='home'&&(width===1440||width===390))await page.screenshot({path:out+'/overview-'+width+'.png'});
  if(width===1440||width===390)await page.screenshot({path:out+'/'+view+'-'+width+'.png',fullPage:true});
  if(view==='analysis'){for(const title of ['Стоп-факторы и риски','Экспертная оценка','Долговая ёмкость','Финансовое состояние','Кредитный портфель','Финансирование','Сверка','Рекомендации','План 7 / 30 / 60','Основания','История']){await page.getByRole('navigation',{name:'Разделы анализа',exact:true}).getByRole('button',{name:title,exact:true}).click();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'analysis '+title+' '+width);}}

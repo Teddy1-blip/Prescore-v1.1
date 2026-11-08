@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Analyze, Crm, type UploadReceipt, type StoredAnalysis, type Deal } from "./client-operations";
+import { Analyze, Crm, ScreeningSummary, type UploadReceipt, type StoredAnalysis, type Deal } from "./client-operations";
 import { EmptyHome, FullAccessNotice, date } from "./presentation";
 import { useWorkspaceModel, selectAnalysis } from "./use-model";
 import {  SourceUpload, RecipientApplications } from "./source-operations";
@@ -39,8 +39,8 @@ export function clientSectionTitle(view:string){
 }
 export default function ClientWorkspace(){
  const [analyses,setAnalyses]=useState<StoredAnalysis[]>([]),[deals,setDeals]=useState<Deal[]>([]),[selectedId,setSelectedId]=useState(''),[view,setView]=useState('home'),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState(''),[readOnly,setReadOnly]=useState(false),[revision,setRevision]=useState(0),[modules,setModules]=useState<Record<string,boolean>>({}),[modulesLoading,setModulesLoading]=useState(true);
- const [operationsError,setOperationsError]=useState(''),[operationsLoading,setOperationsLoading]=useState(false),[,setUploadReceipt]=useState<{id:string;receipt:UploadReceipt}|null>(null);
- const operationsRequest=useRef(0),scope=useRef(''),selection=useRef(''),draftRequests=useRef(new Map<string,string>()),openDataRequests=useRef(new Set<string>());
+ const [operationsError,setOperationsError]=useState(''),[operationsLoading,setOperationsLoading]=useState(false),[uploadReceipt,setUploadReceipt]=useState<{id:string;receipt:UploadReceipt}|null>(null);
+ const operationsRequest=useRef(0),scope=useRef(''),selection=useRef(''),draftRequests=useRef(new Map<string,string>());
  const state=useWorkspaceModel(selectedId,revision);
  const unavailable=state.error==='Эта версия анализа недоступна.'||state.error.startsWith('Сессия завершена');
  const selected=unavailable?undefined:analyses.find(a=>a.id===selectedId),model=selected?state.model:null;
@@ -57,27 +57,7 @@ export default function ClientWorkspace(){
  const refreshSource=useCallback(async()=>{await loadOperations();if(!await reloadModel())throw Error('Документ сохранён, но обновление анализа не подтверждено. Нажмите «Повторить» в сообщении над разделом.');},[loadOperations,reloadModel]);
  useEffect(()=>{if(view!=='applications'||loading)return;const timer=setTimeout(()=>void loadOperations(),0);return()=>clearTimeout(timer);},[view,loading,loadOperations]);
  function chooseAnalysis(id:string){selection.current=id;setSelectedId(id);selectAnalysis(id);setNotice('');}
- async function enrichOpenData(result:StoredAnalysis){
-  const inn=String(result.companyInn??'').replace(/\D/g,'');
-  if(!inn||openDataRequests.current.has(result.id))return;
-  openDataRequests.current.add(result.id);
-  try{
-   if(selection.current===result.id)setNotice('Банковский анализ готов. Подключаем открытые сведения по ИНН…');
-   const response=await fetch(`/api/checko?inn=${encodeURIComponent(inn)}&analysisId=${encodeURIComponent(result.id)}`,{cache:'no-store'});
-   const body=await response.json().catch(()=>({})) as {cached?:boolean;error?:string};
-   if(!response.ok){
-    if(selection.current===result.id)setNotice('Анализ по банковским выпискам готов.');
-    return;
-   }
-   if(selection.current===result.id){
-    setRevision(value=>value+1);
-    setNotice(body.cached?'Анализ обновлён открытыми сведениями.':'Анализ обновлён открытыми сведениями.');
-   }
-  }catch{
-   if(selection.current===result.id)setNotice('Анализ по банковским выпискам готов.');
-  }
- }
- async function accept(result:StoredAnalysis,receipt?:UploadReceipt){setAnalyses(items=>[result,...items.filter(a=>a.id!==result.id)]);chooseAnalysis(result.id);setUploadReceipt({id:result.id,receipt:receipt??{screeningResults:result.screeningResults}});choose('home');setRevision(x=>x+1);setNotice('Анализ готов.');void enrichOpenData(result);}
+ async function accept(result:StoredAnalysis,receipt?:UploadReceipt){setAnalyses(items=>[result,...items.filter(a=>a.id!==result.id)]);chooseAnalysis(result.id);setUploadReceipt({id:result.id,receipt:receipt??{screeningResults:result.screeningResults}});choose('home');setRevision(x=>x+1);setNotice('Банковский анализ сохранён.');}
  async function addDeal(input:Omit<Deal,'id'>){if(locked)throw Error('Изменения недоступны в режиме чтения');const key=JSON.stringify(input),id=draftRequests.current.get(key)??crypto.randomUUID();draftRequests.current.set(key,id);try{const r=await fetch('/api/workspace',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'deal',deal:{...input,id}})});const d=await r.json();if(!r.ok)throw Error(d.error||'Заявка не сохранена. Повторите попытку.');draftRequests.current.delete(key);}catch(e){throw Error(e instanceof TypeError?'Нет подтверждения сохранения. Проверьте список заявок перед повторной попыткой.':e instanceof Error?e.message:'Заявка не сохранена');}await refresh();if(selection.current===input.analysisId)setNotice('Сервер подтвердил сохранение черновика. Внешняя отправка не выполнялась.');}
  async function updateDeal(id:string,status:string){if(locked)throw Error('Изменения недоступны в режиме чтения');try{const r=await fetch('/api/workspace',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,status})});const d=await r.json();if(!r.ok)throw Error(d.error||'Статус не сохранён');}catch(e){throw Error(e instanceof TypeError?'Не удалось подтвердить действие. Обновите список перед повтором.':e instanceof Error?e.message:'Статус не сохранён');}await refresh();if(selection.current===selectedId)setNotice('Действие подтверждено сервером.');}
  const availableViews=clientAvailableViews(modules,locked||loading||modulesLoading);
@@ -93,6 +73,7 @@ export default function ClientWorkspace(){
  {loading||modulesLoading?<p role="status">Загружаем кабинет…</p>:disabled?<p>Раздел временно недоступен.</p>:view==='upload'?(locked?<p>Загрузка выписок недоступна в режиме чтения. Выберите доступный раздел в меню.</p>:<Analyze key={selectedId} onResult={accept}/>):!selected?(selectedId?<p role="alert">Этот анализ больше недоступен. Откройте обзор или создайте новый.</p>:!error&&(view==='home'?<EmptyHome start={availableViews.includes('upload')?()=>choose('upload'):undefined}/>:<Panel title={clientSectionTitle(view)}><p>Создайте первый кредитный профиль по банковской выписке.</p>{availableViews.includes('upload')&&<button className="pc-primary" onClick={()=>choose('upload')}>Новый анализ</button>}</Panel>)):needsModel&&state.loading?<p role="status">Загружаем финансовую картину…</p>:needsModel&&(state.error||!model)?<p role="alert">{state.error||'Не удалось открыть анализ.'} <button onClick={refresh}>Повторить</button><button onClick={()=>choose('documents')}>Открыть документы</button></p>:selected&&<>
  {!needsModel&&state.error&&<p role="alert">{state.error} Это не означает, что документы отсутствуют. <button onClick={refresh}>Повторить загрузку сводки</button></p>}
  {view==='billing'&&<ClientBilling key={selectedId} analysisId={selectedId} readOnly={locked}/>}
+ {view==='home'&&uploadReceipt?.id===selectedId&&uploadReceipt?.receipt.screeningResults?.some(s=>s.status!=='ACCEPTED')&&<ScreeningSummary receipt={uploadReceipt.receipt} open/>}
  {view==='home'&&model&&<ClientOverview key={selectedId} model={model} choose={choose} retry={refresh}/>} 
  {view==='banking'&&model&&<><div className="pc-page-title"><div><h1>Финансы</h1><p>Денежный поток, ликвидность и финансовая отчётность</p></div></div><Panel title="Движение денег"><CashTrend model={model}/></Panel><BankingLedger model={model}/><FinancialStatements model={model}/>{!model.full?.report.financialAnalysis?.history.length&&<button className="pc-text-button" onClick={()=>choose('documents')}>Добавить отчётность в документах →</button>}<Panel title="Крупнейшие контрагенты">{model.basic.bankingFacts.topCounterparties?.length?<div className="pc-table-scroll"><table><thead><tr><th>Контрагент</th><th>Поступления, ₽</th><th>Доля</th></tr></thead><tbody>{model.basic.bankingFacts.topCounterparties.map((c,i)=><tr key={c.name+i}><th>{c.name}</th><td>{new Intl.NumberFormat('ru-RU').format(c.amount)}</td><td>{new Intl.NumberFormat('ru-RU',{maximumFractionDigits:1}).format(c.share*100)}%</td></tr>)}</tbody></table></div>:<p>Контрагенты не определены в доступной выписке.</p>}</Panel></>}
  {view==='analysis'&&model&&<FullCreditAnalysis key={selectedId} model={model} retry={refresh}/>}

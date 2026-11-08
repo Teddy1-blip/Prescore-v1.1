@@ -1,5 +1,6 @@
 import {activeFinancialSnapshots, currentFinancialSnapshots, financialSources} from "../financial-analysis/source-selection.ts";
 import {publicReceipt, type DecisionReceipt} from '../explainability/receipts.ts';
+import {checkoSummary} from '../../external/checko-summary.ts';
 import {activeLegalReceipt} from '../../legal-registry.ts';
 import {safeReason} from './diagnostics.ts';
 import type { AnalysisResult } from '../../prescore.ts';
@@ -17,6 +18,7 @@ import { evaluateRiskFacts } from '../risk/engine.ts';
 import { buildContextAssessment } from '../context/engine.ts';
 import { buildPrescoreIndex } from '../index/engine.ts';
 import { buildFinancingReadiness } from '../readiness/engine.ts';
+import {observedBankProfile} from '../credit-assessment/bank-profile.ts';
 import { buildCreditAssessment } from '../credit-assessment/engine.ts';
 import { buildDebtCapacity } from '../debt-capacity/engine.ts';
 import { buildProductSelection } from '../product-selection/engine.ts';
@@ -106,6 +108,7 @@ export function buildCanonicalCreditAnalysis(input: CanonicalSavedInput) {
     stage = 'READINESS'; const financingReadiness = buildFinancingReadiness(indexed);
     const ready = {...indexed, financingReadiness};
     stage = 'ASSESSMENT'; const creditAssessment = buildCreditAssessment(ready);
+    creditAssessment.bankObservations = observedBankProfile(a,a.metricsV2,riskAssessment,creditPortfolio);
     const assessed = {...ready, creditAssessment, creditPortfolio};
     stage = 'CAPACITY'; const debtCapacity = buildDebtCapacity({...assessed, bankMetrics: a.metricsV2, scenarios: input.scenarios});
     const capacity = {...assessed, debtCapacity};
@@ -129,6 +132,8 @@ export function buildCanonicalCreditAnalysis(input: CanonicalSavedInput) {
     const explainability = buildExplainability({...recommendations, actionPlan, sourceReceipts:[...receipts.values()]});
     const reportInput = {...recommendations, actionPlan, explainability, company: {name: a.companyName, inn: a.companyInn}};
     stage = 'CLIENT_REPORT'; const model = buildClientReportModel(reportInput, {entitlement: 'FULL', mode: 'SAVED_ANALYSIS'});
+    const checko=checkoSummary(p,a.checkoAttempt);
+    if(checko)model.checko=checko;
     return {version: CANONICAL_WIRING_VERSION, analysisId: a.id,
       inputFingerprint: id('canonical-input', stable({asOfDate, integrity: a.integrity, legal: a.legalRegistryV1, bki: a.creditHistory, metrics: a.metricsV2, snapshots: currentSnapshots, portfolio: creditPortfolio, manifest, profile: p, financingCase: input.financingCase, scenarios: input.scenarios})),
       sourceObservations: allSources.map(s => ({sourceId: s.sourceId, sourceType: s.sourceType, status: s.status, periodFrom: s.periodFrom ?? null, periodTo: s.periodTo ?? null, receivedAt: s.receivedAt})),

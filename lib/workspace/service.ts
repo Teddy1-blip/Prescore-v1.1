@@ -15,7 +15,7 @@ import { projectWorkspaceBasic, WORKSPACE_MODEL_V1, type WorkspaceAccessRoleV1, 
 export type WorkspaceServiceDependencies = {
   readAccess: (analysisId: string) => Promise<ReportAccess | null>;
   readTier: (analysisId: string, access: ReportAccess) => Promise<AnalysisTier>;
-  readProfile: (companyInn: string) => Promise<CompanyProfileData | undefined>;
+  readProfile: (companyInn: string) => Promise<CompanyProfileData | {profile?:CompanyProfileData; state:import("../external/checko-cache.ts").CheckoState} | undefined>;
   readOperations: (analysisId: string, access: ReportAccess) => Promise<WorkspaceOperationalInput>;
   recordDecision?: (input:{canonical:ReturnType<typeof buildCanonicalCreditAnalysis>;report:ClientReportModelV1;access:ReportAccess;banking:PrintBankingV1|null}) => Promise<void>;
 };
@@ -104,7 +104,16 @@ export async function loadWorkspaceModelV1(analysisId: string, dependencies: Wor
 
   let stage = "PROFILE_READ";
   try {
-    const companyProfile = await dependencies.readProfile(analysis.companyInn);
+    let companyProfile:CompanyProfileData|undefined;
+    try {
+      const selected=await dependencies.readProfile(analysis.companyInn);
+      if(selected&&'state' in selected) {
+        companyProfile=selected.profile;
+        analysis.checkoAttempt=selected.state;
+        basic.checko=selected.state;
+      } else companyProfile=selected;
+    }
+    catch {basic.checko={status:'FAILED',fetchedAt:null};analysis.checkoAttempt=basic.checko;}
     stage = "SOURCES";
     const canonical = buildCanonicalCreditAnalysis(savedCanonicalInput(analysis,companyProfile));
     stage = "PUBLIC_MODEL";
@@ -113,7 +122,7 @@ export async function loadWorkspaceModelV1(analysisId: string, dependencies: Wor
       ...base,
       // Publish the same source set that the canonical calculation actually read,
       // including cached company BFO. The saved bank-only manifest is not enough.
-      basic: { ...basic, sources: { ...basic.sources, availability:
+      basic: { ...basic, ...(companyProfile?{checko:{status:Date.now()-Date.parse(companyProfile.fetchedAt)>86400000?'STALE' as const:companyProfile.failedMethods?.length?'PARTIAL' as const:'READY' as const,fetchedAt:companyProfile.fetchedAt}}:{}), sources: { ...basic.sources, availability:
         [...new Map(canonical.sourceObservations.map(source => [source.sourceId, source])).values()].map(source => ({
           source: source.sourceId.startsWith("client-request-") ? "CLIENT_DECLARATION" :
             ({ BANK_STATEMENT: "BANK_STATEMENTS", BFO: "FINANCIAL_STATEMENTS", QUARTERLY: "QUARTERLY_REPORT", BKI: "CREDIT_HISTORY" } as Record<string,string>)[source.sourceType] ?? "EXTERNAL_SOURCE",

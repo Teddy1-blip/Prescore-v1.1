@@ -4,6 +4,24 @@ import { cachedProfile } from './checko-profile.ts';
 import { acquireChecko, providerError } from './checko-provider.ts';
 import { DAY } from './records.ts';
 
+export function validInn(value: string) {
+  if (!/^\d{10}$|^\d{12}$/.test(value)) return false;
+  const digits = value.split("").map(Number);
+  const checksum = (weights: number[]) => weights.reduce((sum, weight, index) => sum + weight * digits[index], 0) % 11 % 10;
+  if (digits.length === 10) return checksum([2, 4, 10, 3, 5, 9, 4, 6, 8]) === digits[9];
+  return checksum([7, 2, 4, 10, 3, 5, 9, 4, 6, 8]) === digits[10]
+    && checksum([3, 7, 2, 4, 10, 3, 5, 9, 4, 6, 8]) === digits[11];
+}
+
+export function checkoKey(env:Record<string,unknown>) {
+  if (env.PRESCORE_RUNTIME_MODE==='release-candidate' && env.PRESCORE_CHECKO_ENABLED!=='1') return '';
+  return typeof env.CHECKO_API_KEY==='string'?env.CHECKO_API_KEY.trim():'';
+}
+
+export type CheckoState={status:'READY'|'PARTIAL'|'STALE'|'NOT_CONFIGURED'|'NOT_REQUESTED'|'RETRY_LATER'|'FAILED';fetchedAt:string|null};
+export function checkoState(result:Result):CheckoState {
+  return {status:result.status==='READY' && result.profile?.failedMethods?.length?'PARTIAL':result.status,fetchedAt:result.profile?.fetchedAt??null};
+}
 type Row = { payload: string; updated_at: string; fetched_at: string };
 type Result = {
   profile?: CompanyProfileData;
