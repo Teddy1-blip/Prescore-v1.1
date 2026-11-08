@@ -165,7 +165,7 @@ def expected_runtime_inputs(repo, source):
                 console.log(JSON.stringify({scope, sha256, fileCount, lockSha256}));
             """
             result = subprocess.run(['node', '--input-type=module', '-e', script], cwd=clean,
-                                    env={'PATH': os.environ['PATH']}, capture_output=True,
+                                    env=dict(os.environ), capture_output=True,
                                     text=True, check=True, timeout=180)
             inputs = json.loads(result.stdout)
             require(re.fullmatch('[0-9a-f]{64}', inputs['sha256']) and inputs['fileCount'] > 0,
@@ -259,12 +259,17 @@ def main():
     validate_destination(env)
     workspace = Path.cwd().resolve()
     with tempfile.TemporaryDirectory(prefix='prescore-askpass-') as tmp:
-        helper = Path(tmp) / 'askpass.py'
-        helper.write_text('#!/usr/bin/env python3\nimport os,sys\np=sys.argv[1].lower()\n'
-                          'if "username" in p: print(os.environ["AMVERA_USERNAME"])\n'
-                          'elif "password" in p: print(os.environ["AMVERA_PASSWORD"])\n'
-                          'else: sys.exit(1)\n')
-        helper.chmod(0o700)
+        helper_script = Path(tmp) / 'askpass.py'
+        helper_script.write_text('#!/usr/bin/env python3\nimport os,sys\np=sys.argv[1].lower()\n'
+                                 'if "username" in p: print(os.environ["AMVERA_USERNAME"])\n'
+                                 'elif "password" in p: print(os.environ["AMVERA_PASSWORD"])\n'
+                                 'else: sys.exit(1)\n')
+        if os.name == 'nt':
+            helper = Path(tmp) / 'askpass.cmd'
+            helper.write_text(f'@echo off\r\n"{sys.executable}" "{helper_script}" %*\r\n')
+        else:
+            helper = helper_script
+            helper.chmod(0o700)
         env.update(GIT_ASKPASS=str(helper), GIT_TERMINAL_PROMPT='0', GIT_CONFIG_NOSYSTEM='1',
                    GIT_CONFIG_GLOBAL=os.devnull)
         observed = remote_master(workspace, env)
