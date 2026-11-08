@@ -359,3 +359,5 @@
  .pc-ask span { display:inline; }
  .pc-topbar .pc-new { margin-left:0; }
 }
+.pc-compare-select{display:flex;align-items:center;flex-wrap:wrap;gap:8px 16px;margin-bottom:16px}
+.pc-compare-select select{max-width:100%;padding:8px;border:1px solid var(--pc-line);border-radius:8px;color:var(--pc-ink);background:#fff}

@@ -64,6 +64,20 @@ try{
  checks.push('saved financing purpose and explicit zero-rate scenario survive reload');
  await page.goto(origin+'/dashboard?analysisId='+seed.id);await page.getByRole('heading',{name:'Финансовая картина',exact:true}).waitFor();
 
+ // Issue another revision and compare against an older saved result through the customer surface.
+ const revisionRequest=await page.request.post(origin+'/api/workspace',{data:{type:'financing-request',analysisId:seed.id,
+   financingRequest:{purpose:'WORKING_CAPITAL',product:'CREDIT_LINE',amount:510000,termMonths:12,annualRatePercent:0}}});
+ assert.equal(revisionRequest.status(),200);
+ await page.request.get(origin+'/api/workspace-model?analysisId='+seed.id);
+ await page.goto(origin+'/dashboard?analysisId='+seed.id+'&view=analysis&section=history');
+ const comparison=page.getByLabel('Сравнить текущий выпуск с');
+ await comparison.waitFor();
+ const options=await comparison.locator('option').evaluateAll(nodes=>nodes.map(node=>node.value));
+ assert.ok(options.length>=2);
+ await comparison.selectOption(options.at(-1));
+ await page.getByText(/Показаны изменения между двумя сохранёнными выпусками|Между выбранными выпусками/).waitFor();
+ assert.ok(await page.getByRole('link',{name:'Печать / PDF',exact:true}).count()>=3);
+ checks.push('compare current dossier with an older issued revision; frozen PDF link per issue');
  await page.goto(origin+'/dashboard?analysisId='+seed.id+'&view=analysis&section=factors');await page.getByRole('heading',{name:'Кредитный профиль',exact:true}).waitFor();
  await page.getByRole('button',{name:'Почему?',exact:true}).first().click();await page.getByRole('dialog',{name:'Основания вывода'}).waitFor();await page.keyboard.press('Escape');assert.equal(await page.locator('dialog[open]').count(),0);checks.push('evidence modal keyboard');
  await page.goto(origin+'/dashboard?analysisId='+seed.id+'&view=home');await page.getByRole('heading',{name:'Финансовая картина',exact:true}).waitFor();

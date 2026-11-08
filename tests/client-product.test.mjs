@@ -47,7 +47,7 @@ test('client source contains no credit formulas or retired analytics',()=>{for(c
 test('bank-first overview retains known zero and groups unknown credit outputs without changing the model',async()=>{
  const rt=await createWorkspaceRuntime();try{
  const {ExecutiveOverview}=rt.load('app/components/workspace/client-insights.tsx');
- const {model,canonical}=conclusionFixture();
+ const {model}=conclusionFixture();
  model.full.canonical.prescoreIndex.value=null;
  model.full.canonical.financingReadiness.level='UNKNOWN';
  model.full.canonical.debtCapacity.headlineCapacity.monthlyIncrementalDebtServiceCapacity.prudential=null;
@@ -65,7 +65,7 @@ test('bank-first overview retains known zero and groups unknown credit outputs w
 
 test('public explanations replace implementation wording and print deduplicates without mutating the report',async()=>{
  const rt=await createWorkspaceRuntime();try{
- const {model,canonical}=conclusionFixture(),{publicText:clientText}=rt.load('lib/credit-engine/client-report/copy.ts');
+ const {model}=conclusionFixture(),{publicText:clientText}=rt.load('lib/credit-engine/client-report/copy.ts');
  for(const text of ['Используется исходная причина ограничения.','Контекст требует дополнительной проверки и не является положительным фактором.']){
   const publicText=clientText(text);assert.notEqual(publicText,text);assert.match(publicText,/проверьте/i);
  }
@@ -91,7 +91,7 @@ test('CLIENT product recovery keeps history out of the visible cabinet and prote
 test('the dashboard keeps the incomplete FULL decision visible and limits cash drilldown to covered FULL values',async()=>{
  const rt=await createWorkspaceRuntime();
  try {
-  const {model,canonical}=conclusionFixture();
+  const {model}=conclusionFixture();
   const {ClientOverview}=rt.load('app/components/workspace/client-launch-overview.tsx');
   const {CashTrend}=rt.load('app/components/workspace/client-insights.tsx');
   model.full.report.hero.route='INSUFFICIENT_DATA';

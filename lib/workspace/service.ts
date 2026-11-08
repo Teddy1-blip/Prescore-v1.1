@@ -149,7 +149,7 @@ export async function loadWorkspaceModelV1(analysisId: string, dependencies: Wor
     if (dependencies.recordDecision && workspace.full) {
       try {
         await dependencies.recordDecision({canonical, report, access, banking:projectPrintBanking(workspace)});
-        workspace.full.revisionAvailable = true;
+        workspace.full.revisionAvailable = Boolean(access.row.ownerEmail && report.meta.snapshot);
       } catch { console.error("decision_revision_unavailable", {analysisId, snapshotId: report.meta.snapshot?.snapshotId ?? null}); }
     }
     return workspace;

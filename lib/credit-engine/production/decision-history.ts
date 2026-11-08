@@ -136,6 +136,20 @@ export function compareDecisionHistoryDigests(before:DecisionHistoryDigestV1,aft
   return {version:DECISION_HISTORY_VERSION,fromSnapshotId:before.snapshotId,toSnapshotId:after.snapshotId,changes,counts};
 }
 
+type ChangeLabels=Partial<Record<DecisionChangeArea,Record<string,string>>>;
+function changeLabels(canonical:CanonicalCreditAnalysisV1, report:ClientReportModelV1):ChangeLabels {
+  const risk:Record<string,string>={};
+  for(const f of canonical.riskAssessment.findings){
+    const claim=canonical.explainability.claims.find(c=>c.claimCode===f.code&&c.riskFindingIds.includes(f.findingId));
+    if(claim)risk[[f.code,f.subjectKey??"",f.portfolioObligationId??""].join("|")]=claim.titleRu;
+  }
+  return {
+    RISK:risk,
+    PRODUCTS:Object.fromEntries([...report.productFit.primary,...report.productFit.other].map(p=>[p.family,p.title])),
+    ACTIONS:Object.fromEntries(canonical.actionPlan.items.map(a=>[a.continuityKey,a.titleRu])),
+  };
+}
+
 export async function persistDecisionRevision(db:DecisionRevisionDatabase,input:{canonical:CanonicalCreditAnalysisV1;report:ClientReportModelV1;access:ReportAccess;banking?:PrintBankingV1|null}) {
   const snapshot=decisionSnapshot(input.canonical);
   if(input.report.meta.snapshot && input.report.meta.snapshot.snapshotId!==snapshot.snapshotId) throw new Error("DECISION_SNAPSHOT_MISMATCH");
@@ -147,7 +161,7 @@ export async function persistDecisionRevision(db:DecisionRevisionDatabase,input:
   const result=await db.prepare(`INSERT INTO analysis_decision_revisions
     (snapshot_id,analysis_id,owner_email,company_inn,as_of_date,input_fingerprint,engine_version,report_version,public_model,decision_digest)
     VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT (snapshot_id) DO NOTHING`)
-    .bind(snapshot.snapshotId,input.canonical.analysisId,owner,input.canonical.creditAssessment.companyInn,snapshot.asOfDate,snapshot.inputFingerprint,snapshot.engineVersion,snapshot.reportVersion,JSON.stringify(report),JSON.stringify({...digest,printBanking:input.banking??null})).run() as {meta?:{changes?:number};changes?:number};
+    .bind(snapshot.snapshotId,input.canonical.analysisId,owner,input.canonical.creditAssessment.companyInn,snapshot.asOfDate,snapshot.inputFingerprint,snapshot.engineVersion,snapshot.reportVersion,JSON.stringify(report),JSON.stringify({...digest,printBanking:input.banking??null,changeLabels:changeLabels(input.canonical,report)})).run() as {meta?:{changes?:number};changes?:number};
   return (result.meta?.changes??result.changes??0)>0;
 }
 
@@ -166,8 +180,8 @@ export async function readDecisionRevision(db:DecisionRevisionDatabase,analysisI
     .first<{publicModel:string;decisionDigest:string}>();
   if(!row)return null;
   try{
-    const {printBanking,...digest}=JSON.parse(row.decisionDigest) as DecisionHistoryDigestV1 & {printBanking?:PrintBankingV1|null};
-    return {model:JSON.parse(row.publicModel) as ClientReportModelV1,digest,banking:printBanking??null};
+    const {printBanking,changeLabels:labels,...digest}=JSON.parse(row.decisionDigest) as DecisionHistoryDigestV1 & {printBanking?:PrintBankingV1|null;changeLabels?:ChangeLabels};
+    return {model:JSON.parse(row.publicModel) as ClientReportModelV1,digest,banking:printBanking??null,labels};
   }
   catch{return null;}
 }
@@ -175,5 +189,9 @@ export async function readDecisionRevision(db:DecisionRevisionDatabase,analysisI
 export async function compareDecisionRevisions(db:DecisionRevisionDatabase,analysisId:string,fromSnapshotId:string,toSnapshotId:string) {
   const [before,after]=await Promise.all([readDecisionRevision(db,analysisId,fromSnapshotId),readDecisionRevision(db,analysisId,toSnapshotId)]);
   if(!before||!after)return null;
-  return compareDecisionHistoryDigests(before.digest,after.digest);
+  const diff=compareDecisionHistoryDigests(before.digest,after.digest);
+  return {...diff,changes:diff.changes.map(change=>{
+    const title=after.labels?.[change.area]?.[change.entityId]??before.labels?.[change.area]?.[change.entityId];
+    return title?{...change,title}:change;
+  })};
 }

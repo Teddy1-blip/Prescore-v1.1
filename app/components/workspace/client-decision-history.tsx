@@ -4,9 +4,9 @@ import {Panel} from "./panel";
 import {date} from "./presentation";
 
 type Revision={snapshotId:string;analysisId:string;asOfDate:string;createdAt:string;inputFingerprint:string;engineVersion:string;reportVersion:string;indexValue?:number|null;readinessLevel?:string|null};
-type Change={area:string;entityId:string;kind:"ADDED"|"REMOVED"|"CHANGED";before:unknown;after:unknown};
+type Change={area:string;entityId:string;kind:"ADDED"|"REMOVED"|"CHANGED";before:unknown;after:unknown;title?:string};
 type Diff={fromSnapshotId:string;toSnapshotId:string;changes:Change[];counts:Record<string,number>};
-type HistoryState={loading:boolean;error:string|null;revisions:Revision[];diff:Diff|null};
+type HistoryState={loading:boolean;error:string|null;revisions:Revision[];diff:Diff|null;diffError?:boolean};
 
 const areaLabel:Record<string,string>={
  SOURCES:"Источники",INDEX:"Prescore Index",READINESS:"Готовность",RISK:"Риски",
@@ -25,13 +25,14 @@ function describe(change:Change){
  if(change.area==="PORTFOLIO" && change.entityId==="portfolio-summary")return `Подтверждённый долг: ${rub(record(before.fundedDebt).value)} → ${rub(record(after.fundedDebt).value)}.`;
  if(change.area==="PORTFOLIO")return `Изменилось обязательство${value.creditor?" · "+value.creditor:""}. Остаток: ${rub(value.principal)}.`;
  const verb=change.kind==="ADDED"?"Добавлено":change.kind==="REMOVED"?"Снято":"Изменено";
- if(change.area==="RISK")return verb+" в составе факторов риска.";
- if(change.area==="PRODUCTS")return verb+" в подборе продуктов финансирования.";
- if(change.area==="ACTIONS")return verb+" в плане действий.";
+ if(change.area==="RISK")return verb+" в составе факторов риска"+(change.title?" · "+change.title:"")+".";
+ if(change.area==="PRODUCTS")return verb+" в подборе продуктов"+(change.title?" · "+change.title:"")+".";
+ if(change.area==="ACTIONS")return verb+" в плане действий"+(change.title?" · "+change.title:"")+".";
  return "Обновился состав использованных источников.";
 }
 
 export function DecisionHistory({analysisId,currentSnapshotId,compact=false,openHistory}:{analysisId:string;currentSnapshotId?:string;compact?:boolean;openHistory?:()=>void}){
+ const [compareFrom,setCompareFrom]=useState('');
  const [state,setState]=useState<HistoryState>({loading:true,error:null,revisions:[],diff:null});
  useEffect(()=>{
   const controller=new AbortController();
@@ -43,20 +44,21 @@ export function DecisionHistory({analysisId,currentSnapshotId,compact=false,open
     const revisions=Array.isArray(body.revisions)?body.revisions:[];
     let diff:Diff|null=null;
     const currentIndex=currentSnapshotId?revisions.findIndex(r=>r.snapshotId===currentSnapshotId):-1;
-    const previous=currentIndex>=0?revisions[currentIndex+1]:undefined;
+    const older=currentIndex<0?[]:revisions.slice(currentIndex+1);
+    const previous=older.find(item=>item.snapshotId===compareFrom)??older[0];
+    let diffError=false;
     if(currentSnapshotId&&previous){
      const diffResponse=await fetch("/api/workspace-model?analysisId="+encodeURIComponent(analysisId)+"&projection=decision-diff&from="+encodeURIComponent(previous.snapshotId)+"&to="+encodeURIComponent(currentSnapshotId),{cache:"no-store",signal:controller.signal});
-     if(!diffResponse.ok)throw new Error("DIFF_UNAVAILABLE");
-     diff=await diffResponse.json() as Diff;
+     if(diffResponse.ok)diff=await diffResponse.json() as Diff;else diffError=true;
     }
-    setState({loading:false,error:null,revisions,diff});
+    setState({loading:false,error:null,revisions,diff,diffError});
    }catch(error){
     if((error as {name?:string})?.name==="AbortError")return;
     setState({loading:false,error:"История версий временно недоступна.",revisions:[],diff:null});
    }
   })();
   return()=>controller.abort();
- },[analysisId,currentSnapshotId]);
+ },[analysisId,currentSnapshotId,compareFrom]);
 
  if(compact){
   if(state.loading||state.error||!state.diff)return null;
@@ -69,12 +71,17 @@ export function DecisionHistory({analysisId,currentSnapshotId,compact=false,open
  if(state.loading)return <Panel title="История версий"><p>Загружаем сохранённые выпуски…</p></Panel>;
  if(state.error)return <Panel title="История версий"><p>{state.error}</p><p className="pc-muted">Текущий кредитный анализ остаётся доступен.</p></Panel>;
  const diff=state.diff;
+ const position=state.revisions.findIndex(r=>r.snapshotId===currentSnapshotId);
+ const older=position<0?[]:state.revisions.slice(position+1);
  return <>
   <Panel title="Что изменилось">
-   {!currentSnapshotId?<p>У текущего отчёта нет идентификатора сохранённого выпуска.</p>
-    :diff?.changes.length?<><p>Показаны изменения между текущим выпуском и непосредственно предыдущим. Это сравнение сохранённых результатов, а не новый расчёт.</p>
+   {older.length>1&&<label className="pc-compare-select">Сравнить текущий выпуск с<select value={compareFrom||older[0].snapshotId} onChange={e=>{setState(s=>({...s,diff:null,diffError:false}));setCompareFrom(e.target.value);}}>{older.map((r,i)=><option key={r.snapshotId} value={r.snapshotId}>{date(r.createdAt)} · выпуск {older.length-i}{r.indexValue!=null?' · '+r.indexValue+' / 1000':''}</option>)}</select></label>}
+   {state.diffError?<p>Сравнение временно недоступно. Сохранённые выпуски можно открыть ниже.</p>
+    :!currentSnapshotId?<p>У текущего отчёта нет идентификатора сохранённого выпуска.</p>
+    :diff?.changes.length?<><p>Показаны изменения между двумя сохранёнными выпусками. Это сравнение сохранённых результатов, а не новый расчёт.</p>
       <ul>{diff.changes.map((change,index)=><li key={change.area+change.entityId+index}><b>{areaLabel[change.area]??change.area}.</b> {describe(change)}</li>)}</ul></>
-    :state.revisions.length>1?<p>Между выбранными выпусками значимых изменений в сохранённых результатах не обнаружено.</p>
+    :older.length&&!diff?<p>Сравниваем выпуски…</p>
+    :diff?<p>Между выбранными выпусками значимых изменений в сохранённых результатах не обнаружено.</p>
     :<p>Это первый сохранённый выпуск. Сравнение появится после следующего изменения данных или версии расчёта.</p>}
   </Panel>
   <Panel title="Сохранённые выпуски">
