@@ -12,6 +12,7 @@ import {BankingSnapshot} from './banking-ledger';
 import {ExplanationLibrary} from './explanation-library';
 import {publicText} from '../../../lib/credit-engine/client-report/copy';
 import {indexGapGuidance,capacityGapGuidance,obligationScheduleGuidance} from '../../../lib/workspace/credit-coverage-guidance';
+import {DecisionHistory} from './client-decision-history';
 
 export function FinancingProducts({model,embedded=false,showHeading=true}:{model:WorkspaceModelV1;embedded?:boolean;showHeading?:boolean}){
  const r=model.full?.report;
@@ -77,12 +78,12 @@ function CapacityEvidenceGaps({model}:{model:WorkspaceModelV1}){
 export function FullCreditAnalysis({model,retry,initialSection='conclusion'}:{model:WorkspaceModelV1;retry:()=>void;initialSection?:string}){
  const [tab,setTab]=useState(()=>{
   const value=typeof window==='undefined'?initialSection:new URLSearchParams(window.location.search).get('section')||initialSection;
-  return ['conclusion','factors','capacity','financials','obligations','financing','reconciliation','plan','evidence'].includes(value)?value:'conclusion';
+  return ['conclusion','factors','capacity','financials','obligations','financing','reconciliation','plan','evidence','history'].includes(value)?value:'conclusion';
  });
  const r=model.full?.report;
  if(!r)return <FullAccessNotice model={model} retry={retry}/>;
  const snapshot=r.meta.snapshot;
- const tabs=[['conclusion','Заключение'],['factors','Оценка и риски'],['capacity','Долговая ёмкость'],['financials','Финансовое состояние'],['obligations','Обязательства'],['financing','Финансирование'],['reconciliation','Сопоставление данных'],['plan','План действий'],['evidence','Источники']];
+ const tabs=[['conclusion','Заключение'],['factors','Оценка и риски'],['capacity','Долговая ёмкость'],['financials','Финансовое состояние'],['obligations','Обязательства'],['financing','Финансирование'],['reconciliation','Сопоставление данных'],['plan','План действий'],['evidence','Источники'],['history','История']];
  const all=[...r.primaryFactors,...r.contextHighlights,...r.readiness.constraints,...r.detailedSections.flatMap(s=>s.factors)];
  const topConstraint=r.readiness.constraints[0]??r.limitations[0]??r.dataQuality[0];
  const expertise=r.expertise;
@@ -123,6 +124,7 @@ export function FullCreditAnalysis({model,retry,initialSection='conclusion'}:{mo
    <Panel title="Ограничения достоверности"><FactorRows model={model} items={[...r.dataQuality,...r.limitations]}/></Panel>
    <ExplanationLibrary model={model}/>
   </>}
+  {tab==='history'&&<DecisionHistory analysisId={model.analysisId} currentSnapshotId={snapshot?.snapshotId}/>}
   {tab!=='plan'&&<button className="pc-text-button" onClick={()=>select('plan')} id="plan">Перейти к плану действий →</button>}
  </>;
 }

@@ -9,18 +9,30 @@ import {getRuntime} from '../../../lib/platform/runtime';
 import {requireApiUser, readableAnalysis} from '../../api/api-auth';
 import {resolveAnalysisTier, type EntitlementDatabase} from '../../../lib/entitlements';
 import {loadWorkspaceModelV1,readWorkspaceOperations} from '../../../lib/workspace/service.ts';
-import {persistDecisionRevision,type DecisionRevisionDatabase} from '../../../lib/credit-engine/production/decision-history.ts';
+import {persistDecisionRevision,readDecisionRevision,type DecisionRevisionDatabase} from '../../../lib/credit-engine/production/decision-history.ts';
 import './report-v2.css';
 import './analysis-v3.css';
 export const dynamic = 'force-dynamic';
-export default async function ReportPage({searchParams}: {searchParams: Promise<{analysisId?: string; sample?: string; print?: string; lab?: string}>}) {
+export default async function ReportPage({searchParams}: {searchParams: Promise<{analysisId?: string; snapshotId?: string; sample?: string; print?: string; lab?: string}>}) {
  const query = await searchParams;
  // A supplied real analysis ID can never fall through into fixture loading.
  if (query.analysisId) {
   const user = await requireApiUser();
   if (!user) redirect('/login?returnTo=' + encodeURIComponent('/dashboard/report-v2?analysisId=' + encodeURIComponent(query.analysisId)));
-  if (query.print !== '1') redirect('/dashboard?analysisId=' + encodeURIComponent(query.analysisId) + '&view=analysis');
   const db = getRuntime().DB as unknown as EntitlementDatabase & Parameters<typeof readWorkspaceOperations>[0];
+  if(query.snapshotId){
+   if(!/^sha256:[0-9a-f]{64}$/.test(query.snapshotId))notFound();
+   const access=await readableAnalysis(db,query.analysisId,user);
+   if(!access)notFound();
+   const tier=await resolveAnalysisTier(db,{analysisId:query.analysisId,userEmail:access.row.ownerEmail??'',companyInn:access.row.companyInn,privileged:user.isAdmin||access.access==='agent',readOnly:true});
+   if(tier!=='FULL')return <main className="cr-report cr-state"><h1>Исторический выпуск</h1><p>История решений доступна в полном анализе.</p><Link href={'/checkout?analysisId='+encodeURIComponent(query.analysisId)}>Открыть FULL</Link></main>;
+   const revision=await readDecisionRevision(db as unknown as DecisionRevisionDatabase,query.analysisId,query.snapshotId);
+   if(!revision)notFound();
+   return query.print==='1'
+    ? <PrintReport model={revision.model} realAnalysisId={query.analysisId}/>
+    : <AnalysisV3 model={revision.model} realAnalysisId={query.analysisId} historicalSnapshotId={query.snapshotId}/>;
+  }
+  if (query.print !== '1') redirect('/dashboard?analysisId=' + encodeURIComponent(query.analysisId) + '&view=analysis');
   const result = await loadWorkspaceModelV1(query.analysisId, {
    readAccess: id => readableAnalysis(db, id, user),
    readTier: (id, access) => resolveAnalysisTier(db, {analysisId:id,userEmail:access.row.ownerEmail ?? '',companyInn:access.row.companyInn,privileged:user.isAdmin || access.access === 'agent',readOnly: true}),
