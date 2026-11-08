@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import {decisionSnapshot} from '../lib/credit-engine/production/snapshot.ts';
 import {analyzeBankStatements, analysisForStorage} from '../lib/prescore.ts';
 import {statementFixture} from './fixtures/block1-statements.mjs';
 import {bank as fullBank, scenario} from './fixtures/debt-capacity/builders.mjs';
@@ -47,3 +48,31 @@ test('saved identity cannot cross clients',async()=>{assert.equal((await loadCan
 test('read-only entitlement resolves existing paid access without writes',async()=>{let writes=0;const db={prepare:sql=>({bind(){return this},run:async()=>{writes++;throw Error('write forbidden')},first:async()=>sql.includes('SELECT tier')?{tier:'FULL'}:null})};assert.equal(await resolveAnalysisTier(db,{analysisId:'test',userEmail:'fixture@example.test',companyInn:inn,readOnly:true}),'FULL');assert.equal(writes,0);});
 test('real route has access/entitlement boundary and fixture branch is explicit',()=>{const s=fs.readFileSync('app/dashboard/report-v2/page.tsx','utf8');assert.ok(s.includes('requireApiUser()'));assert.ok(s.includes('readableAnalysis(db, id, user)'));assert.ok(s.includes('readOnly: true'));assert.ok(s.indexOf('if (query.analysisId)')<s.indexOf('if (query.sample)'));assert.ok(!/UPDATE |INSERT |CREATE |ALTER /.test(s));});
 test('public model redacts policy constants without changing numeric results',async()=>{const r=await loadCanonicalReport('wiring-test',deps(owned()));assert.equal(r.status,'READY');assert.equal(r.model.meta.mode,'SAVED_ANALYSIS');assert.doesNotMatch(JSON.stringify(r.model),/20_PERCENT|25_PERCENT|обслуживания 20%|обслуживания 25%/);});
+
+test('a snapshot identifies a calculation across reads, independently of object-key order', async () => {
+  const input = dataset();
+  const first = buildCanonicalCreditAnalysis(input);
+  const ref = decisionSnapshot(first);
+  assert.match(ref.snapshotId, /^sha256:[0-9a-f]{64}$/);
+  assert.equal(ref.analysisId, first.analysisId);
+  assert.equal(ref.asOfDate, first.asOfDate);
+  assert.equal(ref.inputFingerprint, first.inputFingerprint);
+  assert.equal(ref.policies.capacity.policyFingerprint, first.debtCapacity.policyFingerprint);
+  assert.equal(ref.sourceVersions.riskRegistry, first.riskAssessment.ruleRegistryVersion);
+  const reordered = Object.fromEntries(Object.entries(first).reverse());
+  assert.deepEqual(decisionSnapshot(reordered), ref);
+  const access = {...owned(), row: {payload: JSON.stringify(input.analysis), companyInn: inn}};
+  const read = await loadCanonicalReport(first.analysisId, deps(access));
+  assert.equal(read.status, 'READY');
+  assert.deepEqual(read.model.meta.snapshot, ref);
+  const withCredit = buildCanonicalCreditAnalysis(dataset({credit:true}));
+  assert.equal(withCredit.analysisId, first.analysisId);
+  assert.notEqual(decisionSnapshot(withCredit).snapshotId, ref.snapshotId);
+  const policyChange = structuredClone(first);
+  policyChange.debtCapacity.policyFingerprint += '-experimental';
+  assert.notEqual(decisionSnapshot(policyChange).snapshotId, ref.snapshotId);
+  assert.deepEqual(decisionSnapshot(first), ref);
+  for (const dependency of [deps(null), deps(owned(), 'FREE')]) {
+    assert.equal('snapshot' in await loadCanonicalReport(first.analysisId, dependency), false);
+  }
+});

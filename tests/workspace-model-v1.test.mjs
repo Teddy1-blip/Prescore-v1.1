@@ -1,3 +1,4 @@
+import { decisionSnapshot } from "../lib/credit-engine/production/snapshot.ts";
 import * as brokerAuthorization from '../lib/auth/broker-authorizations.ts';
 import * as checkoProfile from "../lib/external/checko-profile.ts";
 import * as releaseSecurity from '../lib/release/security.ts';
@@ -156,6 +157,7 @@ for (const ownerFull of [false, true]) test(ownerFull
       }
       assert.deepEqual(model.full.canonical.recommendations, canonical.recommendationSet);
       assert.deepEqual(model.full.report, expectedReport);
+      assert.deepEqual(model.full.report.meta.snapshot, decisionSnapshot(canonical));
       assert.ok(model.full.report.analysisV3);
       assert.ok(model.full.report.expertise);
       assert.deepEqual(model.full.canonical.expertise, expectedReport.expertise);
@@ -203,6 +205,7 @@ for (const ownerFull of [false, true]) test(ownerFull
     assert.equal(adminResponse.status, 200);
     const admin = await adminResponse.json();
     assert.equal(admin.access.role, "ADMIN");
+    assertCanonical(admin);
     assert.equal(admin.access.readOnly, false);
     current = { email: "workspace-owner@test.invalid", isAdmin: false };
     assert.equal((await (await getModel()).json()).state, ownerFull ? "READY_FULL" : "READY_BASIC");

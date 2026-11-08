@@ -33,6 +33,21 @@ test('unknown and global stop do not render fabricated curves',()=>{for(const n 
 test('confirmed zero is rendered numerically, not UNKNOWN',()=>{const m=get('013').model;const factors=[...m.primaryFactors,...m.contextHighlights,...m.detailedSections.flatMap(s=>s.factors)];const zero=factors.flatMap(f=>f.metrics).find(v=>v.bindingCode==='BKI_HISTORY_DAYS');assert.ok(zero);assert.equal(zero.value,0);assert.ok(render(m).includes('0 дней'));});
 test('013 separates historic DAYS from current RUB',()=>{const h=render(get('013').model);assert.ok(h.includes('Исторический максимум просрочки, дней'));assert.ok(h.includes('Текущая просроченная сумма'));assert.ok(h.includes('0 дней'));assert.ok(/1[\s\u00a0\u202f]000/.test(h));});
 test('022 retains subtotal, conflict and independent portfolio without full turnover',()=>{const h=render(get('022').model);assert.ok(h.includes('Бесспорная часть операционных поступлений — не полный итог'));assert.ok(/11[\s\u00a0\u202f]800[\s\u00a0\u202f]000/.test(h));assert.ok(h.includes('Действующие обязательства'));assert.equal(get('022').model.capacity.headline.value,null);});
+test('print carries the authorized decision version, including legacy and BASIC projections', () => {
+ const {result, model} = get('001');
+ const markup = report => renderToStaticMarkup(createElement(PrintReport, {model: report}));
+ const id = model.meta.snapshot.snapshotId;
+ assert.ok(markup(model).includes(id));
+ const legacy = structuredClone(model);
+ delete legacy.meta.snapshot;
+ assert.doesNotMatch(markup(legacy), /Версия расчёта/);
+ const basic = buildClientReportModel(result, {entitlement: 'FREE'});
+ basic.meta.snapshot = model.meta.snapshot;
+ const redacted = publicCanonicalModel(basic, result);
+ assert.equal(redacted.meta.snapshot, undefined);
+ assert.ok(!markup(redacted).includes(id));
+});
+
 test('missing scenario inputs never default rate/term',()=>{const r=buildCanonicalCreditAnalysis({...loadBusiness('CL-RU-BUS-001').input,scenarios:undefined});const h=render(publicCanonicalModel(r.model,r));assert.ok(h.includes('Для сравнения сумм нужны параметры сценария'));assert.ok(!h.includes('20% годовых'));});
 test('basis is copied independently without combining recurring and near-term',()=>{const {result:r,model:m}=get('001');for(let i=0;i<2;i++){const v=[r.debtCapacity.recurringView,r.debtCapacity.nearTerm30dView][i],p=m.analysisV3.financing.views[i];assert.equal(p.current.value,v.existingDebtServiceAnchor.value);assert.equal(p.headroom,v.incrementalHeadroom.prudential);assert.equal(p.cautious,v.prudentialTotalMonthlyDebtService);assert.equal(p.upper,v.maximumPolicyMonthlyDebtService);}assert.ok(renderToStaticMarkup(createElement(Financing,{model:m})).includes('aria-pressed="true"'));});
 test('PARTIAL / estimated / conflicted provenance is not relabelled confirmed',()=>{const r=structuredClone(get('001').result),v=r.creditPortfolio.obligations[0].currentPosition.principalOutstanding;Object.assign(v,{knowledge:'PARTIAL',origin:'ESTIMATED',verification:'CONFLICTED'});const p=analysisV3Presentation(r,r.model);assert.equal(p.portfolio[0].principal.knowledge,'PARTIAL');const h=render({...r.model,analysisV3:p});assert.ok(h.includes('Неполные данные · Оценка · Конфликт источников'));});

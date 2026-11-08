@@ -19,5 +19,5 @@ export function PrintReport({model,realAnalysisId,banking}:{model:ClientReportMo
  const full=model.meta.entitlement==='FULL';
  const presentation=printPresentation(model);
  if(full&&banking)presentation.sources=presentation.sources.map(s=>({...s,period:banking.sourcePeriods[s.id]?.join('; ')??s.period}));
- return <><ClientReportShell model={presentation} realAnalysisId={realAnalysisId} print/>{full&&banking&&<BankingAppendix banking={banking}/>}<SourceAppendix model={model}/><div className="ex-print"><ExpertiseMemo model={model} print/></div></>;
+ return <><ClientReportShell model={presentation} realAnalysisId={realAnalysisId} print/>{full&&banking&&<BankingAppendix banking={banking}/>}<SourceAppendix model={model}/><div className="ex-print"><ExpertiseMemo model={model} print/></div>{full && model.meta.snapshot && <footer>Версия расчёта <code style={{overflowWrap:"anywhere"}}>{model.meta.snapshot.snapshotId}</code></footer>}</>;
 }

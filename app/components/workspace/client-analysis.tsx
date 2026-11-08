@@ -81,6 +81,7 @@ export function FullCreditAnalysis({model,retry,initialSection='conclusion'}:{mo
  });
  const r=model.full?.report;
  if(!r)return <FullAccessNotice model={model} retry={retry}/>;
+ const snapshot=r.meta.snapshot;
  const tabs=[['conclusion','Заключение'],['factors','Оценка и риски'],['capacity','Долговая ёмкость'],['financials','Финансовое состояние'],['obligations','Обязательства'],['financing','Финансирование'],['reconciliation','Сопоставление данных'],['plan','План действий'],['evidence','Источники']];
  const all=[...r.primaryFactors,...r.contextHighlights,...r.readiness.constraints,...r.detailedSections.flatMap(s=>s.factors)];
  const topConstraint=r.readiness.constraints[0]??r.limitations[0]??r.dataQuality[0];
@@ -90,7 +91,7 @@ export function FullCreditAnalysis({model,retry,initialSection='conclusion'}:{mo
  const memoIds=new Set(expertise?.memoIds??[]);
  function select(next:string){setTab(next);const url=new URL(window.location.href);url.searchParams.set('section',next);window.history.replaceState(null,'',url);}
  return <>
-  <div className="pc-page-title"><div><h1>Анализ Prescore</h1><p>Кредитное заключение на {date(r.meta.asOfDate)}</p></div><a className="pc-secondary" href={'/dashboard/report-v2?analysisId='+encodeURIComponent(model.analysisId)+'&print=1'} target="_blank" rel="noreferrer">Печать / PDF</a></div>
+  <div className="pc-page-title"><div><h1>Анализ Prescore</h1><p>Кредитное заключение на {date(r.meta.asOfDate)}</p>{snapshot && <details><summary>Версия расчёта</summary><code style={{overflowWrap:"anywhere"}}>{snapshot.snapshotId}</code></details>}</div><a className="pc-secondary" href={'/dashboard/report-v2?analysisId='+encodeURIComponent(model.analysisId)+'&print=1'} target="_blank" rel="noreferrer">Печать / PDF</a></div>
   <nav className="pc-tabs" aria-label="Разделы анализа">{tabs.map(([id,title])=><button key={id} aria-current={tab===id?'page':undefined} onClick={()=>select(id)}>{title}</button>)}</nav>
 
   {tab==='conclusion'&&<>

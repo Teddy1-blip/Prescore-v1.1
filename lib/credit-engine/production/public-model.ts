@@ -1,3 +1,4 @@
+import {decisionSnapshot} from './snapshot.ts';
 import {buildExpertise} from '../expertise/model.ts';
 import {analysisV3Presentation} from '../client-report/analysis-v3.ts';
 import {publicFinancialAnalysis,publicReconciliation} from '../client-report/source-detail.ts';
@@ -25,5 +26,9 @@ export function publicCanonicalModel(model: ClientReportModelV1, result?: Canoni
   if(result && copy.meta.entitlement === 'FULL') {copy.financialAnalysis=publicFinancialAnalysis(result);copy.reconciliation=publicReconciliation(result);}
   if (result && copy.meta.entitlement === 'FULL') copy.expertise = buildExpertise(result, copy);
   if (copy.meta.entitlement === 'FREE') delete copy.analysisV3;
+  delete copy.meta.snapshot;
+  if (result && copy.meta.entitlement === 'FULL' && copy.meta.mode === 'SAVED_ANALYSIS') {
+    copy.meta.snapshot = decisionSnapshot(result);
+  }
   return copy;
 }

@@ -34,7 +34,7 @@ export type ClientReportModelV1={
  expertise?:PrescoreExpertiseV1;
  analysisV3?:AnalysisV3Presentation;
  visual:ClientReportVisualV1;
- meta:{version:string;policyVersion:string;policyFingerprint:string;methodology:string;mode:'INTERNAL_PREVIEW'|'SAVED_ANALYSIS';entitlement:'FREE'|'FULL';asOfDate:string};
+ meta:{snapshot?:import("./decision-snapshot.ts").DecisionSnapshotV1;version:string;policyVersion:string;policyFingerprint:string;methodology:string;mode:'INTERNAL_PREVIEW'|'SAVED_ANALYSIS';entitlement:'FREE'|'FULL';asOfDate:string};
  company:{name:string;inn:string};
  hero:{route?:import('../client-report/route.ts').DecisionRouteCode;headline:string;summary:string;confidence:string;status:string;globalStop:boolean;cta:{label:string;target:string}};
  index:{value:PresentationMetricV1|null;status:string;confidence:string;components:{id:string;label:string;score:PresentationMetricV1;maximum:PresentationMetricV1}[]};
