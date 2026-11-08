@@ -1,6 +1,7 @@
 import importlib.util
 import contextlib
 import io
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -111,6 +112,72 @@ class DeliveryTests(unittest.TestCase):
                 self.assertEqual(git(bare, 'rev-parse', delivered + '^{tree}'),
                                  git(source_repo, 'rev-parse', source_sha + '^{tree}'))
 
+
+class LiveRuntimeTests(unittest.TestCase):
+    state = {'source': '1'*40, 'commit': '2'*40, 'tree': '3'*40}
+    inputs = {'scope': 'PRESCORE-SOURCE-INPUTS-1', 'sha256': '4'*64, 'fileCount': 775, 'lockSha256': '5'*64}
+
+    def health(self):
+        return {'alive': True, 'version': {'sourceSha': 'UNKNOWN', 'sourceTree': 'UNKNOWN', 'buildProvenance': {
+            'status': 'PACKAGED_INPUT_FINGERPRINT', 'scope': self.inputs['scope'],
+            'sourceFingerprint': self.inputs['sha256'], 'lockSha256': self.inputs['lockSha256'],
+            'fileCount': self.inputs['fileCount']}}}
+
+    def test_gitless_runtime_requires_all_packaged_input_evidence(self):
+        health = self.health()
+        self.assertTrue(deploy.runtime_matches(health, self.state, self.inputs))
+        for field in ['sourceFingerprint', 'scope', 'lockSha256', 'fileCount', 'status']:
+            bad = self.health()
+            bad['version']['buildProvenance'][field] = 'wrong'
+            self.assertFalse(deploy.runtime_matches(bad, self.state, self.inputs), field)
+        for field in ['sourceSha', 'sourceTree']:
+            bad = self.health()
+            bad['version'][field] = '9' * 40
+            self.assertFalse(deploy.runtime_matches(bad, self.state, self.inputs), field)
+
+    def test_verifier_waits_for_matching_runtime_and_ready_without_pushing(self):
+        previous = self.health()
+        previous['version']['buildProvenance']['sourceFingerprint'] = '0' * 64
+        responses = [previous, self.health(), {'ready': False}, self.health(), {'code': 'READY', 'ready': True}]
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            (directory / 'state.json').write_text(json.dumps(self.state))
+            with patch.object(deploy, 'fresh_source', return_value=self.state['source']), \
+                 patch.object(deploy, 'expected_runtime_inputs', return_value=self.inputs), \
+                 patch.object(deploy, 'run_git', return_value=self.state['tree']) as git, \
+                 patch.object(deploy, 'remote_master', return_value=self.state['commit']), \
+                 patch.object(deploy, 'live_response', side_effect=responses) as read, \
+                 patch.object(deploy.time, 'sleep'):
+                with self.assertRaisesRegex(deploy.DeliveryError, 'master no longer matches'):
+                    deploy.verify_live(directory, directory, {}, '9'*40)
+                deploy.verify_live(directory, directory, {}, self.state['commit'])
+                self.assertEqual([call.args[0] for call in read.call_args_list], ['health','health','ready','health','ready'])
+                self.assertTrue(all(call.args[0][0] == 'rev-parse' for call in git.call_args_list))
+
+    def test_expected_fingerprint_comes_from_committed_inputs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            env = dict(os.environ, GIT_AUTHOR_NAME='Test', GIT_AUTHOR_EMAIL='test@example.invalid',
+                       GIT_COMMITTER_NAME='Test', GIT_COMMITTER_EMAIL='test@example.invalid')
+            deploy.run_git(['init'], repo)
+            (repo / 'app').mkdir()
+            (repo / 'app' / 'entry').write_text('accepted')
+            (repo / 'scripts' / 'release').mkdir(parents=True)
+            bundled = Path(__file__).resolve().parents[2] / 'scripts/release/build-provenance.mjs'
+            (repo / 'scripts/release/build-provenance.mjs').write_bytes(bundled.read_bytes())
+            for name in ['Dockerfile','package.json','package-lock.json']:
+                (repo / name).write_text('{}')
+            deploy.run_git(['add','.'], repo)
+            deploy.run_git(['commit','-m','fixture'], repo, env)
+            source = deploy.run_git(['rev-parse','HEAD'], repo)
+            proof = deploy.expected_runtime_inputs(repo,source)
+            (repo / 'app' / 'entry').write_text('dirty')
+            (repo / 'app' / 'generated').write_text('extra')
+            self.assertEqual(deploy.expected_runtime_inputs(repo,source), proof)
+            deploy.run_git(['add','.'],repo)
+            deploy.run_git(['commit','-m','next'],repo,env)
+            self.assertNotEqual(deploy.expected_runtime_inputs(repo,deploy.run_git(['rev-parse','HEAD'],repo))['sha256'],
+                                proof['sha256'])
 
 if __name__ == '__main__':
     unittest.main()
