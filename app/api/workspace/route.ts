@@ -1,3 +1,4 @@
+import {updateActiveAnalysis} from "../../../lib/workspace/analysis-write.ts";
 import {authorizeBroker,listAuthorizations,assignedBroker,brokerApplicationSQL} from '../../../lib/auth/broker-authorizations';
 import {safeErrorText} from '../../../lib/release/security';
 import {parseFinancingRequest} from "../../../lib/workspace/financing-request";
@@ -231,7 +232,9 @@ export async function POST(request: Request) {
         updated = { ...analysis, quarterlyReport: body.quarterlyReport };
       } else return Response.json({ error: "Не передан структурированный результат" }, { status: 400 });
       const stored = analysisForStorage(updated);
-      await db.prepare("UPDATE analyses SET payload = ? WHERE id = ? AND owner_email = ?").bind(JSON.stringify(stored), body.analysisId, row.ownerEmail).run();
+      if (!await updateActiveAnalysis(db, body.analysisId, row.ownerEmail, row.payload, JSON.stringify(stored))) {
+        return Response.json({error: "Анализ изменился. Обновите страницу и повторите сохранение."}, {status: 409});
+      }
       const controls = await readControlState(db);
       const tier = await resolveAnalysisTier(db, { analysisId: stored.id, userEmail: row.ownerEmail || user.email, companyInn: stored.companyInn, privileged: user.isAdmin });
       return Response.json({ analysis: analysisView(applyAnalysisControls(stored, controls), tier) });
@@ -244,7 +247,9 @@ export async function POST(request: Request) {
       const sourceId='client-request-'+analysis.id;
       const source={sourceId,sourceType:'OTHER' as const,status:'READY' as const,companyInn:analysis.companyInn,sourceName:'Заявленные параметры финансирования',receivedAt:financingRequest.receivedAt,confidence:null,warnings:['CLIENT_DECLARED_NOT_INDEPENDENT_PROOF']};
       const stored=analysisForStorage({...analysis,financingRequestV1:financingRequest,sourceManifest:{...analysis.sourceManifest,external:[...(analysis.sourceManifest?.external??[]).filter(s=>s.sourceId!==sourceId),source]}});
-      await db.prepare("UPDATE analyses SET payload = ? WHERE id = ? AND owner_email = ?").bind(JSON.stringify(stored),analysis.id,row.ownerEmail).run();
+      if (!await updateActiveAnalysis(db, analysis.id, row.ownerEmail, row.payload, JSON.stringify(stored))) {
+        return Response.json({error: "Анализ изменился. Обновите страницу и повторите сохранение параметров финансирования."}, {status: 409});
+      }
       return Response.json({saved:true,financingRequest});
     }
     if (body.type === "deal" && body.deal) {

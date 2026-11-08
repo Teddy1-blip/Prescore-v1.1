@@ -1,3 +1,4 @@
+import {updateActiveAnalysis} from "../../../lib/workspace/analysis-write.ts";
 import {getRuntime} from '../../../lib/platform/runtime';
 import {analysisForStorage, type AnalysisResult} from '../../../lib/prescore';
 import {LEGAL_REGISTRY_VERSION, activeLegalReceipt, legalRegistryView} from '../../../lib/legal-registry';
@@ -41,9 +42,8 @@ export async function POST(request: Request) {
           periodFrom:receipt.informationDate!,periodTo:receipt.informationDate!,confidence:100,parserVersion:LEGAL_REGISTRY_VERSION,
           rawReference:`sha256:${receipt.contentHash}`,warnings:['SIGNATURE_NOT_CRYPTOGRAPHICALLY_VERIFIED','LIFECYCLE_ONLY_NOT_ALL_LEGAL_RISKS']}]:[])
       ]:external}};
-    const write = await db.prepare("UPDATE analyses SET payload = ? WHERE id = ? AND owner_email = ? AND archive_state = 'ACTIVE' AND payload = ?")
-      .bind(JSON.stringify(analysisForStorage(updated)),analysisId,user.email,row.payload).run();
-    if (write.meta?.changes !== 1) throw new LegalIntakeError('ANALYSIS_CHANGED_RETRY',409);
+    const saved = await updateActiveAnalysis(db, analysisId, row.ownerEmail, row.payload, JSON.stringify(analysisForStorage(updated)));
+    if (!saved) throw new LegalIntakeError('ANALYSIS_CHANGED_RETRY',409);
     return Response.json({saved:true,legalRegistry:legalRegistryView(updated),originalFileStored:false});
   } catch (error) {
     return Response.json({error:error instanceof LegalIntakeError ? error.code : 'LEGAL_INTAKE_FAILED'}, {status:error instanceof LegalIntakeError ? error.status : 500});

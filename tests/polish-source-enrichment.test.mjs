@@ -102,3 +102,54 @@ test('fresh source changes reset AI context and print consumes the same current 
  }
  }finally{await rt.close();}
 });
+
+function beforeNextAnalysisWrite(rt, action) {
+  const execute = rt.db.execute.bind(rt.db);
+  rt.db.execute = async (statement, connection) => {
+    if (/^UPDATE analyses SET payload/i.test(statement.sql)) {
+      rt.db.execute = execute;
+      await action();
+    }
+    return execute(statement, connection);
+  };
+}
+
+for (const first of ['document', 'financing request']) {
+  test('concurrent evidence preserves the ' + first + ' and permits retry', async () => {
+    const rt = await createWorkspaceRuntime();
+    try {
+      const analysis = await create(rt);
+      const doc = () => upload(rt, analysis, 'BFO', financialFile(analysis.companyInn));
+      const request = () => rt.request('/api/workspace', {
+        method: 'POST', headers: {'content-type': 'application/json'},
+        body: JSON.stringify({type: 'financing-request', analysisId: analysis.id,
+          financingRequest: {purpose: 'WORKING_CAPITAL', product: 'TERM_LOAN', amount: 750000}}),
+      });
+      const firstWrite = first === 'document' ? doc : request;
+      const secondWrite = first === 'document' ? request : doc;
+      beforeNextAnalysisWrite(rt, async () => assert.equal((await firstWrite()).status, 200));
+      assert.equal((await secondWrite()).status, 409);
+      const preserved = await saved(rt, analysis);
+      if (first === 'document') assert.equal(preserved.sourceManifest.bfo.status, 'READY');
+      else assert.equal(preserved.financingRequestV1.amount, 750000);
+      assert.equal((await secondWrite()).status, 200);
+      const final = await saved(rt, analysis);
+      assert.equal(final.financingRequestV1.amount, 750000);
+      assert.equal(final.sourceManifest.bfo.status, 'READY');
+    } finally { await rt.close(); }
+  });
+}
+
+test('archiving during source processing preserves the archived payload', async () => {
+  const rt = await createWorkspaceRuntime();
+  try {
+    const analysis = await create(rt);
+    const before = await saved(rt, analysis);
+    beforeNextAnalysisWrite(rt, async () => {
+      await rt.db.prepare("UPDATE analyses SET archive_state='LEGACY_PREPRODUCTION' WHERE id=?").bind(analysis.id).run();
+    });
+    const result = await upload(rt, analysis, 'BFO', financialFile(analysis.companyInn));
+    assert.equal(result.status, 409);
+    assert.deepEqual(await saved(rt, analysis), before);
+  } finally { await rt.close(); }
+});

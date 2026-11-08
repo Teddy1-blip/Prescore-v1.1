@@ -1,3 +1,4 @@
+import {updateActiveAnalysis} from "../../../lib/workspace/analysis-write.ts";
 import {validateZipBudget} from '../../../lib/release/archive-limits';
 import {safeErrorText} from '../../../lib/release/security';
 import {getRuntime} from "../../../lib/platform/runtime";
@@ -197,9 +198,8 @@ export async function POST(request: Request) {
     const riskAsOf = [updated.periodTo, updated.creditHistory?.reportDate ?? "", updated.financialAnalysisV2?.latestInterim?.snapshot.period.asOf ?? ""].filter(date => /^\d{4}-\d{2}-\d{2}$/.test(date)).sort().at(-1) ?? "";
     updated = { ...updated, ...buildRiskShadow({ analysis: updated, asOfDate: riskAsOf }) };
     const stored = analysisForStorage(updated);
-    const write = await db.prepare("UPDATE analyses SET payload = ? WHERE id = ? AND owner_email = ? AND payload = ?")
-      .bind(JSON.stringify(stored), analysisId, row.ownerEmail, row.payload).run() as { meta?: { changes?: number } };
-    if (write.meta?.changes !== 1) return Response.json({error: "Анализ обновлён в другой вкладке. Повторите загрузку: предыдущие источники сохранены."}, {status: 409});
+    const saved = await updateActiveAnalysis(db, analysisId, row.ownerEmail, row.payload, JSON.stringify(stored));
+    if (!saved) return Response.json({error: "Анализ обновлён в другой вкладке. Повторите загрузку: предыдущие источники сохранены."}, {status: 409});
     const controls = await readControlState(db as unknown as Parameters<typeof readControlState>[0]);
     const tier = await resolveAnalysisTier(db, { analysisId, userEmail: row.ownerEmail || user.email, companyInn: stored.companyInn, privileged: user.isAdmin });
     return Response.json({
