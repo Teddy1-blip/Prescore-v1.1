@@ -114,10 +114,10 @@ test('a public referral is not a broker account; only its verified email can exp
 
 test('CLIENT /agent renders explicit connection instead of redirecting to dashboard; connected AGENT keeps children',async()=>{
  let user={email:'client@prescore.test',roles:['CLIENT']},returnTo='/agent?view=clients';const connection=()=>null;
- const layout=load('app/agent/layout.tsx',{'next/headers':{headers:async()=>new Headers({'x-prescore-return-to':returnTo})},'../chatgpt-auth':{requireChatGPTUser:async target=>{assert.equal(target,'/agent');return user;}},'../../lib/auth/contracts':await import('../lib/auth/contracts.ts'),'./connect':{AgentConnection:connection},'react/jsx-runtime':await import('react/jsx-runtime')});
+ const layout=load('app/agent/layout.tsx',{'next/headers':{headers:async()=>new Headers({'x-prescore-return-to':returnTo})},'../chatgpt-auth':{requireChatGPTUser:async target=>{assert.equal(target,'/agent');return user;}},'../../lib/auth/contracts':await import('../lib/auth/contracts.ts'),'./connect':{AgentConnection:connection},'./_components/shell':{AgentShell:()=>null},'react/jsx-runtime':await import('react/jsx-runtime')});
  const page=await layout.default({children:'private cabinet'});assert.equal(page.type,connection);assert.equal(page.props.returnTo,returnTo);assert.equal(page.props.email,user.email);
- for(const roles of [['CLIENT','AGENT'],['CLIENT','ADMIN']]){user={...user,roles};assert.equal(await layout.default({children:'private cabinet'}),'private cabinet');}
- const rt=await createWorkspaceRuntime();try{const {AgentConnection}=rt.load('app/agent/connect.tsx');const html=renderToStaticMarkup(React.createElement(AgentConnection,{email:'client@prescore.test'}));assert.match(html,/Подключить кабинет брокера/);assert.match(html,/name="consent"/);assert.match(html,/name="offerAccepted"/);assert.doesNotMatch(html,/type="password"/);}finally{await rt.close();}
+ for(const roles of [['CLIENT','AGENT'],['CLIENT','ADMIN']]){user={...user,roles};assert.equal((await layout.default({children:'private cabinet'})).props.children,'private cabinet');}
+ const rt=await createWorkspaceRuntime();try{const {AgentConnection}=rt.load('app/agent/connect.tsx');const html=renderToStaticMarkup(React.createElement(AgentConnection,{email:'client@prescore.test'}));assert.match(html,/Подключить кабинет агента/);assert.match(html,/name="consent"/);assert.match(html,/name="offerAccepted"/);assert.doesNotMatch(html,/type="password"/);}finally{await rt.close();}
  assert.match(fs.readFileSync('app/agent-ref/[code]/page.tsx','utf8'),/\/agent\?invitation=/);
 });
 

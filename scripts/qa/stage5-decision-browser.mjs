@@ -66,7 +66,7 @@ try{
   const b=await model(first.id);
   assert.deepEqual(b.access,{...b.access,role:'ASSIGNED_BROKER',readOnly:true});assert.deepEqual(b.full,a.full);
   await page.goto(origin+'/agent?view=dossier&dossierView=home&analysisId='+first.id);
-  await page.locator('[data-client-route="READY_FOR_FINANCING"]').waitFor();
+  await page.getByRole('heading',{name:b.full.report.hero.headline,exact:true}).waitFor();
   assert.equal(await page.getByRole('button',{name:'Создать заявку на финансирование'}).count(),0);
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   assert.deepEqual(errors,[]);assert.deepEqual(external,[]);

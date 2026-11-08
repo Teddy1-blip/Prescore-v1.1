@@ -14,7 +14,7 @@ const sources=[
  {key:'EXTERNAL_SOURCE',types:['CHECKO','EIS','LEGAL_SOURCE'],benefit:'Регистрационные сведения, правовые ограничения и контракты, когда доступны.',action:'Получите открытые сведения компании; проверьте дату каждого источника.'}
 ] as const;
 
-export function DocumentSources({model,saved,externalEnabled=true}:{externalEnabled?:boolean;model:WorkspaceModelV1;saved?:()=>Promise<void>}){
+export function DocumentSources({model,saved,externalEnabled=true,readOnly=false}:{readOnly?:boolean;externalEnabled?:boolean;model:WorkspaceModelV1;saved?:()=>Promise<void>}){
  const observations=model.full?.report.analysisV3?.observations??[];
  const entries=sources.map(source=>({...source,rows:model.basic.sources.availability.filter(row=>row.source===source.key),
   observed:observations.filter(o=>source.types.some(t=>t===o.type))}));
@@ -28,11 +28,11 @@ export function DocumentSources({model,saved,externalEnabled=true}:{externalEnab
   </section>)}
   {!connected.length&&<p>Начните с банковской выписки, чтобы увидеть движение денег.</p>}
  </Panel>
- {model.access.role!=='ASSIGNED_BROKER'&&entries.some(s=>targets[s.key]&&!connected.includes(s))&&<Panel title="Что можно добавить"><div className="pc-source-choices">
+ {!readOnly&&model.access.role!=='ASSIGNED_BROKER'&&entries.some(s=>targets[s.key]&&!connected.includes(s))&&<Panel title="Что можно добавить"><div className="pc-source-choices">
   {entries.filter(s=>targets[s.key]&&!connected.includes(s)).map(s=><a key={s.key} href={'#'+targets[s.key]}><strong>{sourceLabel(s.key)}</strong><span>{s.benefit}</span><b>К загрузке →</b></a>)}</div></Panel>}
  <Panel title="Файлы досье"><p>Счётчики относятся к дополнительным файлам досье. Обработанные выписки, БФО и БКИ перечислены в источниках.</p>
   <dl className="pc-definition">{model.basic.operations.documents.count!=null&&<div><dt>Файлы компании</dt><dd>{model.basic.operations.documents.count}</dd></div>}
    {model.basic.operations.documents.analysisCount!=null&&<div><dt>В этом анализе</dt><dd>{model.basic.operations.documents.analysisCount}</dd></div>}</dl>
   {model.basic.financingRequest&&<p className="pc-muted">Запрос на финансирование сохранён {date(model.basic.financingRequest.receivedAt)}.</p>}
- </Panel>{externalEnabled&&<ExternalSourceCards key={model.analysisId+model.entitlement} model={model} saved={saved}/>}<LegalRegistrySource key={model.basic.analysis.id} model={model} saved={saved}/></>;
+ </Panel>{externalEnabled&&<ExternalSourceCards key={model.analysisId+model.entitlement} model={model} saved={saved} readOnly={readOnly}/>}<LegalRegistrySource key={model.basic.analysis.id} model={model} saved={saved}/></>;
 }

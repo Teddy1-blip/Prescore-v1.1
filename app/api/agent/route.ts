@@ -1,11 +1,14 @@
-import {brokerApplicationSQL,dossierAuthorizationSQL} from '../../../lib/auth/broker-authorizations';
+import {clientStatuses,applicationStatuses,closedStatuses} from '../../../lib/agent/workflow';
+import {clientSelect,applicationSelect} from '../../../lib/agent/scoped-sql';
+import {agentWorkspaceProjection} from '../../../lib/agent/workspace-query';
+import {brokerApplicationSQL} from '../../../lib/auth/broker-authorizations';
 import {boundedPage} from '../../../lib/release/pagination';
 import {safeErrorText} from '../../../lib/release/security';
 import {createHash} from "node:crypto";
 import {getRuntime} from "../../../lib/platform/runtime";
 import { averagePartnerCommissionRate, partnerCommissions } from "../../../lib/partner-commissions";
 import { bankControlKey, productControlKey, readControlState } from "../../../lib/admin-controls";
-import { matchGuaranteePolicies } from "../../../lib/bank-guarantees";
+import { guaranteePolicies,matchGuaranteePolicies } from "../../../lib/bank-guarantees";
 import { requireApiUser, unauthorized, readableAnalysis } from "../api-auth";
 
 type PreparedStatement = {
@@ -175,23 +178,24 @@ export async function GET(request: Request) {
     await ensureSchema(db);
     const controls = await readControlState(db);
     const account = await accountFor(db, user);
-    if (!account) return Response.json({ error: "Сначала подключите свой брокерский профиль в /agent" }, { status: 409 });
+    if (!account) return Response.json({ error: "Сначала подключите агентский профиль в /agent" }, { status: 409 });
     const prospectsModule = await db.prepare("SELECT enabled FROM module_settings WHERE module_key = 'prospects' LIMIT 1").first<{ enabled: number }>();
     const requestedCode = normalizeCode(new URL(request.url).searchParams.get("code"));
     const code = requestedCode && requestedCode === account.agentCode ? requestedCode : account.agentCode;
+    const params = new URL(request.url).searchParams;
+    if (params.has('surface')) {
+      const offerOptions = partnerCommissions.filter(item =>
+        !controls.disabled.has(bankControlKey(item.bank)) && !controls.disabled.has(productControlKey(item.product))
+      ).map(({id,bank,product,kind})=>({id,bank,product,kind}));
+      const info = {agent:{code,name:account.name,referralPath:`/ref/${encodeURIComponent(code)}`},
+        modules:{prospects:prospectsModule == null || Boolean(prospectsModule.enabled)},offerOptions,
+        guaranteePolicies:params.get('surface')==='partners' && !controls.disabled.has(productControlKey('Банковская гарантия'))
+          ? guaranteePolicies.filter(p=>p.providerConfirmed&&!controls.disabled.has(bankControlKey(p.provider))) : undefined};
+      return await agentWorkspaceProjection(db,user.email,code,params,paging,info);
+    }
     const [leadResult, applicationResult, partnerResult] = await db.batch([
-      db.prepare(`SELECT l.id, l.company_name AS companyName, l.company_inn AS companyInn,
-        l.contact_name AS contactName, l.phone, l.email, l.source, l.status,
-        l.subscription_status AS subscriptionStatus, l.consent_at AS consentAt,
-        l.created_at AS createdAt, l.updated_at AS updatedAt,
-        (SELECT COUNT(*) FROM payment_orders po JOIN analyses paid_analysis ON paid_analysis.id=po.analysis_id WHERE po.company_inn=l.company_inn AND po.status='Оплачен' AND ${dossierAuthorizationSQL('paid_analysis','actor.email')}) AS paidFullOrders,
-        (SELECT a.id FROM analyses a WHERE a.company_inn = l.company_inn AND a.archive_state='ACTIVE' AND (a.owner_email=actor.email OR ${dossierAuthorizationSQL('a','actor.email')}) ORDER BY a.created_at DESC LIMIT 1) AS analysisId
-        FROM agent_leads l CROSS JOIN (SELECT ?::text AS email) actor WHERE (NOT EXISTS (SELECT 1 FROM analyses ax WHERE ax.company_inn=l.company_inn AND ${dossierAuthorizationSQL('ax','actor.email')}) OR EXISTS (SELECT 1 FROM analyses ax WHERE ax.company_inn=l.company_inn AND ${dossierAuthorizationSQL('ax','actor.email')} AND ax.archive_state='ACTIVE') OR NOT EXISTS (SELECT 1 FROM analyses ax JOIN analysis_archive_batches ab ON ab.id=ax.archive_batch_id WHERE ax.company_inn=l.company_inn AND ${dossierAuthorizationSQL('ax','actor.email')} AND ax.archive_state<>'ACTIVE' AND l.created_at::timestamp AT TIME ZONE 'UTC' < ab.cutover_at)) AND l.agent_code = ? ORDER BY l.updated_at DESC,l.id DESC LIMIT ? OFFSET ?`).bind(user.email,code,paging.limit,paging.offset),
-      db.prepare(`SELECT id, lead_id AS leadId, analysis_id AS analysisId, company_name AS companyName,
-        bank, product, requested_amount AS requestedAmount, calculated_limit AS calculatedLimit,
-        COALESCE((SELECT d.status FROM deals d WHERE d.id = agent_applications.id), status) AS status, next_action AS nextAction,
-        created_at AS createdAt, updated_at AS updatedAt
-        FROM agent_applications CROSS JOIN (SELECT ?::text AS email) actor WHERE ${brokerApplicationSQL('agent_applications','actor.email')} AND agent_code = ? ORDER BY updated_at DESC,id DESC LIMIT ? OFFSET ?`).bind(user.email,code,paging.limit,paging.offset),
+      db.prepare(clientSelect+' ORDER BY l.updated_at DESC,l.id DESC LIMIT ? OFFSET ?').bind(user.email,code,paging.limit,paging.offset),
+      db.prepare(applicationSelect+' ORDER BY updated_at DESC,id DESC LIMIT ? OFFSET ?').bind(user.email,code,paging.limit,paging.offset),
       db.prepare(`SELECT p.agent_code AS agentCode, p.name, p.agency, p.city, p.status, p.created_at AS createdAt,
         COUNT(l.id) AS clientsCount,
         (SELECT COUNT(*) FROM billing_orders po WHERE po.broker_code=p.agent_code AND po.curator_code=p.curator_code AND po.status='PAID') AS activeSubscriptions
@@ -242,7 +246,7 @@ export async function POST(request: Request) {
     if (user && !user.roles.includes("AGENT") && !user.isAdmin) return Response.json({error:"Нет доступа к кабинету агента"},{status:403});
     await ensureSchema(db);
     const account = user ? await accountFor(db, user) : null;
-    if (user && !account) return Response.json({ error: "Сначала подключите свой брокерский профиль в /agent" }, { status: 409 });
+    if (user && !account) return Response.json({ error: "Сначала подключите агентский профиль в /agent" }, { status: 409 });
     const agentCode = account?.agentCode || normalizeCode(String(body.agentCode || ""));
     if (!agentCode) return Response.json({ error: "Некорректная реферальная ссылка" }, { status: 400 });
     if (publicReferral) {
@@ -334,7 +338,7 @@ export async function POST(request: Request) {
           nextAction, now, now,
         ), db.prepare(`INSERT OR IGNORE INTO deals (id, analysis_id, company_name, product, amount, status, owner, next_action, bank, application_group_id, consent_at, owner_email, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'Подготовка документов', 'Брокер', ?, ?, ?, ?, ?, ?, ?)`)
           .bind(id, analysisId, companyName, product, requestedAmount, nextAction, bank, id, lead?.consentAt || now, dealOwner, now, now),
-        db.prepare("INSERT OR IGNORE INTO application_status_history (id, application_id, from_status, to_status, actor_role, actor_email, public_comment, created_at) VALUES (?, ?, '', 'Подготовка документов', 'AGENT', ?, 'Брокер создал заявку', ?)").bind(id+"-created", id, user?.email || "", now),
+        db.prepare("INSERT OR IGNORE INTO application_status_history (id, application_id, from_status, to_status, actor_role, actor_email, public_comment, created_at) VALUES (?, ?, '', 'Подготовка документов', 'AGENT', ?, 'Агент создал заявку', ?)").bind(id+"-created", id, user?.email || "", now),
         db.prepare("INSERT OR IGNORE INTO audit_log (id, entity_type, entity_id, action, actor_role, actor_email, metadata, created_at) VALUES (?, 'APPLICATION', ?, 'CREATE', 'AGENT', ?, ?, ?)").bind(id+"-audit", id, user?.email || "", JSON.stringify({ bank, product, applicationType: guarantee ? "guarantee" : "credit", law: body.law, guaranteeType: body.guaranteeType, noticeNumber: body.noticeNumber, termDays: body.termDays }), now),
       ]);
       return Response.json({ id, ok: true }, { status: 201 });
@@ -353,20 +357,20 @@ export async function PATCH(request: Request) {
     const db = await getDatabase();
     await ensureSchema(db);
     const account = await accountFor(db, user);
-    if (!account) return Response.json({ error: "Сначала подключите свой брокерский профиль в /agent" }, { status: 409 });
+    if (!account) return Response.json({ error: "Сначала подключите агентский профиль в /agent" }, { status: 409 });
     const body = await request.json() as { id?: string; entity?: string; status?: string };
     if (!body.id || !body.status) return Response.json({ error: "Нужны id и статус" }, { status: 400 });
     if (body.entity === "lead") {
-      const allowedLead = ["Новый клиент", "Анализ готов", "Подготовка заявки"];
+      const allowedLead = clientStatuses;
       if (!allowedLead.includes(body.status)) return Response.json({ error: "Недопустимый этап клиента" }, { status: 400 });
       await db.prepare("UPDATE agent_leads SET status = ?, updated_at = ? WHERE id = ? AND agent_code = ?").bind(body.status, new Date().toISOString(), body.id, account.agentCode).run();
       return Response.json({ ok: true });
     }
-    const allowed = ["Подготовка заявки", "Подготовка документов", "Требуются документы", "На рассмотрении у финансового партнёра", "Предварительное решение", "Одобрена", "Выдана", "Отклонена", "Закрыта"];
+    const allowed = applicationStatuses;
     if (!allowed.includes(body.status)) return Response.json({ error: "Недопустимый статус заявки" }, { status: 400 });
     const current = await db.prepare(`SELECT COALESCE((SELECT d.status FROM deals d WHERE d.id = agent_applications.id), status) AS status FROM agent_applications CROSS JOIN (SELECT ?::text AS email) actor WHERE id = ? AND agent_code = ? AND ${brokerApplicationSQL('agent_applications','actor.email')} LIMIT 1`).bind(user.email, body.id, account.agentCode).first<{ status?: string }>();
     if (!current?.status) return Response.json({ error: "Заявка не найдена" }, { status: 404 });
-    const terminal = ["Выдана", "Отклонена", "Закрыта", "Отменена клиентом"];
+    const terminal = closedStatuses;
     if (terminal.includes(current.status) && current.status !== body.status) return Response.json({ error: "Завершённый статус нельзя изменить" }, { status: 409 });
     const clientStatus = body.status === "Подготовка заявки" ? "Подготовка документов" : body.status;
     const nextAction: Record<string, string> = {

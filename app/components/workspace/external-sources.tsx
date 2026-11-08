@@ -298,7 +298,7 @@ function Facts({ data }: { data: View }) {
     </>
   );
 }
-export function ExternalSourceCards({ model, saved }: { model: WorkspaceModelV1; saved?: () => Promise<void> }) {
+export function ExternalSourceCards({ model, saved, readOnly=false }: { readOnly?:boolean; model: WorkspaceModelV1; saved?: () => Promise<void> }) {
   const url =
     '/api/checko?analysisId=' +
     encodeURIComponent(model.analysisId) +
@@ -363,7 +363,7 @@ export function ExternalSourceCards({ model, saved }: { model: WorkspaceModelV1;
       {data?.legacyReceipts && (
         <p>Сохранён профиль прежней версии. Детальная проверка происхождения появится после обновления.</p>
       )}
-      {!model.access.readOnly && data?.providerConfigured && (
+      {!readOnly && !model.access.readOnly && data?.providerConfigured && (
         <button type="button" disabled={busy} onClick={refresh}>
           {busy ? 'Получаем сведения…' : 'Обновить сведения Checko'}
         </button>

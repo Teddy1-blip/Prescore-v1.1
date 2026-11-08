@@ -1,7 +1,7 @@
 "use client";
 import { useId, useState, type ReactNode } from "react";
 import type { WorkspaceFactV1, WorkspaceModelV1 } from "../../../lib/workspace/model";
-import type { AgentData } from "./broker-operations";
+import type { AgentData } from "../../../lib/agent/types";
 
 type Monthly = NonNullable<WorkspaceModelV1["basic"]["bankingFacts"]["monthly"]>;
 const number = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 1 });

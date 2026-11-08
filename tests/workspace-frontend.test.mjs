@@ -24,7 +24,7 @@ test('actual upload, saved selection/reload, BASIC/FULL render and assigned brok
  }finally{await rt.close();}
 });
 test('new analytical presentation has one API source and no legacy analytical fallback',()=>{
- for(const file of ['presentation.tsx','client.tsx','broker.tsx','use-model.ts']){const s=fs.readFileSync('app/components/workspace/'+file,'utf8');assert.doesNotMatch(s,/analysis\.(?:score|grade|readiness)|estimatedLimit|baseMonthlyPaymentCapacity|stressLimit|calculatedLimit|analysisView\(/);}
+ for(const file of ['presentation.tsx','client.tsx','use-model.ts']){const s=fs.readFileSync('app/components/workspace/'+file,'utf8');assert.doesNotMatch(s,/analysis\.(?:score|grade|readiness)|estimatedLimit|baseMonthlyPaymentCapacity|stressLimit|calculatedLimit|analysisView\(/);}
  assert.match(fs.readFileSync('app/components/workspace/use-model.ts','utf8'),/\/api\/workspace-model\?analysisId=/);
  for(const route of ['app/dashboard/workspace-v4','app/dashboard/workspace-new','app/dashboard/new'])assert.equal(fs.existsSync(route),false);
 });
@@ -58,13 +58,13 @@ test('BASIC conclusion keeps direct access to separate banking analysis',async()
 
 test('CLIENT and BROKER routes use the shared canonical presentation contract',()=>{
  const route=fs.readFileSync('app/agent/page.tsx','utf8');
- const agent=fs.readFileSync('app/components/workspace/broker.tsx','utf8');
- const shell=fs.readFileSync('app/components/workspace/client-shell.tsx','utf8');
+ const agent=fs.readFileSync('app/agent/_components/client-detail.tsx','utf8');
+ const shell=fs.readFileSync('app/agent/_components/shell.tsx','utf8');
  const presentation=fs.readFileSync('app/components/workspace/presentation.tsx','utf8');
  const legacy=/analysis\.(?:score|grade|readiness)|estimatedLimit|baseMonthlyPaymentCapacity|stressLimit|analysisView\(/;
- assert.match(route,/export \{ default \} from "\.\.\/components\/workspace\/broker"/);
- for(const title of ['Рабочий стол','Клиенты','Заявки','Воронка','Документы','Партнёрство'])assert.ok(shell.includes(title));
- for(const name of ['ExecutiveOverview','FullCreditAnalysis','DebtPortfolio','FinancingProducts','BankingLedger','FinancialStatements'])assert.ok(agent.includes(name));
+ assert.match(route,/return <AgentDesk\/>/);
+ for(const title of ['Рабочий стол','Клиенты','Заявки','Воронка','Документы','Агентская сеть'])assert.ok(shell.includes(title));
+ for(const name of ['CanonicalSnapshot','FullCreditAnalysis','RiskSections','FinancingProducts','BankingLedger','FinancialStatements'])assert.ok(agent.includes(name));
  assert.doesNotMatch(agent,/<Home\b|agent\/agent\.css/);
  assert.doesNotMatch(agent,legacy);
  assert.match(presentation,/function ClientRecoveryShell/);

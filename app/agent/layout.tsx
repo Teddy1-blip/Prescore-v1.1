@@ -1,6 +1,7 @@
 import {headers} from "next/headers";
 import {requireChatGPTUser} from "../chatgpt-auth";
 import {safeReturnPath} from "../../lib/auth/contracts";
+import {AgentShell} from './_components/shell';
 import {AgentConnection} from "./connect";
 
 export const dynamic = "force-dynamic";
@@ -13,5 +14,5 @@ export default async function AgentLayout({ children }: { children: React.ReactN
     const returnTo = url.pathname === "/agent" || url.pathname.startsWith("/agent/") ? requested : "/agent";
     return <AgentConnection email={user.email} returnTo={returnTo} invitation={url.pathname === "/agent" ? url.searchParams.get("invitation") || "" : ""}/>;
   }
-  return children;
+  return <AgentShell>{children}</AgentShell>;
 }

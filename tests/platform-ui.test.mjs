@@ -17,9 +17,14 @@ for(const [file,expected]of [
  ['app/consent/page.tsx','Согласие'],
  ['app/checkout/checkout-form.tsx','6'],
  ['app/dashboard/page.tsx','АНАЛИЗ'],
- ['app/agent/page.tsx','РАБОТА С КЛИЕНТАМИ'],
+
  ['app/admin/admin-dashboard.tsx','Загру'],
 ])test('portable UI static render '+file,()=>{const html=renderToStaticMarkup(React.createElement(load(file).default));assert.ok(html.replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').toLowerCase().includes(expected.toLowerCase()));assert.ok(html.includes('<main'));assert.doesNotMatch(html,/oai-authenticated|signin-with-chatgpt|RISK-CF-|PRESCORE-RISK-ENGINE/);});
+test('agent shell renders semantic navigation and a focusable main region',()=>{
+ const {AgentShell}=load('app/agent/_components/shell.tsx');
+ const html=renderToStaticMarkup(React.createElement(AgentShell,null,'Рабочий стол'));
+ assert.match(html,/РАБОТА С КЛИЕНТАМИ/);assert.match(html,/<main/);assert.match(html,/href="\/agent\/clients"/);
+});
 test('standalone sign-in has labelled fields and no demo credentials',()=>{const html=renderToStaticMarkup(React.createElement(load('app/login/credentials.tsx').Credentials,{returnTo:'/dashboard'}));assert.match(html,/type="email"/);assert.match(html,/type="password"/);assert.match(html,/autoComplete="current-password"/);assert.match(html,/<button[^>]*>Войти/);assert.doesNotMatch(html.match(/<input[^>]*type="password"[^>]*>/)[0],/value=/i);});
 test('shared responsive and reduced-motion contracts include all requested small widths',()=>{const css=fs.readFileSync('app/components/ui-v2/product-system.css','utf8');for(const width of [360,390,768,1024])assert.ok(css.includes('max-width:'+width+'px'));assert.ok(css.includes('focus-visible'));assert.ok(css.includes('prefers-reduced-motion'));assert.ok(css.includes('@media print'));assert.ok(css.includes('overflow:auto'));});
 
