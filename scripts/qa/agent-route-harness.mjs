@@ -4,10 +4,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 export function agentFixtureRoutes(root){
   const base=path.join(root,'app/agent');
-  const files=fs.readdirSync(base,{recursive:true}).filter(f=>/(^|\/)page\.tsx$/.test(f)).sort();
+  const files=fs.readdirSync(base,{recursive:true})
+    .map(file=>file.split(path.sep).join('/'))
+    .filter(file=>path.posix.basename(file)==='page.tsx').sort();
   const imports=["import {AgentShell} from './app/agent/_components/shell.tsx';"];
   const routes=files.map((file,i)=>{
-    const dir=path.dirname(file),route='/agent'+(dir==='.'?'':'/'+dir);
+    const dir=path.posix.dirname(file),route='/agent'+(dir==='.'?'':'/'+dir);
     imports.push("import Page"+i+" from './app/agent/"+file+"';");
     const layout=dir.includes('[')?dir.split('/').slice(0,2).join('/'):null;
     if(layout)imports.push("import Layout"+i+" from './app/agent/"+layout+"/layout.tsx';");
