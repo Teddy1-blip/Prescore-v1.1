@@ -43,7 +43,7 @@ export function numeric(value:number|string|null,status:string,unit:string){
 }
 
 function MetricTable({metrics}:{metrics:PublicFinancialMetric[]}){
- return <div className="pc-table-scroll" tabIndex={0} aria-label="Финансовые показатели"><table><thead><tr><th>Показатель</th><th>Значение</th><th>Качество и период</th></tr></thead><tbody>{metrics.map(m=><tr key={m.key}><th scope="row">{m.label}</th><td>{numeric(m.value,m.status,m.unit)}</td><td>{label(m.status)} · {label(m.confidence)} · {label(m.origin)}<small>{m.periodFrom||m.periodTo?date(m.periodFrom)+' — '+date(m.periodTo):date(m.asOf)}</small><Warnings items={m.warnings}/></td></tr>)}</tbody></table></div>;
+ return <div className="pc-table-scroll" tabIndex={0} aria-label="Финансовые показатели"><table><thead><tr><th>Показатель</th><th>Значение</th><th>Качество и период</th></tr></thead><tbody>{metrics.filter(m=>m.value!==null && (m.status==='KNOWN'||m.status==='PARTIAL')).map(m=><tr key={m.key}><th scope="row">{m.label}</th><td>{numeric(m.value,m.status,m.unit)}</td><td>{label(m.status)} · {label(m.confidence)} · {label(m.origin)}<small>{m.periodFrom||m.periodTo?date(m.periodFrom)+' — '+date(m.periodTo):date(m.asOf)}</small><Warnings items={m.warnings}/></td></tr>)}</tbody></table></div>;
 }
 
 // Reuses the retired conclusion's preview, keeping annual and interim periods separate.
@@ -66,7 +66,7 @@ export function FinancialStatements({model}:{model:WorkspaceModelV1}){
  return <>
   <Panel title="Финансовая отчётность">
    <p>Показатели основаны на бухгалтерской и квартальной отчётности. Денежный поток по выпискам не заменяет бухгалтерскую выручку.</p>
-   {!a?.history.length&&<div className="pc-empty-inline"><h3>Отчётность для финансового анализа не обработана</h3><p>Отсутствие показателей не означает нулевую выручку, прибыль или отсутствие активов.</p></div>}
+   {!a?.history.length&&<div className="pc-empty-inline"><p>Добавьте БФО в документах, чтобы увидеть выручку, прибыль и капитал по периодам.</p></div>}
   </Panel>
   {a&&<FinancialDynamics history={a.history}/>}
   {a?.history.map((p,index)=><section className="pc-panel pc-financial-period" key={p.id}>
@@ -104,18 +104,21 @@ export function ReconciliationDetails({model}:{model:WorkspaceModelV1}){
  const r=model.full?.report;
  if(!r)return <FullAccessNotice model={model}/>;
  const a=r.reconciliation;
+ const renderFinding=(f:NonNullable<typeof a>['findings'][number])=><article className={'pc-recon-card'+(f.requiresReview?' needs-review':'')} key={f.id}>
+   <header><div><span>{outcomes[f.outcome]??'Состояние сверки не определено'}</span><h2>{f.title}</h2></div><span className={'pc-badge'+(f.requiresReview?' attention':'')}>{f.requiresReview?'Проверить':'Без отдельной проверки'}</span></header>
+   <p>{f.requiresReview?'Есть расхождение или ограничение сопоставимости, которое стоит объяснить до подачи заявки.':'Сопоставление не выявило отдельного действия по этому факту.'}</p>
+   <p className="pc-muted">Сопоставимость: {({EXACT_PERIOD:'одинаковый период',EXACT_ASOF:'одинаковая дата',NEAR_ASOF:'близкие даты',FULL_MONTH_ALIGNED:'совмещены полные месяцы',PARTIAL:'частичная',NONE:'не подтверждена'})[f.comparability]??'не определена'} · достоверность: {label(f.confidence)}.</p>
+   <details><summary>Сравнить исходные показатели</summary><div className="pc-recon-sides">{[f.left,f.right].map((side,n)=><div key={n}>{side.map((v,i)=><div className="pc-recon-value" key={i}><h3>{sourceLabel(v.sourceType)} · {v.label}</h3><strong>{numeric(v.value,v.status,v.unit)}</strong><p>{date(v.period.from)} — {date(v.period.to)} · на {date(v.period.asOf)}</p><small>{label(v.status)} · {label(v.confidence)}</small><Warnings items={v.warnings}/></div>)}{!side.length&&<p>Сопоставляемый источник отсутствует.</p>}</div>)}</div><dl className="pc-definition"><div><dt>Абсолютная разница</dt><dd>{numeric(f.absoluteDifference,'KNOWN','')}</dd></div><div><dt>Относительное отклонение</dt><dd>{numeric(f.relativeDifference,'KNOWN','RATIO')}</dd></div><div><dt>Соотношение значений</dt><dd>{numeric(f.ratio,'KNOWN','RATIO')}</dd></div><div><dt>Разница дат</dt><dd>{numeric(f.temporalGapDays,'KNOWN','DAYS')}</dd></div></dl><Warnings items={[...f.reasons,...f.warnings]}/></details>
+  </article>;
  return <>
   <Panel title="Сопоставление источников">
    <p>Prescore сравнивает банковские данные, отчётность и кредитную историю там, где показатели и периоды действительно сопоставимы. Расхождение само по себе не является кредитным решением.</p>
    {a&&<div className="pc-statusline"><span className="pc-badge">Достоверность: {label(a.confidence)}</span><span className={'pc-badge'+(a.findings.some(f=>f.requiresReview)?' attention':'')}>{a.findings.filter(f=>f.requiresReview).length} требуют проверки</span></div>}
    {a&&<Warnings items={a.warnings}/>}
   </Panel>
-  {a?<div className="pc-reconciliation-list">{a.findings.map(f=><article className={'pc-recon-card'+(f.requiresReview?' needs-review':'')} key={f.id}>
-   <header><div><span>{outcomes[f.outcome]??'Состояние сверки не определено'}</span><h2>{f.title}</h2></div><span className={'pc-badge'+(f.requiresReview?' attention':'')}>{f.requiresReview?'Проверить':'Без отдельной проверки'}</span></header>
-   <p>{f.requiresReview?'Есть расхождение или ограничение сопоставимости, которое стоит объяснить до подачи заявки.':'Сопоставление не выявило отдельного действия по этому факту.'}</p>
-   <p className="pc-muted">Сопоставимость: {({EXACT_PERIOD:'одинаковый период',EXACT_ASOF:'одинаковая дата',NEAR_ASOF:'близкие даты',FULL_MONTH_ALIGNED:'совмещены полные месяцы',PARTIAL:'частичная',NONE:'не подтверждена'})[f.comparability]??'не определена'} · достоверность: {label(f.confidence)}.</p>
-   <details><summary>Сравнить исходные показатели</summary><div className="pc-recon-sides">{[f.left,f.right].map((side,n)=><div key={n}>{side.map((v,i)=><div className="pc-recon-value" key={i}><h3>{sourceLabel(v.sourceType)} · {v.label}</h3><strong>{numeric(v.value,v.status,v.unit)}</strong><p>{date(v.period.from)} — {date(v.period.to)} · на {date(v.period.asOf)}</p><small>{label(v.status)} · {label(v.confidence)}</small><Warnings items={v.warnings}/></div>)}{!side.length&&<p>Сопоставляемый источник отсутствует.</p>}</div>)}</div><dl className="pc-definition"><div><dt>Абсолютная разница</dt><dd>{numeric(f.absoluteDifference,'KNOWN','')}</dd></div><div><dt>Относительное отклонение</dt><dd>{numeric(f.relativeDifference,'KNOWN','RATIO')}</dd></div><div><dt>Соотношение значений</dt><dd>{numeric(f.ratio,'KNOWN','RATIO')}</dd></div><div><dt>Разница дат</dt><dd>{numeric(f.temporalGapDays,'KNOWN','DAYS')}</dd></div></dl><Warnings items={[...f.reasons,...f.warnings]}/></details>
-  </article>)}{!a.findings.length&&<Panel title="Сверка завершена"><p>Отдельные результаты сопоставления источников пока отсутствуют.</p></Panel>}</div>:<Panel title="Сверка недоступна"><p>Детальная сверка не опубликована для этого анализа.</p></Panel>}
+  {a?<div className="pc-reconciliation-list">{a.findings.filter(f=>f.requiresReview).map(renderFinding)}
+    {a.findings.some(f=>!f.requiresReview)&&<details className="pc-recon-other"><summary>Остальные сопоставления ({a.findings.filter(f=>!f.requiresReview).length})</summary>{a.findings.filter(f=>!f.requiresReview).map(renderFinding)}</details>}
+    {!a.findings.length&&<Panel title="Сверка завершена"><p>Отдельные результаты сопоставления источников пока отсутствуют.</p></Panel>}</div>:<Panel title="Сверка недоступна"><p>Детальная сверка не опубликована для этого анализа.</p></Panel>}
   <Panel title="Влияние на кредитную оценку">{r.detailedSections.filter(s=>/reconcil|сверк|источник/i.test(s.id+' '+s.title)).map(s=><section className="pc-factor-section" key={s.id}><h3>{s.title}</h3><FactorRows model={model} items={s.factors}/></section>)}<FactorRows model={model} items={r.limitations}/></Panel>
  </>;
 }

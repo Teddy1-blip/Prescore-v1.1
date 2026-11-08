@@ -9,10 +9,27 @@ const render=(C,props)=>renderToStaticMarkup(React.createElement(C,props));
 test('commercial client uses one navigation and separate executive/analysis paths',async t=>{
  const rt=await createWorkspaceRuntime();try{
  const shell=rt.load('app/components/workspace/client-shell.tsx'),insights=rt.load('app/components/workspace/client-insights.tsx'),analysis=rt.load('app/components/workspace/client-analysis.tsx'),routing=rt.load('app/components/workspace/client.tsx');
- const {model}=conclusionFixture(),before=JSON.stringify(model),props={model,choose:()=>{},retry:()=>{}};
+ const {model,canonical}=conclusionFixture(),before=JSON.stringify(model),props={model,choose:()=>{},retry:()=>{}};
  assert.deepEqual(shell.CLIENT_NAV.map(i=>i.label),['Обзор','Финансы','Кредитный профиль','Финансирование','Документы','Заявки','Мониторинг','Контрагенты','Контракты']);
  const overview=render(insights.ExecutiveOverview,props);assert.match(overview,/Финансовая картина/);assert.match(overview,/ДЕНЬГИ/);assert.doesNotMatch(overview,/av-scenario-grid|pc-memo|CLIENT.*ANALYSIS V3/);
- for(const section of ['conclusion','factors','capacity','financials','obligations','financing','reconciliation','plan','evidence'])await t.test(section,()=>{const html=render(analysis.FullCreditAnalysis,{...props,initialSection:section});assert.doesNotMatch(html,/NaN|undefined|Infinity/);assert.match(html,/Кредитный профиль/);});
+ for(const section of ['conclusion','factors','expertise','capacity','financials','obligations','financing','reconciliation','recommendations','plan','evidence','history'])await t.test(section,()=>{const html=render(analysis.FullCreditAnalysis,{...props,initialSection:section});assert.doesNotMatch(html,/NaN|undefined|Infinity/);assert.match(html,/Кредитный профиль/);});
+ const profile=(section)=>render(analysis.FullCreditAnalysis,{...props,initialSection:section});
+ const riskPage=profile('factors');
+ for(const finding of canonical.riskAssessment.findings){
+  const claim=model.full.canonical.explainability.claims.find(c=>c.status===finding.scope && c.riskFindingIds.includes(finding.findingId) && c.claimCode===finding.code);
+  assert.ok(claim, finding.code);
+  assert.ok(riskPage.includes('data-claim-id="'+claim.claimId+'"'),finding.code);
+ }
+ const stop=conclusionFixture('CL-RU-BUS-017');
+ assert.ok(stop.canonical.riskAssessment.findings.some(f=>f.scope==='GLOBAL_STOP'));
+ assert.match(render(analysis.FullCreditAnalysis,{...props,model:stop.model,initialSection:'factors'}),/>Стоп-факторы</);
+ assert.match(profile('expertise'),/Факт и влияние/);
+ assert.match(profile('recommendations'),/Приоритетные рекомендации/);
+ assert.match(profile('plan'),/Сейчас/);
+ const projected=model.full.report.analysisV3;
+
+ assert.deepEqual(projected.scheduledPayments.map(s=>s.value),[7,30,60].map(d=>canonical.creditPortfolio.summary['scheduledPayments'+d+'d'].value));
+ for(const o of projected.portfolio)assert.equal(o.annualRate.value,canonical.creditPortfolio.obligations.find(x=>x.obligationId===o.id).currentTerms.annualRate.value);
  for(const C of [analysis.FinancingProducts,analysis.DebtPortfolio])assert.doesNotMatch(render(C,props),/NaN|undefined|Infinity/);
  assert.equal(JSON.stringify(model),before,'presentation must not mutate canonical results');
  const basic=structuredClone(model);delete basic.full;basic.entitlement='BASIC';basic.state='READY_BASIC';basic.fullAvailability='LOCKED';basic.basic.bankingFacts.grossInflow={...basic.basic.bankingFacts.grossInflow,value:0,status:'KNOWN'};basic.basic.bankingFacts.operatingInflow={...basic.basic.bankingFacts.operatingInflow,value:987654321,status:'UNKNOWN'};
@@ -30,7 +47,7 @@ test('client source contains no credit formulas or retired analytics',()=>{for(c
 test('bank-first overview retains known zero and groups unknown credit outputs without changing the model',async()=>{
  const rt=await createWorkspaceRuntime();try{
  const {ExecutiveOverview}=rt.load('app/components/workspace/client-insights.tsx');
- const {model}=conclusionFixture();
+ const {model,canonical}=conclusionFixture();
  model.full.canonical.prescoreIndex.value=null;
  model.full.canonical.financingReadiness.level='UNKNOWN';
  model.full.canonical.debtCapacity.headlineCapacity.monthlyIncrementalDebtServiceCapacity.prudential=null;
@@ -48,7 +65,7 @@ test('bank-first overview retains known zero and groups unknown credit outputs w
 
 test('public explanations replace implementation wording and print deduplicates without mutating the report',async()=>{
  const rt=await createWorkspaceRuntime();try{
- const {model}=conclusionFixture(),{publicText:clientText}=rt.load('lib/credit-engine/client-report/copy.ts');
+ const {model,canonical}=conclusionFixture(),{publicText:clientText}=rt.load('lib/credit-engine/client-report/copy.ts');
  for(const text of ['Используется исходная причина ограничения.','Контекст требует дополнительной проверки и не является положительным фактором.']){
   const publicText=clientText(text);assert.notEqual(publicText,text);assert.match(publicText,/проверьте/i);
  }
@@ -74,7 +91,7 @@ test('CLIENT product recovery keeps history out of the visible cabinet and prote
 test('the dashboard keeps the incomplete FULL decision visible and limits cash drilldown to covered FULL values',async()=>{
  const rt=await createWorkspaceRuntime();
  try {
-  const {model}=conclusionFixture();
+  const {model,canonical}=conclusionFixture();
   const {ClientOverview}=rt.load('app/components/workspace/client-launch-overview.tsx');
   const {CashTrend}=rt.load('app/components/workspace/client-insights.tsx');
   model.full.report.hero.route='INSUFFICIENT_DATA';

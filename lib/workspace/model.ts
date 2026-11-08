@@ -101,6 +101,7 @@ export type WorkspaceModelV1 = {
   basic: WorkspaceBasicV1;
   fullAvailability: WorkspaceAvailabilityV1;
   full?: {
+    revisionAvailable?: boolean;
     /** Source identity/period only; never exposed to BASIC or forwarded to the analyst. */
     bankingSources?: Array<{sourceId:string;periodFrom:string|null;periodTo:string|null}>;
     policyRequirements?: { debtCapacityMinFullMonths: number };

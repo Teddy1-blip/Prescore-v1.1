@@ -18,7 +18,7 @@ export default async function ReportPage({searchParams}: {searchParams: Promise<
  // A supplied real analysis ID can never fall through into fixture loading.
  if (query.analysisId) {
   const user = await requireApiUser();
-  if (!user) redirect('/login?returnTo=' + encodeURIComponent('/dashboard/report-v2?analysisId=' + encodeURIComponent(query.analysisId)));
+  if (!user) redirect('/login?returnTo=' + encodeURIComponent('/dashboard/report-v2?' + new URLSearchParams({analysisId:query.analysisId,...(query.snapshotId?{snapshotId:query.snapshotId}:{}),...(query.print==='1'?{print:'1'}:{})}).toString()));
   const db = getRuntime().DB as unknown as EntitlementDatabase & Parameters<typeof readWorkspaceOperations>[0];
   if(query.snapshotId){
    if(!/^sha256:[0-9a-f]{64}$/.test(query.snapshotId))notFound();
@@ -29,7 +29,7 @@ export default async function ReportPage({searchParams}: {searchParams: Promise<
    const revision=await readDecisionRevision(db as unknown as DecisionRevisionDatabase,query.analysisId,query.snapshotId);
    if(!revision)notFound();
    return query.print==='1'
-    ? <PrintReport model={revision.model} realAnalysisId={query.analysisId}/>
+    ? <PrintReport banking={revision.banking} model={revision.model} realAnalysisId={query.analysisId}/>
     : <AnalysisV3 model={revision.model} realAnalysisId={query.analysisId} historicalSnapshotId={query.snapshotId}/>;
   }
   if (query.print !== '1') redirect('/dashboard?analysisId=' + encodeURIComponent(query.analysisId) + '&view=analysis');

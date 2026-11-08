@@ -78,13 +78,14 @@ function Fact({name,fact,model}:{name:BankingField;fact:WorkspaceFactV1;model:Wo
 
 export function BankingLedger({model}:{model:WorkspaceModelV1}){
  const b=model.basic.bankingFacts;
+ const visibleGroups=groups.map(group=>({...group,fields:group.fields.filter(k=>factValue(b[k])!==null&&b[k].status!=='NOT_APPLICABLE')})).filter(g=>g.fields.length);
  return <>
   <section className="pc-panel pc-bank-ledger">
-   <header><div><h2>Банковские показатели</h2><p>Сгруппированы по экономическому смыслу. Неизвестное значение не считается нулём.</p></div></header>
-   <div className="pc-bank-groups">{groups.map(group=><article key={group.title}>
+   <header><div><h2>Банковские показатели</h2><p>По выпискам за {date(model.basic.analysis.period.from)} — {date(model.basic.analysis.period.to)}.</p></div></header>
+   <div className="pc-bank-groups">{visibleGroups.map(group=><article key={group.title}>
     <header><h3>{group.title}</h3><p>{group.hint}</p></header>
     <dl>{group.fields.map(name=><Fact key={name} name={name} fact={b[name]} model={model}/>)}</dl>
-   </article>)}</div>
+   </article>)}</div>{!visibleGroups.length&&<p>Добавьте выписку за период, чтобы увидеть банковские показатели.</p>}
   </section>
 
   <section className="pc-panel">

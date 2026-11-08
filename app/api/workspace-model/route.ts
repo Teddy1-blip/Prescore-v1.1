@@ -53,7 +53,7 @@ export async function GET(request: Request) {
         try { return cachedProfile(row.payload,inn); } catch { return undefined; }
       },
       readOperations: (id, access) => readWorkspaceOperations(db, id, access.row.companyInn, user),
-      recordDecision: ({canonical,report,access}) => persistDecisionRevision(db as unknown as DecisionRevisionDatabase,{canonical,report,access}).then(()=>undefined),
+      recordDecision: ({canonical,report,access,banking}) => persistDecisionRevision(db as unknown as DecisionRevisionDatabase,{canonical,report,access,banking}).then(()=>undefined),
     };
     if (params.get("projection") === "decision-history" || params.get("projection") === "decision-revision" || params.get("projection") === "decision-diff") {
       const access=await dependencies.readAccess(analysisId);

@@ -1,3 +1,4 @@
+import {projectPrintBanking, type PrintBankingV1} from "./print-banking.ts";
 import {documentAccessSQL} from '../auth/broker-authorizations.ts';
 import {diagnostic, safeReason, type CanonicalDiagnosticV1} from "../credit-engine/production/diagnostics.ts";
 import {savedCanonicalInput} from "./financing-request.ts";
@@ -16,7 +17,7 @@ export type WorkspaceServiceDependencies = {
   readTier: (analysisId: string, access: ReportAccess) => Promise<AnalysisTier>;
   readProfile: (companyInn: string) => Promise<CompanyProfileData | undefined>;
   readOperations: (analysisId: string, access: ReportAccess) => Promise<WorkspaceOperationalInput>;
-  recordDecision?: (input:{canonical:ReturnType<typeof buildCanonicalCreditAnalysis>;report:ClientReportModelV1;access:ReportAccess}) => Promise<void>;
+  recordDecision?: (input:{canonical:ReturnType<typeof buildCanonicalCreditAnalysis>;report:ClientReportModelV1;access:ReportAccess;banking:PrintBankingV1|null}) => Promise<void>;
 };
 
 function accessRole(access: ReportAccess["access"]): WorkspaceAccessRoleV1 {
@@ -108,11 +109,7 @@ export async function loadWorkspaceModelV1(analysisId: string, dependencies: Wor
     const canonical = buildCanonicalCreditAnalysis(savedCanonicalInput(analysis,companyProfile));
     stage = "PUBLIC_MODEL";
     const report: ClientReportModelV1 = publicCanonicalModel(canonical.model, canonical);
-    if (dependencies.recordDecision) {
-      try { await dependencies.recordDecision({canonical,report,access}); }
-      catch { console.error("decision_revision_unavailable", {analysisId, snapshotId: report.meta.snapshot?.snapshotId ?? null}); }
-    }
-    return {
+    const workspace: WorkspaceModelV1 = {
       ...base,
       // Publish the same source set that the canonical calculation actually read,
       // including cached company BFO. The saved bank-only manifest is not enough.
@@ -149,6 +146,13 @@ export async function loadWorkspaceModelV1(analysisId: string, dependencies: Wor
         },
       },
     };
+    if (dependencies.recordDecision && workspace.full) {
+      try {
+        await dependencies.recordDecision({canonical, report, access, banking:projectPrintBanking(workspace)});
+        workspace.full.revisionAvailable = true;
+      } catch { console.error("decision_revision_unavailable", {analysisId, snapshotId: report.meta.snapshot?.snapshotId ?? null}); }
+    }
+    return workspace;
   } catch (error) {
     return { ...base, state: "READY_BASIC", fullAvailability: "UNAVAILABLE",
       limitations: { code: "CANONICAL_REPORT_UNAVAILABLE" }, diagnostic: failureDiagnostic(stage, error) };

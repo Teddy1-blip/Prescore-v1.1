@@ -9,8 +9,10 @@ import {sourceLabel,sourceState,label} from './credit-depth';
 import {CashMovement} from './cash-movement';
 import {ClientDecisionRoute} from './client-decision-route';
 import {receiptLabel} from '../../../lib/credit-engine/explainability/receipts';
+import {DecisionHistory} from './client-decision-history';
 import {FinancialSnapshot} from './client-financials';
-export function Panel({title,action,children,id}:{title:string;action?:ReactNode;children:ReactNode;id?:string}){return <section className="pc-panel" id={id}><header><h2>{title}</h2>{action}</header>{children}</section>;}
+import {Panel} from './panel';
+export {Panel};
 export function Why({model,ids}:{model:WorkspaceModelV1;ids:string[]}){
  const dialog=useRef<HTMLDialogElement>(null),e=model.full?.canonical.explainability;
  const claims=linkedWhyClaims(e,ids);
@@ -32,7 +34,7 @@ export function CashTrend({model, compact=false}:{model:WorkspaceModelV1;compact
 }
 export function SourceSummary({model,choose,onlyConnected=false}:{model:WorkspaceModelV1;choose?:(v:string)=>void;onlyConnected?:boolean}){
  const groups=['BANK_STATEMENTS','FINANCIAL_STATEMENTS','QUARTERLY_REPORT','CREDIT_HISTORY','EXTERNAL_SOURCE'];
- const visible=groups.flatMap(key=>{const rows=model.basic.sources.availability.filter(s=>s.source===key);if(onlyConnected&&!rows.length)return[];return[{key,rows}];});
+ const visible=groups.flatMap(key=>{const rows=model.basic.sources.availability.filter(s=>s.source===key);if(onlyConnected&&!rows.some(s=>['READY','PARTIAL','STALE'].includes(s.status)))return[];return[{key,rows}];});
  return <div className="pc-source-list">{visible.map(({key,rows})=><div key={key}><span>{sourceLabel(key)}</span><b>{rows.length?[...new Set(rows.map(s=>sourceState(s.status)))].join(', '):'Можно добавить'}</b></div>)}{choose&&<button className="pc-text-button" onClick={()=>choose('documents')}>Управлять источниками →</button>}</div>;
 }
 export function CreditSummary({model,section}:{model:WorkspaceModelV1;section?:"index"|"capacity"}){
@@ -53,7 +55,7 @@ export function AssessmentLimits({model,choose}:{model:WorkspaceModelV1;choose?:
  return <aside className="pc-assessment-limit"><h2>Предварительная оценка</h2><p>Пока не определены: {missing.join(', ')}. Подтверждённые банковские данные показаны в обзоре.</p><p>{reason}</p><p>{bfo?'Отчётность дополнит денежный поток финансовым состоянием компании.':bki?'Кредитный отчёт позволит сопоставить обязательства с наблюдаемыми платежами.':'Уточнение источников позволит перепроверить ограниченные выводы; изменение оценки не гарантируется.'}</p>{choose&&<button className="pc-text-button" onClick={()=>choose(bfo||bki?'documents':'analysis')}>{action} →</button>}</aside>;
 }
 function dashboardFactValue(f:WorkspaceModelV1['basic']['bankingFacts']['grossInflow']){return f.status==='UNKNOWN'||f.status==='NOT_APPLICABLE'||f.value===null||!Number.isFinite(f.value)?null:f.value;}
-function dashboardValue(f:WorkspaceModelV1['basic']['bankingFacts']['grossInflow']){const v=dashboardFactValue(f);return f.status==='NOT_APPLICABLE'?'Не применимо':v===null?'Нет данных':money(v);}
+function dashboardValue(f:WorkspaceModelV1['basic']['bankingFacts']['grossInflow']){return money(dashboardFactValue(f));}
 export function ExecutiveOverview({model,choose,retry,children}:{children?:ReactNode;model:WorkspaceModelV1;choose:(v:string)=>void;retry:()=>void}){
  const r=model.full?.report,b=model.basic.bankingFacts;
  const index=model.full?.canonical.prescoreIndex.value??null;
@@ -67,7 +69,8 @@ export function ExecutiveOverview({model,choose,retry,children}:{children?:React
    (f,i,items)=>f.status.tone==='data' && items.findIndex(other=>other.claimId===f.claimId)===i
  ).slice(0, Math.max(0,3-risks.length)) : [];
  const actions=r?.recommendations.primary.slice(0,3)??[];
- const products=r?[...r.productFit.primary,...r.productFit.other].slice(0,3):[];
+ const candidates=model.full?.canonical.productSelection.candidates??[];
+ const products=r?[...r.productFit.primary,...r.productFit.other].filter(p=>candidates.some(c=>c.productFamily===p.family&&['STRONG_MATCH','MODERATE_MATCH','CONDITIONAL_MATCH'].includes(c.fitLevel))).slice(0,3):[];
  const period=`${date(model.basic.analysis.period.from)} — ${date(model.basic.analysis.period.to)}`;
  const bankKpis=[
   {label:'Поступления',fact:b.grossInflow},
@@ -76,17 +79,19 @@ export function ExecutiveOverview({model,choose,retry,children}:{children?:React
   {label:'Средний остаток',fact:b.averageDailyBalance},
  ].filter(({fact})=>dashboardFactValue(fact)!==null);
  const hasSummary=index!==null||ready||capacity!==null;
- function openAnalysis(section:'conclusion'|'plan') {
+ function openAnalysis(section:'conclusion'|'plan'|'expertise'|'history') {
    const url = new URL(window.location.href);
    url.searchParams.set('section',section);
    url.hash='';
    window.history.replaceState(null,'',url);
    choose('analysis');
  }
+ const expertise=r?.expertise;
+ const preview=expertise?.memoIds.map(id=>expertise.items.find(i=>i.id===id)).find(i=>i!==undefined)??expertise?.items[0];
  const bankName=model.basic.sources.statements.bankNames?.join(' · ')||'Банковские выписки';
  return <div className="pc-dashboard" data-prescore-dashboard="v2">
   <header className="pc-dashboard-heading">
-   <div><span>ВАША КОМПАНИЯ</span><h1>Финансовая картина</h1><p>Главное о деньгах, устойчивости и готовности к финансированию · {period}</p></div>
+   <div><span>ВАША КОМПАНИЯ</span><h1>Финансовая картина</h1><p>{model.basic.analysis.company.name} · ИНН {model.basic.analysis.company.inn} · {period}{r?.meta.asOfDate && <> · на {date(r.meta.asOfDate)}</>}</p></div>
    {r&&<button className="pc-primary" onClick={()=>openAnalysis('conclusion')}>Кредитный профиль →</button>}
   </header>
   {r && <div className="pc-dashboard-route">
@@ -97,6 +102,7 @@ export function ExecutiveOverview({model,choose,retry,children}:{children?:React
    {ready&&<article className="pc-summary-card"><small>Готовность к финансированию</small><strong data-credit-readiness>{r?.readiness.level||readiness}</strong><p>{r?.readiness.text||'Откройте профиль, чтобы увидеть основания.'}</p></article>}
    {capacity!==null&&<article className="pc-capacity-card"><small>Запас для нового долга</small><strong data-prudential-capacity>{money(capacity)}<em>/ месяц</em></strong><p>{r?.capacity.text||'Осторожная оценка дополнительного долгового платежа.'}</p></article>}
   </section>}
+  {r?.meta.snapshot&&<DecisionHistory key={model.analysisId+r.meta.snapshot.snapshotId} analysisId={model.analysisId} currentSnapshotId={r.meta.snapshot.snapshotId} compact openHistory={()=>openAnalysis('history')}/>}
   {bankKpis.length>0&&<section className="pc-bank-kpis" aria-label="Банковская картина">
    {bankKpis.map(({label,fact})=><article key={label}><small>{label}</small><strong>{dashboardValue(fact)}</strong></article>)}
   </section>}
@@ -109,17 +115,18 @@ export function ExecutiveOverview({model,choose,retry,children}:{children?:React
     <div className="pc-dashboard-factors">
      {!strengths.length && !risks.length && !dataLimits.length && <p className="pc-muted">Существенных факторов для отдельного акцента сейчас нет.</p>}
      {strengths.map((f,i)=><article key={'s'+i} data-tone="positive"><small>Сильная сторона</small><h3>{clientText(f.title)}</h3><p>{clientText(f.text)}</p><Why model={model} ids={[f.claimId]}/></article>)}
-     {risks.map((f,i)=><article key={'r'+i} data-tone={f.status.tone}><small>Требует внимания</small><h3>{clientText(f.title)}</h3><p>{clientText(f.text)}</p><Why model={model} ids={[f.claimId]}/></article>)}
+     {risks.map((f,i)=><article key={'r'+i} data-tone={f.status.tone}><small>{f.status.tone==='critical'?'Критическое ограничение':'Требует внимания'}</small><h3>{clientText(f.title)}</h3><p>{clientText(f.text)}</p><Why model={model} ids={[f.claimId]}/></article>)}
      {dataLimits.map(f=><article key={f.id} data-tone="data"><small>Можно уточнить</small><h3>{clientText(f.title)}</h3><p>{clientText(f.text)}</p><Why model={model} ids={[f.claimId]}/></article>)}
     </div>
    </section>}
   </div>
+  {preview&&<section className="pc-dashboard-section pc-expert-preview"><header><h2>Экспертная оценка</h2><button className="pc-text-button" onClick={()=>openAnalysis('expertise')}>В кредитный профиль →</button></header><h3>{clientText(preview.title)}</h3><p>{clientText(preview.interpretation)}</p>{preview.nextStep&&<p><b>Следующий шаг.</b> {clientText(preview.nextStep)}</p>}{preview.claimIds.length>0&&<Why model={model} ids={preview.claimIds}/>}</section>}
   {r&&<div className="pc-dashboard-grid">
    <section className="pc-dashboard-section"><header><div><span>ФИНАНСИРОВАНИЕ</span><h2>Что подходит бизнесу</h2></div><button className="pc-text-button" onClick={()=>choose('financing')}>Все варианты →</button></header>
-    <div className="pc-dashboard-products">{products.map((p,i)=><article key={p.id}><small>{String(i+1).padStart(2,'0')}</small><h3>{p.title}</h3><p>{p.purpose}</p><Why model={model} ids={[p.claimId]}/></article>)}</div>
+    <div className="pc-dashboard-products">{products.map(p=><article key={p.id}><small>{p.fit}</small><h3>{p.title}</h3><p>{p.purpose}</p><Why model={model} ids={[p.claimId]}/></article>)}</div>{!products.length&&<p className="pc-muted">{r.hero.globalStop?'Сначала разберите ограничение в кредитном профиле.':'Уточните цель и параметры запроса в разделе финансирования.'}</p>}
    </section>
    <section className="pc-dashboard-section"><header><div><span>РЕКОМЕНДАЦИИ</span><h2>Что сделать сейчас</h2></div><button className="pc-text-button" onClick={()=>openAnalysis('plan')}>План 7 / 30 / 60 →</button></header>
-    <div className="pc-dashboard-actions">{actions.map((a,i)=><article key={a.id}><small>{String(i+1).padStart(2,'0')}</small><div><h3>{a.title}</h3><p>{a.summary}</p></div><Why model={model} ids={[a.claimId]}/></article>)}</div>
+    <div className="pc-dashboard-actions">{actions.map(a=><article key={a.id}><div><h3>{a.title}</h3><p>{a.summary}</p></div><Why model={model} ids={[a.claimId]}/></article>)}</div>
    </section>
   </div>}
   {r?.financialAnalysis?.history.length?<FinancialSnapshot model={model} choose={choose}/>:null}

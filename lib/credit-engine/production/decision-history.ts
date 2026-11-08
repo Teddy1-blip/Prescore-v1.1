@@ -1,3 +1,4 @@
+import type {PrintBankingV1} from "../../workspace/print-banking.ts";
 import type {ClientReportModelV1} from "../contracts/client-report.ts";
 import type {CanonicalCreditAnalysisV1} from "./orchestrator.ts";
 import type {ReportAccess} from "./report-service.ts";
@@ -47,7 +48,7 @@ export type DecisionRevisionDatabase = {
 
 export type DecisionRevisionSummaryV1 = {
   snapshotId:string; analysisId:string; asOfDate:string; createdAt:string;
-  inputFingerprint:string; engineVersion:string; reportVersion:string;
+  inputFingerprint:string; engineVersion:string; reportVersion:string; indexValue:number|null; readinessLevel:string|null;
 };
 
 export type DecisionChangeArea = "SOURCES"|"INDEX"|"READINESS"|"RISK"|"PORTFOLIO"|"CAPACITY"|"PRODUCTS"|"ACTIONS";
@@ -135,7 +136,7 @@ export function compareDecisionHistoryDigests(before:DecisionHistoryDigestV1,aft
   return {version:DECISION_HISTORY_VERSION,fromSnapshotId:before.snapshotId,toSnapshotId:after.snapshotId,changes,counts};
 }
 
-export async function persistDecisionRevision(db:DecisionRevisionDatabase,input:{canonical:CanonicalCreditAnalysisV1;report:ClientReportModelV1;access:ReportAccess}) {
+export async function persistDecisionRevision(db:DecisionRevisionDatabase,input:{canonical:CanonicalCreditAnalysisV1;report:ClientReportModelV1;access:ReportAccess;banking?:PrintBankingV1|null}) {
   const snapshot=decisionSnapshot(input.canonical);
   if(input.report.meta.snapshot && input.report.meta.snapshot.snapshotId!==snapshot.snapshotId) throw new Error("DECISION_SNAPSHOT_MISMATCH");
   const owner=input.access.row.ownerEmail;
@@ -146,13 +147,14 @@ export async function persistDecisionRevision(db:DecisionRevisionDatabase,input:
   const result=await db.prepare(`INSERT INTO analysis_decision_revisions
     (snapshot_id,analysis_id,owner_email,company_inn,as_of_date,input_fingerprint,engine_version,report_version,public_model,decision_digest)
     VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT (snapshot_id) DO NOTHING`)
-    .bind(snapshot.snapshotId,input.canonical.analysisId,owner,input.canonical.creditAssessment.companyInn,snapshot.asOfDate,snapshot.inputFingerprint,snapshot.engineVersion,snapshot.reportVersion,JSON.stringify(report),JSON.stringify(digest)).run() as {meta?:{changes?:number};changes?:number};
+    .bind(snapshot.snapshotId,input.canonical.analysisId,owner,input.canonical.creditAssessment.companyInn,snapshot.asOfDate,snapshot.inputFingerprint,snapshot.engineVersion,snapshot.reportVersion,JSON.stringify(report),JSON.stringify({...digest,printBanking:input.banking??null})).run() as {meta?:{changes?:number};changes?:number};
   return (result.meta?.changes??result.changes??0)>0;
 }
 
 export async function listDecisionRevisions(db:DecisionRevisionDatabase,analysisId:string):Promise<DecisionRevisionSummaryV1[]> {
   const rows=await db.prepare(`SELECT snapshot_id AS "snapshotId",analysis_id AS "analysisId",as_of_date AS "asOfDate",
-    created_at AS "createdAt",input_fingerprint AS "inputFingerprint",engine_version AS "engineVersion",report_version AS "reportVersion"
+    created_at AS "createdAt",input_fingerprint AS "inputFingerprint",engine_version AS "engineVersion",report_version AS "reportVersion",
+    (decision_digest::jsonb #>> '{index,value}')::double precision AS "indexValue",decision_digest::jsonb #>> '{readiness,level}' AS "readinessLevel"
     FROM analysis_decision_revisions WHERE analysis_id=? ORDER BY created_at DESC,snapshot_id DESC`)
     .bind(analysisId).all<DecisionRevisionSummaryV1>();
   return rows.results??[];
@@ -163,7 +165,10 @@ export async function readDecisionRevision(db:DecisionRevisionDatabase,analysisI
     FROM analysis_decision_revisions WHERE analysis_id=? AND snapshot_id=? LIMIT 1`).bind(analysisId,snapshotId)
     .first<{publicModel:string;decisionDigest:string}>();
   if(!row)return null;
-  try{return {model:JSON.parse(row.publicModel) as ClientReportModelV1,digest:JSON.parse(row.decisionDigest) as DecisionHistoryDigestV1};}
+  try{
+    const {printBanking,...digest}=JSON.parse(row.decisionDigest) as DecisionHistoryDigestV1 & {printBanking?:PrintBankingV1|null};
+    return {model:JSON.parse(row.publicModel) as ClientReportModelV1,digest,banking:printBanking??null};
+  }
   catch{return null;}
 }
 

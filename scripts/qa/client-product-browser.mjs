@@ -26,8 +26,9 @@ try{
  for(const view of ['home','analysis','banking','obligations','financing','documents','applications','analyst','upload']){
  await page.goto(origin+'/dashboard?analysisId='+seed.id+'&view='+view);await page.locator('.pc-company b').waitFor();await page.waitForFunction(()=>!document.body.innerText.includes('Загружаем финансовую картину')&&!document.body.innerText.includes('Загружаем кабинет'));
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'overflow '+view+' '+width);
+ if(view==='home'&&(width===1440||width===390))await page.screenshot({path:out+'/overview-'+width+'.png'});
  if(width===1440||width===390)await page.screenshot({path:out+'/'+view+'-'+width+'.png',fullPage:true});
- if(view==='analysis'){for(const title of ['Стоп-факторы и риски','Долговая ёмкость','Финансовое состояние','Кредитный портфель','Финансирование','Сверка','Рекомендации 7 / 30 / 60','Основания']){await page.getByRole('navigation',{name:'Разделы анализа',exact:true}).getByRole('button',{name:title,exact:true}).click();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'analysis '+title+' '+width);}}
+ if(view==='analysis'){for(const title of ['Стоп-факторы и риски','Экспертная оценка','Долговая ёмкость','Финансовое состояние','Кредитный портфель','Финансирование','Сверка','Рекомендации','План 7 / 30 / 60','Основания','История']){await page.getByRole('navigation',{name:'Разделы анализа',exact:true}).getByRole('button',{name:title,exact:true}).click();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'analysis '+title+' '+width);}}
  checks.push(view+' '+width);
  }
  }
@@ -68,6 +69,19 @@ try{
  await page.goto(origin+'/dashboard?analysisId='+seed.id+'&view=home');await page.getByRole('heading',{name:'Финансовая картина',exact:true}).waitFor();
  const unknown=await(await page.request.get(origin+'/__qa/seed?case=CL-RU-BUS-011')).json();await page.goto(origin+'/dashboard?analysisId='+unknown.id+'&view=home');await page.getByRole('heading',{name:'Финансовая картина',exact:true}).waitFor();await page.reload();await page.getByRole('heading',{name:'Финансовая картина',exact:true}).waitFor();assert.equal(new URL(page.url()).searchParams.get('analysisId'),unknown.id);checks.push('deep-linked analysis and reload');
  await page.setViewportSize({width:390,height:900});await page.getByRole('button',{name:'Открыть меню',exact:true}).click();await page.getByRole('navigation',{name:'Разделы кабинета'}).getByRole('button',{name:'Документы',exact:true}).click();assert.equal(await page.getByRole('button',{name:'Открыть меню'}).getAttribute('aria-expanded'),'false');checks.push('mobile navigation');
+
+ await page.getByRole('button',{name:'Открыть меню',exact:true}).click();
+ for(const name of ['Мониторинг','Контрагенты','Контракты']){
+  const later=page.getByRole('navigation',{name:'Разделы кабинета'}).getByRole('button',{name:new RegExp(name)});
+  assert.equal(await later.isDisabled(),true);assert.match(await later.innerText(),/Позже/);
+ }
+ await page.keyboard.press('Escape');
+ await page.getByRole('button',{name:'Закрыть навигацию'}).waitFor({state:'hidden'});
+ assert.equal(await page.getByRole('button',{name:'Открыть меню'}).getAttribute('aria-expanded'),'false');
+ assert.equal(await page.getByRole('button',{name:'Открыть меню'}).evaluate(el=>el===document.activeElement),true);
+ await page.getByRole('button',{name:'Спросить Prescore',exact:true}).click();
+ await page.waitForURL(url=>url.searchParams.get('view')==='analyst');
+ checks.push('Later sections disabled; mobile Escape restores focus; Ask Prescore opens the analyst');
 
  // Refresh preserves the mounted application table and local search state.
  await page.setViewportSize({width:1440,height:1000});

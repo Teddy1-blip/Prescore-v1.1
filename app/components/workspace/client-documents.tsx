@@ -16,15 +16,23 @@ const sources=[
 
 export function DocumentSources({model,saved,externalEnabled=true}:{externalEnabled?:boolean;model:WorkspaceModelV1;saved?:()=>Promise<void>}){
  const observations=model.full?.report.analysisV3?.observations??[];
+ const entries=sources.map(source=>({...source,rows:model.basic.sources.availability.filter(row=>row.source===source.key),
+  observed:observations.filter(o=>source.types.some(t=>t===o.type))}));
+ const connected=entries.filter(s=>s.rows.some(r=>['READY','PARTIAL','STALE'].includes(r.status)));
+ const targets:Record<string,string>={FINANCIAL_STATEMENTS:'source-bfo',QUARTERLY_REPORT:'source-quarterly',CREDIT_HISTORY:'source-bki'};
  return <><Panel title="Источники кредитного досье">
-  <p className="pc-muted">Статус обработки и дата получения относятся к источнику. Они не подтверждают актуальность всех его сведений сегодня.</p>
-  <div className="pc-table-scroll" tabIndex={0} aria-label="Источники анализа"><table className="pc-source-table"><thead><tr><th>Источник и состояние</th><th>Период / дата отчёта / получен</th><th>Что добавляет и следующий шаг</th></tr></thead><tbody>{sources.map(s=>{
-   const availability=model.basic.sources.availability.filter(v=>v.source===s.key),seen=observations.filter(o=>s.types.some(t=>t===o.type));
-   return <tr key={s.key}><th>{sourceLabel(s.key)}<small>{availability.length?[...new Set(availability.map(v=>sourceState(v.status)))].join(', '):'Не добавлен'}</small></th><td>{availability.length?availability.map((v,i)=><p key={i}>{s.key==='CREDIT_HISTORY'?(v.reportDate?'Дата отчёта: '+date(v.reportDate):'Дата отчёта не подтверждена'):date(v.periodFrom)+' — '+date(v.periodTo)}</p>):'Период не указан'}<small>{seen.length?'Получен: '+[...new Set(seen.map(v=>date(v.receivedAt)))].join(', '):'Дата получения не опубликована'}</small></td><td>{s.benefit}<small>{model.access.readOnly?'Запросите сведения у владельца компании. Источник для анализа не является автоматически требованием банка.':s.action}</small></td></tr>;
-  })}</tbody></table></div>
-  <p className="pc-muted">Счётчики файлов ниже относятся к дополнительным файлам досье, а не к обработанным выпискам, БФО и БКИ. Их состояния показаны в таблице источников выше.</p>
-  <dl className="pc-definition"><div><dt>Сведения компании</dt><dd>{model.basic.analysis.company.name} · ИНН {model.basic.analysis.company.inn}</dd></div><div><dt>Файлы компании</dt><dd>{model.basic.operations.documents.count??'Недостаточно данных'}</dd></div><div><dt>Файлы выбранного анализа</dt><dd>{model.basic.operations.documents.analysisCount??'Недостаточно данных'}</dd></div></dl>
-  {model.basic.financingRequest&&<p className="pc-muted">Заявленные параметры финансирования сохранены {date(model.basic.financingRequest.receivedAt)}. Они используются как сведения клиента, без независимого документального подтверждения.</p>}
-  <p>Бухгалтерская отчётность, кредитная история и квартальные данные дополняют общую финансовую картину через формы ниже. Произвольные файлы сохраняются в досье и не меняют оценку автоматически.</p>
+  <h3>Подключённые источники</h3>
+  {connected.map(s=><section className="pc-source-entry" key={s.key}><header><h4>{sourceLabel(s.key)}</h4><small>{[...new Set(s.rows.map(r=>sourceState(r.status)))].join(' · ')}</small></header>
+   <p>{s.benefit}</p>{s.rows.map((r,i)=><small key={i}>{[r.reportDate&&'Отчёт на '+date(r.reportDate),r.periodFrom&&r.periodTo&&date(r.periodFrom)+' — '+date(r.periodTo)].filter(Boolean).join(' · ')}</small>)}
+   {s.observed.some(o=>o.receivedAt)&&<small>Получен · {[...new Set(s.observed.filter(o=>o.receivedAt).map(o=>date(o.receivedAt)))].join(', ')}</small>}
+  </section>)}
+  {!connected.length&&<p>Начните с банковской выписки, чтобы увидеть движение денег.</p>}
+ </Panel>
+ {model.access.role!=='ASSIGNED_BROKER'&&entries.some(s=>targets[s.key]&&!connected.includes(s))&&<Panel title="Что можно добавить"><div className="pc-source-choices">
+  {entries.filter(s=>targets[s.key]&&!connected.includes(s)).map(s=><a key={s.key} href={'#'+targets[s.key]}><strong>{sourceLabel(s.key)}</strong><span>{s.benefit}</span><b>К загрузке →</b></a>)}</div></Panel>}
+ <Panel title="Файлы досье"><p>Здесь собраны приложения к анализу и к заявкам компании.</p>
+  <dl className="pc-definition">{model.basic.operations.documents.count!=null&&<div><dt>Файлы компании</dt><dd>{model.basic.operations.documents.count}</dd></div>}
+   {model.basic.operations.documents.analysisCount!=null&&<div><dt>В этом анализе</dt><dd>{model.basic.operations.documents.analysisCount}</dd></div>}</dl>
+  {model.basic.financingRequest&&<p className="pc-muted">Запрос на финансирование сохранён {date(model.basic.financingRequest.receivedAt)}.</p>}
  </Panel>{externalEnabled&&<ExternalSourceCards key={model.analysisId+model.entitlement} model={model} saved={saved}/>}<LegalRegistrySource key={model.basic.analysis.id} model={model} saved={saved}/></>;
 }
