@@ -55,7 +55,12 @@ test('shared shell exposes only released navigation and no admin link in client 
    const html=renderToStaticMarkup(React.createElement(ClientShell,{view:'home',choose(){},broker,availableViews:(broker?BROKER_NAV:CLIENT_NAV).map(x=>x.id),context:'Synthetic'},'Test'));
    assert.doesNotMatch(html,/href="\/(?:admin|prescore-control)"/);
    assert.match(html,/href="\/logout">Сменить аккаунт/);
-   if(!broker){assert.doesNotMatch(html,/Контрагенты|Оплата/);assert.match(html,/Анализ Prescore/);assert.match(html,/Финансы/);}
+   if(!broker){
+    assert.match(html,/Кредитный профиль/);assert.match(html,/Финансы/);
+    for(const future of ['Мониторинг','Контрагенты','Контракты']){
+     assert.match(html,new RegExp(`disabled=""[^>]*data-later="true"[\\s\\S]*?<span>${future}<\\/span>`));
+    }
+   }
   }
  }finally{await rt.close();}
 });

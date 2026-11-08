@@ -27,16 +27,26 @@ try{
  await page.goto(origin+'/dashboard?analysisId='+seed.id+'&view='+view);await page.locator('.pc-company b').waitFor();await page.waitForFunction(()=>!document.body.innerText.includes('Загружаем финансовую картину')&&!document.body.innerText.includes('Загружаем кабинет'));
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'overflow '+view+' '+width);
  if(width===1440||width===390)await page.screenshot({path:out+'/'+view+'-'+width+'.png',fullPage:true});
- if(view==='analysis'){for(const title of ['Оценка и риски','Долговая ёмкость','Финансовое состояние','Обязательства','Финансирование','Сопоставление данных','План действий','Источники']){await page.getByRole('navigation',{name:'Разделы анализа',exact:true}).getByRole('button',{name:title,exact:true}).click();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'analysis '+title+' '+width);}}
+ if(view==='analysis'){for(const title of ['Стоп-факторы и риски','Долговая ёмкость','Финансовое состояние','Кредитный портфель','Финансирование','Сверка','Рекомендации 7 / 30 / 60','Основания']){await page.getByRole('navigation',{name:'Разделы анализа',exact:true}).getByRole('button',{name:title,exact:true}).click();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'analysis '+title+' '+width);}}
  checks.push(view+' '+width);
  }
  }
- await page.setViewportSize({width:1440,height:1000});await page.goto(origin+'/dashboard?analysisId='+seed.id);await page.getByRole('heading',{name:'Финансово-кредитный профиль',exact:true}).waitFor();
+ await page.setViewportSize({width:1440,height:1000});await page.goto(origin+'/dashboard?analysisId='+seed.id);await page.getByRole('heading',{name:'Финансовая картина',exact:true}).waitFor();
  const navigation=page.getByRole('navigation',{name:'Разделы кабинета'});
  assert.deepEqual(await navigation.getByRole('button').evaluateAll(buttons=>buttons.map(button=>({label:button.querySelector('span')?.firstChild?.textContent,disabled:button.disabled}))),
-  ['Обзор','Анализ Prescore','Финансы','Обязательства','Финансирование','Документы','Заявки','Кредитный аналитик'].map(label=>({label,disabled:false})));
+  [
+   {label:'Обзор',disabled:false},
+   {label:'Финансы',disabled:false},
+   {label:'Кредитный профиль',disabled:false},
+   {label:'Финансирование',disabled:false},
+   {label:'Документы',disabled:false},
+   {label:'Заявки',disabled:false},
+   {label:'Мониторинг',disabled:true},
+   {label:'Контрагенты',disabled:true},
+   {label:'Контракты',disabled:true},
+  ]);
  assert.equal(await page.locator('.pc-content .pc-canonical').count(),0);
- let model=await(await page.request.get(origin+'/api/workspace-model?analysisId='+seed.id)).json();assert.match(await page.locator('[data-credit-index]').innerText(),new RegExp(String(model.full.canonical.prescoreIndex.value)));checks.push('canonical index and ten navigation entries with counterparties disabled');
+ let model=await(await page.request.get(origin+'/api/workspace-model?analysisId='+seed.id)).json();assert.match(await page.locator('[data-credit-index]').innerText(),new RegExp(String(model.full.canonical.prescoreIndex.value)));checks.push('canonical index and released navigation with future modules disabled');
  await page.goto(origin+'/dashboard?analysisId='+seed.id+'&view=financing');
  await page.getByLabel('Цель финансирования',{exact:true}).selectOption('WORKING_CAPITAL');
  await page.getByLabel('Предпочтительный продукт',{exact:true}).selectOption('CREDIT_LINE');
@@ -51,12 +61,12 @@ try{
  assert.equal(requested.full.report.analysisV3.scenarios[0].rate,0);
  assert.equal(requested.full.canonical.productSelection.financingPurpose.value,'WORKING_CAPITAL');
  checks.push('saved financing purpose and explicit zero-rate scenario survive reload');
- await page.goto(origin+'/dashboard?analysisId='+seed.id);await page.getByRole('heading',{name:'Финансово-кредитный профиль',exact:true}).waitFor();
+ await page.goto(origin+'/dashboard?analysisId='+seed.id);await page.getByRole('heading',{name:'Финансовая картина',exact:true}).waitFor();
 
- await page.goto(origin+'/dashboard?analysisId='+seed.id+'&view=analysis&section=factors');await page.getByRole('heading',{name:'Анализ Prescore',exact:true}).waitFor();
+ await page.goto(origin+'/dashboard?analysisId='+seed.id+'&view=analysis&section=factors');await page.getByRole('heading',{name:'Кредитный профиль',exact:true}).waitFor();
  await page.getByRole('button',{name:'Почему?',exact:true}).first().click();await page.getByRole('dialog',{name:'Основания вывода'}).waitFor();await page.keyboard.press('Escape');assert.equal(await page.locator('dialog[open]').count(),0);checks.push('evidence modal keyboard');
- await page.goto(origin+'/dashboard?analysisId='+seed.id+'&view=home');await page.getByRole('heading',{name:'Финансово-кредитный профиль',exact:true}).waitFor();
- const unknown=await(await page.request.get(origin+'/__qa/seed?case=CL-RU-BUS-011')).json();await page.goto(origin+'/dashboard?analysisId='+unknown.id+'&view=home');await page.getByRole('heading',{name:'Финансово-кредитный профиль',exact:true}).waitFor();await page.reload();await page.getByRole('heading',{name:'Финансово-кредитный профиль',exact:true}).waitFor();assert.equal(new URL(page.url()).searchParams.get('analysisId'),unknown.id);checks.push('deep-linked analysis and reload');
+ await page.goto(origin+'/dashboard?analysisId='+seed.id+'&view=home');await page.getByRole('heading',{name:'Финансовая картина',exact:true}).waitFor();
+ const unknown=await(await page.request.get(origin+'/__qa/seed?case=CL-RU-BUS-011')).json();await page.goto(origin+'/dashboard?analysisId='+unknown.id+'&view=home');await page.getByRole('heading',{name:'Финансовая картина',exact:true}).waitFor();await page.reload();await page.getByRole('heading',{name:'Финансовая картина',exact:true}).waitFor();assert.equal(new URL(page.url()).searchParams.get('analysisId'),unknown.id);checks.push('deep-linked analysis and reload');
  await page.setViewportSize({width:390,height:900});await page.getByRole('button',{name:'Открыть меню',exact:true}).click();await page.getByRole('navigation',{name:'Разделы кабинета'}).getByRole('button',{name:'Документы',exact:true}).click();assert.equal(await page.getByRole('button',{name:'Открыть меню'}).getAttribute('aria-expanded'),'false');checks.push('mobile navigation');
 
  // Refresh preserves the mounted application table and local search state.
@@ -106,7 +116,7 @@ try{
  await page.getByText('Режим просмотра',{exact:true}).first().waitFor();
  assert.equal(await page.getByRole('button',{name:'Новая заявка',exact:true}).count(),0);
  assert.equal(await page.getByRole('button',{name:'Отменить',exact:true}).count(),0);
- assert.equal(await page.getByRole('button',{name:'Новый анализ',exact:true}).count(),0);
+ assert.equal(await page.getByRole('button',{name:'Обновить данные',exact:true}).count(),0);
  checks.push('broker read-only applications');await context.clearCookies();
  // Failed model refresh retains the last model; retry restores it.
  await page.goto(origin+'/dashboard?analysisId='+seed.id+'&view=applications');
@@ -137,7 +147,7 @@ try{
  await page.getByRole('alert').waitFor();assert.match(await page.getByRole('alert').innerText(),/Повторить/);
  await page.unroute(workspaceURL,unavailableWorkspace);
  const recoveredResponse=page.waitForResponse(workspaceResponse);await page.getByRole('button',{name:'Повторить',exact:true}).click();
- assert.equal((await recoveredResponse).status(),200);await page.getByRole('heading',{name:'Финансово-кредитный профиль',exact:true}).waitFor();
+ assert.equal((await recoveredResponse).status(),200);await page.getByRole('heading',{name:'Финансовая картина',exact:true}).waitFor();
  await page.waitForFunction(()=>document.querySelector('[role="alert"]')===null);
  checks.push('intercepted summary 503: visible alert and successful retry');
  assert.deepEqual(errors,[]);checks.push('no browser runtime errors');console.log('PASS',checks.length);
