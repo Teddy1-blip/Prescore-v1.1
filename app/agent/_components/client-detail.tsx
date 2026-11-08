@@ -3,7 +3,7 @@ import Link from 'next/link';
 import {useSearchParams,usePathname} from 'next/navigation';
 import {createContext,useContext,useState,type ReactNode} from 'react';
 import type {AgentIdentity,Lead,Application,AnalysisRef} from '../../../lib/agent/types';
-import {clientUrl,applicationUrl} from '../../../lib/agent/workflow';
+import {clientUrl,applicationUrl,agentRecordId} from '../../../lib/agent/workflow';
 import {useWorkspaceModel} from '../../components/workspace/use-model';
 import {FullCreditAnalysis,FinancingProducts,ActionPlan} from '../../components/workspace/client-analysis';
 import {RiskSections} from '../../components/workspace/profile-sections';
@@ -23,8 +23,8 @@ type RecordContext={data:ClientData;model:ReturnType<typeof useWorkspaceModel>;c
   page:number;setPage:(n:number)=>void;reload:()=>void;href:(s:string)=>string};
 const ClientContext=createContext<RecordContext|null>(null);
 function useClientRecord(){const r=useContext(ClientContext);if(!r)throw Error('Требуется карточка клиента');return r;}
-export function ClientRecord({id,children}:{id:string;children:ReactNode}){
-  const q=useSearchParams(),explicit=q.get('analysisId')??'',path=usePathname(),[page,setPage]=useState(1);
+export function ClientRecord({children}:{children:ReactNode}){
+  const q=useSearchParams(),explicit=q.get('analysisId')??'',path=usePathname(),id=agentRecordId(path),[page,setPage]=useState(1);
   const params=new URLSearchParams({surface:'client',id,analysisId:explicit,page:String(page)});
   const state=useAgentRead<ClientData>('/api/agent?'+params),d=state.data;
   const selected=explicit||d?.analyses[0]?.id||'';
@@ -35,7 +35,7 @@ export function ClientRecord({id,children}:{id:string;children:ReactNode}){
   return <ClientContext.Provider value={{data:d,model,clientId:id,analysisId:selected,page,setPage,reload:state.reload,href}}>
     <Link href="/agent/clients" className="ag-back">← Клиенты</Link><PageHeader title={company.companyName} subtitle={'ИНН '+company.companyInn}>
       {d.lead&&<Badge value={d.lead.status}/>}</PageHeader>
-    <nav className="ag-tabs" aria-label="Разделы досье">{tabs.map(([slug,label])=><Link key={slug} aria-current={path===clientUrl(id,slug)?'page':undefined} href={href(slug)}>{label}</Link>)}</nav>{children}
+    <nav className="ag-tabs" aria-label="Разделы досье">{tabs.map(([slug,label])=><Link key={slug} aria-current={(path.split('/')[4]||'')===slug?'page':undefined} href={href(slug)}>{label}</Link>)}</nav>{children}
   </ClientContext.Provider>;
 }
 function ModelSurface({children}:{children:(model:WorkspaceModelV1)=>ReactNode}){

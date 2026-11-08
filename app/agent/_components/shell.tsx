@@ -3,6 +3,7 @@ import Link from 'next/link';
 import {usePathname,useSearchParams} from 'next/navigation';
 import {useEffect,useRef,useState,type ReactNode} from 'react';
 import {LayoutDashboard,Users,ContactRound,Columns3,BriefcaseBusiness,Files,Landmark,Wallet,Network,Bell,Menu,X,Sparkles} from 'lucide-react';
+import {agentRecordId} from '../../../lib/agent/workflow';
 import type {AgentIdentity} from '../../../lib/agent/types';
 import {useAgentRead} from './data';
 import './workspace.css';
@@ -35,7 +36,7 @@ export function AgentShell({children}:{children:ReactNode}){
   },[open]);
   const assistantQuery=new URLSearchParams();
   if(path.startsWith('/agent/clients/')){
-    assistantQuery.set('client',decodeURIComponent(path.split('/')[3]));
+    assistantQuery.set('client',agentRecordId(path));
     if(search.get('analysisId'))assistantQuery.set('analysisId',search.get('analysisId')!);
   }
   return <div className="ag-shell"><a className="ag-skip" href="#agent-main">К содержимому</a>

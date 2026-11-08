@@ -7,6 +7,7 @@ import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {createWorkspaceRuntime} from './fixtures/workspace-runtime.mjs';
 import {loadBusiness} from '../lib/credit-engine/credit-lab/business-corpus.mjs';
+import {agentRecordId,applicationUrl,clientUrl} from '../lib/agent/workflow.ts';
 import {scenario} from './fixtures/stage5-decision.mjs';
 import {statementFixture} from './fixtures/block1-statements.mjs';
 
@@ -75,4 +76,12 @@ test('agent route projections preserve authorization and expose only actual fact
     assert.equal((await read('client',{id:analysis.id,analysisId:analysis.id})).lead.id,lead.id);
     assert.equal((await rt.request('/api/agent?surface=client&id='+lead.id+'&analysisId=missing',{},rt.broker)).status,404);
   }finally{await rt.close();}
+});
+
+test('agent record links preserve existing IDs containing URL delimiters and literal escape sequences',()=>{
+  for(const id of ['BG-agent:9905000000:00:1','encoded%3A','id/part','Компания 1','value?#']){
+    for(const link of [applicationUrl(id,'history'),clientUrl(id,'documents')]){
+      assert.equal(agentRecordId(new URL(link,'https://example.invalid').pathname),id);
+    }
+  }
 });

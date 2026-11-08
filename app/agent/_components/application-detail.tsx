@@ -3,7 +3,7 @@ import Link from 'next/link';
 import {usePathname} from 'next/navigation';
 import {createContext,useContext,type ReactNode} from 'react';
 import type {Application,Lead,ApplicationEvent} from '../../../lib/agent/types';
-import {applicationUrl,clientUrl} from '../../../lib/agent/workflow';
+import {applicationUrl,clientUrl,agentRecordId} from '../../../lib/agent/workflow';
 import ApplicationChat from '../../dashboard/application-chat';
 import {useWorkspaceModel} from '../../components/workspace/use-model';
 import {CanonicalSnapshot} from './client-detail';
@@ -16,12 +16,13 @@ type Detail={application:Application;lead?:Lead;history:ApplicationEvent[]};
 const AppContext=createContext<(Detail&{reload:()=>void})|null>(null);
 function useApplication(){const a=useContext(AppContext);if(!a)throw Error('Требуется заявка');return a;}
 const tabs=[['','Обзор'],['comments','Комментарии'],['documents','Документы'],['history','История'],['prescore','Prescore'],['partner','Партнёр и статус']];
-export function ApplicationRecord({id,children}:{id:string;children:ReactNode}){
-  const state=useAgentRead<Detail>('/api/agent?surface=application&id='+encodeURIComponent(id)),path=usePathname(),a=state.data?.application;
+export function ApplicationRecord({children}:{children:ReactNode}){
+  const path=usePathname(),id=agentRecordId(path);
+  const state=useAgentRead<Detail>('/api/agent?surface=application&id='+encodeURIComponent(id)),a=state.data?.application;
   if(!a||!state.data)return <Notice {...state}/>;
   return <AppContext.Provider value={{...state.data,reload:state.reload}}><Link className="ag-back" href="/agent/applications">← Заявки</Link>
     <PageHeader title={a.companyName} subtitle={a.product+' · '+amount(a.requestedAmount)}><Badge value={a.status}/></PageHeader>
-    <nav className="ag-tabs" aria-label="Разделы заявки">{tabs.map(([s,t])=><Link key={s} aria-current={path===applicationUrl(id,s)?'page':undefined} href={applicationUrl(id,s)}>{t}</Link>)}</nav>{children}</AppContext.Provider>;
+    <nav className="ag-tabs" aria-label="Разделы заявки">{tabs.map(([s,t])=><Link key={s} aria-current={(path.split('/')[4]||'')===s?'page':undefined} href={applicationUrl(id,s)}>{t}</Link>)}</nav>{children}</AppContext.Provider>;
 }
 export function AppOverview(){const {application:a,lead}=useApplication();return <Section title="Обзор заявки"><dl className="ag-facts">
   <div><dt>Запрошено</dt><dd>{amount(a.requestedAmount)}</dd></div><div><dt>Партнёр</dt><dd>{a.bank}</dd></div><div><dt>Дата создания</dt><dd>{day(a.createdAt)}</dd></div>

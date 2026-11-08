@@ -13,3 +13,9 @@ export const stages = [
 ];
 export function clientUrl(id:string, section='') {return '/agent/clients/'+encodeURIComponent(id)+(section?'/'+section:'');}
 export function applicationUrl(id:string, section='') {return '/agent/applications/'+encodeURIComponent(id)+(section?'/'+section:'');}
+
+// Read the same URL segment Next Link writes. Decode once so stored '%' and ':' stay distinct.
+export function agentRecordId(pathname:string){
+  const segment=pathname.split('/')[3]??'';
+  try{return decodeURIComponent(segment);}catch{return '';}
+}
