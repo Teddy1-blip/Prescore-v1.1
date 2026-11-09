@@ -3,8 +3,9 @@
 import { AlertTriangle, LoaderCircle, MessageSquareText, Send, ShieldCheck } from "lucide-react";
 import { FormEvent, useEffect, useRef, useState } from "react";
 
-type Message = { id: string; role: "user" | "assistant"; content: string; createdAt: string };
+type Message = { id: string; role: "user" | "assistant"; content: string; createdAt: string; evidence?: {title:string;text:string;metrics:string[];evidence:{source:string;periodFrom:string|null;periodTo:string|null;asOf:string|null}[]}[] };
 
+const sourceNames:Record<string,string>={BANK_STATEMENT:"Банковская выписка",FINANCIAL_STATEMENT:"Бухгалтерская отчётность",CREDIT_HISTORY:"Отчёт БКИ",LEGAL_SOURCE:"Юридические сведения",CREDIT_PORTFOLIO:"Кредитный портфель",CLIENT_DECLARATION:"Сведения клиента",RECONCILIATION:"Сверка источников",DERIVED_ANALYTICS:"Расчёт Prescore",OTHER:"Другой источник"};
 const quickQuestions = [
   "Почему такая оценка Prescore?",
   "Что мешает финансированию?",
@@ -28,6 +29,8 @@ function AnalystConversation({ analysisId }: { analysisId: string }) {
   const [mode, setMode] = useState("rules");
   const alive = useRef(true);
   const pending = useRef(false);
+  const version = useRef<string | undefined>(undefined);
+  const [reload, setReload] = useState(0);
   const [error, setError] = useState("");
   const end = useRef<HTMLDivElement>(null);
 
@@ -36,9 +39,10 @@ function AnalystConversation({ analysisId }: { analysisId: string }) {
     alive.current = true;
     fetch(`/api/ai-analyst?analysisId=${encodeURIComponent(analysisId)}`, { signal: controller.signal })
       .then(async (response) => {
-        const body = await response.json() as { available?: boolean; messages?: Message[]; mode?: string; error?: string };
+        const body = await response.json() as { available?: boolean; messages?: Message[]; version?:string; mode?: string; error?: string };
         if (!response.ok) throw new Error(body.error || "Аналитик временно недоступен");
         if (controller.signal.aborted) return;
+        version.current=body.version;
         setMode(body.mode ?? "rules");
         setAvailable(Boolean(body.available)); setMessages(body.messages ?? []);
       })
@@ -48,7 +52,7 @@ function AnalystConversation({ analysisId }: { analysisId: string }) {
       })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => { alive.current = false; controller.abort(); };
-  }, [analysisId]);
+  }, [analysisId,reload]);
 
   useEffect(() => { end.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, sending]);
 
@@ -60,8 +64,9 @@ function AnalystConversation({ analysisId }: { analysisId: string }) {
     const local: Message = { id: `local-${Date.now()}`, role: "user", content: value, createdAt: new Date().toISOString() };
     setMessages((items) => [...items, local]); setQuestion(""); setSending(true); setError("");
     try {
-      const response = await fetch("/api/ai-analyst", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ analysisId, question: value }) });
+      const response = await fetch("/api/ai-analyst", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ analysisId, question: value, version: version.current }) });
       const body = await response.json() as { message?: Message; mode?: string; error?: string };
+      if(response.status===409 && alive.current){setMessages([]);setQuestion(value);setLoading(true);setReload(n=>n+1);return;}
       if (!response.ok || !body.message) throw new Error(body.error || "Аналитик не ответил");
       if (!alive.current) return;
       setMode(body.mode ?? "rules");
@@ -81,7 +86,7 @@ function AnalystConversation({ analysisId }: { analysisId: string }) {
       <div className={'ps-ai-messages'+((loading||!messages.length)&&!sending?' is-idle':'')}>
         {loading && <div className="ps-ai-state"><LoaderCircle className="spin" /><b>Загружаем диалог…</b></div>}
         {!loading && available && !messages.length && <div className="ps-ai-empty"><MessageSquareText /><h2>Что хотите понять в анализе?</h2><p>Выберите быстрый вопрос или сформулируйте свой. Ответ будет опираться только на ваши рассчитанные показатели и доказательства.</p></div>}
-        {messages.map((message) => <article key={message.id} className={message.role}><small>{message.role === "user" ? "Вы" : "Аналитик Prescore"}</small><p style={{overflowWrap:"anywhere"}}>{message.content}</p></article>)}
+        {messages.map((message) => <article key={message.id} className={message.role}><small>{message.role === "user" ? "Вы" : "Аналитик Prescore"}</small><p style={{overflowWrap:"anywhere"}}>{message.content}</p>{!!message.evidence?.length && <details><summary>Почему Prescore так считает</summary>{message.evidence.map((e,i)=><div key={i}><strong>{e.title}</strong><dl><dt>Источник</dt><dd>{e.evidence.map(r=>[sourceNames[r.source]??r.source,r.periodFrom,r.periodTo,r.asOf].filter(Boolean).join(' · ')).join(' / ')}</dd>{e.metrics.length>0&&<><dt>Показатели</dt><dd>{e.metrics.join(' · ')}</dd></>}<dt>Вывод Prescore</dt><dd>{e.text}</dd></dl></div>)}</details>}</article>)}
         {sending && <article className="assistant pending"><small>Аналитик Prescore</small><p><LoaderCircle className="spin" /> Проверяю выводы и источники…</p></article>}
         <div ref={end} />
       </div>

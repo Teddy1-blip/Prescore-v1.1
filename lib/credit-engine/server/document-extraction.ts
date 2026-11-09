@@ -32,25 +32,30 @@ function pageText(items: PdfTextItem[], preserveColumns: boolean) {
   }).join("\n");
 }
 
-export async function extractPdfText(bytes: Uint8Array, maxPages = Number.POSITIVE_INFINITY, preserveColumns = false) {
+export async function mapPdfPages<T>(bytes:Uint8Array,maxPages:number,preserveColumns:boolean,
+  visit:(text:string,page:import("pdfjs-dist/types/src/display/api").PDFPageProxy)=>Promise<T>) {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   const document = await pdfjs.getDocument({
     data: bytes,
     isEvalSupported: false,
     useSystemFonts: true,
   }).promise;
-  const pages: string[] = [];
+  const pages: T[] = [];
   try {
     if (document.numPages > maxPages) throw new Error("PDF_PAGE_LIMIT");
     for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
       const page = await document.getPage(pageNumber);
       const content = await page.getTextContent();
-      pages.push(pageText(content.items as PdfTextItem[], preserveColumns));
+      pages.push(await visit(pageText(content.items as PdfTextItem[], preserveColumns),page));
       page.cleanup();
     }
   } finally {
     await document.destroy();
   }
+  return pages;
+}
+export async function extractPdfText(bytes: Uint8Array, maxPages = Number.POSITIVE_INFINITY, preserveColumns = false) {
+  const pages=await mapPdfPages(bytes,maxPages,preserveColumns,async text=>text);
   return pages.join("\n\f\n");
 }
 
