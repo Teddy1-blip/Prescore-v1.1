@@ -1,6 +1,6 @@
 import { strFromU8, unzipSync } from "fflate";
 
-type PdfTextItem = { str?: string; width?: number; transform?: number[] };
+export type PdfTextItem = { str?: string; width?: number; transform?: number[] };
 
 function pageText(items: PdfTextItem[], preserveColumns: boolean) {
   const rows: Array<{ y: number; items: Array<{ x: number; width: number; text: string }> }> = [];
@@ -33,7 +33,7 @@ function pageText(items: PdfTextItem[], preserveColumns: boolean) {
 }
 
 export async function mapPdfPages<T>(bytes:Uint8Array,maxPages:number,preserveColumns:boolean,
-  visit:(text:string,page:import("pdfjs-dist/types/src/display/api").PDFPageProxy)=>Promise<T>) {
+  visit:(text:string,page:import("pdfjs-dist/types/src/display/api").PDFPageProxy,items:PdfTextItem[])=>Promise<T>) {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   const document = await pdfjs.getDocument({
     data: bytes,
@@ -46,7 +46,7 @@ export async function mapPdfPages<T>(bytes:Uint8Array,maxPages:number,preserveCo
     for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
       const page = await document.getPage(pageNumber);
       const content = await page.getTextContent();
-      pages.push(await visit(pageText(content.items as PdfTextItem[], preserveColumns),page));
+      pages.push(await visit(pageText(content.items as PdfTextItem[], preserveColumns),page,content.items as PdfTextItem[]));
       page.cleanup();
     }
   } finally {

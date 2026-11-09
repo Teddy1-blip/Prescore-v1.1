@@ -1,9 +1,10 @@
-export const EXTRACTOR_VERSION = 'PRESCORE-DOCUMENT-EXTRACTION-0.1';
+export const EXTRACTOR_VERSION = 'PRESCORE-DOCUMENT-EXTRACTION-0.2';
 export type Confidence = 'HIGH' | 'MEDIUM' | 'LOW';
 export type Line = {
   text: string;
   confidence: Confidence;
   page: number;
+  pdf?:boolean;
 };
 export type Field<T> = {
   value: T | null;
@@ -23,13 +24,14 @@ export type Input = {
   id: string;
   lines: Line[];
   issues: Issue[];
+  financialTables?:import("./financial-layout.ts").PdfFinancialRow[];
 };
 export function field<T>(id: string, line?: Line, value?: T | null): Field<T> {
   const uncertain = line?.confidence === 'LOW' || value == null;
   return {
     value: uncertain ? null : value,
     status: !line ? 'MISSING' : uncertain ? 'REVIEW' : 'READ',
-    confidence: line?.confidence ?? null,
+    confidence: line ? uncertain ? 'LOW' : line.confidence : null,
     source_page: line?.page ?? null,
     source_text: line?.text.slice(0, 220) ?? null,
     document_id: id,

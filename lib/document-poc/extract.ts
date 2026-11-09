@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { mapPdfPages } from '../credit-engine/server/document-extraction.ts';
 import type { VisionPage, VisionProvider } from '../ai/providers/index.ts';
+import { financialTableRows } from './financial-layout.ts';
 import { financialStatement } from './financial.ts';
 import { creditAgreement } from './agreement.ts';
 import { EXTRACTOR_VERSION, issue, validation, type Line, type Input } from './fields.ts';
@@ -28,8 +29,8 @@ function transcript(raw: string, page: number): Line[] {
   });
 }
 function classify(lines: Line[]) {
-  const text = lines.map(l => l.text).join('\n');
-  const financial = /бухгалтерский баланс|отч[её]т о финансовых результатах|balance sheet|income statement/i.test(text);
+  const text = lines.map(l => l.text).join(' ').replace(/\s+/g,' ');
+  const financial = /бухгалтерский баланс|отч[её]т о финансовых результатах|balance sheet|income statement|форма по ОКУД\s*[:|]?\s*071000[12]\b/i.test(text);
   const agreement = /кредитный договор|договор кредитной линии|credit agreement|loan agreement/i.test(text);
   return financial === agreement ? 'UNKNOWN' : financial ? 'FINANCIAL_STATEMENT' : 'CREDIT_AGREEMENT';
 }
@@ -72,10 +73,11 @@ export async function extractDocument(bytes: Uint8Array, options: ExtractionOpti
     }
   }
   if (Buffer.from(bytes.subarray(0, 5)).toString() === '%PDF-') {
-    await mapPdfPages(new Uint8Array(bytes), 12, true, async (text, page) => {
+    await mapPdfPages(new Uint8Array(bytes), 12, true, async (text, page, items) => {
+      (input.financialTables??=[]).push(...financialTableRows(items,page.pageNumber));
       const source = text.split('\n').filter(s => s.trim()).map(s => ({
         text: s.trim(),
-        confidence: 'HIGH' as const,
+        confidence: 'HIGH' as const, pdf:true,
         page: page.pageNumber
       }));
       const clean = text.replace(/\s/g, '');
@@ -161,7 +163,7 @@ export async function extractDocument(bytes: Uint8Array, options: ExtractionOpti
   // Required format and confidence checks also cover fields inside rows and covenants.
   function checkFields(obj: unknown) {
     if (!obj || typeof obj !== 'object') return;
-    if ('extractor_version' in obj && 'status' in obj) {
+    if ('value' in obj && 'extractor_version' in obj && 'status' in obj) {
       if (obj.status === 'REVIEW') issue(input, 'REVIEW', 'FIELD_REQUIRES_REVIEW', 'source_page' in obj && typeof obj.source_page === 'number' ? obj.source_page : undefined);
       return;
     }

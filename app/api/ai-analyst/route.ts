@@ -124,6 +124,7 @@ export async function POST(request: Request) {
   let usageId = "";
   let runtimeValues: Awaited<ReturnType<typeof runtime>> | null = null;
   try {
+    request.signal.throwIfAborted();
     const body = await request.json() as { analysisId?: string; question?: string; version?: string };
     const analysisId = String(body.analysisId ?? "");
     const question = String(body.question ?? "").trim();
@@ -145,6 +146,7 @@ export async function POST(request: Request) {
       VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET analysis_version = excluded.analysis_version, prompt_version = excluded.prompt_version, updated_at = excluded.updated_at`)
       .bind(conversationId, analysisId, user.email, version, AI_ANALYST_PROMPT_VERSION, now, now).run();
     // Serialize quota reservations for this viewer. The provider call runs outside the transaction.
+    request.signal.throwIfAborted();
     const reservationId=crypto.randomUUID();
     const reservation=await db.batch([
       db.prepare("SELECT pg_advisory_xact_lock(hashtext(?))").bind("analyst-usage:"+user.email),
@@ -156,6 +158,7 @@ export async function POST(request: Request) {
     ]);
     if(!reservation[1].results.length)return Response.json({error:"Лимит вопросов временно исчерпан. Попробуйте позже."},{status:429});
     usageId=reservationId;
+    request.signal.throwIfAborted();
     const sanitized = buildSanitizedCreditContext(question, workspace);
     // Classify locally: user-pasted identifiers/documents and past assistant answers
     // never become provider context. Every answer is grounded afresh in this snapshot.
@@ -165,7 +168,8 @@ export async function POST(request: Request) {
       {role:"system",content:AI_ANALYST_SYSTEM_PROMPT},
       {role:"system",content:`Текущий CanonicalAnalystContextV1:\n${JSON.stringify(sanitized)}`},
       {role:"user",content:ANALYST_QUESTIONS[analystTopic(question)]},
-    ], () => buildLocalAnalystAnswer(question, workspace));
+    ], () => buildLocalAnalystAnswer(question, workspace),request.signal);
+    request.signal.throwIfAborted();
     let firstEvidence:number|null=null;
     let mode=generated.mode, failure=generated.failure;
     if(mode==="provider"){
@@ -186,6 +190,7 @@ export async function POST(request: Request) {
       .filter(x=>x.evidence.length).sort((a,b)=>Number(b===sanitized.explanations[firstEvidence??-1])-Number(a===sanitized.explanations[firstEvidence??-1])).slice(0,4);
     const turn=version+":"+crypto.randomUUID(), userId=turn+":0", answerId=turn+":1", createdAt=new Date().toISOString();
     const reply={id:answerId,role:"assistant" as const,content:JSON.stringify({text:answer,evidence}),createdAt};
+    request.signal.throwIfAborted();
     await db.batch([
       db.prepare("INSERT INTO ai_messages (id, conversation_id, role, content, created_at) VALUES (?, ?, 'user', ?, ?)").bind(userId,conversationId,question,now),
       db.prepare("INSERT INTO ai_messages (id, conversation_id, role, content, created_at) VALUES (?, ?, 'assistant', ?, ?)").bind(answerId,conversationId,reply.content,createdAt),
@@ -196,8 +201,9 @@ export async function POST(request: Request) {
 
   } catch {
     if (runtimeValues && usageId) {
-      try { await runtimeValues.db.prepare("UPDATE ai_usage SET latency_ms=?,error_type=? WHERE id=?").bind(Date.now()-started,"AI_REQUEST_FAILED",usageId).run(); } catch { /* Preserve the original service error. */ }
+      try { await runtimeValues.db.prepare("UPDATE ai_usage SET latency_ms=?,error_type=? WHERE id=?").bind(Date.now()-started,request.signal.aborted?"CANCELLED":"AI_REQUEST_FAILED",usageId).run(); } catch { /* Preserve the original service error. */ }
     }
+    if(request.signal.aborted)return Response.json({error:"Запрос отменён."},{status:499});
     return Response.json({ error: "Кредитный аналитик временно перегружен. Попробуйте повторить вопрос. Сам анализ Prescore сохранён и доступен." }, { status: 503 });
   }
 }

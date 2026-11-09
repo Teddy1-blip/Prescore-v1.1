@@ -28,7 +28,7 @@ function AnalystConversation({ analysisId }: { analysisId: string }) {
   const [available, setAvailable] = useState(false);
   const [mode, setMode] = useState("rules");
   const alive = useRef(true);
-  const pending = useRef(false);
+  const pending = useRef<AbortController|null>(null);
   const version = useRef<string | undefined>(undefined);
   const [reload, setReload] = useState(0);
   const [error, setError] = useState("");
@@ -51,7 +51,7 @@ function AnalystConversation({ analysisId }: { analysisId: string }) {
         setError(caught instanceof Error ? caught.message : "Аналитик временно недоступен");
       })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
-    return () => { alive.current = false; controller.abort(); };
+    return () => { alive.current = false; controller.abort();pending.current?.abort(); };
   }, [analysisId,reload]);
 
   useEffect(() => { end.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, sending]);
@@ -60,12 +60,14 @@ function AnalystConversation({ analysisId }: { analysisId: string }) {
     event?.preventDefault();
     const value = question.trim();
     if (value.length < 3 || pending.current || !available) return;
-    pending.current = true;
+    const controller=new AbortController();
+    pending.current=controller;
     const local: Message = { id: `local-${Date.now()}`, role: "user", content: value, createdAt: new Date().toISOString() };
     setMessages((items) => [...items, local]); setQuestion(""); setSending(true); setError("");
     try {
-      const response = await fetch("/api/ai-analyst", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ analysisId, question: value, version: version.current }) });
+      const response = await fetch("/api/ai-analyst", { method: "POST", signal:controller.signal, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ analysisId, question: value, version: version.current }) });
       const body = await response.json() as { message?: Message; mode?: string; error?: string };
+      controller.signal.throwIfAborted();
       if(response.status===409 && alive.current){setMessages([]);setQuestion(value);setLoading(true);setReload(n=>n+1);return;}
       if (!response.ok || !body.message) throw new Error(body.error || "Аналитик не ответил");
       if (!alive.current) return;
@@ -75,8 +77,8 @@ function AnalystConversation({ analysisId }: { analysisId: string }) {
       if (!alive.current) return;
       setMessages((items) => items.filter((item) => item.id !== local.id));
       setQuestion(value);
-      setError(caught instanceof Error ? caught.message : "Кредитный аналитик временно недоступен. Сам анализ сохранён.");
-    } finally { pending.current = false; if (alive.current) setSending(false); }
+      setError(controller.signal.aborted ? "Запрос отменён." : caught instanceof Error ? caught.message : "Кредитный аналитик временно недоступен. Сам анализ сохранён.");
+    } finally { pending.current = null; if (alive.current) setSending(false); }
   }
 
   return <>
@@ -87,7 +89,7 @@ function AnalystConversation({ analysisId }: { analysisId: string }) {
         {loading && <div className="ps-ai-state"><LoaderCircle className="spin" /><b>Загружаем диалог…</b></div>}
         {!loading && available && !messages.length && <div className="ps-ai-empty"><MessageSquareText /><h2>Что хотите понять в анализе?</h2><p>Выберите быстрый вопрос или сформулируйте свой. Ответ будет опираться только на ваши рассчитанные показатели и доказательства.</p></div>}
         {messages.map((message) => <article key={message.id} className={message.role}><small>{message.role === "user" ? "Вы" : "Аналитик Prescore"}</small><p style={{overflowWrap:"anywhere"}}>{message.content}</p>{!!message.evidence?.length && <details><summary>Почему Prescore так считает</summary>{message.evidence.map((e,i)=><div key={i}><strong>{e.title}</strong><dl><dt>Источник</dt><dd>{e.evidence.map(r=>[sourceNames[r.source]??r.source,r.periodFrom,r.periodTo,r.asOf].filter(Boolean).join(' · ')).join(' / ')}</dd>{e.metrics.length>0&&<><dt>Показатели</dt><dd>{e.metrics.join(' · ')}</dd></>}<dt>Вывод Prescore</dt><dd>{e.text}</dd></dl></div>)}</details>}</article>)}
-        {sending && <article className="assistant pending"><small>Аналитик Prescore</small><p><LoaderCircle className="spin" /> Проверяю выводы и источники…</p></article>}
+        {sending && <article className="assistant pending"><small>Аналитик Prescore</small><p><LoaderCircle className="spin" /> Проверяю выводы и источники…</p><button type="button" onClick={()=>pending.current?.abort()}>Отменить запрос</button></article>}
         <div ref={end} />
       </div>
       {error && <div className="ps-ai-error"><AlertTriangle />{error}</div>}

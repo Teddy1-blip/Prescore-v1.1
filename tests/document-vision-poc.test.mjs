@@ -27,7 +27,9 @@ test('BFO has bound row values, current and comparative periods, units and prove
   assert.equal(r.validation, 'PASS');
   assert.equal(r.result.metadata.inn.value, '7707083893');
   assert.deepEqual([row.line_code.value, row.current_period_value.value, row.previous_period_value.value, row.period.value, row.previous_period.value, row.unit.value], ['1600', 1500, 1200, '2025-12-31', '2024-12-31', 'тыс. ₽']);
-  for (const f of Object.values(row)) {
+  assert.equal(row.source_page, 1);
+  assert.equal(row.document_id, r.document_id);
+  for (const f of [row.line_code,row.current_period_value,row.previous_period_value,row.period,row.previous_period,row.unit]) {
     assert.equal(f.source_page, 1);
     assert.equal(f.document_id, r.document_id);
     assert.equal(f.extractor_version, r.extractor_version);
@@ -174,4 +176,18 @@ test('mixed PDF reuses existing text extraction; only the second page is rendere
   assert.equal(calls, 1);
   assert.equal(r.result.terms.borrower.source_page, 1);
   assert.equal(r.result.terms.credit_limit.source_page, 2);
+});
+test('Synthetic financial Vision smoke verifies the fields and returns only safe receipt data',async()=>{
+  const {financialSmoke}=await import('../scripts/document-poc.mjs');
+  const env={AI_PROVIDER:'deepseek',DEEPSEEK_API_KEY:'fake-unit-test-key',DEEPSEEK_VISION_MODEL:'mock-vision'};
+  let called=0;
+  const invoke=async(url,opts)=>{
+    called++;assert.equal(url,'https://api.deepseek.com/chat/completions');
+    const payload=JSON.parse(opts.body);assert.match(payload.messages[1].content[0].image_url.url,/^data:image\/png;base64,/);
+    const lines=['Бухгалтерский баланс','Отчётная дата: 31.12.2024','Отчётный период: 2024','Предыдущая дата: 31.12.2023','Единица измерения: тыс. ₽','Строка | Код | 2024 | 2023','Активы | 1600 | 12345 | 9800','Баланс | 1700 | 12345 | 9800'];
+    return Response.json({choices:[{message:{content:await provider(lines).extractVision()}}]});
+  };
+  const pass=await financialSmoke(env,invoke);assert.equal(called,1);assert.equal(pass.status,'PASS');assert.equal(pass.http,200);assert.equal(pass.fields.length,2);assert.doesNotMatch(JSON.stringify(pass),/fake-unit-test-key|base64/);
+  const fail=await financialSmoke(env,async()=>new Response('',{status:403}));assert.equal(fail.status,'FAIL');assert.equal(fail.http,403);assert.equal(fail.fields.length,0);
+  assert.equal((await financialSmoke({},invoke)).status,'BLOCKED');assert.equal(called,1);
 });

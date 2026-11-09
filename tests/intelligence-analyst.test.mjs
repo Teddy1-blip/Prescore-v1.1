@@ -227,3 +227,33 @@ test('Overlapping requests share the viewer quota, and an in-flight answer is wi
     await rt.close();
   }
 });
+
+test('Cancellation aborts the provider request, consumes a dispatched quota slot and saves no messages in either analysis', async()=>{
+  const rt=await createWorkspaceRuntime();
+  const post=(url,body,signal)=>rt.request(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal});
+  try{
+    const analyses=[];
+    for(const name of ['one','two']){
+      const result=await (await post('/api/analysis',{statements:[{fileName:name+'.txt',text:statementFixture()}]})).json();
+      await rt.full(result.analysis.id);analyses.push(result.analysis.id);
+    }
+    const [a,b]=analyses,controller=new AbortController();
+    let enter;const dispatched=new Promise(r=>{enter=r;});let aborted=false;
+    const provider=rt.load('lib/ai/providers/index.ts');
+    provider.configuredProvider=()=>({generate:(_,signal)=>new Promise((resolve,reject)=>{
+      enter();signal.addEventListener('abort',()=>{aborted=true;reject(Error('interrupted'));},{once:true});
+    })});
+    const pending=post('/api/ai-analyst',{analysisId:a,question:'Почему такая готовность?'},controller.signal);
+    await dispatched;controller.abort();
+    assert.equal((await pending).status,499);assert.equal(aborted,true);
+    for(const id of analyses)assert.deepEqual((await(await rt.request('/api/ai-analyst?analysisId='+id)).json()).messages,[]);
+    const usage=await rt.db.prepare('SELECT success,error_type AS reason FROM ai_usage WHERE conversation_id=?').bind(a+':'+rt.owner.email).first();
+    assert.equal(usage.reason,'CANCELLED');assert.equal(Number(usage.success),0);
+    provider.configuredProvider=()=>null;
+    assert.equal((await post('/api/ai-analyst',{analysisId:b,question:'Что мешает финансированию?'})).status,200);
+    assert.deepEqual((await(await rt.request('/api/ai-analyst?analysisId='+a)).json()).messages,[]);
+    const pre=new AbortController();pre.abort();
+    assert.equal((await post('/api/ai-analyst',{analysisId:a,question:'Почему индекс?'},pre.signal)).status,499);
+    const count=await rt.db.prepare('SELECT COUNT(*) AS n FROM ai_usage WHERE conversation_id=?').bind(a+':'+rt.owner.email).first();assert.equal(Number(count.n),1);
+  }finally{await rt.close();}
+});

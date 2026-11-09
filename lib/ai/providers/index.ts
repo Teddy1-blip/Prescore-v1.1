@@ -7,7 +7,7 @@ export interface VisionProvider {
 export interface AIProvider {
  readonly providerName: string;
  readonly modelName: string;
- generate(messages: AIMessage[]): Promise<AIResult>;
+ generate(messages: AIMessage[], signal?:AbortSignal): Promise<AIResult>;
  health(): Promise<{ available: boolean; reason: string | null }>;
 }
 
@@ -33,8 +33,8 @@ export class DeepSeekProvider implements AIProvider {
   this.modelName = config.model;
   this.endpoint = config.baseUrl.replace(/\/$/, '') + '/chat/completions';
  }
- async generate(messages: AIMessage[]): Promise<AIResult> {
-   const result=await this.complete(messages.map(m=>({...m,content:minimizeQuestion(m.content)})),900);
+ async generate(messages: AIMessage[], signal?:AbortSignal): Promise<AIResult> {
+   const result=await this.complete(messages.map(m=>({...m,content:minimizeQuestion(m.content)})),900,signal);
   // Guard explicit prohibited promises for text generation.
   if (/вероятность одобрения\s*[:—-]?\s*\d|гарантированн\w* (?:лимит|одобрение)|банк (?:точно )?одобрит|кредит точно получите/i.test(result.text)) throw Error('AI_RESPONSE_UNSUPPORTED_CLAIM');
    return result;
@@ -54,7 +54,7 @@ export class DeepSeekProvider implements AIProvider {
     method: 'POST', redirect: 'error',
     headers: {'Content-Type': 'application/json', Authorization: `Bearer ${this.config.apiKey}`},
     body: JSON.stringify({model: this.modelName, temperature: 0.2, max_tokens: maxTokens, messages}),
-    signal: signal ?? AbortSignal.timeout(this.config.timeoutMs ?? 25_000),
+    signal: signal ? AbortSignal.any([signal,AbortSignal.timeout(this.config.timeoutMs ?? 25_000)]) : AbortSignal.timeout(this.config.timeoutMs ?? 25_000),
    });
   } catch { throw Error('AI_CONNECTION_UNAVAILABLE'); }
   if (!response.ok) throw Error(response.status === 429 ? 'AI_RATE_LIMITED' : 'AI_PROVIDER_UNAVAILABLE');
@@ -81,13 +81,14 @@ export function configuredProvider(env: Record<string, string | undefined> = pro
  return new DeepSeekProvider({apiKey: env.DEEPSEEK_API_KEY, model: env.DEEPSEEK_MODEL, baseUrl: env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com'});
 }
 
-export function configuredVisionProvider(env:Record<string,string|undefined>=process.env):VisionProvider|null {
+export function configuredVisionProvider(env:Record<string,string|undefined>=process.env, request:typeof fetch=fetch):VisionProvider|null {
  if(env.AI_PROVIDER!=='deepseek'||!env.DEEPSEEK_API_KEY||!env.DEEPSEEK_VISION_MODEL)return null;
- return new DeepSeekProvider({apiKey:env.DEEPSEEK_API_KEY,model:env.DEEPSEEK_VISION_MODEL,baseUrl:env.DEEPSEEK_BASE_URL||'https://api.deepseek.com'});
+ return new DeepSeekProvider({apiKey:env.DEEPSEEK_API_KEY,model:env.DEEPSEEK_VISION_MODEL,baseUrl:env.DEEPSEEK_BASE_URL||'https://api.deepseek.com'},request);
 }
 
-export async function generateWithFallback(provider: AIProvider | null, messages: AIMessage[], fallback: () => string) {
- if (provider) try { return {...await provider.generate(messages), mode: 'provider' as const, failure: null}; }
- catch { return {text: fallback(), inputTokens: null, outputTokens: null, mode: 'rules' as const, failure: 'AI_PROVIDER_UNAVAILABLE'}; }
+export async function generateWithFallback(provider: AIProvider | null, messages: AIMessage[], fallback: () => string, signal?:AbortSignal) {
+ signal?.throwIfAborted();
+ if (provider) try { return {...await provider.generate(messages,signal), mode: 'provider' as const, failure: null}; }
+ catch { signal?.throwIfAborted(); return {text: fallback(), inputTokens: null, outputTokens: null, mode: 'rules' as const, failure: 'AI_PROVIDER_UNAVAILABLE'}; }
  return {text: fallback(), inputTokens: null, outputTokens: null, mode: 'rules' as const, failure: null};
 }
