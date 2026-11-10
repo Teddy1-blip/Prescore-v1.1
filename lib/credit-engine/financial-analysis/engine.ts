@@ -1,3 +1,4 @@
+import type { CurrentRatioExpression } from '../experimental/contracts.ts';
 import { FINANCIAL_ANALYSIS_VERSION, type FinancialAnalysisV2, type FinancialMetricResult, type FinancialPeriodAnalysis, type FinancialStatementSnapshot, type FinancialTrend } from "../contracts/financial-statements.ts";
 import { analyzeFinancialPeriod } from "./metrics.ts";
 import { comparePeriods } from "./periods.ts";
@@ -34,7 +35,7 @@ function trend(current: FinancialPeriodAnalysis, previous: FinancialPeriodAnalys
   return { metric: field, currentSnapshotId: current.snapshot.snapshotId, previousSnapshotId: previous?.snapshot.snapshotId ?? null, comparability, absoluteChange: result(absolute, false), relativeChange: result(relative, true) };
 }
 
-export function buildFinancialAnalysis(snapshots: FinancialStatementSnapshot[]): FinancialAnalysisV2 {
+export function buildFinancialAnalysis(snapshots: FinancialStatementSnapshot[], currentRatio?: CurrentRatioExpression): FinancialAnalysisV2 {
   if (new Set(snapshots.map(s => s.companyInn)).size > 1) throw new Error("FINANCIAL_COMPANY_MISMATCH");
   if (new Set(snapshots.map(s => s.snapshotId)).size !== snapshots.length) throw new Error("DUPLICATE_FINANCIAL_SNAPSHOT");
   const ordered = [...snapshots].sort((a, b) => (a.period.asOf ?? "").localeCompare(b.period.asOf ?? "") || a.snapshotId.localeCompare(b.snapshotId));
@@ -42,7 +43,7 @@ export function buildFinancialAnalysis(snapshots: FinancialStatementSnapshot[]):
   const history = ordered.map(s => {
     const opening = ordered.filter(p => p.snapshotId !== s.snapshotId && p.companyInn === s.companyInn && p.accountingStandard === s.accountingStandard && p.period.asOf && s.period.from && Date.parse(s.period.from) - Date.parse(p.period.asOf) === 86_400_000);
     if (opening.length > 1) warnings.push("AMBIGUOUS_OPENING_BALANCE");
-    return analyzeFinancialPeriod(s, opening.length === 1 ? opening[0] : undefined);
+    return analyzeFinancialPeriod(s, opening.length === 1 ? opening[0] : undefined, currentRatio);
   });
   const trends = history.flatMap(current => {
     const matches = history.filter(p => ["COMPARABLE_ANNUAL_YOY", "COMPARABLE_INTERIM_YOY"].includes(comparePeriods(current.snapshot, p.snapshot)));
