@@ -38,7 +38,14 @@ export function evaluateRiskFacts(input: { companyInn: string; asOfDate: string;
   }
   const suppressed = new Map<string, string>();
   for (const f of findings) {
-    const stronger = f.code === "RISK-FIN-NET-LOSS-CURRENT" ? findings.find(x => x.code === "RISK-FIN-NET-LOSS-REPEATED") : f.code === "RISK-BKI-HISTORICAL-DELINQUENCY" ? findings.find(x => x.code === "RISK-BKI-CURRENT-OVERDUE" && (x.portfolioObligationId ?? x.subjectKey) === (f.portfolioObligationId ?? f.subjectKey) && severities.indexOf(x.severity) <= severities.indexOf(f.severity)) : undefined;
+    const stronger =
+      f.code === "RISK-FIN-NET-ASSETS-PROXY-NEGATIVE"
+        ? findings.find(x => x.code === "RISK-FIN-EQUITY-NON-POSITIVE" && x.scope === "CREDIT_RISK")
+        : f.code === "RISK-FIN-NET-LOSS-CURRENT"
+          ? findings.find(x => x.code === "RISK-FIN-NET-LOSS-REPEATED")
+          : f.code === "RISK-BKI-HISTORICAL-DELINQUENCY"
+            ? findings.find(x => x.code === "RISK-BKI-CURRENT-OVERDUE" && (x.portfolioObligationId ?? x.subjectKey) === (f.portfolioObligationId ?? f.subjectKey) && severities.indexOf(x.severity) <= severities.indexOf(f.severity))
+            : undefined;
     if (stronger) suppressed.set(f.findingId, stronger.findingId);
   }
   for (const e of evaluations) if (e.findingId && suppressed.has(e.findingId)) e.suppressedBy = suppressed.get(e.findingId);
