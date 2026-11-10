@@ -36,6 +36,18 @@ export function evaluateRiskFacts(input: { companyInn: string; asOfDate: string;
         factIds: out.facts.map(f => f.factId).sort(), evidence, calculationBasis: `${r.code}: ${out.facts.map(f => f.calculationBasis).join("; ")}`, warnings: unique([...(out.warnings ?? []), ...out.facts.flatMap(f => f.warnings)]), portfolioObligationId: out.facts.find(f => f.portfolioObligationId)?.portfolioObligationId, subjectKey: obligationId, origin: out.facts.some(f => f.origin === "PROXY") ? "PROXY" : out.facts.some(f => f.origin === "DERIVED") ? "DERIVED" : "REPORTED" });
     }
   }
+  const factById = new Map(facts.map(f => [f.factId, f]));
+  const periodFact = (finding: RiskFinding, semanticCode: string) => finding.factIds.map(fid => factById.get(fid)).find(f => f?.semanticCode === semanticCode);
+  // Revenue decline is one economic deterioration when the bank observation is not wholly subsequent
+  // to the annual reporting period. Keep the bank rule evaluation for auditability, but do not present
+  // it as a second scoreable finding until the bank period starts strictly after the annual period ends.
+  const annualRevenueDecline = findings.find(x => x.code === "RISK-FIN-REVENUE-DECLINE" && x.scope === "CREDIT_RISK");
+  const bankDeclineIsIndependentLaterPeriod = (bankFinding: RiskFinding) => {
+    if (!annualRevenueDecline) return true;
+    const annual = periodFact(annualRevenueDecline, "FIN_ANNUAL_REVENUE_CHANGE");
+    const bank = periodFact(bankFinding, "BANK_OPERATING_TREND");
+    return !!annual?.period.to && !!bank?.period.from && bank.period.from > annual.period.to;
+  };
   const suppressed = new Map<string, string>();
   for (const f of findings) {
     const stronger =
@@ -43,9 +55,11 @@ export function evaluateRiskFacts(input: { companyInn: string; asOfDate: string;
         ? findings.find(x => x.code === "RISK-FIN-EQUITY-NON-POSITIVE" && x.scope === "CREDIT_RISK")
         : f.code === "RISK-FIN-NET-LOSS-CURRENT"
           ? findings.find(x => x.code === "RISK-FIN-NET-LOSS-REPEATED")
-          : f.code === "RISK-BKI-HISTORICAL-DELINQUENCY"
-            ? findings.find(x => x.code === "RISK-BKI-CURRENT-OVERDUE" && (x.portfolioObligationId ?? x.subjectKey) === (f.portfolioObligationId ?? f.subjectKey) && severities.indexOf(x.severity) <= severities.indexOf(f.severity))
-            : undefined;
+          : f.code === "RISK-CF-OPERATING-RECEIPTS-DECLINE" && annualRevenueDecline && !bankDeclineIsIndependentLaterPeriod(f)
+            ? annualRevenueDecline
+            : f.code === "RISK-BKI-HISTORICAL-DELINQUENCY"
+              ? findings.find(x => x.code === "RISK-BKI-CURRENT-OVERDUE" && (x.portfolioObligationId ?? x.subjectKey) === (f.portfolioObligationId ?? f.subjectKey) && severities.indexOf(x.severity) <= severities.indexOf(f.severity))
+              : undefined;
     if (stronger) suppressed.set(f.findingId, stronger.findingId);
   }
   for (const e of evaluations) if (e.findingId && suppressed.has(e.findingId)) e.suppressedBy = suppressed.get(e.findingId);
