@@ -1,11 +1,13 @@
 import type {ClientReportModelV1} from '../contracts/client-report.ts';
 import type {CanonicalCreditAnalysisV1} from '../production/orchestrator.ts';
+import {scopeReason} from '../reconciliation/common.ts';
 import type {PortfolioValue} from '../contracts/credit-portfolio.ts';
 
 export const ANALYSIS_V3_PRESENTATION_VERSION = 'PRESCORE-CLIENT-ANALYSIS-PRESENTATION-3.0.0';
 export type AnalysisV3Value = {value: number|string|null; knowledge: string; origin: string; verification: string; confidence: string; asOf: string|null};
 export type AnalysisV3Presentation = {
  version: string;
+ companyPrincipal?: {value:number;asOf:string};
  observations: {type:string; status:string; receivedAt:string; from:string|null; to:string|null}[];
  financing: {observed:AnalysisV3Value; scheduled:AnalysisV3Value; views:{kind:'RECURRING'|'NEAR_TERM_30D'; operatingBasis:string; operatingAmount:number|null; current:AnalysisV3Value; cautious:number|null; upper:number|null; headroom:number|null; upperHeadroom:number|null; confidence:string}[]};
  scenarios: {id:string; rate:number; months:number; frequency:string; amortization:string; cautious:number|null; upper:number|null; monthlyCautious:number|null; monthlyUpper:number|null; confidence:string; assumptions:{source:string; asOf:string|null; confidence:string}[]}[];
@@ -20,7 +22,8 @@ export function analysisV3Presentation(r:CanonicalCreditAnalysisV1, m:ClientRepo
  const d=r.debtCapacity;
  const amount=(a:{value:number|null;knowledge:string;confidence:string}):AnalysisV3Value=>({value:a.value,knowledge:a.knowledge,origin:'DERIVED',verification:'UNCONFIRMED',confidence:a.confidence,asOf:r.asOfDate});
  const pv=(v:PortfolioValue<string|number>):AnalysisV3Value=>({value:v.value,knowledge:v.knowledge,origin:v.origin,verification:v.verification,confidence:v.confidence,asOf:v.observedAt});
- return {version:ANALYSIS_V3_PRESENTATION_VERSION,
+ const principalFact=r.reconciliation?.findings.flatMap(f=>f.leftFacts).find(f=>f.semanticCode==='BKI_OUTSTANDING_PRINCIPAL'&&f.sourceType==='BKI'&&f.unit==='RUB'&&f.status==='KNOWN'&&typeof f.value==='number'&&f.period.asOf&&!scopeReason(r.company.inn,[f]));
+ return {...(principalFact&&typeof principalFact.value==='number'&&principalFact.period.asOf?{companyPrincipal:{value:principalFact.value,asOf:principalFact.period.asOf}}:{}),version:ANALYSIS_V3_PRESENTATION_VERSION,
   observations:r.sourceObservations.map(s=>({type:s.sourceType,status:s.status,receivedAt:s.receivedAt,from:s.periodFrom,to:s.periodTo})),
   financing:{observed:amount(d.observedDebtServiceBasis),scheduled:amount(d.portfolioScheduledDebtService30d),views:[d.recurringView,d.nearTerm30dView].map(v=>({kind:v.kind,operatingBasis:v.operatingBasis,operatingAmount:v.operatingAmount,current:amount(v.existingDebtServiceAnchor),cautious:v.prudentialTotalMonthlyDebtService,upper:v.maximumPolicyMonthlyDebtService,headroom:v.incrementalHeadroom.prudential,upperHeadroom:v.incrementalHeadroom.maximumPolicy,confidence:v.confidence}))},
   scenarios:d.scenarioResults.map(s=>({id:s.scenarioId,rate:s.annualRatePercent,months:s.termMonths,frequency:s.paymentFrequency,amortization:s.amortization,cautious:s.prudentialPrincipalEquivalent,upper:s.maximumPolicyPrincipalEquivalent,monthlyCautious:s.prudentialMonthlyPaymentCapacity,monthlyUpper:s.maximumPolicyMonthlyPaymentCapacity,confidence:s.confidence,assumptions:s.references.filter(e=>e.kind==='SCENARIO').map(e=>({source:e.evidenceIds.includes('synthetic-explicit-test-assumption-not-bank-offer')?'Явное тестовое допущение Credit Lab, не предложение банка':e.evidenceIds.length?'Явно заданные параметры сценария':'Происхождение допущения не подтверждено',asOf:e.asOf,confidence:e.confidence}))})),

@@ -1,0 +1,149 @@
+{
+  "raw": [
+    {
+      "m": "Май",
+      "op": 8.8,
+      "loan": 0.6,
+      "other": 0.2,
+      "supplier": 5.4,
+      "payroll": 1.3,
+      "tax": 0.65,
+      "principal": 0.45,
+      "interest": 0.12,
+      "lease": 0.2,
+      "misc": 0.58,
+      "unknown": 0.1
+    },
+    {
+      "m": "Июн",
+      "op": 9.4,
+      "loan": 0,
+      "other": 0.3,
+      "supplier": 5.8,
+      "payroll": 1.3,
+      "tax": 0.7,
+      "principal": 0.5,
+      "interest": 0.12,
+      "lease": 0.2,
+      "misc": 0.48,
+      "unknown": 0.1
+    },
+    {
+      "m": "Июл",
+      "op": 9.2,
+      "loan": 0.5,
+      "other": 0.1,
+      "supplier": 5.9,
+      "payroll": 1.4,
+      "tax": 0.65,
+      "principal": 0.5,
+      "interest": 0.13,
+      "lease": 0.2,
+      "misc": 0.52,
+      "unknown": 0.1
+    },
+    {
+      "m": "Авг",
+      "op": 10.4,
+      "loan": 0,
+      "other": 0.2,
+      "supplier": 6.1,
+      "payroll": 1.45,
+      "tax": 0.75,
+      "principal": 0.55,
+      "interest": 0.14,
+      "lease": 0.25,
+      "misc": 0.41,
+      "unknown": 0.15
+    },
+    {
+      "m": "Сен",
+      "op": 11.1,
+      "loan": 0,
+      "other": 0.1,
+      "supplier": 6.7,
+      "payroll": 1.6,
+      "tax": 0.85,
+      "principal": 0.6,
+      "interest": 0.14,
+      "lease": 0.25,
+      "misc": 0.51,
+      "unknown": 0.15
+    },
+    {
+      "m": "Окт",
+      "op": 12,
+      "loan": 1,
+      "other": 0,
+      "supplier": 6.9,
+      "payroll": 1.7,
+      "tax": 0.9,
+      "principal": 0.6,
+      "interest": 0.15,
+      "lease": 0.25,
+      "misc": 0.3,
+      "unknown": 0.2
+    }
+  ],
+  "initialTasks": [
+    {
+      "id": "t1",
+      "title": "Уточнить график по кредитной линии",
+      "detail": "Финансист · нужен для оценки дополнительного платежа",
+      "route": "credit",
+      "done": false
+    },
+    {
+      "id": "t2",
+      "title": "Согласовать оплату с Демо-Логистикой",
+      "detail": "Менеджер · 2,6 млн ₽, договорный срок прошёл",
+      "route": "counterparties",
+      "done": false
+    },
+    {
+      "id": "t3",
+      "title": "Проверить назначения неразнесённых платежей",
+      "detail": "Бухгалтер · выписка за октябрь",
+      "route": "finance",
+      "done": false
+    }
+  ],
+  "counterparties": [
+    {
+      "id": "alpha",
+      "name": "Демо-Снабжение",
+      "amount": 3.2,
+      "due": "2026-11-12",
+      "dueLabel": "12 ноября",
+      "status": "Срок не наступил",
+      "color": "ok"
+    },
+    {
+      "id": "log",
+      "name": "Демо-Логистика",
+      "amount": 2.6,
+      "due": "2026-10-16",
+      "dueLabel": "16 октября",
+      "status": "15 дней просрочки",
+      "color": "red"
+    },
+    {
+      "id": "build",
+      "name": "Демо-Строй",
+      "amount": 2.4,
+      "due": "2026-11-20",
+      "dueLabel": "20 ноября",
+      "status": "Срок не наступил",
+      "color": "ok"
+    },
+    {
+      "id": "retail",
+      "name": "Демо-Ритейл",
+      "amount": 1.6,
+      "due": null,
+      "dueLabel": "Нужно уточнить",
+      "status": "Срок не установлен",
+      "color": "warn"
+    }
+  ]
+}
