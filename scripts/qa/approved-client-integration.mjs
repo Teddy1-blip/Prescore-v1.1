@@ -99,7 +99,7 @@ async function signup(role) {
   assert.equal(verified.status, 302);
   await login(role);
 }
-async function useRole(role) {
+async function signInAsRole(role) {
   await ctx.clearCookies();
   if (cookies[role])
     await ctx.addCookies(
@@ -122,7 +122,7 @@ const waitModel = () => page.waitForSelector('.approved-client .client-hero');
 try {
   await fs.mkdir(out, { recursive: true });
   await signup(ownerRole);
-  await useRole(ownerRole);
+  await signInAsRole(ownerRole);
   await page.goto(origin + '/dashboard?view=counterparties');
   await page.getByRole('heading', { name: 'Покупатели', exact: true }).waitFor();
   ok('Пустой кабинет и Контрагенты без выписки');
@@ -348,7 +348,7 @@ try {
   );
   const shared = await json(endpoint, partnerRole);
   assert.equal(shared.access.readOnly, true);
-  await useRole(partnerRole);
+  await signInAsRole(partnerRole);
   await page.goto(origin + '/dashboard?client=' + A.id + '&from=agent&view=applications');
   await page.getByRole('table', { name: 'Заявки компании' }).waitFor();
   assert.equal(await page.getByRole('button', { name: 'Подготовить заявку' }).count(), 0);
@@ -357,7 +357,7 @@ try {
     403,
   );
   ok('Чужое досье запрещено, согласованный партнёр только читает');
-  await useRole(ownerRole);
+  await signInAsRole(ownerRole);
   await page.goto(origin + '/dashboard?analysisId=' + A.id);
   await waitModel();
   await json('/api/auth/sign-out', ownerRole, {});
@@ -365,7 +365,7 @@ try {
   await page.reload();
   await page.waitForURL('**/login**');
   await login(ownerRole);
-  await useRole(ownerRole);
+  await signInAsRole(ownerRole);
   await page.goto(origin + '/dashboard?analysisId=' + A.id + '&view=applications');
   await page.getByRole('table', { name: 'Заявки компании' }).waitFor();
   ok('Истечение сессии и сохранность после повторного входа');

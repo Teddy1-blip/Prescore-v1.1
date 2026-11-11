@@ -22,14 +22,15 @@ export function ApprovedPage(p: ScreenProps) {
     [drawer, setDrawer] = useState(''),
     [promiseDate, setPromiseDate] = useState('');
   const detailsRef = useRef<HTMLDetailsElement>(null);
+  const hasDetails = Boolean(p.details);
   useEffect(() => {
-    if (!p.details || !location.hash) return;
+    if (!hasDetails || !location.hash) return;
     const target = document.getElementById(location.hash.slice(1));
     if (target && detailsRef.current?.contains(target)) {
       detailsRef.current.open = true;
       target.scrollIntoView();
     }
-  }, [page, !!p.details]);
+  }, [page, hasDetails]);
   const jump = (label: string, target: Page) => (
     <button className="text-link" onClick={() => go(target)}>
       {label} →
@@ -313,6 +314,7 @@ export function ApprovedPage(p: ScreenProps) {
               heads={['Контрагент', 'Задолженность', 'Договорный срок', 'Статус', 'Обещание оплаты']}
               rows={d.ar.rows.map((r, i) => [
                 <button
+                  key="counterparty"
                   className="table-action entity"
                   onClick={() => {
                     setPromiseDate(r.promise ?? '');
@@ -328,6 +330,7 @@ export function ApprovedPage(p: ScreenProps) {
                 money(r.amount),
                 r.due || 'Уточняется',
                 <span
+                  key="status"
                   className={
                     'chip ' +
                     (r.due === 'Нужно уточнить' ? 'warn' : r.status.includes('просроч') ? 'red' : 'ok')
@@ -419,8 +422,8 @@ export function ApprovedPage(p: ScreenProps) {
                 a.id,
                 a.product,
                 rub(a.amount),
-                <span className="chip purple">{a.status}</span>,
-                <button className="text-link" onClick={() => setDrawer('app:' + a.id)}>
+                <span key="status" className="chip purple">{a.status}</span>,
+                <button key="next" className="text-link" onClick={() => setDrawer('app:' + a.id)}>
                   {a.next || 'Проверить сведения'} →
                 </button>,
               ])}
@@ -451,12 +454,13 @@ export function ApprovedPage(p: ScreenProps) {
             label="Источники"
             heads={['Источник', 'Дата / период', 'Состояние', 'Где используется']}
             rows={d.sources.map((s) => [
-              <div className="entity">
+              <div key="source" className="entity">
                 <span className="file-icon">◇</span>
                 <b>{s.label}</b>
               </div>,
               s.date,
               <span
+                key="status"
                 className={
                   'chip ' +
                   (['Обработан', 'Учебные данные', 'Остатки раскрыты'].includes(s.status) ? 'ok' : 'warn')

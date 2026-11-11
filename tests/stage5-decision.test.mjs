@@ -15,10 +15,10 @@ const cases=[
  [17,'legacy','TRIGGERED',null,'NOT_READY','VERIFY_LIQUIDATION_STAGE',noProducts],
  [1,'bankrupt','TRIGGERED',null,'NOT_READY','VERIFY_BANKRUPTCY_PROCEDURE',noProducts],
  [1,'terminated','TRIGGERED',null,'NOT_READY','VERIFY_ENTITY_TERMINATION',noProducts],
- [1,'rnp','TRIGGERED',null,'NOT_READY','VERIFY_RNP_RECORD',noProducts],
+ [1,'rnp',ordinary,1000,'MEDIUM',confirm,noProducts],
  [1,'excluded',ordinary,1000,'MEDIUM',confirm,noProducts],
- [1,'unverified',gap,1000,'MEDIUM',confirm,noProducts],
- [1,'aggregator',gap,1000,'MEDIUM',confirm,noProducts],
+ [1,'unverified',ordinary,1000,'MEDIUM',confirm,noProducts],
+ [1,'aggregator',ordinary,1000,'MEDIUM',confirm,noProducts],
  [1,'delinquent',ordinary,549,'LOW',verify,noProducts],
  [1,'historic',ordinary,699,'LOW','VERIFY_HISTORICAL_DELINQUENCY',noProducts],
  [1,'unknown-principal',ordinary,549,'LOW',verify,noProducts],
@@ -57,8 +57,19 @@ for(const [n,variant,stopState,score,readiness,action,products] of cases) test('
   if(state!==partial)assert.equal(c.debtCapacity.headlineCapacity.monthlyIncrementalDebtServiceCapacity.prudential,null);
   if(variant==='rnp'){
     const f=c.riskAssessment.findings.find(f=>f.code==='RISK-LEGAL-RNP-ACTIVE'),claim=claims.find(k=>k.claimCode===f.code);
-    assert.match(claim.textRu,/S5-RNP/);assert.match(claim.textRu,/44-ФЗ/);assert.equal(f.scope,'GLOBAL_STOP');
+    assert.match(claim.textRu,/S5-RNP/);assert.match(claim.textRu,/44-ФЗ/);assert.equal(f.scope,'INFORMATION');
+    assert.equal(f.decisionImpact,'NON_BLOCKING');
+    assert.ok(f.reasonCodes.includes('CURRENT_RNP_RECORD_REQUIRES_PRODUCT_POLICY_REVIEW'));
+    assert.ok(!c.prescoreIndex.contributions.some(item=>item.riskFindingId===f.findingId));
+    assert.ok(c.recommendationSet.recommendations.some(r=>r.definitionCode==='VERIFY_RNP_RECORD'&&r.riskFindingIds.includes(f.findingId)));
+    assert.match(claim.textRu,/условия конкретного продукта/);
+    assert.doesNotMatch(claim.textRu,/приостанавливает подготовку финансирования/i);
     assert.ok(refs.filter(r=>claim.sourceReferenceIds.includes(r.sourceReferenceId)).some(r=>r.receipts?.some(s=>s.direct&&s.provider==='EIS_DIRECT')));
+  }
+  if(['unverified','aggregator'].includes(variant)){
+    assert.ok(c.riskAssessment.evaluations.some(e=>e.ruleCode==='RISK-LEGAL-RNP-ACTIVE'&&e.status==='INSUFFICIENT_DATA'));
+    assert.ok(!c.riskAssessment.findings.some(f=>f.code==='RISK-LEGAL-RNP-ACTIVE'));
+    assert.ok(!c.recommendationSet.recommendations.some(r=>r.definitionCode==='VERIFY_RNP_RECORD'));
   }
   if(['delinquent','historic','unknown-principal','unknown-overdue'].includes(variant)){
     assert.equal(c.riskAssessment.findings.some(f=>f.reasonCodes.includes('PRESCORE_CURRENT_90_PLUS_CONSTRAINT')),variant==='delinquent');
@@ -75,16 +86,20 @@ for(const [n,variant,stopState,score,readiness,action,products] of cases) test('
   if(variant==='partial')assert.equal(c.riskAssessment.facts.find(f=>f.semanticCode==='LEGAL_VIOLATIONS_REPORTED').value,null);
   if(variant==='ready')assert.equal(c.model.hero.route,'READY_FOR_FINANCING');
 });
-test('A change to source status invalidates the decision fingerprint and removes the RNP stop',()=>{
+test('A change to source status invalidates the decision fingerprint and withdraws the RNP product-policy signal',()=>{
   const input=scenario(1,'rnp'),active=buildCanonicalCreditAnalysis(input);
   const facts=input.companyProfile.externalFacts,record=facts.rnp[0];
   const receipt=facts.receipts.find(r=>r.id===record.receiptId);
   receipt.status='FAILED';
   const failed=buildCanonicalCreditAnalysis(input);
   assert.notEqual(failed.inputFingerprint,active.inputFingerprint);
-  assert.equal(failed.riskAssessment.summary.globalStopStatus,gap);
+  assert.equal(failed.riskAssessment.summary.globalStopStatus,ordinary);
+  assert.ok(!failed.riskAssessment.findings.some(f=>f.code==='RISK-LEGAL-RNP-ACTIVE'));
   assert.equal(failed.riskAssessment.facts.find(f=>f.semanticCode==='LEGAL_RNP_CURRENT_RECORD').value,null);
   assert.equal(failed.prescoreIndex.value,1000);
   receipt.status='READY';record.plannedEnd=null;
-  assert.equal(buildCanonicalCreditAnalysis(input).riskAssessment.summary.globalStopStatus,gap);
+  const incomplete=buildCanonicalCreditAnalysis(input);
+  assert.equal(incomplete.riskAssessment.summary.globalStopStatus,ordinary);
+  assert.ok(!incomplete.riskAssessment.findings.some(f=>f.code==='RISK-LEGAL-RNP-ACTIVE'));
+  assert.ok(incomplete.riskAssessment.evaluations.some(e=>e.ruleCode==='RISK-LEGAL-RNP-ACTIVE'&&e.status==='INSUFFICIENT_DATA'));
 });
