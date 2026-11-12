@@ -13,16 +13,17 @@ const names:Record<ContractFactKey,string>={
 export default function DocumentOcrPreview({documents}:{documents:DocumentOption[]}){
  const available=documents.filter(d=>/\.pdf$/i.test(d.fileName));
  const [selected,setSelected]=useState(''),[layout,setLayout]=useState<OcrLayout>('SINGLE'),[quality,setQuality]=useState<'STANDARD'|'HIGH'>('STANDARD');
- const [pages,setPages]=useState<OcrPage[]>([]),[total,setTotal]=useState(0),[progress,setProgress]=useState(0);
+ const [pages,setPages]=useState<OcrPage[]>([]),[extraPages,setExtraPages]=useState<OcrPage[]>([]),[total,setTotal]=useState(0),[progress,setProgress]=useState(0);
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[done,setDone]=useState(false);
  const stopped=useRef(false),controller=useRef<AbortController|null>(null);
  const documentId=available.some(d=>d.id===selected)?selected:available[0]?.id??'';
- const contract=useMemo(()=>extractContractReview(pages),[pages]);
- function reset(){setPages([]);setProgress(0);setTotal(0);setDone(false);setError('');}
+ const contract=useMemo(()=>extractContractReview([...pages,...extraPages]),[pages,extraPages]);
+ function reset(){setPages([]);setExtraPages([]);setProgress(0);setTotal(0);setDone(false);setError('');}
  async function run(){
   if(busy||!documentId)return;
   stopped.current=false;setBusy(true);setError('');setDone(false);
   let next=progress+1,totalPages=total;
+  const scanned=[...pages];
   try{
    for(;;){
     controller.current=new AbortController();
@@ -34,9 +35,26 @@ export default function DocumentOcrPreview({documents}:{documents:DocumentOption
     if(!response.ok)throw Error(data.error??'Не удалось прочитать документ');
     totalPages=data.ocr.pageCount;
     setTotal(totalPages);setProgress(data.ocr.processedTo);
-    setPages(current=>[...current.filter(p=>p.page<data.ocr.processedFrom||p.page>data.ocr.processedTo),...data.ocr.pages].sort((a,b)=>a.logicalPage-b.logicalPage));
+    scanned.push(...data.ocr.pages);
+    setPages([...scanned].sort((a,b)=>a.logicalPage-b.logicalPage));
     next=data.ocr.processedTo+1;
-    if(next>totalPages){setDone(true);break;}
+    if(next>totalPages){
+      // A faint first sheet sometimes loses a key date at one resolution.
+      // Re-run only that sheet at the other DPI and merge review evidence, not accounting facts.
+      const candidates=extractContractReview(scanned).facts;
+      const missing=candidates.some(f=>['CONTRACT_DATE','WORK_START','WORK_END'].includes(f.key)&&f.value===null);
+      const doc=available.find(x=>x.id===documentId);
+      const commercial=/(?:договор|контракт)/iu.test((doc?.category??'')+' '+(doc?.fileName??''));
+      if(missing&&commercial&&layout==='TWO_UP_ROTATED'&&!stopped.current){
+       try{
+        const other=quality==='HIGH'?'STANDARD':'HIGH';
+        const retry=await fetch('/api/document-ocr',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({documentId,fromPage:1,toPage:1,layout,quality:other}),cache:'no-store'});
+        const refined=await retry.json() as OcrResponse&{error?:string};
+        if(retry.ok)setExtraPages(refined.ocr.pages);
+       }catch{/* The first pass remains available for manual review. */}
+      }
+      setDone(true);break;
+    }
     if(stopped.current)break;
    }
   }catch(e){if(!stopped.current)setError(e instanceof Error?e.message:'OCR недоступен');}
@@ -60,7 +78,7 @@ export default function DocumentOcrPreview({documents}:{documents:DocumentOption
    {progress>0&&<span role="status">PDF-листов обработано: {progress}{total?' из '+total:''}</span>}
   </div>
   {error&&<p role="alert">{error} Можно продолжить с последнего обработанного листа.</p>}
-  {done&&<p role="status">Распознавание завершено. Проверьте все финансовые поля по оригиналу.</p>}
+  {done&&<p role="status">Распознавание завершено. {extraPages.length?'Для плохо читаемого первого листа добавлен второй OCR-проход. ':''}Проверьте все финансовые поля по оригиналу.</p>}
   {!!pages.length&&<section aria-label="Результат локального OCR">
    <h4>Предварительные финансовые условия</h4>
    <div className="ps-table-scroll"><table><thead><tr><th>Поле</th><th>Извлечено</th><th>Основание</th></tr></thead><tbody>
