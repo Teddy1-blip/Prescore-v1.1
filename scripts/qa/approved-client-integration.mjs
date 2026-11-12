@@ -122,7 +122,20 @@ const waitModel = () => page.waitForSelector('.approved-client .client-hero');
 try {
   await fs.mkdir(out, { recursive: true });
   await signup(ownerRole);
-  await signInAsRole(ownerRole);
+  await page.goto(origin + '/login');
+  const loginForm = page.getByRole('form', { name: 'Вход', exact: true });
+  await loginForm.getByLabel('Электронная почта').fill(ownerRole + '@rc.test');
+  const loginPassword = loginForm.getByLabel('Пароль', { exact: true });
+  await loginPassword.fill(password);
+  const toggle = loginForm.getByRole('button', { name: 'Показать пароль' });
+  await toggle.focus();
+  await page.keyboard.press('Space');
+  assert.equal(await loginPassword.getAttribute('type'), 'text');
+  await loginForm.getByRole('button', { name: 'Скрыть пароль' }).press('Enter');
+  assert.equal(await loginPassword.getAttribute('type'), 'password');
+  await loginForm.getByRole('button', { name: 'Войти', exact: true }).click();
+  await page.waitForURL('**/dashboard**');
+  ok('Вход клиента через форму и управление видимостью пароля с клавиатуры');
   await page.goto(origin + '/dashboard?view=counterparties');
   await page.getByRole('heading', { name: 'Покупатели', exact: true }).waitFor();
   ok('Пустой кабинет и Контрагенты без выписки');
@@ -134,8 +147,18 @@ try {
     text: new TextDecoder('windows-1251').decode(files[dir + d.path]),
   }));
   const create = async (statements) => (await json('/api/analysis', ownerRole, { statements })).analysis;
-  const A = await create(statements),
-    B = await create(statements.map((s) => ({ ...s, text: s.text.replaceAll(A.companyInn, '9900002999') })));
+  await page.goto(origin + '/dashboard?view=upload');
+  await page.locator('.pc-statement-upload input[type=file]').setInputFiles(seed.bankDocuments.map(d => ({
+    name: path.basename(d.path), mimeType: 'text/plain', buffer: Buffer.from(files[dir + d.path]),
+  })));
+  const accepted = page.waitForResponse(r => new URL(r.url()).pathname === '/api/analysis' && r.request().method() === 'POST');
+  await page.getByRole('button', { name: 'Рассчитать по выбранным файлам' }).click();
+  const responseA = await accepted;
+  assert.ok(responseA.ok(), 'TXT upload HTTP ' + responseA.status());
+  const { analysis: A } = await responseA.json();
+  assert.ok(A?.id, 'server analysisId');
+  ok('Загрузка синтетической выписки TXT через браузер с выдачей analysisId');
+  const B = await create(statements.map((s) => ({ ...s, text: s.text.replaceAll(A.companyInn, '9900002999') })));
   assert.notEqual(B.id, A.id);
   const endpoint = '/api/workspace-model?analysisId=' + A.id;
   const basic = await json(endpoint, ownerRole);
@@ -144,7 +167,12 @@ try {
   await page.goto(origin + '/dashboard?analysisId=' + A.id + '&view=home');
   await waitModel();
   assert.match(await page.locator('.client-hero').innerText(), /FULL/);
-  ok('BASIC и частичный состав источников');
+  await nav('План действий').click();
+  const basicPlan = page.locator('.approved-canonical-section');
+  await basicPlan.locator('.ws-upgrade').waitFor();
+  assert.equal(await basicPlan.locator('.pc-timeline').count(), 0);
+  await nav('Обзор').click();
+  ok('BASIC показывает банковские факты и ограничивает доступ к полному плану');
   await pool.query(
     "UPDATE analysis_entitlements SET tier='FULL',granted_by='TEST_ONLY' WHERE analysis_id=$1",
     [A.id],
@@ -263,7 +291,8 @@ try {
   ok('Заявка в PostgreSQL, повтор запроса, reload и изоляция компании');
   await page.getByLabel('Компания', { exact: true }).selectOption(A.id);
   await nav('Документы').click();
-  await page.getByRole('button', { name: 'Открыть документы и загрузку' }).click();
+  for (const id of ['source-bfo', 'source-quarterly', 'source-bki'])
+    await page.locator('form#' + id).waitFor({ state: 'visible' });
   const quarter =
     'Бухгалтерская отчетность за Январь - Март 2026 г.\nОрганизация ООО Синтетическая компания\nИНН ' +
     A.companyInn +
@@ -289,7 +318,6 @@ try {
   await page.getByRole('table', { name: 'Бухгалтерская отчётность' }).waitFor();
   ok('Загрузка квартального CSV и обновление БФО на соседней вкладке');
   await nav('Документы').click();
-  await page.getByRole('button', { name: 'Открыть документы и загрузку' }).click();
   await page.getByRole('button', { name: 'Новый анализ по выпискам' }).click();
   await page.locator('input[type=file]').first().waitFor({ state: 'attached' });
   assert.ok(!new URL(page.url()).searchParams.has('analysisId'));
@@ -298,6 +326,7 @@ try {
   await fs.mkdir(screenshotDir, { recursive: true });
   for (const [size, width, height] of [
     ['desktop', 1440, 1100],
+    ['tablet', 768, 1024],
     ['mobile', 390, 844],
   ]) {
     await page.setViewportSize({ width, height });
@@ -326,8 +355,17 @@ try {
       });
     }
   }
+  const mobileMenu = page.getByRole('button', { name: 'Открыть меню' });
+  await mobileMenu.press('Enter');
+  await page.waitForFunction(() => Boolean(document.activeElement?.closest('nav')));
+  await page.keyboard.press('Escape');
+  assert.ok(await mobileMenu.evaluate((button) => document.activeElement === button));
+  await mobileMenu.click();
+  await nav('Документы').click();
+  await page.locator('form#source-bfo').waitFor({ state: 'visible' });
+  ok('Мобильное меню, переход в Документы и возврат фокуса при Escape');
   await page.setViewportSize({ width: 1440, height: 1100 });
-  ok('18 снимков защищённого кабинета с сервером, без горизонтального переполнения');
+  ok('27 снимков защищённого кабинета с сервером, без горизонтального переполнения');
   await signup(partnerRole);
   assert.ok([403, 404].includes((await req(endpoint, partnerRole)).status));
   await json('/api/agent', partnerRole, { type: 'connect', consent: true, offerAccepted: true }, 201);

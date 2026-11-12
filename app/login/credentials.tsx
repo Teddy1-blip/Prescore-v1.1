@@ -52,7 +52,7 @@ export function Credentials({returnTo,verified=false,verificationError=false}:{r
  {mode!=='reset'&&<div className="ps-password-control">
   <Input label="Пароль" type={passwordVisible?'text':'password'} name="password" autoComplete={mode==='register'?'new-password':'current-password'} minLength={mode==='register'?8:1} required disabled={busy}/>
   <button type="button" className="ps-password-visibility" aria-label={passwordVisible?'Скрыть пароль':'Показать пароль'} aria-pressed={passwordVisible} disabled={busy} onClick={()=>setPasswordVisible(current=>!current)}>{passwordVisible?<EyeOff aria-hidden="true"/>:<Eye aria-hidden="true"/>}</button>
- </div>
+ </div>}
  <label><input type="checkbox" checked={remember} disabled={busy} onChange={e=>{setRemember(e.target.checked);if(!e.target.checked)rememberEmail('',false);}}/> Запомнить email на этом устройстве</label>
  <PrimaryAction disabled={busy}>{busy?'Подождите…':mode==='login'?'Войти':mode==='register'?'Создать аккаунт':'Восстановить доступ'}</PrimaryAction>
  <p role="status" aria-live="polite">{notice}</p>

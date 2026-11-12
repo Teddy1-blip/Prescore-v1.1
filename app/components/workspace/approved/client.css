@@ -1401,6 +1401,10 @@
 .approved-client .side-bottom a {
   color: #e4dfff;
 }
+/* Menu links must accept keyboard focus as soon as the sidebar opens. */
+.approved-client .sidebar a {
+  transition-property: color, background-color, box-shadow;
+}
 .approved-client .nav a:focus-visible {
   outline-offset: -4px;
 }
@@ -1491,3 +1495,8 @@
 .approved-client .approved-canonical-heading h2 { margin: 0 0 6px; font-size: clamp(17px, 1.8vw, 22px); color: var(--ink); }
 .approved-client .approved-canonical-heading p { margin: 0; color: var(--muted); }
 .approved-client .approved-canonical-section .ws { min-width: 0; }
+.approved-client .approved-canonical-section .pc-form-grid input[type="file"] {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}

@@ -27,9 +27,24 @@ function format(bytes:Uint8Array):'PDF'|'PNG'|'JPEG'{
 }
 async function exec(name:'pdfinfo'|'pdftotext'|'pdftoppm'|'tesseract',args:string[],maxBytes=MAX_PROCESS_BYTES){
  return new Promise<string>((resolve,reject)=>{
-  const child=spawn(name,args,{shell:false,stdio:['ignore','pipe','pipe'],env:{PATH:process.env.PATH??'/usr/bin:/bin',OMP_THREAD_LIMIT:'1',OMP_NUM_THREADS:'1'}});
+  const child=spawn(name,args,{
+    shell:false,
+    stdio:['ignore','pipe','pipe'],
+    env:{
+      NODE_ENV:process.env.NODE_ENV ?? 'production',
+      PATH:process.env.PATH ?? '/usr/bin:/bin',
+      OMP_THREAD_LIMIT:'1',
+      OMP_NUM_THREADS:'1',
+    },
+  });
   let stdout='',count=0,settled=false;
-  const finish=(err?:Error)=>{if(settled)return;settled=true;clearTimeout(timer);err?reject(err):resolve(stdout)};
+  const finish=(err?:Error)=>{
+    if(settled)return;
+    settled=true;
+    clearTimeout(timer);
+    if(err)reject(err);
+    else resolve(stdout);
+  };
   const timer=setTimeout(()=>{child.kill('SIGKILL');finish(Error('OCR_PROCESS_TIMEOUT'))},MAX_PROCESS_MS);
   child.stdout.setEncoding('utf8');
   child.stdout.on('data',(chunk:string)=>{count+=Buffer.byteLength(chunk);if(count>maxBytes){child.kill('SIGKILL');finish(Error('OCR_OUTPUT_LIMIT'));return;}stdout+=chunk});
