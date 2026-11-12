@@ -8,7 +8,7 @@ import {ClientBilling} from './billing';
 import {ClientShell,LivePage} from './approved/live-shell';
 import {CashTrend,Panel} from './client-insights';
 import {ClientOverview} from './client-launch-overview';
-import {FullCreditAnalysis,FinancingProducts,DebtPortfolio} from './client-analysis';
+import {FullCreditAnalysis,FinancingProducts,DebtPortfolio,ActionPlan} from './client-analysis';
 import {FinancialStatements} from './client-financials';
 import {BankingLedger} from './banking-ledger';
 import {FinancingRequest} from './financing-request';
@@ -34,7 +34,7 @@ export function clientViewNeedsModel(view:string){
  return !['upload','documents','obligations','applications','billing','counterparties'].includes(view);
 }
 export function clientSectionTitle(view:string){
- const titles:Record<string,string>={home:'Обзор',analysis:'Кредитный профиль',banking:'Финансы',obligations:'Кредитный портфель',financing:'Финансирование',documents:'Документы',applications:'Заявки',analyst:'Спросить Prescore',billing:'Подписка компании'};
+ const titles:Record<string,string>={home:'Обзор',actions:'План действий',analysis:'Кредитный профиль',banking:'Финансы',obligations:'Кредитный портфель',financing:'Финансирование',documents:'Документы',applications:'Заявки',analyst:'Спросить Prescore',billing:'Подписка компании'};
  return Object.hasOwn(titles,view)?titles[view]:'Раздел кабинета';
 }
 export default function ClientWorkspace(){
@@ -80,6 +80,7 @@ export default function ClientWorkspace(){
  {view==='home'&&model&&<ClientOverview key={selectedId} model={model} choose={choose} retry={refresh}/>} 
  {view==='banking'&&model&&<><div className="pc-page-title"><div><h1>Финансы</h1><p>Денежный поток, ликвидность и финансовая отчётность</p></div></div><Panel title="Движение денег"><CashTrend model={model}/></Panel><BankingLedger model={model}/><FinancialStatements model={model}/>{!model.full?.report.financialAnalysis?.history.length&&<button className="pc-text-button" onClick={()=>choose('documents')}>Добавить отчётность в документах →</button>}<Panel title="Крупнейшие контрагенты">{model.basic.bankingFacts.topCounterparties?.length?<div className="pc-table-scroll"><table><thead><tr><th>Контрагент</th><th>Поступления, ₽</th><th>Доля</th></tr></thead><tbody>{model.basic.bankingFacts.topCounterparties.map((c,i)=><tr key={c.name+i}><th>{c.name}</th><td>{new Intl.NumberFormat('ru-RU').format(c.amount)}</td><td>{new Intl.NumberFormat('ru-RU',{maximumFractionDigits:1}).format(c.share*100)}%</td></tr>)}</tbody></table></div>:<p>Контрагенты не определены в доступной выписке.</p>}</Panel></>}
  {view==='analysis'&&model&&<FullCreditAnalysis key={selectedId} model={model} retry={refresh}/>}
+  {view==='actions'&&model&&(model.full?<ActionPlan key={selectedId} model={model}/>:<FullAccessNotice model={model} retry={refresh}/>)}
  {view==='financing'&&model&&<><div className="pc-page-title"><div><h1>Финансирование</h1><p>Цель, параметры и подходящие механизмы финансирования</p></div></div><FinancingRequest key={selectedId+'-request'} model={model} saved={refresh}/><FinancingProducts model={model} showHeading={false}/>{!locked&&availableViews.includes('applications')&&<Panel title="Подготовить заявку"><p>Укажите цель и запрашиваемую сумму. Подготовка заявки не означает отправку в банк.</p><button className="pc-primary" onClick={()=>choose('applications')}>Перейти к заявкам</button></Panel>}</>}
  {view==='obligations'&&<>{model?<DebtPortfolio key={selectedId} model={model}/>:<div className="pc-page-title"><div><h1>Обязательства</h1><p>Кредитная история добавляется к выбранному анализу. Портфель появится после получения расчётной сводки.</p></div></div>}{!locked&&<SourceUpload key={selectedId+'-bki'} analysisId={selectedId} kind="BKI" saved={refreshSource}/>}</>}
  {view==='documents'&&<><div className="pc-page-title"><div><h1>Документы</h1><p>Комплект источников и файлы компании</p></div></div>{!locked&&<nav className="pc-source-actions" aria-label="Добавить источники анализа">{availableViews.includes('upload')&&<button onClick={()=>choose('upload')}>Новый анализ по выпискам</button>}<a href="#source-bfo">Добавить бухгалтерскую отчётность</a><a href="#source-bki">Добавить кредитную историю</a></nav>}{model&&<DocumentSources model={model} readOnly={locked} externalEnabled={modules.company!==false} saved={locked?undefined:refreshSource}/>} {!locked&&<><SourceUpload key={selectedId+'-bki'} analysisId={selectedId} kind="BKI" saved={refreshSource}/><SourceUpload key={selectedId+'-bfo'} analysisId={selectedId} kind="BFO" saved={refreshSource}/><SourceUpload key={selectedId+'-quarterly'} analysisId={selectedId} kind="QUARTERLY" saved={refreshSource}/></>}<DocumentsHub key={selectedId} companyInn={selected.companyInn} companyName={selected.companyName} analysisId={selectedId} readOnly={locked} showHeading={false}/>{!locked&&<BrokerPermissions key={selectedId+'-permissions'} analysisId={selectedId}/>}</>}

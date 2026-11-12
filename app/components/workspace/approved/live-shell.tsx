@@ -136,8 +136,7 @@ export function LivePage({ children }: { children: ReactNode }) {
   if (!c?.renderPage || !Object.hasOwn(pages, c.view)) return <>{children}</>;
   const page = c.view as Page;
   const billing = page === 'billing',
-    ar = page === 'counterparties',
-    actions = page === 'actions';
+    ar = page === 'counterparties';
   return (
     <ApprovedPage
       key={page}
@@ -153,27 +152,8 @@ export function LivePage({ children }: { children: ReactNode }) {
         next: d.nextAction,
       }))}
       newApp={c.open}
-      operations={
-        billing ? (
-          children
-        ) : page === 'documents' ? (
-          <button
-            className="btn"
-            onClick={() => {
-              const summary = document.getElementById('approved-source-operations'),
-                details = summary?.closest('details');
-              if (details) {
-                details.open = true;
-                summary?.focus();
-                details.scrollIntoView({ block: 'start' });
-              }
-            }}
-          >
-            {c.readOnly ? 'Открыть документы' : 'Открыть документы и загрузку'}
-          </button>
-        ) : undefined
-      }
-      details={billing || ar || actions ? undefined : <div className="ws">{children}</div>}
+      operations={billing ? children : undefined}
+      details={billing || ar ? undefined : <div className="ws">{children}</div>}
     />
   );
 }

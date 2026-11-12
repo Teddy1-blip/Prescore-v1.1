@@ -23,8 +23,18 @@ export function ApprovedPage(p: ScreenProps) {
     [promiseDate, setPromiseDate] = useState('');
   const detailsRef = useRef<HTMLDetailsElement>(null);
   const hasDetails = Boolean(p.details);
+  // Canonical conclusions and document operations remain visible on their actual product pages.
+  const inlineCanonical = (['banking', 'analysis', 'financing', 'documents', 'applications', 'actions'] as Page[]).includes(page);
+  const canonicalHeadings: Partial<Record<Page, string>> = {
+    banking: 'Подробные банковские показатели и отчётность',
+    analysis: 'Полное кредитное заключение',
+    financing: 'Расчёты и подготовка финансирования',
+    documents: 'Источники, загрузка и проверка документов',
+    applications: 'Работа с заявками и документами',
+    actions: 'Обоснованный план 7 / 30 / 60',
+  };
   useEffect(() => {
-    if (!hasDetails || !location.hash) return;
+    if (!hasDetails || inlineCanonical || !location.hash) return;
     const target = document.getElementById(location.hash.slice(1));
     if (target && detailsRef.current?.contains(target)) {
       detailsRef.current.open = true;
@@ -544,12 +554,20 @@ export function ApprovedPage(p: ScreenProps) {
   return (
     <>
       {content}
-      {p.details && (
+      {p.details && (inlineCanonical ? (
+        <section className="approved-canonical-section" id="approved-source-operations" aria-label={canonicalHeadings[page]}>
+          <div className="approved-canonical-heading">
+            <h2>{canonicalHeadings[page]}</h2>
+            <p>Показатели и действия относятся к выбранному анализу. Отсутствующий источник не заменяется выдуманными значениями.</p>
+          </div>
+          {p.details}
+        </section>
+      ) : (
         <details ref={detailsRef} className="details">
           <summary id="approved-source-operations">Подробности, источники и доступные операции</summary>
           {p.details}
         </details>
-      )}
+      ))}
       {drawer && (
         <Drawer
           title={counter?.name ?? task?.title ?? (app ? 'Карточка заявки' : 'Основания оценки')}

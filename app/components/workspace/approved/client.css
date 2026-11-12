@@ -1484,3 +1484,10 @@
   max-width: 145px;
   overflow-wrap: anywhere;
 }
+
+/* W1: actual source and credit content remains visible within the approved shell. */
+.approved-client .approved-canonical-section { min-width: 0; margin-top: 24px; padding: clamp(14px, 2.5vw, 26px); border: 1px solid var(--border); border-radius: var(--radius); background: var(--white); }
+.approved-client .approved-canonical-heading { margin-bottom: 18px; }
+.approved-client .approved-canonical-heading h2 { margin: 0 0 6px; font-size: clamp(17px, 1.8vw, 22px); color: var(--ink); }
+.approved-client .approved-canonical-heading p { margin: 0; color: var(--muted); }
+.approved-client .approved-canonical-section .ws { min-width: 0; }
