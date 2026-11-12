@@ -40,7 +40,7 @@ export function ApprovedPage(p: ScreenProps) {
       detailsRef.current.open = true;
       target.scrollIntoView();
     }
-  }, [page, hasDetails]);
+  }, [page, hasDetails, inlineCanonical]);
   const jump = (label: string, target: Page) => (
     <button className="text-link" onClick={() => go(target)}>
       {label} →
