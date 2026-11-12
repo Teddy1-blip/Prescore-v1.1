@@ -4,6 +4,7 @@ import {getRuntime} from '../../../lib/platform/runtime';
 import {documentStorage} from '../../../lib/storage/documents';
 import {recognizeLocalDocument,OCR_MAX_BYTES,OCR_BATCH_PAGES,type OcrLayout} from '../../../lib/document-poc/local-ocr';
 import {contractEvidence} from '../../../lib/document-poc/financial-terms';
+import {routeDocument,type UploadFamily} from '../../../lib/document-poc/document-routing';
 import {requireApiUser,unauthorized} from '../api-auth';
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
@@ -17,7 +18,8 @@ export async function POST(request:Request){
  const origin=request.headers.get('origin');
  if(request.headers.get('sec-fetch-site')==='cross-site'||(origin&&origin!==new URL(request.url).origin))return error(403,'Недопустимый источник запроса');
  try{
-  const body=await request.json() as {documentId?:unknown;fromPage?:unknown;toPage?:unknown;layout?:unknown;quality?:unknown};
+  const body=await request.json() as {documentId?:unknown;fromPage?:unknown;toPage?:unknown;layout?:unknown;quality?:unknown;expectedFamily?:unknown};
+  if(body?.expectedFamily!=null&&(typeof body.expectedFamily!=='string'||!['BFO','CREDIT','COMMERCIAL'].includes(body.expectedFamily)))return error(400,'Неизвестный тип загрузки');
   const id=String(body?.documentId??'');
   if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))return error(400,'Нужен идентификатор документа');
   const fromPage=body.fromPage??1,toPage=body.toPage??(Number(fromPage)+OCR_BATCH_PAGES-1),layout=body.layout??'SINGLE',quality=body.quality??'STANDARD';
@@ -35,9 +37,13 @@ export async function POST(request:Request){
   const bytes=doc.contentBase64?new Uint8Array(Buffer.from(doc.contentBase64,'base64')):await documentStorage().get(doc.storageKey);
   if(bytes.byteLength!==doc.sizeBytes)return error(409,'Повреждённый документ');
   const result=await recognizeLocalDocument(bytes,{fromPage:Number(fromPage),toPage:Number(toPage),layout:layout as OcrLayout,quality:quality as 'STANDARD'|'HIGH'});
-  const contract=/(?:контракт|договор|акт|упд)/iu.test(doc.category+' '+doc.fileName);
-  const hints=contract?contractEvidence(result.pages):[];
-  return Response.json({status:'PREVIEW',documentId:doc.id,fileName:doc.fileName,documentCategory:doc.category,ocr:result,hints,
+  // This endpoint reads one bounded batch, never pretend its type covers unread pages.
+  // Expected upload family is a constraint, not proof of actual document type.
+  const routing=routeDocument({expectedFamily:(body.expectedFamily??null) as UploadFamily|null,
+   pages:result.pages,totalPhysicalPages:result.pageCount,layout:layout as OcrLayout,extractionWarnings:result.warnings});
+  const hints=routing.parser==='COMMERCIAL_CONTRACT'?contractEvidence(result.pages):[];
+  return Response.json({status:'PREVIEW',documentId:doc.id,fileName:doc.fileName,documentCategory:doc.category,ocr:result,
+   routing,routingScope:'CURRENT_OCR_BATCH',hints,
    warnings:['OCR_REQUIRES_HUMAN_REVIEW','NO_FOREIGN_TRANSMISSION','NOT_IMPORTED_INTO_CREDIT_ENGINE',...result.warnings]},
    {headers:{'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'}});
  }catch(e){
