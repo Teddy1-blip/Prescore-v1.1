@@ -9,7 +9,7 @@ function SourceAmount({ fact }: { fact: BankBfoComparison["accounting"] }) {
 
 export function BankBfoReconciliation({ rows }: { rows?: BankBfoComparison[] }) {
   if (!rows?.length) return null;
-  return <section className="pc-panel" data-testid="bank-bfo"><h2>Сверка выписок и БФО</h2>
+  return <section className="pc-panel" id="bank-bfo-comparison" data-testid="bank-bfo"><h2>Сверка выписок и БФО</h2>
     {rows.map(row => <article key={row.findingId} className="pc-factor-section">
       <h3>{row.title}</h3>
       <dl className="pc-definition">{row.bank && <SourceAmount fact={row.bank}/>}<SourceAmount fact={row.accounting}/></dl>

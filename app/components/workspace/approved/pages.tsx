@@ -7,6 +7,7 @@ export type ScreenProps = {
   page: Page;
   data: ViewData;
   focus: string;
+  availableViews?: readonly string[];
   go: (p: Page) => void;
   apps: Application[];
   details?: ReactNode;
@@ -143,7 +144,7 @@ export function ApprovedPage(p: ScreenProps) {
               ))}
             </div>
             <span className="chip dark">{d.scoreStatus}</span>
-            <p className="sub">Основания и ограничения раскрыты в кредитном профиле.</p>
+            <p className="sub">{d.scoreExplanation || 'Основания и ограничения раскрыты в кредитном профиле.'}</p>
           </div>
         </section>
         <div className="kpis">
@@ -155,7 +156,7 @@ export function ApprovedPage(p: ScreenProps) {
             d.ar ? 'ОСВ · ' + d.ar.asOf : 'Для остатка нужна ОСВ 62',
             'counterparties',
           )}
-          {metric('Остаток основного долга', money(d.debt), d.debtDate, 'analysis')}
+          {metric('Остаток основного долга', money(d.debt), d.debtDate, p.availableViews?.includes('obligations') ? 'obligations' : 'analysis')}
         </div>
         <CashCards data={d} go={go} />
         <div className="grid two gap-top">
@@ -170,6 +171,7 @@ export function ApprovedPage(p: ScreenProps) {
                   : 'Сроки денег и условия финансирования'
             }
           >
+            {d.riskSummary?.[0] && <Review title={d.riskSummary[0].title}>{d.riskSummary[0].detail}</Review>}
             <Review title="Дополнительный платёж">{d.capacityText}</Review>
             {jump('Проверить документы', 'documents')}
             {first && <Review title={first.title}>{first.detail}</Review>}
@@ -197,6 +199,7 @@ export function ApprovedPage(p: ScreenProps) {
           <button className={statement ? 'active' : ''} onClick={() => setStatement(true)}>
             Бухгалтерская отчётность
           </button>
+          {d.hasBankBfo && <a className="text-link" href="#bank-bfo-comparison">Сверка выписок и БФО ↓</a>}
         </div>
         {statement ? (
           <Card title="БФО: показатели и основания" sub={d.fiscalDate || 'Отдельный отчётный период'}>
@@ -207,7 +210,9 @@ export function ApprovedPage(p: ScreenProps) {
                 rows={d.bfo}
               />
             ) : (
-              <p>Добавьте бухгалтерскую отчётность в документы компании.</p>
+              <p>{d.hasFinancialSource
+                ? d.plan === 'BASIC' ? 'Отчётность сохранена. Подробный финансовый анализ доступен в FULL.' : 'В сохранённой отчётности нет подтверждённых значений для этой таблицы.'
+                : 'Добавьте бухгалтерскую отчётность в документы компании.'}</p>
             )}
             {jump('Источники', 'documents')}
           </Card>
@@ -286,6 +291,7 @@ export function ApprovedPage(p: ScreenProps) {
             {jump('Перейти к плану действий', 'actions')}
           </Card>
           <Card title={(d.score ?? '—') + ' / 1000'} sub={d.scoreStatus}>
+            {d.scoreExplanation && <p>{d.scoreExplanation}</p>}
             {d.components.map((c) => (
               <div className="barrow" key={c.label}>
                 <div className="title">
@@ -309,7 +315,7 @@ export function ApprovedPage(p: ScreenProps) {
           </Card>
         </div>
         {d.riskSummary !== null && (
-          <Card extra="gap-top" title="Риски и стоп-факторы" sub="Выводы по каноническому анализу выбранной компании">
+          <Card extra="gap-top" title="Риски и стоп-факторы" sub="По проверенным источникам выбранной компании">
             <p className="note">
               Это факторы по методике Prescore, не объявление решения или стоп-критериев конкретного банка.
             </p>
@@ -338,8 +344,9 @@ export function ApprovedPage(p: ScreenProps) {
               rows={d.obligations}
             />
           ) : (
-            <p>Для договоров и остатков добавьте кредитную историю.</p>
+            <p>{d.plan === 'BASIC' ? 'Просмотр договоров и остатков доступен в полном кредитном профиле.' : 'Для договоров и остатков проверьте кредитную историю в документах.'}</p>
           )}
+          {p.availableViews?.includes('obligations') && jump('Открыть кредитный портфель', 'obligations')}
           {jump('Проверить документы', 'documents')}
         </Card>
         <Card
@@ -551,7 +558,7 @@ export function ApprovedPage(p: ScreenProps) {
               >
                 {s.status}
               </span>,
-              jump(s.route === 'banking' ? 'Финансы' : 'Открыть раздел', s.route),
+              p.availableViews && !p.availableViews.includes(s.route) ? 'Раздел недоступен' : jump(s.route === 'banking' ? 'Финансы' : s.route === 'obligations' ? 'Кредитный портфель' : 'Открыть раздел', s.route),
             ])}
           />
         </Card>
@@ -572,7 +579,7 @@ export function ApprovedPage(p: ScreenProps) {
         </div>
       </>
     );
-  if (page === 'actions')
+  if (page === 'actions' && !p.details)
     content = (
       <div className="grid two">
         <Card

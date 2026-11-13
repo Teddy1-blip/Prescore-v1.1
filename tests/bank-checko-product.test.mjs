@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {loadBusiness} from '../lib/credit-engine/credit-lab/business-corpus.mjs';
+import {checkoStatusText} from '../lib/external/checko-summary.ts';
 import {normalizeProfile} from '../lib/external/checko-profile.ts';
 import {buildCanonicalCreditAnalysis} from '../lib/credit-engine/production/orchestrator.ts';
 import {publicCanonicalModel} from '../lib/credit-engine/production/public-model.ts';
@@ -42,4 +43,11 @@ test('The six businesses receive distinct opinions grounded in their own evidenc
  assert.equal(new Set([...profiles.values()].map(({r})=>r.expertise.items.find(i=>i.id===r.expertise.memoIds[0]).interpretation)).size,6);
  const clean=profiles.get('A').r.productFit.other.find(p=>p.family==='CREDIT_LINE').purpose;
  assert.notEqual(profiles.get('B').r.productFit.other.find(p=>p.family==='CREDIT_LINE').purpose,clean);
+});
+
+test('Checko distinguishes a failed dossier checksum from provider and configuration states', () => {
+  assert.match(checkoStatusText('FAILED', '9900002001'), /Контрольная цифра ИНН/);
+  assert.match(checkoStatusText('FAILED', ''), /нужны 10 цифр/);
+  assert.equal(checkoStatusText('FAILED', '7707083893'), 'Ошибка получения сведений');
+  assert.equal(checkoStatusText('NOT_CONFIGURED', '9900002001'), 'Источник не настроен');
 });

@@ -74,6 +74,7 @@ export function NavIcon({ id }: { id: string }) {
     home: 'overview',
     banking: 'finance',
     analysis: 'credit',
+    obligations: 'applications',
     financing: 'funding',
   };
   return (

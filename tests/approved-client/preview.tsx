@@ -194,7 +194,7 @@ function Preview() {
   return (
     <ApprovedShell
       page={page}
-      available={Object.keys(pages)}
+      available={Object.keys(pages).filter(id => id !== 'obligations')}
       preview
       company={d.company}
       companyId={company}

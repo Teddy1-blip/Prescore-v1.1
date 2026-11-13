@@ -22,9 +22,9 @@ const facts:Record<string,{label:string;action:string}>={
 };
 export function indexGapGuidance(rows:readonly CoverageRow[]):IndexGapGuidance[]{
  return rows.flatMap(row=>(row.state==='ADEQUATE'?[]:row.missingFactCodes.map(factCode=>({
-  component:components[row.component]??row.component,
+  component:components[row.component]??'Компонент оценки',
   factCode,
-  label:facts[factCode]?.label??`Не подтверждён факт ${factCode}`,
+  label:facts[factCode]?.label??'Для этого компонента требуется дополнительное подтверждение',
   action:facts[factCode]?.action??'Проверьте источник, его период и достоверность.',
   blocksNumericIndex:row.state==='INSUFFICIENT',
  }))));

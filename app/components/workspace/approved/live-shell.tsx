@@ -24,7 +24,7 @@ type Workspace = {
   context: ReactNode;
   children: ReactNode;
 };
-type ContentProps = Pick<Workspace, 'view' | 'renderPage' | 'choose'> & {
+type ContentProps = Pick<Workspace, 'view' | 'renderPage' | 'choose' | 'availableViews'> & {
   data: ReturnType<typeof liveView>;
   focus: string;
   apps: Deal[];
@@ -110,6 +110,7 @@ export function ClientShell(p: Workspace) {
         value={{
           view: p.view,
           renderPage: p.renderPage,
+          availableViews: p.availableViews,
           choose: p.choose,
           data,
           focus,
@@ -134,6 +135,7 @@ export function ClientShell(p: Workspace) {
 export function LivePage({ children }: { children: ReactNode }) {
   const c = useContext(ScreenContext);
   if (!c?.renderPage || !Object.hasOwn(pages, c.view)) return <>{children}</>;
+  if (c.view === 'obligations') return <div className="ws">{children}</div>;
   const page = c.view as Page;
   const billing = page === 'billing',
     ar = page === 'counterparties';
@@ -141,6 +143,7 @@ export function LivePage({ children }: { children: ReactNode }) {
     <ApprovedPage
       key={page}
       page={page}
+      availableViews={c.availableViews}
       data={c.data}
       focus={c.focus}
       go={c.choose}

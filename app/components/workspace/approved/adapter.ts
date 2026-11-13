@@ -1,4 +1,5 @@
 import type { WorkspaceModelV1, WorkspaceFactV1 } from '../../../../lib/workspace/model';
+import { indexGapGuidance } from '../../../../lib/workspace/credit-coverage-guidance';
 import { cashValue } from '../../../../lib/workspace/cash-series';
 import { colorList, money, type Amount, type ViewData, type Page } from './types';
 import { sourceLabel, sourceState, label } from '../credit-depth';
@@ -68,8 +69,8 @@ export function liveView(model: WorkspaceModelV1 | null, name: string, month: st
         ? [s.periodFrom, s.periodTo].filter(Boolean).map(date).join(' — ')
         : 'Дата уточняется',
     status: sourceState(s.status),
-    route: (s.source.includes('CREDIT')
-      ? 'analysis'
+    route: (s.source === 'CREDIT_HISTORY'
+      ? 'obligations'
       : s.source.includes('BANK') || s.source.includes('FINANCIAL') || s.source === 'QUARTERLY_REPORT'
         ? 'banking'
         : 'documents') as Page,
@@ -94,8 +95,19 @@ export function liveView(model: WorkspaceModelV1 | null, name: string, month: st
           detail: publicText(claim.textRu),
         }))
     : null;
+  const index = model?.full?.canonical.prescoreIndex;
+  const blockers = index?.value === null && index.status !== 'NOT_RATABLE_GLOBAL_STOP'
+    ? indexGapGuidance(index.coverage.components).filter(gap => gap.blocksNumericIndex)
+    : [];
+  const scoreExplanation = index?.status === 'NOT_RATABLE_GLOBAL_STOP'
+    ? 'Расчёт остановлен. Основание указано в разделе «Стоп-факторы и риски».'
+    : [...new Set(blockers.map(gap => gap.label))].join('. ');
   return {
     company: name,
+    scoreExplanation,
+    hasFinancialSource: model?.basic.sources.availability.some(s =>
+      ['FINANCIAL_STATEMENTS', 'QUARTERLY_REPORT'].includes(s.source) && ['READY', 'PARTIAL', 'STALE'].includes(s.status)),
+    hasBankBfo: Boolean(report?.reconciliation?.bankBfo?.length),
     asOf: report?.meta.asOfDate ? date(report.meta.asOfDate) : '',
     period,
     plan: model?.entitlement ?? '',
@@ -144,7 +156,7 @@ export function liveView(model: WorkspaceModelV1 | null, name: string, month: st
     bfo: (sheet?.groups ?? []).flatMap((g) =>
       g.metrics
         .filter((m) => m.value !== null && m.status !== 'UNKNOWN')
-        .map((m) => [m.label, g.title, numeric(m.value, m.status, m.unit), date(m.asOf ?? m.periodTo)]),
+        .map((m) => [m.label, sourceLabel(sheet!.source), numeric(m.value, m.status, m.unit), date(m.asOf ?? m.periodTo)]),
     ),
     obligations: portfolio.map((o) => [
       String(o.creditor.value ?? label(o.type)),

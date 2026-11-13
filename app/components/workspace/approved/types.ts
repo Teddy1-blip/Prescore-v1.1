@@ -2,6 +2,7 @@ export const pages = {
   home: ['Обзор', 'Ваша финансовая картина', 'Деньги, обязательства и следующий шаг'],
   banking: ['Финансы', 'Движение денег', 'От поступлений до конкретных платежей'],
   analysis: ['Кредитный профиль', 'Кредитный профиль', 'Выводы, их основания и ограничения'],
+  obligations: ['Кредитный портфель', 'Кредитный портфель', 'Договоры, фактические выплаты и график'],
   counterparties: ['Контрагенты', 'Расчёты с покупателями', 'Дебиторка, сроки и рабочие договорённости'],
   financing: ['Финансирование', 'Финансирование бизнеса', 'От задачи до подготовленной заявки'],
   applications: ['Заявки', 'Ваши заявки', 'Документы, ответственные и следующий шаг'],
@@ -46,6 +47,7 @@ export type ViewData = {
   summary: string;
   score: Amount;
   scoreStatus: string;
+  scoreExplanation?: string;
   components: { label: string; score: number; max: number }[];
   capacity: string;
   capacityText: string;
@@ -65,6 +67,8 @@ export type ViewData = {
   riskSummary: CreditRiskItem[] | null;
   products: Item[];
   bfo: string[][];
+  hasBankBfo?: boolean;
+  hasFinancialSource?: boolean;
   fiscalDate: string;
   obligations: string[][];
   sources: { label: string; date: string; status: string; route: Page }[];

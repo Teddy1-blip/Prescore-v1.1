@@ -15,7 +15,7 @@ test('index: missing legal component blocks, limited operating trend does not in
 test('index: only actual missing codes appear; no invented facts',()=>{
  assert.deepEqual(indexGapGuidance([{component:'LEGAL_CORPORATE',state:'ADEQUATE',missingFactCodes:['LEGAL_LIFECYCLE']}]),[]);
  const r=indexGapGuidance([{component:'OTHER',state:'INSUFFICIENT',missingFactCodes:['CUSTOM'] }]);
- assert.equal(r[0].factCode,'CUSTOM');assert.match(r[0].label,/CUSTOM/);
+ assert.equal(r[0].factCode,'CUSTOM');assert.doesNotMatch(r[0].label+r[0].component,/CUSTOM|OTHER/);assert.ok(r[0].label);
 });
 test('capacity: one month, incomplete assessment, excluded scheduled obligation, no zero substitution',()=>{
  const input={status:'INSUFFICIENT_DATA',operatingBasis:{fullMonthCount:1},creditAssessmentReference:{status:'INSUFFICIENT_DATA'},portfolioScheduledDebtService30d:{value:null,complete:false,excludedObligationIds:['loan-a'],unknownObligationIds:[]}};

@@ -10,6 +10,7 @@ const sectionRoutes = [
   'home',
   'banking',
   'analysis',
+  'obligations',
   'counterparties',
   'financing',
   'applications',
@@ -214,6 +215,7 @@ try {
     'Обзор',
     'Финансы',
     'Кредитный профиль',
+    'Кредитный портфель',
     'Контрагенты',
     'Финансирование',
     'Заявки',
@@ -280,6 +282,12 @@ try {
     String(full.full.report.index.value?.value ?? '—') + '/1000',
   );
   ok('Временный отказ модели и повторная загрузка с сервера');
+  await nav('Кредитный портфель').click();
+  await page.getByRole('heading', {name:'Обслуживание долга по выпискам'}).waitFor();
+  assert.equal(new URL(page.url()).searchParams.get('analysisId'), A.id);
+  await page.reload();
+  await page.getByRole('heading', {name:'Обязательства по договорам'}).waitFor();
+  ok('Прямой переход и reload открывают DebtPortfolio выбранной компании');
   const months = full.basic.bankingFacts.monthly ?? [];
   if (months.length) {
     const month = months.at(-1).month;
@@ -357,6 +365,7 @@ try {
   assert.ok(revenue.context.some(f=>f.value===320000 && f.period.asOf==='2025-12-31'));
   assert.equal(rows.find(row=>row.accounting.label.includes('1250')).accounting.value,850000);
   await nav('Финансы').click();
+  await page.getByRole('link', {name:/Сверка выписок и БФО/}).click();
   const comparison = page.getByTestId('bank-bfo');
   await comparison.waitFor();
   const normalized = text => text.replace(/\s+/g,' ').trim();
@@ -371,14 +380,39 @@ try {
   await nav('Кредитный профиль').click();
   await page.getByRole('button',{name:'Сверка',exact:true}).click();
   assert.equal(normalized(await comparison.innerText()),displayed);
+  const creditTabs=page.getByRole('navigation',{name:'Разделы анализа'});
+  for(const [tab,heading] of [
+    ['Стоп-факторы и риски', 'Что мешает рассчитать Prescore Index'],
+    ['Долговая ёмкость','Основания и ограничения долговой ёмкости'],
+    ['Рекомендации','Приоритетные рекомендации'],
+  ]) {
+    await creditTabs.getByRole('button',{name:tab,exact:true}).click();
+    await page.getByRole('heading',{name:heading,exact:true}).waitFor();
+  }
+  await nav('Обзор').click();
+  await page.getByText('Не подтверждён юридический статус компании', {exact:false}).first().waitFor();
+  await nav('План действий').click();
+  for(const horizon of combined.actionPlan.horizons) {
+    const block=page.locator('.pc-panel').filter({has:page.getByRole('heading',{name:new RegExp(horizon.title)})});
+    assert.equal(await block.locator('.pc-timeline > li').count(),horizon.items.length);
+    for (const item of horizon.items) {
+      assert.ok(await block.locator('[id="'+item.id+'"]').count());
+    }
+  }
+  await page.locator('.pc-timeline').getByRole('button',{name:'Почему?'}).first().click();
+  await page.getByRole('dialog',{name:'Основания вывода'}).waitFor();
+  await page.getByRole('button',{name:'Закрыть',exact:true}).click();
+  ok('Канонические причины отсутствующего Index, риски, долговая ёмкость и все пункты 7/30/60 со связанным основанием');
   const printPath = '/dashboard/report-v2?' + new URLSearchParams({analysisId:A.id,snapshotId:combined.meta.snapshot.snapshotId,print:'1'});
   const printPage = await ctx.newPage();
-  await printPage.emulateMedia({media:'print'});
   await printPage.goto(origin+printPath);
+  await printPage.getByRole('button',{name:'Печать / сохранить PDF'}).waitFor({state:'visible'});
+  await printPage.getByText(/Контрольная цифра ИНН в досье неверна/).waitFor();
+  await printPage.emulateMedia({media:'print'});
   const printed = printPage.getByTestId('bank-bfo');
   await printed.waitFor();
   assert.deepEqual(await factLines(printed),financeLines);
-  const pdf = await printPage.pdf();
+  const pdf = await printPage.pdf({path:path.join(out,'synthetic-client-report.pdf'),format:'A4',printBackground:true});
   assert.equal(pdf.subarray(0,5).toString(),'%PDF-');
   await printPage.close();
   ok('Выписки → годовая БФО: суммы и источники совпадают в Финансах, Кредитном профиле и печатном снимке PDF');
@@ -402,7 +436,7 @@ try {
     await page.setViewportSize({ width, height });
     for (const key of sectionRoutes) {
       await page.goto(origin + '/dashboard?analysisId=' + A.id + '&view=' + key);
-      await page.locator('.approved-client .client-hero,.approved-client .card').first().waitFor();
+      await page.locator('.approved-client .client-hero,.approved-client .card,.approved-client .pc-panel').first().waitFor();
       await page.waitForFunction(
         () => document.querySelector("select[aria-label='Период']")?.options.length > 1,
       );
@@ -435,9 +469,23 @@ try {
   await page.locator('form#source-bfo').waitFor({ state: 'visible' });
   ok('Мобильное меню, переход в Документы и возврат фокуса при Escape');
   await page.setViewportSize({ width: 1440, height: 1100 });
-  ok('27 снимков защищённого кабинета с сервером, без горизонтального переполнения');
+  ok('30 снимков защищённого кабинета с сервером, без горизонтального переполнения');
   await signup(partnerRole);
   assert.ok([403, 404].includes((await req(endpoint, partnerRole)).status));
+  const foreignRevision = await req('/api/workspace-model?'+new URLSearchParams({
+    analysisId:A.id,projection:'decision-revision',snapshotId:combined.meta.snapshot.snapshotId,
+  }),partnerRole);
+  assert.equal(foreignRevision.status,404);
+  await signInAsRole(partnerRole);
+  await page.goto(origin+printPath);
+  // Next can stream its layout with 200 before the protected server page resolves notFound().
+  await page.getByRole('heading',{name:'404',exact:true}).waitFor();
+  assert.equal(await page.locator('.cr-report, [data-testid="bank-bfo"]').count(),0);
+  assert.ok(!(await page.locator('body').innerText()).includes(A.companyName));
+  await page.goto(origin+'/dashboard?view=analysis&analysisId='+A.id);
+  await page.getByText(/Этот анализ больше недоступен/).waitFor();
+  assert.equal(await page.getByTestId('bank-bfo').count(),0);
+  ok('Второй авторизованный клиент без выдачи доступа не может прочитать чужой анализ и замороженный PDF');
   await json('/api/agent', partnerRole, { type: 'connect', consent: true, offerAccepted: true }, 201);
   await json(
     '/api/workspace',

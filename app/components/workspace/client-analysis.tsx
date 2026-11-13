@@ -32,6 +32,7 @@ export function FinancingProducts({model,embedded=false,showHeading=true}:{model
    {p.missing.length>0&&<><h3>До подачи нужно уточнить</h3><ul>{p.missing.map((s,i)=><li key={i}>{s}</li>)}</ul></>}
    <Why model={model} ids={[p.claimId]}/>
   </Panel>)}</div>
+  {!embedded && r.analysisV3?.scenarios.length ? <Panel title="Сценарии обслуживания долга"><div className="pc-canonical av-report"><Financing model={r}/></div></Panel> : null}
   {!products.length&&<Panel title="Требуются дополнительные данные"><p>{r.hero.globalStop?'Откройте стоп-факторы в кредитном профиле.':'Заполните запрос на финансирование: укажите цель и желаемую сумму.'}</p></Panel>}
   <p className="pc-muted">Prescore оценивает соответствие механики финансирования. Решение и условия конкретного банка определяет кредитор.</p>
  </>;
@@ -78,12 +79,12 @@ export function DebtPortfolio({model,embedded=false}:{model:WorkspaceModelV1;emb
 
 function IndexEvidenceGaps({model}:{model:WorkspaceModelV1}){
  const index=model.full?.canonical.prescoreIndex;
- if(!index||index.value!==null)return null;
+ if(!index||index.value!==null||index.status==='NOT_RATABLE_GLOBAL_STOP')return null;
  const gaps=indexGapGuidance(index.coverage.components);
  if(!gaps.length)return null;
  return <Panel title="Что мешает рассчитать Prescore Index">
   <p className="pc-muted">Указаны фактически отсутствующие подтверждения из расчётной модели. Диагностические баллы компонентов не являются общим индексом.</p>
-  <ul>{gaps.map(g=><li key={g.component+g.factCode}><b>{g.component}: {g.label}.</b> {g.blocksNumericIndex?'Без этого подтверждения итоговый индекс не публикуется.':'Покрытие компонента ограничено, но это не самостоятельная блокировка общего индекса.'} {g.action}</li>)}</ul>
+  <ul>{gaps.map(g=><li key={g.component+g.factCode}><b>{g.component}: {g.label}.</b> {g.blocksNumericIndex?'В этом компоненте пока недостаточно подтверждённых показателей для общего индекса.':'Покрытие компонента ограничено, но это не самостоятельная блокировка общего индекса.'} {g.action}</li>)}</ul>
  </Panel>;
 }
 function CapacityEvidenceGaps({model}:{model:WorkspaceModelV1}){
@@ -116,7 +117,7 @@ export function FullCreditAnalysis({model,retry,initialSection='conclusion'}:{mo
     <aside><span>{economic?'Ключевой фактор':'Что требует проверки'}</span><strong>{publicText(topConstraint?whyTitle(model.full?.canonical.explainability,topConstraint.claimId,topConstraint.title):'Отдельное ограничение не выделено')}</strong><small>{publicText(topConstraint?.text??'Проверьте комплект источников и готовность к финансированию.')}</small>{topConstraint&&<Why model={model} ids={[topConstraint.claimId]}/>}</aside>
    </section>
    {model.full?.canonical.creditAssessment.bankObservations?.length?<Panel title="Факторы заключения">{model.full.canonical.explainability.claims.filter(c=>c.claimCode.startsWith('PROFILE:')).map(c=><article key={c.claimId}><p>{publicText(c.textRu)}</p><Why model={model} ids={[c.claimId]}/></article>)}</Panel>:null}
-   <BankingSnapshot model={model}/><CreditSummary model={model}/><AssessmentLimits model={model}/><details><summary>Основания числовой оценки</summary><IndexEvidenceGaps model={model}/></details>
+   <BankingSnapshot model={model}/><CreditSummary model={model}/><AssessmentLimits model={model}/><IndexEvidenceGaps model={model}/>
    {model.full!.canonical.financingReadiness.level!=='UNKNOWN'&&<Panel title="Готовность к финансированию"><h3>{r.readiness.level}</h3><p>{r.readiness.text}</p><FactorRows model={model} items={r.readiness.constraints}/></Panel>}
   </>}
 
@@ -143,10 +144,13 @@ export function FullCreditAnalysis({model,retry,initialSection='conclusion'}:{mo
 }
 
 export function ActionPlan({model}:{model:WorkspaceModelV1}){
- const r=model.full!.report,scheduled=new Set(r.actionPlan.horizons.flatMap(h=>h.items.map(a=>a.canonicalId))),now=r.recommendations.primary.filter(a=>!scheduled.has(a.canonicalId)),shown=new Set<string>();
+ const full=model.full!, r=full.report;
+ const publishedItems=new Set(r.actionPlan.horizons.flatMap(h=>h.items.map(item=>item.canonicalId)));
+ const scheduled=new Set(full.canonical.actionPlan.items.filter(item=>publishedItems.has(item.planItemId)).map(item=>item.recommendationId));
+ const now=r.recommendations.primary.filter(a=>!scheduled.has(a.canonicalId));
  return <>
   <Panel title="Сейчас">{now.length?now.map(a=><ActionItem key={a.id} item={a} model={model}/>):<p>Приоритетные действия включены в ближайший этап плана ниже.</p>}</Panel>
-  {r.actionPlan.horizons.map(h=><Panel key={h.id} title={h.title+' · '+date(h.date)}><ol className="pc-timeline">{h.items.filter(a=>{const key=a.title.trim()+'|'+a.summary.trim();if(shown.has(key))return false;shown.add(key);return true;}).map(a=><li key={a.id} id={a.id}><b>{publicText(a.title)}</b><p>{publicText(a.steps[0]??a.summary)}</p><small>{publicText(a.recheck)}</small><Why model={model} ids={[a.claimId]}/></li>)}</ol>{!h.items.length&&<p>Отдельные действия на этот срок не назначены.</p>}</Panel>)}
+  {r.actionPlan.horizons.map(h=><Panel key={h.id} title={h.title+' · '+date(h.date)}><ol className="pc-timeline">{h.items.map(a=><li key={a.id} id={a.id}><b>{publicText(a.title)}</b><p>{publicText(a.steps[0]??a.summary)}</p>{a.why && a.why !== a.summary && <p>{publicText(a.why)}</p>}<small>{publicText(a.recheck)}</small>{a.evidence.length>0&&<p><b>Что подтвердить</b> · {a.evidence.map(publicText).join(' · ')}</p>}<Why model={model} ids={[a.claimId]}/></li>)}</ol>{!h.items.length&&<p>Отдельные действия на этот срок не назначены.</p>}</Panel>)}
 
   <p className="pc-muted">{r.actionPlan.disclaimer}</p>
  </>;

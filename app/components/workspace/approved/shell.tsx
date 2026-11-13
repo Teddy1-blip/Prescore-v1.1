@@ -62,7 +62,6 @@ export function ApprovedShell(p: ShellProps) {
   }, [menu]);
   const extra: Record<string, readonly string[]> = {
     upload: ['Загрузка', 'Обновление данных', 'Банковские выписки компании'],
-    obligations: pages.analysis,
     analyst: ['Объяснение', 'Спросить Prescore', 'Вопросы по выбранному анализу'],
   };
   const [label, title, subtitle] = pages[p.page as Page] ?? extra[p.page] ?? pages.home;
@@ -72,6 +71,7 @@ export function ApprovedShell(p: ShellProps) {
   };
   function link(id: string) {
     const query = new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search);
+    if (p.companyId) query.set('analysisId', p.companyId);
     query.set('view', id);
     return '?' + query.toString();
   }
