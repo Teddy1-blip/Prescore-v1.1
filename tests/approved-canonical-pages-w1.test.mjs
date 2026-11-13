@@ -23,6 +23,12 @@ test('approved core pages expose canonical detail without hidden disclosure', as
    assert.match(html,/id="approved-source-operations"/,page);
   }
   assert.match(render('home'),/class="details"/);
+  const analysis=render('analysis');
+  assert.match(analysis,/Финансово-кредитное заключение Prescore/);
+  assert.match(analysis,/независимая финансовая диагностика/);
+  assert.match(analysis,/не показывает/);
+  assert.match(analysis,/Направления финансирования/);
+  assert.match(analysis,/Рассмотреть финансирование/);
  } finally {await rt.close();}
 });
 
