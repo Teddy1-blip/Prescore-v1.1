@@ -189,6 +189,19 @@ try {
   await page
     .getByRole('heading', { name: (full.full.report.index.value?.value ?? '—') + ' / 1000', exact: true })
     .waitFor();
+  // The financial diagnosis must be visible to the client and must not impersonate a lender's decision.
+  await page.getByRole('heading', { name: 'Финансово-кредитное заключение Prescore', exact: true }).waitFor();
+  await page.getByText(/независимая финансовая диагностика компании/).first().waitFor();
+  await page.getByRole('heading', { name: 'Направления финансирования', exact: true }).waitFor();
+  assert.equal(await page.getByText(/банк откажет|вероятность отказа|заявка отклонена/i).count(), 0);
+  const suggested = full.full.report.productFit?.primary ?? [];
+  for (const product of suggested.slice(0, 3)) {
+    await page.getByRole('heading', { name: product.title, exact: true }).first().waitFor();
+  }
+  if (!suggested.length) {
+    await page.getByText('Уточните цель, сумму и срок финансирования.', { exact: false }).waitFor();
+  }
+  ok('Заключение отличает Prescore от решения банка и показывает только рассчитанные направления');
   ok('Index совпадает в Обзоре, Кредитном профиле и серверном снимке');
   const names = [
     'Обзор',
