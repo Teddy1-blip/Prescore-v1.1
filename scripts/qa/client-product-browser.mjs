@@ -19,8 +19,63 @@ async function stopServer(){
 await startServer();
 const browser=await chromium.launch({headless:true,...(process.env.QA_CHROMIUM_PATH?{executablePath:process.env.QA_CHROMIUM_PATH}:{}),args:['--no-sandbox','--disable-dev-shm-usage']});const context=await browser.newContext(),page=await context.newPage(),origin='http://127.0.0.1:4189',errors=[],checks=[];
 page.on('pageerror',e=>errors.push(e.message));
+// New approved-client shell and the original legacy client have different navigation semantics.
+// Keep the historical regression branch below, while testing the currently shipped shell directly.
+async function verifyApprovedClient(seed){
+  const views=['home','analysis','banking','financing','documents','applications','actions','counterparties','billing'];
+  const full=await(await page.request.get(origin+'/api/workspace-model?analysisId='+seed.id)).json();
+  assert.equal(full.entitlement,'FULL');
+  assert.ok(full.full?.report,'Full canonical analysis expected');
+  for(const width of [1440,768,390]){
+    await page.setViewportSize({width,height:width===390?844:1000});
+    for(const view of views){
+      await page.goto(origin+'/dashboard?analysisId='+seed.id+'&view='+view);
+      await page.locator('.approved-client .head h1').waitFor();
+      await page.waitForFunction(()=>!document.body.innerText.includes('Загружаем кабинет'));
+      assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'overflow '+view+' '+width);
+      if(view==='home')await page.locator('.client-hero').waitFor();
+      if(view==='analysis'){
+        await page.getByRole('heading',{name:'Финансово-кредитное заключение Prescore',exact:true}).waitFor();
+        await page.getByRole('heading',{name:'Риски и стоп-факторы',exact:true}).waitFor();
+        await page.getByRole('heading',{name:'Направления финансирования',exact:true}).waitFor();
+        const score=full.full.report.index.value?.value;
+        if(score!==null&&score!==undefined){
+          await page.getByRole('heading',{name:score+' / 1000',exact:true}).waitFor();
+        }
+      }
+      if(width===1440||width===390)await page.screenshot({path:out+'/approved-'+view+'-'+width+'.png',fullPage:true});
+      checks.push('approved '+view+' '+width);
+    }
+  }
+  await page.setViewportSize({width:390,height:844});
+  await page.goto(origin+'/dashboard?analysisId='+seed.id+'&view=home');
+  const toggle=page.getByRole('button',{name:'Открыть меню'});
+  await toggle.click();
+  await page.getByRole('navigation',{name:'Разделы кабинета'}).getByRole('link',{name:'Документы',exact:true}).click();
+  assert.equal(await toggle.getAttribute('aria-expanded'),'false');
+  checks.push('approved mobile menu navigation');
+  const basic=structuredClone(full);
+  delete basic.full;
+  basic.state='READY_BASIC';
+  basic.entitlement='BASIC';
+  basic.fullAvailability='LOCKED';
+  const matcher=url=>url.pathname==='/api/workspace-model'&&url.searchParams.get('analysisId')===seed.id;
+  await page.route(matcher,route=>route.fulfill({json:basic}));
+  try{
+    await page.goto(origin+'/dashboard?analysisId='+seed.id+'&view=analysis');
+    await page.locator('.approved-client .head h1').waitFor();
+    await page.getByText('Открыть полный анализ',{exact:false}).first().waitFor();
+    assert.equal(await page.getByRole('heading',{name:'Риски и стоп-факторы',exact:true}).count(),0);
+    checks.push('approved BASIC does not leak FULL risk details');
+  }finally{await page.unroute(matcher);}
+}
 try{
  let seed=await(await page.request.get(origin+'/__qa/seed')).json();fs.writeFileSync(out+'/seed.json',JSON.stringify(seed));
+ await page.goto(origin+'/dashboard?analysisId='+seed.id+'&view=home');
+ await page.locator('.approved-client .head h1,.pc-company b').first().waitFor();
+ if(await page.locator('.approved-client').count()){
+   await verifyApprovedClient(seed);
+ }else{
  for(const [width,height] of [[1440,900],[1280,800],[1024,768],[768,1024],[390,844],[360,800]]){
  await page.setViewportSize({width,height});
  for(const view of ['home','analysis','banking','obligations','financing','documents','applications','analyst','upload']){
@@ -189,5 +244,6 @@ try{
  assert.equal((await recoveredResponse).status(),200);await page.getByRole('heading',{name:'Финансовая картина',exact:true}).waitFor();
  await page.waitForFunction(()=>document.querySelector('[role="alert"]')===null);
  checks.push('intercepted summary 503: visible alert and successful retry');
+ }
  assert.deepEqual(errors,[]);checks.push('no browser runtime errors');console.log('PASS',checks.length);
 }catch(e){console.error(e);await page.screenshot({path:out+'/failure.png',fullPage:true});process.exitCode=1;}finally{fs.writeFileSync(out+'/result.json',JSON.stringify({checks,errors},null,2));await browser.close();await stopServer();}

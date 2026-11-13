@@ -42,6 +42,7 @@ function snapshot(
     return {
       id: '2026-' + String(i + 5).padStart(2, '0'),
       label: r.m,
+      coverage: 'FULL', // only synthetic preview statements; real coverage comes from the canonical API
       incoming,
       outgoing,
       net: incoming - outgoing,
@@ -99,6 +100,7 @@ function snapshot(
     factors: [
       { title: '38% поступлений — один покупатель', detail: 'Доля операционных поступлений за период.' },
     ],
+    riskSummary: null, // Synthetic visual preview has no verified canonical risk findings.
     products: [
       { title: 'Оборотная линия', detail: 'Закупка и временная потребность' },
       { title: 'Факторинг', detail: 'Финансирование под требования' },
