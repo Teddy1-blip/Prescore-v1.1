@@ -1,3 +1,4 @@
+import {beforeBankBfoEvidence} from './fixtures/client-report/reconciliation-v1-baseline.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile,mkdtemp,rm} from 'node:fs/promises';
@@ -19,7 +20,7 @@ const makeDraft=()=>{const d=initial();d.method.expression=expr;return d;};
 const raw=()=>analyze(integrationB());
 const fullHash=o=>createHash('sha256').update(JSON.stringify(o)).digest('hex');
 const pre=['1fd67a9f8d57d100a9f44bc3972c5e9fce6830e130baf7640f10a5199401d7eb','e083f5d74fc6c59f668b8a86421057a44b2d6de274f66ec96684032499ae6c67','b24803017132b0c427ce7ad77a0a3247a0c96f7719e82ac0fdc00e622bd31957'];
-test('three default canonical outputs equal complete pre-edit serialized outputs',()=>{assert.deepEqual([{}, {months:6},{conflict:true}].map(s=>fullHash(analyze(integrationB(s)))),pre);});
+test('three default canonical outputs equal complete pre-edit serialized outputs',()=>{assert.deepEqual([{}, {months:6},{conflict:true}].map(s=>fullHash(beforeBankBfoEvidence(analyze(integrationB(s))))),pre);});
 test('Studio default equals ordinary canonical object and equal comparison hashes',()=>{assert.deepEqual(analyze(makeInput(scenario()),compileMethodology(baseline())),raw());const r=runComparison(initial());assert.equal(r.before.resultHash,r.after.resultHash);assert.deepEqual(r.changed,[]);});
 test('typed expression reaches metric, finding, component and ceiling',()=>{const r=runComparison(makeDraft());const x=r.after.result;assert.equal(x.metric.value,2.5/3);assert.equal(x.rule.status,'TRIGGERED');assert.ok(x.risks.some(v=>v.code===RISK));assert.deepEqual([x.raw,x.ceiling,x.index],[928,849,849]);assert.deepEqual(r.before.result.capacity,x.capacity);});
 test('new action follows finding, edited copy changes no Index and reaches plan',()=>{const d=makeDraft(),a={...currentAction,title:'Сверить требования покупателей',text:'Уточните даты ожидаемых платежей.',code:'STUDIO_DATES'};d.method.actions=[a];let x=runComparison(d).after.result;const v=x.recommendations.find(v=>v.code===a.code);assert.ok(v.facts.length&&v.sources.length&&v.horizon);assert.equal(x.index,849);a.trigger='RISK-FIN-WORKING-CAPITAL';assert.ok(!runComparison(d).after.result.recommendations.some(v=>v.code===a.code));d.method.actions=[{...currentAction,text:'Перепроверьте подтверждённые сроки платежей.'}];x=runComparison(d).after.result;assert.equal(x.index,849);assert.equal(x.recommendations.find(x=>x.code===currentAction.code).text,d.method.actions[0].text);});

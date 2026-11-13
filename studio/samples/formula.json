@@ -52,8 +52,8 @@
   },
   "checks": {
     "runId": "1ca43e99-382e-42ac-9bbf-ca8a8e5b3c9d",
-    "before": "dc65655e523377f544365f64ea2228170f6945a312e974e38766470d013420d2",
-    "after": "2117f01dc828643634540e00866b7841bd7d8619970f8a2df6a7c4d4b0c9bc3d",
+    "before": "683620ccdb0102316e059b3cc9d5733f6f406843a3c34ee4ca91875287567b98",
+    "after": "db4371604a40a96d90d88b552d075593056801fdebb62efc1e2ff233d7139f8a",
     "changed": [
       "index",
       "raw",
@@ -84,5 +84,5 @@
   },
   "rollback": "Вернуть базовую методологию из сохранённого снимка",
   "createdAt": "2026-11-10T22:36:38.877Z",
-  "checksum": "3cba788f6301fcf4097b82328e28b62fc960ea78f53d27494ea279e6f24a8ddd"
+  "checksum": "288a1d899a0d512c26aebbb9ec4012fe3a702b92796dbfc7a5666e03f7440259"
 }

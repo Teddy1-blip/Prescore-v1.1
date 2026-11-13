@@ -1,3 +1,4 @@
+import {beforeBankBfoEvidence} from './client-report/reconciliation-v1-baseline.mjs';
 import assert from 'node:assert/strict';
 import {digest,reviewed,restore} from './client-report/stage5-baseline.mjs';
 import {readFileSync} from 'node:fs';
@@ -22,7 +23,7 @@ export function currentHistoricalBusinessResult(caseId,input) {
 }
 // Reconstruct and verify the accepted byte-for-byte Stage 5 result from the new result.
 export function historicalBusinessResult(caseId,input) {
-  const result=currentHistoricalBusinessResult(caseId,input);
+  const result=beforeBankBfoEvidence(currentHistoricalBusinessResult(caseId,input));
   assert.equal(digest(result),bankProfileHashes[caseId].historical,caseId+' current profile');
   bankProfileReverse??=JSON.parse(gunzipSync(readFileSync(new URL('./client-report/bank-profile-reverse.json.gz',import.meta.url))));
   const prior=restore(result,bankProfileReverse[caseId]);

@@ -1,4 +1,5 @@
 "use client";
+import {BankBfoReconciliation} from './bank-bfo-reconciliation';
 import {FinancialDynamics} from './financial-dynamics';
 import type {WorkspaceModelV1} from '../../../lib/workspace/model';
 import type {PublicFinancialMetric} from '../../../lib/credit-engine/client-report/source-detail';
@@ -104,6 +105,8 @@ export function ReconciliationDetails({model}:{model:WorkspaceModelV1}){
  const r=model.full?.report;
  if(!r)return <FullAccessNotice model={model}/>;
  const a=r.reconciliation;
+ const displayed = new Set(a?.bankBfo?.map(row => row.findingId));
+ const other = a?.findings.filter(f => !displayed.has(f.id)) ?? [];
  const renderFinding=(f:NonNullable<typeof a>['findings'][number])=><article className={'pc-recon-card'+(f.requiresReview?' needs-review':'')} key={f.id}>
    <header><div><span>{outcomes[f.outcome]??'Состояние сверки не определено'}</span><h2>{f.title}</h2></div><span className={'pc-badge'+(f.requiresReview?' attention':'')}>{f.requiresReview?'Проверить':'Без отдельной проверки'}</span></header>
    <p>{f.requiresReview?'Есть расхождение или ограничение сопоставимости, которое стоит объяснить до подачи заявки.':'Сопоставление не выявило отдельного действия по этому факту.'}</p>
@@ -111,13 +114,14 @@ export function ReconciliationDetails({model}:{model:WorkspaceModelV1}){
    <details><summary>Сравнить исходные показатели</summary><div className="pc-recon-sides">{[f.left,f.right].map((side,n)=><div key={n}>{side.map((v,i)=><div className="pc-recon-value" key={i}><h3>{sourceLabel(v.sourceType)} · {v.label}</h3><strong>{numeric(v.value,v.status,v.unit)}</strong><p>{date(v.period.from)} — {date(v.period.to)} · на {date(v.period.asOf)}</p><small>{label(v.status)} · {label(v.confidence)}</small><Warnings items={v.warnings}/></div>)}{!side.length&&<p>Сопоставляемый источник отсутствует.</p>}</div>)}</div><dl className="pc-definition"><div><dt>Абсолютная разница</dt><dd>{numeric(f.absoluteDifference,'KNOWN','')}</dd></div><div><dt>Относительное отклонение</dt><dd>{numeric(f.relativeDifference,'KNOWN','RATIO')}</dd></div><div><dt>Соотношение значений</dt><dd>{numeric(f.ratio,'KNOWN','RATIO')}</dd></div><div><dt>Разница дат</dt><dd>{numeric(f.temporalGapDays,'KNOWN','DAYS')}</dd></div></dl><Warnings items={[...f.reasons,...f.warnings]}/></details>
   </article>;
  return <>
+  <BankBfoReconciliation rows={a?.bankBfo}/>
   <Panel title="Сопоставление источников">
    <p>Prescore сравнивает банковские данные, отчётность и кредитную историю там, где показатели и периоды действительно сопоставимы. Расхождение само по себе не является кредитным решением.</p>
    {a&&<div className="pc-statusline"><span className="pc-badge">Достоверность: {label(a.confidence)}</span><span className={'pc-badge'+(a.findings.some(f=>f.requiresReview)?' attention':'')}>{a.findings.filter(f=>f.requiresReview).length} требуют проверки</span></div>}
    {a&&<Warnings items={a.warnings}/>}
   </Panel>
   {a?<div className="pc-reconciliation-list">{a.findings.filter(f=>f.requiresReview).map(renderFinding)}
-    {a.findings.some(f=>!f.requiresReview)&&<details className="pc-recon-other"><summary>Остальные сопоставления ({a.findings.filter(f=>!f.requiresReview).length})</summary>{a.findings.filter(f=>!f.requiresReview).map(renderFinding)}</details>}
+    {other.some(f=>!f.requiresReview)&&<details className="pc-recon-other"><summary>Остальные сопоставления ({other.filter(f=>!f.requiresReview).length})</summary>{other.filter(f=>!f.requiresReview).map(renderFinding)}</details>}
     {!a.findings.length&&<Panel title="Сверка завершена"><p>Отдельные результаты сопоставления источников пока отсутствуют.</p></Panel>}</div>:<Panel title="Сверка недоступна"><p>Детальная сверка не опубликована для этого анализа.</p></Panel>}
   <Panel title="Влияние на кредитную оценку">{r.detailedSections.filter(s=>/reconcil|сверк|источник/i.test(s.id+' '+s.title)).map(s=><section className="pc-factor-section" key={s.id}><h3>{s.title}</h3><FactorRows model={model} items={s.factors}/></section>)}<FactorRows model={model} items={r.limitations}/></Panel>
  </>;

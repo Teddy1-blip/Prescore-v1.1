@@ -142,15 +142,21 @@ try {
   const files = corpusFiles(),
     dir = 'CL-RU-BUS-001/',
     seed = JSON.parse(Buffer.from(files[dir + 'case.json']).toString('utf8'));
-  const statements = seed.bankDocuments.map((d) => ({
-    fileName: d.path,
-    text: new TextDecoder('windows-1251').decode(files[dir + d.path]),
-  }));
+  // Align the synthetic bank fixture with a calendar-year BFO. Preserve its original TXT encoding.
+  const annualFiles = seed.bankDocuments.map(d => {
+    const original = Buffer.from(files[dir + d.path]).toString('latin1');
+    const shifted = original.replace(/(\d{2})\.(\d{2})\.(20\d{2})/g, (_, day, month, year) => {
+      const last = new Date(Date.UTC(+year, +month, 0)).getUTCDate();
+      const targetEnd = new Date(Date.UTC(+year, +month - 6, 0));
+      const targetDay = +day === last ? targetEnd.getUTCDate() : Math.min(+day, targetEnd.getUTCDate());
+      return [targetDay, targetEnd.getUTCMonth() + 1, targetEnd.getUTCFullYear()].map(v=>String(v).padStart(2,'0')).join('.');
+    });
+    return {name: path.basename(d.path), mimeType:'text/plain', buffer:Buffer.from(shifted,'latin1')};
+  });
+  const statements = annualFiles.map(f => ({fileName:f.name, text:new TextDecoder('windows-1251').decode(f.buffer)}));
   const create = async (statements) => (await json('/api/analysis', ownerRole, { statements })).analysis;
   await page.goto(origin + '/dashboard?view=upload');
-  await page.locator('.pc-statement-upload input[type=file]').setInputFiles(seed.bankDocuments.map(d => ({
-    name: path.basename(d.path), mimeType: 'text/plain', buffer: Buffer.from(files[dir + d.path]),
-  })));
+  await page.locator('.pc-statement-upload input[type=file]').setInputFiles(annualFiles);
   const accepted = page.waitForResponse(r => new URL(r.url()).pathname === '/api/analysis' && r.request().method() === 'POST');
   await page.getByRole('button', { name: 'Рассчитать по выбранным файлам' }).click();
   const responseA = await accepted;
@@ -179,6 +185,7 @@ try {
   );
   const full = await json(endpoint, ownerRole);
   assert.equal(full.entitlement, 'FULL');
+  assert.deepEqual(full.full.report.reconciliation.bankBfo, []);
   await page.reload();
   await waitModel();
   assert.equal(
@@ -330,6 +337,56 @@ try {
   assert.ok(updated.full.report.financialAnalysis?.history.length);
   await page.getByRole('table', { name: 'Бухгалтерская отчётность' }).waitFor();
   ok('Загрузка квартального CSV и обновление БФО на соседней вкладке');
+  await nav('Документы').click();
+  const bfoForm = page.locator('form#source-bfo');
+  const annual = quarter.replace('за Январь - Март 2026 г.', 'за 2025 год')
+    + '\nДенежные средства и денежные эквиваленты 1250 850\nДебиторская задолженность 1230 320';
+  await bfoForm.locator('input[type=file]').setInputFiles({name:'synthetic-annual.csv',mimeType:'text/csv',buffer:Buffer.from(annual)});
+  await bfoForm.getByRole('checkbox').check();
+  const saved = page.waitForResponse(r=>new URL(r.url()).pathname==='/api/source-documents' && r.request().method()==='POST');
+  await bfoForm.locator('button[type=submit],button:not([type])').last().click();
+  assert.ok((await saved).ok(), 'BFO upload');
+  await bfoForm.getByText(/Документ добавлен/).first().waitFor();
+  const combined = (await json(endpoint,ownerRole)).full.report;
+  const rows = combined.reconciliation.bankBfo;
+  assert.equal(rows.length,2);
+  assert.ok(rows.every(row=>row.difference!==null && row.bank.sourceIds.length && row.accounting.sourceIds.length));
+  const revenue = rows.find(row=>row.accounting.label.includes('2110'));
+  assert.equal(revenue.accounting.value,1200000);
+  assert.equal(revenue.difference,Math.abs(revenue.bank.value-1200000));
+  assert.ok(revenue.context.some(f=>f.value===320000 && f.period.asOf==='2025-12-31'));
+  assert.equal(rows.find(row=>row.accounting.label.includes('1250')).accounting.value,850000);
+  await nav('Финансы').click();
+  const comparison = page.getByTestId('bank-bfo');
+  await comparison.waitFor();
+  const normalized = text => text.replace(/\s+/g,' ').trim();
+  const displayed = normalized(await comparison.innerText());
+  const factLines = locator => locator.locator('h2,h3,dt,dd,article > p').allTextContents();
+  const financeLines = await factLines(comparison);
+  await comparison.screenshot({path:path.join(out,"bank-bfo-synthetic.png")});
+  for(const row of rows) for(const fact of [row.bank,row.accounting]) {
+    assert.ok(displayed.includes(fact.sourceIds[0]));
+    assert.ok(displayed.includes(normalized(new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(fact.value))));
+  }
+  await nav('Кредитный профиль').click();
+  await page.getByRole('button',{name:'Сверка',exact:true}).click();
+  assert.equal(normalized(await comparison.innerText()),displayed);
+  const printPath = '/dashboard/report-v2?' + new URLSearchParams({analysisId:A.id,snapshotId:combined.meta.snapshot.snapshotId,print:'1'});
+  const printPage = await ctx.newPage();
+  await printPage.emulateMedia({media:'print'});
+  await printPage.goto(origin+printPath);
+  const printed = printPage.getByTestId('bank-bfo');
+  await printed.waitFor();
+  assert.deepEqual(await factLines(printed),financeLines);
+  const pdf = await printPage.pdf();
+  assert.equal(pdf.subarray(0,5).toString(),'%PDF-');
+  await printPage.close();
+  ok('Выписки → годовая БФО: суммы и источники совпадают в Финансах, Кредитном профиле и печатном снимке PDF');
+  await pool.query("UPDATE analysis_entitlements SET tier='FREE' WHERE analysis_id=$1",[A.id]);
+  assert.equal((await json(endpoint,ownerRole)).full,undefined);
+  assert.doesNotMatch(await (await req(printPath,ownerRole)).text(), /data-testid="bank-bfo"/);
+  await pool.query("UPDATE analysis_entitlements SET tier='FULL' WHERE analysis_id=$1",[A.id]);
+  ok('BASIC не раскрывает сверку и сохранённый полный выпуск');
   await nav('Документы').click();
   await page.getByRole('button', { name: 'Новый анализ по выпискам' }).click();
   await page.locator('input[type=file]').first().waitFor({ state: 'attached' });

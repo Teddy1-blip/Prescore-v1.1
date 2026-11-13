@@ -3,7 +3,7 @@ import type { BankStatementMetricsV2 } from "./metrics.ts";
 import type { FinancialAnalysisV2, FinancialStatementSnapshot } from "./financial-statements.ts";
 import type { CreditHistoryReport } from "../../credit-history.ts";
 
-export const RECONCILIATION_VERSION = "PRESCORE-CROSS-SOURCE-RECONCILIATION-1.0.0-SHADOW";
+export const RECONCILIATION_VERSION = "PRESCORE-CROSS-SOURCE-RECONCILIATION-1.1.0-SHADOW";
 export type ReconciliationFactStatus = "KNOWN" | "PARTIAL" | "UNKNOWN" | "NOT_APPLICABLE";
 export type ReconciliationConfidence = "HIGH" | "MEDIUM" | "LOW" | "UNKNOWN";
 export type ReconciliationEntityScope = "COMPANY" | "IP" | "OWNER" | "GUARANTOR" | "DIRECTOR" | "OTHER" | "UNKNOWN";
@@ -26,6 +26,7 @@ export type ReconciliationFinding = {
   findingId: string; code: string; version: string; domain: string; nature: ReconciliationNature;
   outcome: ReconciliationOutcome; comparability: ReconciliationComparability;
   direction: "LEFT_ABOVE_RIGHT" | "LEFT_BELOW_RIGHT" | "EQUAL" | "NOT_APPLICABLE";
+  contextFacts?: ReconciliationFact[];
   leftFacts: ReconciliationFact[]; rightFacts: ReconciliationFact[];
   absoluteDifference: number | null; relativeDifference: number | null; ratio: number | null; temporalGapDays: number | null;
   evidenceConfidence: ReconciliationConfidence; requiresDataReview: boolean;
@@ -34,6 +35,7 @@ export type ReconciliationFinding = {
 export type ReconciliationDataset = {
   companyInn: string; facts: ReconciliationFact[]; sources: SourceEnvelope[];
   bankPeriod?: BankStatementMetricsV2["period"];
+  calendarCoverage?: AnalysisIntegritySummary["calendarCoverage"];
 };
 export type ReconciliationRule = { code: string; evaluate: (data: ReconciliationDataset) => ReconciliationFinding[] };
 export type ReconciliationInput = {

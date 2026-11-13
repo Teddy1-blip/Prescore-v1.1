@@ -193,7 +193,16 @@ export function parseQuarterlyReportText(text: string, fileName: string): Quarte
   }
   const lower = normalized.toLowerCase();
   const subject = detectCompany(normalized);
-  const unitScale = /млн\.?\s*руб/.test(lower) ? 1_000_000 : /тыс\.?\s*руб|код\s*по\s*океи\s*384/.test(lower) ? 1_000 : 1;
+  const declaredScales = new Set<number>();
+  if (/млн\.?\s*руб|океи\s*[:|]?\s*385/.test(lower)) declaredScales.add(1_000_000);
+  if (/тыс\.?\s*руб|океи\s*[:|]?\s*384/.test(lower)) declaredScales.add(1_000);
+  if (/единица измерения\s*[:|]?\s*(?:в\s+)?руб|океи\s*[:|]?\s*383/.test(lower)) declaredScales.add(1);
+  const unitDeclarations = lower.split("\n").filter(line => /единица измерения|валюта отч[её]тности|^валюта\s*[:|]/.test(line));
+  const unsupportedDeclaration = unitDeclarations.some(line => !/руб|₽|rub\b|океи\s*[:|]?\s*38[345]\b/.test(line)
+    || /доллар|евро|франк|фунт|тенге|юан|гривн|\b(?:usd|eur|kzt|cny|chf|gbp|byn|uah)\b/.test(line)
+    || /белорусск|миллиард|млрд/.test(line));
+  const scaleConfirmed = declaredScales.size === 1 && !unsupportedDeclaration;
+  const unitScale = [...declaredScales][0] ?? 1;
   const unitLabel = unitScale === 1_000_000 ? "млн ₽" : unitScale === 1_000 ? "тыс. ₽" : "₽";
   const values = {} as QuarterlyFinancialReport["values"];
   for (const key of Object.keys(labels) as Array<keyof typeof labels>) {
@@ -271,7 +280,7 @@ export function parseQuarterlyReportText(text: string, fileName: string): Quarte
     ? (values.equity ?? 0) + (values.longTermLiabilities ?? 0) + (values.currentLiabilities ?? 0) : null;
   const balanceGap = values.assets != null && balanceLiabilities != null && values.assets !== 0 ? Math.abs(values.assets - balanceLiabilities) / Math.abs(values.assets) : null;
   const warnings: string[] = [];
-  if (unitScale === 1) warnings.push("Единица измерения не найдена явно; проверьте масштаб сумм.");
+  if (!scaleConfirmed) warnings.push("Единица измерения не найдена явно; проверьте масштаб сумм.");
   if (balanceGap != null && balanceGap > 0.03) warnings.push(`Баланс не сошёлся на ${Math.round(balanceGap * 100)}%; требуется проверить распознанные колонки и исходный файл.`);
   const hasFormalStop = (values.netAssets ?? values.equity ?? 0) <= 0;
   const criticalCount = factors.filter((factor) => factor.severity === "critical").length;
@@ -293,7 +302,7 @@ export function parseQuarterlyReportText(text: string, fileName: string): Quarte
     companyInn: subject.companyInn,
     period: detectPeriod(normalized), extractedAt: new Date().toISOString(), parserConfidence, unitScale, unitLabel,
     financialMetadataV2: {
-      scaleConfirmed: /млн\.?\s*руб|тыс\.?\s*руб|океи\s*384|единица измерения\s*:\s*(?:в\s+)?руб|океи\s*383/.test(lower),
+      scaleConfirmed,
       rawScale: unitScale,
       rawLines: Object.fromEntries([...Object.values(BALANCE_CODES), ...Object.values(INCOME_CODES)].map((code) => [code, valueAfterCode(lines, code)])),
       labelValues: Object.fromEntries(Object.entries(codes).flatMap(([key, code]) => {
