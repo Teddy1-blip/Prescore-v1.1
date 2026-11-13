@@ -96,6 +96,8 @@ export function ApprovedPage(p: ScreenProps) {
       <div>{jump('Открыть весь план', 'actions')}</div>
     </Card>
   );
+  const completeCashMonths = d.months.filter((month) => month.coverage === 'FULL' && month.net !== null);
+  const negativeCashMonths = completeCashMonths.filter((month) => month.net !== null && month.net < 0);
   const first = d.factors[0],
     counter = d.ar?.rows.find((v) => 'ar:' + v.id === drawer),
     task = d.tasks.find((v) => 'task:' + v.id === drawer),
@@ -218,6 +220,29 @@ export function ApprovedPage(p: ScreenProps) {
               {metric('Изменение денег', money(d.net), 'Чистый внешний поток', 'banking', 'green')}
             </div>
             <CashCards data={d} go={go} />
+            {completeCashMonths.length > 0 && (
+              <Card extra="gap-top" title="Отрицательный денежный поток" sub="Факты из полных месяцев банковских выписок">
+                {negativeCashMonths.length > 0 ? (
+                  <>
+                    <p className="note">
+                      В {negativeCashMonths.length} из {completeCashMonths.length} полных месяцев внешние списания
+                      превысили поступления. Проверьте причины и обязательные платежи в эти периоды.
+                    </p>
+                    <Table
+                      label="Месяцы с отрицательным денежным потоком"
+                      heads={['Период', 'Изменение денег']}
+                      rows={negativeCashMonths.map((month) => [month.label, money(month.net)])}
+                    />
+                  </>
+                ) : (
+                  <p className="note">В полных месяцах выбранного периода отрицательный внешний денежный поток не выявлен.</p>
+                )}
+                <p className="note">
+                  Это история движения денег, а не прогноз кассового разрыва. Для прогноза нужны сроки
+                  будущих поступлений и обязательных платежей.
+                </p>
+              </Card>
+            )}
             <Card extra="gap-top" title="Месячные итоги" sub="Единые данные с обзором">
               <Table
                 label="Месячные итоги"
@@ -283,6 +308,28 @@ export function ApprovedPage(p: ScreenProps) {
             </button>
           </Card>
         </div>
+        {d.riskSummary !== null && (
+          <Card extra="gap-top" title="Риски и стоп-факторы" sub="Выводы по каноническому анализу выбранной компании">
+            <p className="note">
+              Это факторы по методике Prescore, не объявление решения или стоп-критериев конкретного банка.
+            </p>
+            {d.riskSummary.length ? (
+              d.riskSummary.slice(0, 5).map((finding) => (
+                <Review
+                  key={finding.id}
+                  title={(finding.status === 'GLOBAL_STOP' ? 'Критический фактор · ' : 'Существенный риск · ') + finding.title}
+                >
+                  {finding.detail}
+                </Review>
+              ))
+            ) : (
+              <p className="note">
+                По проверенным сведениям в этом выпуске критические факторы и существенные риски не выделены.
+              </p>
+            )}
+            <p className="note">Полный перечень и доказательства находятся в разделе «Стоп-факторы и риски» ниже.</p>
+          </Card>
+        )}
         <Card extra="gap-top" title="Обязательства компании" sub={d.debtDate}>
           {d.obligations.length ? (
             <Table

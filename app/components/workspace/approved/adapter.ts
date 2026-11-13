@@ -4,6 +4,7 @@ import { colorList, money, type Amount, type ViewData, type Page } from './types
 import { sourceLabel, sourceState, label } from '../credit-depth';
 import { date } from '../presentation';
 import { numeric } from '../client-financials';
+import { publicText } from '../../../../lib/credit-engine/client-report/copy';
 
 const amount = (f?: WorkspaceFactV1): Amount =>
   f && ['KNOWN', 'PARTIAL'].includes(f.status) && typeof f.value === 'number' && Number.isFinite(f.value)
@@ -21,6 +22,7 @@ export function liveView(model: WorkspaceModelV1 | null, name: string, month: st
       .map((r) => ({
         id: r.month,
         label: r.month,
+        coverage: r.coverage,
         operating: cashValue(r, 'operatingReceipts'),
         incoming: cashValue(r, 'externalInflows'),
         outgoing: cashValue(r, 'externalOutflows'),
@@ -74,6 +76,24 @@ export function liveView(model: WorkspaceModelV1 | null, name: string, month: st
   }));
   const balance = b?.balanceCheck,
     principal = report?.analysisV3?.companyPrincipal;
+  // Reuse canonical risk claims: never translate a Prescore risk into a bank's decision.
+  // BASIC access has no risk summary, even if banking facts are available.
+  const riskSummary = model?.full
+    ? model.full.canonical.explainability.claims
+        .filter(
+          (claim) =>
+            claim.riskFindingIds.length > 0 &&
+            (claim.claimKind === 'FINDING' || claim.claimKind === 'DATA_LIMITATION') &&
+            (claim.status === 'GLOBAL_STOP' || claim.status === 'CREDIT_RISK') &&
+            !claim.claimCode.includes('SOURCE-MISSING'),
+        )
+        .map((claim) => ({
+          id: claim.claimId,
+          status: claim.status as 'GLOBAL_STOP' | 'CREDIT_RISK',
+          title: publicText(claim.titleRu),
+          detail: publicText(claim.textRu),
+        }))
+    : null;
   return {
     company: name,
     asOf: report?.meta.asOfDate ? date(report.meta.asOfDate) : '',
@@ -118,6 +138,7 @@ export function liveView(model: WorkspaceModelV1 | null, name: string, month: st
       })),
     ),
     factors: (report?.primaryFactors ?? []).map((f) => ({ title: f.title, detail: f.text })),
+    riskSummary,
     products: (report?.productFit.primary ?? []).map((p) => ({ title: p.title, detail: p.purpose })),
     fiscalDate: sheet?.period.asOf ? date(sheet.period.asOf) : '',
     bfo: (sheet?.groups ?? []).flatMap((g) =>

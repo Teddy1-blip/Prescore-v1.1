@@ -14,6 +14,7 @@ export type Amount = number | null;
 export type Row = {
   id: string;
   label: string;
+  coverage?: string;
   incoming: Amount;
   outgoing: Amount;
   operating: Amount;
@@ -24,6 +25,7 @@ export type Row = {
   receipts?: number[];
 };
 export type Item = { title: string; detail: string };
+export type CreditRiskItem = { id: string; status: 'GLOBAL_STOP' | 'CREDIT_RISK'; title: string; detail: string };
 export type Task = Item & { id: string; route: Page; done?: boolean };
 export type Category = { label: string; value: number; color: string };
 export type AR = {
@@ -60,6 +62,7 @@ export type ViewData = {
   categories: Category[];
   tasks: Task[];
   factors: Item[];
+  riskSummary: CreditRiskItem[] | null;
   products: Item[];
   bfo: string[][];
   fiscalDate: string;
