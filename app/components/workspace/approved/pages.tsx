@@ -239,13 +239,17 @@ export function ApprovedPage(p: ScreenProps) {
     content = (
       <>
         <div className="grid two">
-          <Card title="Кредитное заключение" sub={d.asOf}>
+          <Card title="Финансово-кредитное заключение Prescore" sub={d.asOf}>
             <div className="alert">
               <span>ⓘ</span>
               <span>
                 <b>{d.title}</b> {d.summary}
               </span>
             </div>
+            <p className="note">
+              Это независимая финансовая диагностика компании и подготовка к возможному финансированию,
+              а не решение банка. Условия конкретного кредитора проверяются отдельно.
+            </p>
             {d.factors.slice(0, 2).map((f) => (
               <Review key={f.title} title={f.title}>
                 {f.detail}
@@ -270,7 +274,10 @@ export function ApprovedPage(p: ScreenProps) {
                 </div>
               </div>
             ))}
-            <p className="note">Итог учитывает ограничения и потолки выбранного снимка.</p>
+            <p className="note">
+              Итог учитывает ограничения и потолки выбранного снимка. Индекс Prescore не показывает
+              вероятность решения конкретного банка.
+            </p>
             <button className="text-link" onClick={() => setDrawer('score')}>
               Показать основания →
             </button>
@@ -287,6 +294,25 @@ export function ApprovedPage(p: ScreenProps) {
             <p>Для договоров и остатков добавьте кредитную историю.</p>
           )}
           {jump('Проверить документы', 'documents')}
+        </Card>
+        <Card
+          extra="gap-top"
+          title="Направления финансирования"
+          sub="Возможности для проверки, а не решение кредитора"
+        >
+          {d.products.length > 0 ? (
+            d.products.slice(0, 3).map((product) => (
+              <Review key={product.title} title={product.title}>
+                {product.detail}
+              </Review>
+            ))
+          ) : (
+            <p className="note">
+              Уточните цель, сумму и срок финансирования. Подходящие способы будут показаны после
+              расчёта на подтверждённых данных.
+            </p>
+          )}
+          {jump('Рассмотреть финансирование', 'financing')}
         </Card>
       </>
     );
