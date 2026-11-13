@@ -55,6 +55,6 @@ test("login hub exposes client and agent but keeps internal administration priva
   assert.match(login, /href="\/agent"/);
   assert.doesNotMatch(login, /href="\/(?:admin|prescore-control)"/);
   assert.doesNotMatch(login, /ЛК администратора/);
-  assert.match(landing, /href="\/agent"/);
+  assert.match(landing, /href=\{configuredAppLink\('\/agent'\)\}/);
   assert.doesNotMatch(landing, /href="\/(?:admin|prescore-control)"/);
 });
