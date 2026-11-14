@@ -8,7 +8,8 @@ export type ScreenProps = {
   data: ViewData;
   focus: string;
   availableViews?: readonly string[];
-  go: (p: Page | 'upload') => void;
+  go: (p: Page) => void;
+  onUpload?: () => void;
   apps: Application[];
   details?: ReactNode;
   newApp?: (product?: string) => void;
@@ -130,7 +131,7 @@ export function ApprovedPage(p: ScreenProps) {
                 Открыть заключение ↗
               </button>
               {d.tasks.length > 0 && <span className="chip dark">{d.tasks.length} действий в плане</span>}
-              {p.availableViews?.includes('upload') && <button className="btn" onClick={() => go('upload')}>Загрузить банковскую выписку ↗</button>}
+              {p.availableViews?.includes('upload') && p.onUpload && <button className="btn" onClick={p.onUpload}>Загрузить банковскую выписку ↗</button>}
             </div>
           </div>
           <div className="hero-score">

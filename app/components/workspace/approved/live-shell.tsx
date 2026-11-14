@@ -147,6 +147,7 @@ export function LivePage({ children }: { children: ReactNode }) {
       data={c.data}
       focus={c.focus}
       go={c.choose}
+      onUpload={() => c.choose('upload')}
       apps={c.apps.map((d) => ({
         id: d.id,
         amount: d.amount,
