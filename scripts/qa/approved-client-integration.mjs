@@ -451,10 +451,21 @@ try {
       );
       if (key === 'billing')
         await page.getByRole('heading', { name: 'Подписка компании', exact: true }).first().waitFor();
-      assert.ok(
-        await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
-        'overflow ' + size + ' ' + key,
-      );
+      const layout = await page.evaluate(() => {
+        const width = document.documentElement.scrollWidth;
+        const viewport = innerWidth;
+        if (width <= viewport) return { width, viewport, outside: [] };
+        const outside = Array.from(document.querySelectorAll('main *')).filter((element) => {
+          if (element.getBoundingClientRect().right <= viewport + 1) return false;
+          for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+            if (['hidden', 'auto', 'scroll', 'clip'].includes(getComputedStyle(parent).overflowX)
+              && parent.getBoundingClientRect().right <= viewport + 1) return false;
+          }
+          return true;
+        }).slice(0, 10).map((el) => el.tagName + '.' + el.className);
+        return { width, viewport, outside };
+      });
+      assert.ok(layout.width <= layout.viewport, 'overflow ' + size + ' ' + key + ' ' + JSON.stringify(layout));
       if (key === 'home') {
         const height = await page.locator('.client-hero').evaluate((el) => el.getBoundingClientRect().height);
         assert.ok(

@@ -9,7 +9,10 @@
 .period dl>div {display:grid;grid-template-columns:1fr auto;gap:.25rem .5rem;margin-top:.8rem;align-items:baseline;}
 .period dt {color:#384d58;font-size:.82rem;overflow-wrap:anywhere;}
 .period dd {font-variant-numeric:tabular-nums;font-weight:600;font-size:.88rem;overflow-wrap:anywhere;}
-.track {height:5px;grid-column:1/-1;background:#e7ecef;border-radius:4px;overflow:hidden;}
-.track i {display:block;height:100%;}
-.primary {background:#18686c}.secondary {background:#5e7a99}.loss {background:#a7443c}
+.plot {display:flex;position:relative;gap:5%;align-items:stretch;height:76px;margin:14px 0 8px;padding:0 5%;}
+.axis {position:absolute;left:0;right:0;height:1px;background:#687e89;}
+.column {position:relative;flex:1;min-width:0;}
+.column i {position:absolute;left:0;right:0;background:#216b71;}
+.column:nth-of-type(even) i {background:#657d9b;}
+.column i[data-sign="-1"] {background:#a7443c;}
 @media(max-width:450px){.period dl>div{grid-template-columns:1fr}.period{padding:.75rem}}
