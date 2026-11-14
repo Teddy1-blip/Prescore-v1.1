@@ -1,6 +1,6 @@
 // Portable storage projection. Existing analytical schema semantics retained.
 import { sql } from "drizzle-orm";
-import { bigint, boolean, timestamp, doublePrecision, pgTable, text, integer, check, index } from "drizzle-orm/pg-core";
+import { bigint, boolean, timestamp, doublePrecision, pgTable, text, integer, check, index, jsonb, unique, primaryKey } from "drizzle-orm/pg-core";
 
 export const analyses = pgTable("analyses", {
   id: text("id").primaryKey(),
@@ -494,3 +494,13 @@ export const billingFunnel = pgTable("billing_funnel", {
 export const rcProviderState=pgTable("rc_provider_state",{provider:text("provider").notNull(),id:text("id").notNull(),idempotencyKey:text("idempotency_key").notNull(),state:text("state").notNull(),createdAt:text("created_at").notNull()});
 export const runtimeWorkers=pgTable("runtime_workers",{id:text("id").primaryKey(),heartbeatAt:text("heartbeat_at").notNull(),status:text("status").notNull(),sourceSha:text("source_sha").notNull(),processed:bigint("processed",{mode:"number"}).notNull()});
 export const runtimeRateLimits=pgTable("runtime_rate_limits",{bucket:text("bucket").primaryKey(),count:bigint("count",{mode:"number"}).notNull(),expiresAt:text("expires_at").notNull()});
+
+export const companyDossiers = pgTable("company_dossiers", {
+  id: text("id").primaryKey(), ownerEmail: text("owner_email").notNull(),
+  companyInn: text("company_inn").notNull(), createdAt: timestamp("created_at",{withTimezone:true}).notNull().defaultNow(),
+}, t => [unique().on(t.ownerEmail,t.companyInn)]);
+export const dossierSources = pgTable("dossier_sources", {
+  dossierId: text("dossier_id").notNull().references(()=>companyDossiers.id), sourceId: text("source_id").notNull(),
+  sourceType: text("source_type").notNull(), payload: jsonb("payload").notNull(),
+  documentId: text("document_id").unique().references(()=>clientDocuments.id), receivedAt: timestamp("received_at",{withTimezone:true}).notNull().defaultNow(),
+}, t => [primaryKey({columns:[t.dossierId,t.sourceId]})]);

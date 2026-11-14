@@ -89,7 +89,7 @@ test('clicking the cash flow section without an analysis changes content, not on
  assert.equal(new URL(h.window.location.href).searchParams.get('view'),'banking');
  assert.equal(named(tree,'EmptyHome').length,0);
  assert.ok(named(tree,'Panel').some(n=>n.props.title==='Движение денег'));
- assert.match(text(tree),/Создайте первый кредитный профиль по банковской выписке/);
+ assert.match(text(tree),/Выберите компанию/);
 });
 for(const [view,title]of Object.entries({analysis:'Кредитный профиль',banking:'Движение денег',obligations:'Кредитный портфель',financing:'Финансирование',documents:'Досье клиента',applications:'Заявки',analyst:'Кредитный эксперт',billing:'Подписка компании'})){
  test(`unselected ${view} has its own section title and explicit company selection`,()=>{

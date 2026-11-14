@@ -1,7 +1,7 @@
 import type { RiskFact, RiskShadowInput } from "../../contracts/risk.ts";
 import type { FinancialMetricResult, FinancialPeriodAnalysis } from "../../contracts/financial-statements.ts";
 import { fact, freshness, weakest, usable, RISK_SOURCE_FRESHNESS_DAYS as age } from "../common.ts";
-export function financialFacts(input: RiskShadowInput): RiskFact[] {
+export function financialFacts(input: Pick<RiskShadowInput,'asOfDate'|'companyProfile'> & {analysis:Pick<RiskShadowInput['analysis'],'companyInn'|'financialAnalysisV2'>}): RiskFact[] {
   const { analysis: a, companyProfile: p, asOfDate } = input;
   const analyses = [a.financialAnalysisV2, p?.financialAnalysisV2].filter(x => !!x);
   const history = [...new Map(analyses.flatMap(x => x!.history).map(x => [x.snapshot.snapshotId, x])).values()].filter(x => x.snapshot.companyInn === a.companyInn && x.snapshot.period.asOf && x.snapshot.period.asOf <= asOfDate);

@@ -1,5 +1,6 @@
 "use client";
 import {BankBfoReconciliation} from './bank-bfo-reconciliation';
+import {scopedEvidence} from '../../../lib/workspace/scoped-evidence';
 import {FinancialDynamics} from './financial-dynamics';
 import type {WorkspaceModelV1} from '../../../lib/workspace/model';
 import type {PublicFinancialMetric} from '../../../lib/credit-engine/client-report/source-detail';
@@ -63,7 +64,7 @@ export function FinancialStatements({model}:{model:WorkspaceModelV1}){
  const hasChange=(t:NonNullable<typeof a>['trends'][number])=>[t.absolute,t.relative].some(m=>m.value!==null&&m.status!=='UNKNOWN'&&m.status!=='NOT_APPLICABLE');
  const availableTrends=a?.trends.filter(hasChange)??[],unavailableTrends=a?.trends.filter(t=>!hasChange(t))??[];
  const trendTable=(trends:NonNullable<typeof a>['trends'])=><div className="pc-table-scroll" tabIndex={0} aria-label="Финансовые тренды"><table><thead><tr><th>Показатель / периоды</th><th>Изменение суммы</th><th>Относительное изменение</th><th>Сопоставимость</th></tr></thead><tbody>{trends.map((t,i)=><tr key={i}><th>{t.label}<small>{date(a?.history.find(p=>p.id===t.previousId)?.period.asOf)} → {date(a?.history.find(p=>p.id===t.currentId)?.period.asOf)}</small></th><td>{numeric(t.absolute.value,t.absolute.status,t.absolute.unit)}<small>{label(t.absolute.status)}</small><Warnings items={t.absolute.warnings}/></td><td>{numeric(t.relative.value,t.relative.status,t.relative.unit)}<small>{label(t.relative.status)}</small><Warnings items={t.relative.warnings}/></td><td>{t.comparability==='COMPARABLE_ANNUAL_YOY'?'Год к году':t.comparability==='COMPARABLE_INTERIM_YOY'?'Промежуточный период':'Сопоставимость ограничена'}</td></tr>)}</tbody></table></div>;
- const conclusions=r.detailedSections.filter(s=>/financial|финанс|отчёт|отчет|капитал|ликвид|рентаб/i.test(s.id+' '+s.title));
+ const conclusions=scopedEvidence(model.full,'bfo').sections;
  return <>
   <Panel title="Финансовая отчётность">
    <p>Показатели основаны на бухгалтерской и квартальной отчётности. Денежный поток по выпискам не заменяет бухгалтерскую выручку.</p>

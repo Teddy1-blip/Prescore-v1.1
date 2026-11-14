@@ -847,5 +847,32 @@
     "primaryKey": [
       "snapshot_id"
     ]
+  },
+  {
+    "table": "company_dossiers",
+    "columns": [
+      "id",
+      "owner_email",
+      "company_inn",
+      "created_at"
+    ],
+    "primaryKey": [
+      "id"
+    ]
+  },
+  {
+    "table": "dossier_sources",
+    "columns": [
+      "dossier_id",
+      "source_id",
+      "source_type",
+      "payload",
+      "document_id",
+      "received_at"
+    ],
+    "primaryKey": [
+      "dossier_id",
+      "source_id"
+    ]
   }
 ]

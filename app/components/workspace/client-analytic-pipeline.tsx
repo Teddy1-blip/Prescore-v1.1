@@ -1,28 +1,17 @@
 "use client";
 import type {WorkspaceModelV1} from "../../../lib/workspace/model";
-import type {PresentationFactorV1} from "../../../lib/credit-engine/contracts/client-report";
+import {scopedEvidence} from "../../../lib/workspace/scoped-evidence";
 
 type Scope="home"|"bfo"|"counterparties"|"obligations";
 type Route="analysis"|"actions"|"financing"|"documents"|"obligations"|"counterparties"|"bfo";
 
-const scopedSections:Record<Exclude<Scope,"home">,RegExp>={
- bfo:/financial|\bBFO\b|отч[её]т|ликвид|капитал|рентаб/i,
- counterparties:/counterpart|контрагент|дебитор|кредитор/i,
- obligations:/credit.portfolio|obligation|debt|долг|кредитн|бки|лизинг/i,
-};
 const labels:Record<Scope,string>={home:"Общий анализ компании",bfo:"По бухгалтерской отчётности",counterparties:"По данным покупателей и поставщиков",obligations:"По кредитным обязательствам"};
 
 /** One analytical presentation, sourced from saved canonical evidence. No local credit calculations. */
 export function ClientAnalyticPipeline({model,scope,choose}:{model:WorkspaceModelV1;scope:Scope;choose:(view:string)=>void}){
  const report=model.full?.report;
  const statements=model.basic.bankingFacts;
- const factors:PresentationFactorV1[]=report?(scope==="home"
-  ? [...report.primaryFactors,...report.readiness.constraints]
-  : report.detailedSections.filter(s=>scopedSections[scope].test(s.id+" "+s.title)).flatMap(s=>s.factors)):[];
- const topRisk=factors.find(f=>f.status.tone==="critical")??factors.find(f=>f.status.tone==="attention");
- const relatedClaims=new Set(factors.map(f=>f.claimId));
- const recommendation=report?.recommendations.primary.find(item=>scope==="home"||relatedClaims.has(item.claimId));
- const action=report?.actionPlan.horizons.flatMap(h=>h.items).find(item=>scope==="home"||relatedClaims.has(item.claimId)||Boolean(recommendation&&item.canonicalId===recommendation.canonicalId));
+ const {stopFactor,recommendation,action}=scopedEvidence(model.full,scope);
  const financial=report?.financialAnalysis?.history??[];
  const annual=[...financial].sort((a,b)=>(b.period.asOf??b.period.to??"").localeCompare(a.period.asOf??a.period.to??""))[0];
  const portfolio=report?.analysisV3?.portfolio??[];
@@ -39,7 +28,7 @@ export function ClientAnalyticPipeline({model,scope,choose}:{model:WorkspaceMode
   :"Только опубликованные факты этого раздела; общий кредитный вывод — в «Кредитном профиле»";
  const steps:Array<{title:string;summary:string;route:Route}>=[
   {title:"Экспертность",summary:expert,route:scope==="bfo"?"bfo":scope==="obligations"?"obligations":scope==="counterparties"?"counterparties":"analysis"},
-  {title:"Стоп-факторы",summary:topRisk?.title??"Отдельный подтверждённый фактор не опубликован",route:"analysis"},
+  {title:"Стоп-факторы",summary:stopFactor?.title??"Отдельный подтверждённый фактор не опубликован",route:"analysis"},
   {title:"Рекомендации",summary:recommendation?.title??"Нет отдельной рекомендации по подтверждённым фактам раздела",route:"analysis"},
   {title:"Предложения",summary:scope==="home"?report?.productFit.primary[0]?.title??"Подбор требует уточнения данных":"Финансирование подбирается по общему кредитному профилю",route:"financing"},
   {title:"План 7 / 30 / 60",summary:action?.title??"Откройте общий план действий и необходимые подтверждения",route:"actions"},

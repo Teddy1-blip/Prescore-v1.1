@@ -55,7 +55,7 @@ function statementPreview(text:string) {
  const bank=field('Отправитель');
  return [bank,range,accounts.size?'Счетов: '+accounts.size:''].filter(Boolean).join(' · ')||'Реквизиты уточнит сервер';
 }
-export function Analyze({onResult}:{onResult:(result:AnalysisResult,receipt?:UploadReceipt)=>void|Promise<void>}){
+export function Analyze({onResult,dossierId}:{dossierId?:string;onResult:(result:AnalysisResult,receipt?:UploadReceipt)=>void|Promise<void>}){
  const input=useRef<HTMLInputElement>(null),pending=useRef(false),reading=useRef(false);
  const [statements,setStatements]=useState<BankUpload[]>([]),[processing,setProcessing]=useState(false),[adding,setAdding]=useState(false),[error,setError]=useState(''),[localRejected,setLocalRejected]=useState<Array<{fileName:string;reason:string}>>([]),[receipt,setReceipt]=useState<UploadReceipt>({});
  async function addFiles(files:File[]){
@@ -76,7 +76,7 @@ export function Analyze({onResult}:{onResult:(result:AnalysisResult,receipt?:Upl
  }
  async function calculate(){
   if(pending.current||reading.current||!statements.length)return;pending.current=true;setProcessing(true);setError('');setReceipt({});
-  try{const response=await fetch('/api/analysis',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({statements:statements.map(({fileName,base64})=>({fileName,base64}))})});const body=await response.json() as UploadReceipt&{analysis?:AnalysisResult;error?:string};setReceipt(body);
+  try{const response=await fetch('/api/analysis',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({dossierId,statements:statements.map(({fileName,base64})=>({fileName,base64}))})});const body=await response.json() as UploadReceipt&{analysis?:AnalysisResult;error?:string};setReceipt(body);
    if(!response.ok||!body.analysis)throw Error(body.error||'Серверный расчёт не выполнен');await onResult(body.analysis,body);
   }catch(e){setError(e instanceof TypeError?'Нет подтверждения сохранения. Проверьте историю анализов перед повторным запросом.':e instanceof Error?e.message:'Не удалось выполнить анализ');}
   finally{pending.current=false;setProcessing(false);}
