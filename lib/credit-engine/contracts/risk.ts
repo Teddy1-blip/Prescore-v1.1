@@ -40,3 +40,5 @@ export type RiskComparisonSummary = { version: string; legacyFactorCount: number
   comparisons: Array<{ legacyConcept: string; riskConcept: string; reasonCodes: string[] }> };
 export type RiskShadowFields = { riskAssessmentV1?: RiskAssessmentV1; riskComparison?: RiskComparisonSummary; riskEngineWarnings?: string[] };
 export type RiskShadowInput = { analysis: AnalysisResult; companyProfile?: CompanyProfileData; asOfDate: string; extraFacts?: RiskFact[] };
+
+export type ProfileRiskInput = Omit<RiskShadowInput,'analysis'> & {analysis:Pick<AnalysisResult,'companyInn'|'legalRegistryV1'|'sourceManifest'|'creditHistory'|'creditPortfolioV1'|'financialAnalysisV2'>};

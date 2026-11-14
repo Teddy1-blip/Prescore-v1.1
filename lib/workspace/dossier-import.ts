@@ -69,7 +69,7 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
       VALUES($1,$2,$3,$4,$5,$6,'',$7,$7,$8)`,[doc,inn,kind,file.name,mime,bytes.length,owner,storageKey]);
     await tx.query('INSERT INTO dossier_sources(dossier_id,source_id,source_type,payload,document_id) VALUES($1,$2,$3,$4,$5)',[id,sourceId,kind,JSON.stringify(payload),doc]);
     // Update only the owner's latest working version. Previously issued report snapshots stay immutable.
-    if(payload.snapshot || payload.bki){
+    if(payload.snapshot || payload.bki || kind==='DEBT_LEDGER'){
       const current=(await tx.query("SELECT id,payload FROM analyses WHERE owner_email=$1 AND company_inn=$2 AND archive_state='ACTIVE' ORDER BY created_at DESC,id DESC LIMIT 1 FOR UPDATE",[owner,inn])).rows[0];
       if(current){
         const bank=JSON.parse(String(current.payload)) as AnalysisResult;

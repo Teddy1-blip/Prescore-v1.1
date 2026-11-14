@@ -13,8 +13,21 @@ import {persistDecisionRevision,readDecisionRevision,type DecisionRevisionDataba
 import './report-v2.css';
 import './analysis-v3.css';
 export const dynamic = 'force-dynamic';
-export default async function ReportPage({searchParams}: {searchParams: Promise<{analysisId?: string; snapshotId?: string; sample?: string; print?: string; lab?: string}>}) {
+export default async function ReportPage({searchParams}: {searchParams: Promise<{analysisId?: string; dossierId?: string; snapshotId?: string; sample?: string; print?: string; lab?: string}>}) {
  const query = await searchParams;
+ if(query.dossierId && !query.analysisId){
+   const user=await requireApiUser();
+   if(!user)redirect('/login?returnTo='+encodeURIComponent('/dashboard/report-v2?'+new URLSearchParams({dossierId:query.dossierId,print:'1'})));
+   const pool=getRuntime().DB.pool;
+   const {ownedDossier}=await import('../../../lib/workspace/dossier');
+   const company=await ownedDossier(pool,user.email,query.dossierId);
+   if(!company)notFound();
+   const {readDossierReport}=await import('../../../lib/workspace/dossier-report');
+   const report=await readDossierReport(pool,user,company,query.snapshotId??'');
+   if(!report)notFound();
+   const {DossierPrint}=await import('./dossier-print');
+   return <DossierPrint inn={company.inn} result={report}/>;
+ }
  // A supplied real analysis ID can never fall through into fixture loading.
  if (query.analysisId) {
   const user = await requireApiUser();

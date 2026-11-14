@@ -1,13 +1,18 @@
+import {reviewedFinancial} from '../../../lib/workspace/reviewed-financial';
+import {nullableFinancialNumber} from '../../../lib/credit-engine/financial-analysis/normalizer';
+import {withDossierSources} from '../../../lib/workspace/dossier-bank';
+import type {AnalysisResult} from '../../../lib/prescore';
+import {recognizeDossierBatch} from '../../../lib/workspace/dossier-ocr';
 import {calendarEntry} from '../../../lib/workspace/calendar-entry';
 import {getRuntime} from '../../../lib/platform/runtime';
 import {checkoKey,loadChecko,validInn,checkoState} from '../../../lib/external/checko-cache';
 import {profileView} from '../../../lib/external/checko-profile';
 import {rateLimit} from '../../../lib/release/security';
 import {ownedDossier,saveDossier,dossierVersions} from '../../../lib/workspace/dossier';
-import {dossierSources,sourceProjection} from '../../../lib/workspace/dossier-sources';
+import {visibleProjection} from '../../../lib/workspace/dossier-view';
+import {dossierSources} from '../../../lib/workspace/dossier-sources';
 import {InputError,importSource,uploadKinds} from '../../../lib/workspace/dossier-import';
 import {requireApiUser,unauthorized} from '../api-auth';
-import {stagingFullAccessEnabled} from '../../../lib/platform/staging-access';
 export const dynamic='force-dynamic';
 const reply=(body:unknown,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'private, no-store'}});
 export async function GET(request:Request){
@@ -16,18 +21,9 @@ export async function GET(request:Request){
   if(!id)return reply({companies:(await pool.query('SELECT id,company_inn AS inn FROM company_dossiers WHERE owner_email=$1 ORDER BY created_at DESC,id',[user.email])).rows});
   const company=await ownedDossier(pool,user.email,id);
   if(!company)return reply({error:'Досье недоступно.'},404);
-  const rows=await dossierSources(pool,user.email,id);
-  const result=sourceProjection(rows,company.inn);
-  const entitled=user.isAdmin||stagingFullAccessEnabled()||(await pool.query(`SELECT 1 FROM billing_subscriptions s JOIN billing_periods p ON p.subscription_id=s.id
-    WHERE s.owner_email=$1 AND s.company_inn=$2 AND s.status='ACTIVE' AND p.status='ACTIVE' AND now()>=s.access_from AND now()<s.access_until AND now()>=p.starts_at AND now()<p.ends_at LIMIT 1`,[user.email,company.inn])).rows.length>0;
-  if(!entitled && result.financial){
-    result.findings=[];result.financial.trends=[];
-    for(const period of result.financial.history)period.groups=period.groups.filter(g=>g.key==='amounts');
-  }
+  const result=await visibleProjection(pool,user,company);
   const versions=await dossierVersions(pool,user.email,company.inn);
-  const saved=rows.filter(r=>r.kind==='CHECKO').at(-1);
-  const publicProfile=saved?.payload.publicProfile;
-  return reply({company,...result,versions,publicProfile:publicProfile?profileView(publicProfile,entitled?'FULL':'FREE'):null,entitlement:entitled?'FULL':'BASIC'});
+  return reply({company,...result,versions});
 }
 export async function POST(request:Request){
   const user=await requireApiUser();if(!user)return unauthorized();
@@ -41,6 +37,17 @@ export async function POST(request:Request){
       return saved?reply(saved,saved.duplicate?200:201):reply({error:'Досье недоступно.'},404);
     }
     const body=await request.json(),inn=typeof body.inn==='string'?body.inn.trim():'';
+    if(body.action==='issue-report'){
+      const company=await ownedDossier(pool,user.email,String(body.id??''));
+      if(!company)return reply({error:'Досье недоступно.'},404);
+      const {issueDossierReport}=await import('../../../lib/workspace/dossier-report');
+      return reply({snapshot:await issueDossierReport(pool,user,company)});
+    }
+    if(body.action==='recognize'){
+      if(body.layout!=='SINGLE' && body.layout!=='TWO_UP_ROTATED')return reply({error:'Проверьте раскладку страниц.'},400);
+      const result=await recognizeDossierBatch(pool,user.email,String(body.id??''),String(body.sourceId??''),body.layout);
+      return reply(result,result.status);
+    }
     if(body.action==='verify-field'){
       const company=await ownedDossier(pool,user.email,String(body.id??''));
       if(!company)return reply({error:'Досье недоступно.'},404);
@@ -48,10 +55,35 @@ export async function POST(request:Request){
       const matches=source?.payload.review?.fields.filter(f=>f.key===body.field)??[];
       const field=matches.length===1?matches[0]:null;
       if(!source||!field?.page||!field.fragment||typeof body.value!=='string'||!body.value.trim()||body.value.length>400)return reply({error:'Нужны поле, значение и подтверждённая страница документа.'},400);
+      if(['borrower_inn','company_inn'].includes(field.key)&&(body.value.trim()!==company.inn||field.value!==company.inn))return reply({error:'ИНН документа не совпадает с досье.'},400);
+      if(source.kind==='BFO_REVIEW'&&/^\d{4}$/.test(field.key)&&nullableFinancialNumber(body.value)===null)return reply({error:'Проверьте числовое значение строки.'},400);
       const patch={value:body.value.trim(),page:field.page,fragment:field.fragment};
-      const saved=await pool.query(`UPDATE dossier_sources SET payload=jsonb_set(payload,'{verified}',coalesce(payload->'verified','{}') || jsonb_build_object($1::text,$2::jsonb)) WHERE dossier_id=$3 AND source_id=$4
+      const tx=await pool.connect();
+      try{
+        await tx.query('BEGIN');
+        await tx.query('SELECT id FROM company_dossiers WHERE id=$1 AND owner_email=$2 FOR UPDATE',[company.id,user.email]);
+      const saved=await tx.query(`UPDATE dossier_sources SET payload=jsonb_set(payload,'{verified}',coalesce(payload->'verified','{}') || jsonb_build_object($1::text,$2::jsonb)) WHERE dossier_id=$3 AND source_id=$4
        AND (payload->'verified'->$1::text IS NOT DISTINCT FROM $5::jsonb OR payload->'verified'->$1::text=$2::jsonb) RETURNING source_id`,[field.key,JSON.stringify(patch),company.id,source.id,body.previous?JSON.stringify(body.previous):null]);
+        if(saved.rows.length&&(source.kind==='CREDIT_DOCUMENT'||source.kind==='BFO_REVIEW')){
+          const stored=(await tx.query('SELECT payload FROM dossier_sources WHERE dossier_id=$1 AND source_id=$2',[company.id,source.id])).rows[0];
+          let payload=stored.payload as typeof source.payload;
+          if(source.kind==='BFO_REVIEW'){
+            const snapshot=reviewedFinancial(payload,company.inn);
+            if(snapshot){
+              payload={...payload,snapshot,envelope:snapshot.source};
+              await tx.query('UPDATE dossier_sources SET payload=$1 WHERE dossier_id=$2 AND source_id=$3',[JSON.stringify(payload),company.id,source.id]);
+            }else if(payload.snapshot){await tx.query('ROLLBACK');return reply({error:'Исправление противоречит периоду или единице уже подтверждённой отчётности.'},409);}
+          }
+          const current=(await tx.query("SELECT id,payload FROM analyses WHERE owner_email=$1 AND company_inn=$2 AND archive_state='ACTIVE' ORDER BY created_at DESC,id DESC LIMIT 1 FOR UPDATE",[user.email,company.inn])).rows[0];
+          if(current){
+            const analysis=JSON.parse(String(current.payload)) as AnalysisResult;
+            const updated=withDossierSources(analysis,[{...source,payload}]);
+            await tx.query('UPDATE analyses SET payload=$1 WHERE owner_email=$2 AND id=$3',[JSON.stringify(updated),user.email,current.id]);
+          }
+        }
+        await tx.query('COMMIT');
       return saved.rows.length?reply({verified:patch}):reply({error:'Поле уже изменилось. Обновите досье.'},409);
+      }catch(e){await tx.query('ROLLBACK');throw e;}finally{tx.release();}
     }
     if(body.action==='calendar'){
       const company=await ownedDossier(pool,user.email,String(body.id??''));

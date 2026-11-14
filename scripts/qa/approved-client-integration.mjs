@@ -478,7 +478,7 @@ try {
   await page.locator('form#source-bfo').waitFor({ state: 'visible' });
   ok('Мобильное меню, переход в Документы и возврат фокуса при Escape');
   await page.setViewportSize({ width: 1440, height: 1100 });
-  ok('30 снимков защищённого кабинета с сервером, без горизонтального переполнения');
+  ok(3*sectionRoutes.length+' снимков защищённого кабинета с сервером, без горизонтального переполнения');
   await signup(partnerRole);
   assert.ok([403, 404].includes((await req(endpoint, partnerRole)).status));
   const foreignRevision = await req('/api/workspace-model?'+new URLSearchParams({

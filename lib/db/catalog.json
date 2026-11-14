@@ -874,5 +874,18 @@
       "dossier_id",
       "source_id"
     ]
+  },
+  {
+    "table": "dossier_reports",
+    "columns": [
+      "id",
+      "dossier_id",
+      "tier",
+      "public_model",
+      "created_at"
+    ],
+    "primaryKey": [
+      "id"
+    ]
   }
 ]

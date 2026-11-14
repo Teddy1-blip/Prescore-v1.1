@@ -16,7 +16,7 @@ export async function createWorkspaceRuntime({checkoFetch}={}){
  let transactionTail=Promise.resolve();
  const pool={query,connect:async()=>{let unlock;const turn=new Promise(resolve=>{unlock=resolve;});const previous=transactionTail;transactionTail=turn;await previous;let released=false;return{query,release(){if(released)return;released=true;unlock();}};}};
  const db=new PortableDatabase(pool,JSON.parse(fs.readFileSync('lib/db/catalog.json','utf8')));
- for(const m of ['0001_product.sql','0002_platform_auth.sql','0003_runtime_indexes.sql','0004_admin_observations.sql','0005_admin_cache_invalidation.sql','0006_billing_v1.sql','0007_rc1_operations.sql','0008_rc1_lookup_indexes.sql','0009_analysis_archive.sql','0010_decision_revisions.sql','0011_company_dossiers.sql'])await pg.exec(fs.readFileSync('lib/db/migrations/'+m,'utf8'));
+ for(const m of ['0001_product.sql','0002_platform_auth.sql','0003_runtime_indexes.sql','0004_admin_observations.sql','0005_admin_cache_invalidation.sql','0006_billing_v1.sql','0007_rc1_operations.sql','0008_rc1_lookup_indexes.sql','0009_analysis_archive.sql','0010_decision_revisions.sql','0011_company_dossiers.sql','0012_dossier_reports.sql'])await pg.exec(fs.readFileSync('lib/db/migrations/'+m,'utf8'));
  function load(file){file=path.resolve(file);if(cache.has(file))return cache.get(file);const exports={};cache.set(file,exports);
  const code=ts.transpileModule(fs.readFileSync(file,'utf8'),{fileName:file,compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText;
  new Function('exports','require','fetch',code)(exports,name=>{

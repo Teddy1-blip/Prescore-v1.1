@@ -6,6 +6,7 @@ import path from 'node:path';
 import {createWorkspaceRuntime} from './fixtures/workspace-runtime.mjs';
 import {financialFile,corporateBkiFile} from './fixtures/polish-sources.mjs';
 import {syntheticPdf} from '../scripts/release/pdf-fixture.mjs';
+import {readDossierReport} from '../lib/workspace/dossier-report.ts';
 import {statementFixture} from './fixtures/block1-statements.mjs';
 import {corporation,checkoDouble} from './fixtures/stage4-external.mjs';
 
@@ -42,10 +43,27 @@ test('Private company dossier, independent inputs and canonical combined analysi
     }
     const d=await read(id,user);assert.equal(d.versions.length,0);assert.equal(d.sources.length,2);assert.equal(d.financial.history.length,2);assert.equal(d.entitlement,'BASIC');
     assert.equal(d.financial.history[0].groups[0].metrics.find(m=>m.key==='REVENUE').value,1200000);
+    const issued=await post({action:'issue-report',id},user);assert.equal(issued.status,200,await issued.clone().text());
+    const snapshot=(await issued.json()).snapshot,company={id,inn},pool={query:(q,v)=>rt.pg.query(q,v)};
+    const model=await readDossierReport(pool,{email:user.email,isAdmin:false},company,snapshot);assert.equal(model.financial.history.length,2);
+    assert.equal(await readDossierReport(pool,{email:publicOwner.email,isAdmin:false},company,snapshot),undefined);
+    await attach(id,'BFO',financialFile(inn,'csv',{period:'2023 год'}),user);
+    assert.equal((await readDossierReport(pool,{email:user.email,isAdmin:false},company,snapshot)).financial.history.length,2);
     const url='/api/documents?download='+d.sources[0].documentId;
     assert.equal((await rt.request(url,{},publicOwner)).status,404);
     const bytes=await (await rt.request(url,{},user)).text();assert.match(bytes,/2024/);
     assert.equal((await attach(id,'BFO',financialFile('500100732259'),user)).status,400);
+  });
+  await t.test('BFO-only recommendations and 7/30/60 keep claim, source and approved rule',async()=>{
+    const user={email:'full-source@workspace.test',roles:['CLIENT','ADMIN']},id=await save(user);
+    const year=new Date().getUTCFullYear()-1;
+    await attach(id,'BFO',financialFile(inn,'csv',{period:year+' год',profit:'-250'}),user);
+    const d=await read(id,user);assert.equal(d.entitlement,'FULL');
+    for(const stage of ['expert','recommendation','plan']){
+      const c=d.claims.find(c=>c.stage===stage&&c.ruleIds.length&&c.sourceIds.some(s=>d.sources.some(r=>r.id===s)));
+      assert.ok(c,'missing BFO '+stage);assert.ok(c.id);assert.ok(c.text);
+    }
+    assert.ok(!d.claims.some(c=>c.stage==='stop'));
   });
   await t.test('BANK-only keeps version identity and uses existing cash analysis',async()=>{
     const user=actor(3),r=await bank(undefined,user);assert.equal(r.status,200,await r.clone().text());
@@ -60,6 +78,8 @@ test('Private company dossier, independent inputs and canonical combined analysi
     const user=actor(6),id=await save(user),doc=new File([syntheticPdf(['Кредитный договор','Кредитор: Банк Тест','Заёмщик: Компания Тест','ИНН заёмщика: '+inn,'Номер договора: Т-001','Дата договора: 2025-01-01','Валюта: RUB','Кредитный лимит: 100000','Вид кредита: кредитная линия'])],'credit.pdf');
     const before=await attach(id,'CREDIT_DOCUMENT',doc,user);assert.equal(before.status,201,await before.clone().text());
     let d=await read(id,user);assert.equal(d.obligations.length,0);const review=d.reviews[0];assert.equal(review.status,'READY_FOR_REVIEW');assert.ok(review.documentId);
+    const recognize={action:'recognize',id,sourceId:review.id,layout:'SINGLE'};
+    assert.equal((await post(recognize,publicOwner)).status,404);
     for(const key of ['borrower','borrower_inn','creditor','agreement_number','agreement_date','currency','credit_limit','product_type']){
       const f=review.fields.find(f=>f.key===key);assert.ok(f?.value,key);
       const change={action:'verify-field',id,sourceId:review.id,field:key,value:f.value};
@@ -67,10 +87,21 @@ test('Private company dossier, independent inputs and canonical combined analysi
       const approved=await post(change,user);assert.equal(approved.status,200,await approved.clone().text());
     }
     d=await read(id,user);assert.equal(d.obligations.length,1);assert.equal(d.obligations[0].principal,null);assert.equal(d.obligations[0].limit,100000);
+    assert.equal((await post(recognize,user)).status,409);
     assert.equal(d.reviews[0].verified.credit_limit.page,1);assert.equal((await attach(id,'CREDIT_DOCUMENT',doc,user)).status,200);
+    const hdr='ИНН организации;Дата остатка;Счёт;Контрагент;Договор;Дебет, руб.;Кредит, руб.;Вид задолженности';
+    await attach(id,'DEBT_LEDGER',new File([hdr+'\n'+inn+';2026-01-31;66.01;Банк Тест;Т-001;;80000;Основной долг'],'debt.csv'),user);
+    const enriched=await read(id,user);assert.equal(enriched.obligations.length,1);assert.equal(enriched.obligations[0].limit,100000);assert.equal(enriched.ledger[0].credit,80000);
     const event={action:'calendar',id,key:crypto.randomUUID(),entry:{direction:'IN',amount:500,date:'2027-01-02',purpose:'Поставка',source:'Договор Т',certainty:'SCENARIO'}};
     assert.equal((await post(event,publicOwner)).status,404);assert.equal((await post(event,user)).status,200);assert.equal((await post(event,user)).status,200);
     assert.equal((await post({...event,entry:{...event.entry,amount:600}},user)).status,409);assert.equal((await read(id,user)).calendar.length,1);
+  });
+  await t.test('confirmed financial rows require identity, dates, unit and source evidence',async()=>{
+    const {reviewedFinancial}=await import('../lib/workspace/reviewed-financial.ts');
+    const verified=Object.fromEntries(Object.entries({company_inn:inn,period_start:'2025-01-01',period_end:'2025-12-31',statement_date:'2025-12-31',statement_unit:'тыс. ₽','2110':'1250'}).map(([k,value])=>[k,{value,page:1,fragment:k+' '+value}]));
+    const input={envelope:{sourceType:'OTHER',sourceId:'fixture:review',companyInn:inn,status:'PROCESSING',receivedAt:'2026-02-01'},review:{status:'READY_FOR_REVIEW',version:'fixture'},verified};
+    const result=reviewedFinancial(input,inn);assert.equal(result.income.REVENUE.value,1250000);assert.equal(result.income.NET_PROFIT.value,null);
+    assert.equal(reviewedFinancial(input,'500100732259'),undefined);assert.equal(reviewedFinancial({...input,verified:{...verified,statement_unit:undefined}},inn),undefined);
   });
   const ledger=new File(['ИНН организации;Дата остатка;Счёт;Контрагент;Договор;Дебет, руб.;Кредит, руб.\n'+inn+';2025-12-31;62.01;Покупатель;Д-1;1800;'],'balances.csv');
   await t.test('OSV-only preserves missing credit balance and tenant boundaries',async()=>{

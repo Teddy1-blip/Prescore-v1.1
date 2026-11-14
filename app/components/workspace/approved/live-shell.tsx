@@ -14,6 +14,7 @@ type Workspace = {
   choose: (v: string) => void;
   availableViews: string[];
   selected?: StoredAnalysis;
+  dossier?: {id:string;inn:string};
   analyses: StoredAnalysis[];
   model: WorkspaceModelV1 | null;
   locked: boolean;
@@ -54,12 +55,13 @@ export function ClientShell(p: Workspace) {
     else u.searchParams.delete('bankMonth');
     history.pushState(null, '', u);
   };
-  const company = p.model?.basic.analysis.company.name || p.selected?.companyName || 'Кабинет компании';
+  const company = p.model?.basic.analysis.company.name || p.selected?.companyName || (p.dossier?.inn?'ИНН '+p.dossier.inn:'Кабинет компании');
   const data = liveView(p.model, company, period);
   const options = p.analyses
     .filter((a) => a.historyPurpose !== 'QA' || a.id === p.selected?.id)
     .map((a) => ({ id: a.id, label: a.companyName + ' · ' + date(a.periodTo) }));
-  if (!p.selected) options.unshift({ id: '', label: 'Выберите компанию' });
+  if(p.dossier)options.unshift({id:p.dossier.id,label:company});
+  else if (!p.selected) options.unshift({ id: '', label: 'Выберите компанию' });
   const open =
     p.selected && !p.locked && p.availableViews.includes('applications')
       ? (product = '') => setApplication(product)
@@ -83,15 +85,15 @@ export function ClientShell(p: Workspace) {
       context={p.context}
       page={p.view}
       company={company}
-      companyId={p.selected?.id ?? ''}
+      companyId={p.selected?.id ?? p.dossier?.id ?? ''}
       companies={options}
-      onCompany={p.select}
+      onCompany={id=>{if(id!==p.dossier?.id)p.select(id);}}
       periods={[
         {
           id: '',
           label: p.model
             ? date(p.model.basic.analysis.period.from) + ' — ' + date(p.model.basic.analysis.period.to)
-            : 'Период выписки',
+            : p.dossier?'По источникам компании':'Период выписки',
         },
         ...months.map((r) => ({ id: r.month, label: r.month })),
       ]}

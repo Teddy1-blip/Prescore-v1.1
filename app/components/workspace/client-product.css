@@ -388,3 +388,13 @@
 .pc-index-coverage{padding:14px 18px;border:1px solid #dce6e5;border-radius:12px}
 
 .pc-review-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1.25rem}.pc-review-columns blockquote{margin:1rem 0;padding-left:1rem;border-left:2px solid #b7bfc2;overflow-wrap:anywhere}.pc-review-columns input{max-width:100%}.pc-review-columns small{display:block}.pc-review-columns section>div{margin:1rem 0}@media(max-width:720px){.pc-review-columns{grid-template-columns:minmax(0,1fr)}}
+
+.approved-client .pc-company-sources{display:grid;gap:20px;min-width:0}
+.approved-client .pc-source-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr));gap:12px;margin:18px 0 26px}
+.approved-client .pc-source-kpis>div{padding:16px;background:var(--surface,#f6f8fc);border:1px solid #e0e5ee;border-radius:12px;min-width:0}
+.approved-client .pc-source-kpis dt,.approved-client .pc-source-kpis small{font-size:12px;color:#52627a}
+.approved-client .pc-source-kpis dd{margin:8px 0;font-size:clamp(18px,2vw,28px);font-weight:650;font-variant-numeric:tabular-nums;color:#172942;overflow-wrap:anywhere}
+.approved-client .pc-source-kpis small{display:block}
+.approved-client .pc-source-intake form{display:flex;align-items:flex-end;flex-wrap:wrap;gap:10px;padding-block:10px}
+.approved-client .pc-company-sources form label{min-width:0}
+.approved-client .pc-company-sources input[type=file]{max-width:100%}

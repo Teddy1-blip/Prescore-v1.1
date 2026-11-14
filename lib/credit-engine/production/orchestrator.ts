@@ -65,6 +65,28 @@ export function canonicalAsOf(input: CanonicalSavedInput): string {
   return present.map(d => d.slice(0, 10)).sort().at(-1)!;
 }
 
+// Both saved bank analyses and source-only dossiers pass through the same decision stages.
+export function decisionStages(riskAssessment:ReturnType<typeof evaluateRiskFacts>,contextAssessment:ReturnType<typeof buildContextAssessment>,
+    creditPortfolio:ReturnType<typeof buildCreditPortfolio>,asOfDate:string, bank?:{analysis:AnalysisResult;metrics:NonNullable<AnalysisResult['metricsV2']>},
+    scenarios?:DebtCapacityScenarioInputV1[],experiment?:ExperimentalMethodology,stage:(name:string)=>void=()=>{}){
+    const base = {riskAssessment, contextAssessment, asOfDate};
+    stage('INDEX'); const prescoreIndex = buildPrescoreIndex(base);
+    const indexed = {...base, prescoreIndex};
+    stage('READINESS'); const financingReadiness = buildFinancingReadiness(indexed);
+    const ready = {...indexed, financingReadiness};
+    stage('ASSESSMENT'); const creditAssessment = buildCreditAssessment(ready);
+    if (bank) creditAssessment.bankObservations = observedBankProfile(bank.analysis,bank.metrics,riskAssessment,creditPortfolio);
+    const assessed = {...ready, creditAssessment, creditPortfolio};
+    stage('CAPACITY'); const debtCapacity = buildDebtCapacity({...assessed, ...(bank?{bankMetrics:bank.metrics}:{bankMetrics:null,sourceOnly:true}), scenarios});
+    const capacity = {...assessed, debtCapacity};
+    stage('PRODUCTS'); const productSelection = buildProductSelection(capacity);
+    const products = {...capacity, productSelection};
+    stage('RECOMMENDATIONS'); const recommendationSet = buildRecommendations(products, undefined, experiment?.recommendationRegistry);
+    const recommendations = {...products, recommendationSet};
+    stage('ACTION_PLAN'); const actionPlan = buildActionPlan(recommendations, undefined, experiment?.recommendationRegistry);
+    return {...recommendations,actionPlan};
+}
+
 // Pure orchestration. Stored full-population canonical metrics are authoritative;
 // the masked/truncated display transaction list is deliberately never reprocessed.
 export function buildCanonicalCreditAnalysis(input: CanonicalSavedInput, experiment?: ExperimentalMethodology) {
@@ -103,21 +125,8 @@ export function buildCanonicalCreditAnalysis(input: CanonicalSavedInput, experim
     const riskAssessment = evaluateRiskFacts({companyInn: a.companyInn, asOfDate, facts: adaptRiskFacts({analysis, companyProfile, asOfDate})}, experiment?.riskRules);
     stage = 'CONTEXT';
     const contextAssessment = buildContextAssessment({analysis, companyProfile, riskAssessment, asOfDate, financingCase: input.financingCase});
-    const base = {riskAssessment, contextAssessment, asOfDate};
-    stage = 'INDEX'; const prescoreIndex = buildPrescoreIndex(base);
-    const indexed = {...base, prescoreIndex};
-    stage = 'READINESS'; const financingReadiness = buildFinancingReadiness(indexed);
-    const ready = {...indexed, financingReadiness};
-    stage = 'ASSESSMENT'; const creditAssessment = buildCreditAssessment(ready);
-    creditAssessment.bankObservations = observedBankProfile(a,a.metricsV2,riskAssessment,creditPortfolio);
-    const assessed = {...ready, creditAssessment, creditPortfolio};
-    stage = 'CAPACITY'; const debtCapacity = buildDebtCapacity({...assessed, bankMetrics: a.metricsV2, scenarios: input.scenarios});
-    const capacity = {...assessed, debtCapacity};
-    stage = 'PRODUCTS'; const productSelection = buildProductSelection(capacity);
-    const products = {...capacity, productSelection};
-    stage = 'RECOMMENDATIONS'; const recommendationSet = buildRecommendations(products, undefined, experiment?.recommendationRegistry);
-    const recommendations = {...products, recommendationSet};
-    stage = 'ACTION_PLAN'; const actionPlan = buildActionPlan(recommendations, undefined, experiment?.recommendationRegistry);
+    const decisions = decisionStages(riskAssessment,contextAssessment,creditPortfolio,asOfDate,{analysis:a,metrics:a.metricsV2},input.scenarios,experiment,next=>{stage=next;});
+    const {actionPlan,...recommendations}=decisions;
     stage = 'EXPLAINABILITY';
     const receipts=new Map<string,DecisionReceipt>(allSources.map(s=>[s.sourceId,publicReceipt(s)]));
     for(const r of p?.externalFacts?.receipts ?? []) if(r.retrievedAt && p?.externalFacts?.inn===a.companyInn)

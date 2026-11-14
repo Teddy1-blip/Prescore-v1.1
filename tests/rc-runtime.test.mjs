@@ -25,7 +25,7 @@ test('portable artifact identifies RC3, includes PostgreSQL 17 runtime and exclu
  assert.equal(PRESCORE_RELEASE_ID,'PRESCORE-V1-RC3-20261019');
  assert.equal(version.releaseId,PRESCORE_RELEASE_ID);
  assert.notEqual(version.sourceSha,'a'.repeat(40),'runtime SHA must not impersonate packaged build provenance');
- assert.equal(version.schemaVersion,'0011_company_dossiers.sql');
+ assert.equal(version.schemaVersion,'0012_dossier_reports.sql');
  assert.ok(!JSON.stringify(version).includes('must-not-leak'));
  const docker=fs.readFileSync('Dockerfile','utf8');
  assert.match(docker,/USER node/);
@@ -34,7 +34,7 @@ test('portable artifact identifies RC3, includes PostgreSQL 17 runtime and exclu
  assert.match(docker,/PRESCORE-V1-RC3-20261019/);
  assert.match(docker,/postgresql-client-17/);
  assert.match(docker,/pg_dump --version/);
- assert.match(docker,/prescore\.schema="0011_company_dossiers\.sql"/);
+ assert.match(docker,/prescore\.schema="0012_dossier_reports\.sql"/);
  assert.doesNotMatch(docker,/COPY.*\.env|AUTH_SECRET=/);
  const compose=fs.readFileSync('docker-compose.rc.yml','utf8');
  assert.match(compose,/prescore-worker:/);

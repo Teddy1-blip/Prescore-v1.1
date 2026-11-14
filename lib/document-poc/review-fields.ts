@@ -27,6 +27,12 @@ export function reviewFields(id:string,pages:EvidencePage[],total:number,family:
   }
  }else if(routing.parser==='FINANCIAL_STATEMENT'){
   const bfo=financialStatement(input);
+  const metadata=bfo.metadata;
+  add('company_inn','ИНН организации','',metadata.inn);
+  add('statement_date','Отчётная дата','',metadata.reporting_date);
+  add('period_start','Начало периода','',metadata.period_start);
+  add('period_end','Конец периода','',metadata.period_end);
+  add('statement_unit','Единица отчётности','',metadata.unit);
   for(const row of bfo.rows){const code=row.line_code.value;if(code)add(code,'Строка '+code,String(row.unit.value??''),row.current_period_value);}
  }else{
   const contract=extractContractReview(pages.map(p=>({...p,segment:p.segment??'FULL'})));

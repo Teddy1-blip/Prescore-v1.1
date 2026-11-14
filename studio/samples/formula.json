@@ -5,7 +5,7 @@
   "engine": {
     "baseCommit": "cef0145f890a91fe8be58d5c740e7c7d250f4af8",
     "wiring": "PRESCORE-CANONICAL-WIRING-1.1.0",
-    "implementation": "0d3503b01a0fda54213f21f65f97343d55c1745e12e31fd28e9f1ebfadd35512"
+    "implementation": "8702fba89ab8a5a3becdc216864844959df268aea149b1e893fb6b039238c9e0"
   },
   "version": "4b3ebad2bac34e97bf5045e471f8c3835ef7a7ee1a7575c2434640d24deb2861",
   "draft": {
@@ -51,7 +51,7 @@
     }
   },
   "checks": {
-    "runId": "1ca43e99-382e-42ac-9bbf-ca8a8e5b3c9d",
+    "runId": "d5fb5fd1-5c58-4b43-b107-b0f2d9ef8fc4",
     "before": "683620ccdb0102316e059b3cc9d5733f6f406843a3c34ee4ca91875287567b98",
     "after": "db4371604a40a96d90d88b552d075593056801fdebb62efc1e2ff233d7139f8a",
     "changed": [
@@ -83,6 +83,6 @@
     "at": null
   },
   "rollback": "Вернуть базовую методологию из сохранённого снимка",
-  "createdAt": "2026-11-10T22:36:38.877Z",
-  "checksum": "288a1d899a0d512c26aebbb9ec4012fe3a702b92796dbfc7a5666e03f7440259"
+  "createdAt": "2026-11-14T03:39:01.677Z",
+  "checksum": "3aead855aa584828916378acf660e58ed06e59b86b2627c8f0b3b7e86b08e6d0"
 }

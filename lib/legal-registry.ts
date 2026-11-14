@@ -12,7 +12,7 @@ export type LegalRegistryReceipt = {
   replacesSourceId: string | null;
 };
 export type LegalRegistryV1 = {version: typeof LEGAL_REGISTRY_VERSION; activeSourceId: string | null; history: LegalRegistryReceipt[]};
-export function activeLegalReceipt(analysis: AnalysisResult) {
+export function activeLegalReceipt(analysis: Pick<AnalysisResult,'companyInn'|'sourceManifest'|'legalRegistryV1'>) {
   const registry = analysis.legalRegistryV1;
   if (registry?.version !== LEGAL_REGISTRY_VERSION) return null;
   const r = registry.history.find(r => r.id === registry.activeSourceId);

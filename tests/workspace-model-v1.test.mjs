@@ -85,7 +85,7 @@ for (const ownerFull of [false, true]) test(ownerFull
   });
 
   try {
-    for (const migration of ["0001_product.sql", "0002_platform_auth.sql", "0003_runtime_indexes.sql", "0009_analysis_archive.sql", "0010_decision_revisions.sql","0011_company_dossiers.sql"]) {
+    for (const migration of ["0001_product.sql", "0002_platform_auth.sql", "0003_runtime_indexes.sql", "0009_analysis_archive.sql", "0010_decision_revisions.sql","0011_company_dossiers.sql",'0012_dossier_reports.sql']) {
       await pg.exec(fs.readFileSync("lib/db/migrations/" + migration, "utf8"));
     }
 

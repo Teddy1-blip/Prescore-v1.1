@@ -504,3 +504,8 @@ export const dossierSources = pgTable("dossier_sources", {
   sourceType: text("source_type").notNull(), payload: jsonb("payload").notNull(),
   documentId: text("document_id").unique().references(()=>clientDocuments.id), receivedAt: timestamp("received_at",{withTimezone:true}).notNull().defaultNow(),
 }, t => [primaryKey({columns:[t.dossierId,t.sourceId]})]);
+
+export const dossierReports=pgTable("dossier_reports",{
+ id:text("id").primaryKey(),dossierId:text("dossier_id").notNull().references(()=>companyDossiers.id),
+ tier:text("tier").notNull(),publicModel:jsonb("public_model").notNull(),createdAt:timestamp("created_at",{withTimezone:true}).notNull().defaultNow(),
+},table=>[index("dossier_reports_by_company").on(table.dossierId,table.createdAt.desc())]);
