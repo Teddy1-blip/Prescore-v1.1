@@ -400,3 +400,71 @@
 .approved-client .pc-company-sources form label{min-width:0}
 .approved-client .pc-source-intake form label{flex:1 1 200px;max-width:100%}
 .approved-client .pc-company-sources input[type=file]{display:block;box-sizing:border-box;width:100%;min-width:0;max-width:100%}
+
+
+/* Focused BFO workspace: reuse canonical dossier and financial outputs; preserve other client tabs. */
+.approved-client .pc-bfo{max-width:1260px;gap:24px;font-size:15px;line-height:1.6;color:#173044}
+.approved-client .pc-bfo *{box-sizing:border-box}
+.approved-client .pc-bfo h2,.approved-client .pc-bfo h3,.approved-client .pc-bfo p{margin-top:0}
+.approved-client .pc-bfo-intro{padding:2px 0 4px}
+.approved-client .pc-bfo-intro>span,.approved-client .pc-bfo-identity span{font-size:11px;letter-spacing:.12em;font-weight:800;color:#158078}
+.approved-client .pc-bfo-intro h2{font-size:clamp(26px,3vw,34px);line-height:1.18;letter-spacing:-.035em;margin:9px 0 9px}
+.approved-client .pc-bfo-intro p{font-size:15px;max-width:780px;color:#52687a;line-height:1.65}
+.approved-client .pc-bfo-start{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.approved-client .pc-bfo-input{background:#fff;border:1px solid #dfe8ed;border-radius:16px;padding:24px;min-width:0;box-shadow:0 4px 24px #13344809}
+.approved-client .pc-bfo-input h3{font-size:19px;letter-spacing:-.015em;margin-bottom:6px}
+.approved-client .pc-bfo-input>p{color:#52687a;font-size:14px;min-height:44px;line-height:1.55}
+.approved-client .pc-bfo-input form{display:grid;gap:10px;align-content:start}
+.approved-client .pc-bfo label{font-size:13px;font-weight:650;color:#3f5665;display:block}
+.approved-client .pc-bfo input,.approved-client .pc-bfo select{font:inherit;font-size:15px;padding:11px 13px;min-height:46px;max-width:100%;width:100%;border-radius:9px;border:1px solid #c5d2da;color:#173044;background:#fff}
+.approved-client .pc-bfo input[type=file]{padding:10px}
+.approved-client .pc-bfo-inline{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px}
+.approved-client .pc-bfo button{font:inherit;font-size:14px;font-weight:700;padding:12px 17px;min-height:46px;border-radius:9px;border:1px solid #137e81;color:white;background:#147d80;cursor:pointer}
+.approved-client .pc-bfo button:disabled{opacity:.62;cursor:not-allowed}
+.approved-client .pc-bfo-existing{margin-top:18px;display:grid!important;gap:7px}
+.approved-client .pc-bfo-dashboard{background:#fff;border:1px solid #dfe8ed;border-radius:18px;padding:28px;display:grid;gap:24px;min-width:0}
+.approved-client .pc-bfo-identity{display:flex;justify-content:space-between;gap:20px;align-items:flex-start}
+.approved-client .pc-bfo-identity h2{font-size:25px;line-height:1.28;margin:7px 0 6px;letter-spacing:-.025em}
+.approved-client .pc-bfo-identity p{font-size:14px;color:#617583;margin:0}
+.approved-client .pc-bfo-identity button{background:#f4fbfb;color:#147d80}
+.approved-client .pc-bfo-period{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;padding-top:18px;border-top:1px solid #edf1f4}
+.approved-client .pc-bfo-period select{width:auto;max-width:100%;min-width:260px}
+.approved-client .pc-bfo-period span{color:#617583;font-size:13px}
+.approved-client .pc-bfo-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px}
+.approved-client .pc-bfo-kpi{min-width:0;border:1px solid #e2eaf0;border-radius:13px;background:#f8fafc;padding:19px;display:flex;flex-direction:column;gap:5px}
+.approved-client .pc-bfo-kpi h3{font-size:13px;font-weight:650;color:#546b7b;margin:0}
+.approved-client .pc-bfo-kpi strong{font-size:clamp(19px,2vw,27px);font-weight:740;line-height:1.18;color:#153245;overflow-wrap:normal;font-variant-numeric:tabular-nums}
+.approved-client .pc-bfo-kpi span,.approved-client .pc-bfo-kpi small{font-size:12px;line-height:1.4;color:#617583}
+.approved-client .pc-bfo-charts{min-width:0}
+.approved-client .pc-bfo-charts .pc-panel{border:0;padding:0;margin:0;box-shadow:none}
+.approved-client .pc-bfo-charts h2{font-size:20px}
+.approved-client .pc-bfo-balance{padding:17px 19px;border-left:3px solid #158078;background:#f5faf9;border-radius:9px}
+.approved-client .pc-bfo-balance h3{font-size:16px;margin:0 0 6px}
+.approved-client .pc-bfo-balance p{font-size:14px;margin:0}
+.approved-client .pc-bfo-balance small{font-size:12px;color:#5d7080;display:block;margin-top:8px}
+.approved-client .pc-bfo-no-finances{padding:24px;background:#f5f8fa;border-radius:11px}
+.approved-client .pc-bfo-no-finances h3{font-size:18px;margin:0 0 7px}
+.approved-client .pc-bfo-no-finances p{font-size:14px;color:#4f6573;margin:0}
+.approved-client .pc-bfo-detail{border:1px solid #e3eaf0;border-radius:11px;padding:15px 19px}
+.approved-client .pc-bfo-detail summary{cursor:pointer;font-size:15px;font-weight:700}
+.approved-client .pc-bfo-detail section{margin-top:18px}
+.approved-client .pc-bfo-detail section h3{font-size:16px}
+.approved-client .pc-bfo-detail dl>div{display:flex;justify-content:space-between;gap:20px;padding:10px 0;border-bottom:1px solid #edf1f4}
+.approved-client .pc-bfo-detail dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
+.approved-client .pc-bfo-insights>header{margin-bottom:15px}
+.approved-client .pc-bfo-insights>header h2{font-size:23px;letter-spacing:-.025em;margin:0 0 6px}
+.approved-client .pc-bfo-insights>header p{font-size:14px;color:#617583}
+.approved-client .pc-bfo-insight-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.approved-client .pc-bfo-insight{background:white;border:1px solid #dfe8ed;border-radius:14px;padding:24px;min-width:0;box-shadow:0 3px 14px #12364c08}
+.approved-client .pc-bfo-insight:first-child{grid-column:1/-1}
+.approved-client .pc-bfo-insight>span{display:block;color:#148080;font-size:12px;font-weight:750;letter-spacing:.08em;margin-bottom:8px}
+.approved-client .pc-bfo-insight h3{font-size:19px;line-height:1.3;letter-spacing:-.015em;margin:0 0 13px}
+.approved-client .pc-bfo-insight p{font-size:15px;line-height:1.65;color:#425b6a;margin:0}
+.approved-client .pc-bfo-insight .pc-bfo-main-fact{font-size:16px;font-weight:650;color:#15384a;margin-bottom:12px}
+.approved-client .pc-bfo-insight ul{padding:0;list-style:none;margin:0;display:grid;gap:15px}
+.approved-client .pc-bfo-insight li+li{border-top:1px solid #edf1f4;padding-top:15px}
+.approved-client .pc-bfo-insight li strong{display:block;font-size:15px;line-height:1.45;margin-bottom:6px}
+.approved-client .pc-bfo-insight li small{display:block;color:#6a7c89;line-height:1.5;margin-top:6px;font-size:12px}
+@media(max-width:1050px){.approved-client .pc-bfo-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){.approved-client .pc-bfo-start,.approved-client .pc-bfo-insight-grid{grid-template-columns:1fr}.approved-client .pc-bfo-insight:first-child{grid-column:auto}.approved-client .pc-bfo-dashboard{padding:18px}.approved-client .pc-bfo-identity{flex-direction:column}.approved-client .pc-bfo-identity h2{font-size:21px}.approved-client .pc-bfo-input{padding:19px}.approved-client .pc-bfo-input>p{min-height:auto}}
+@media(max-width:460px){.approved-client .pc-bfo-kpis{grid-template-columns:1fr}.approved-client .pc-bfo-inline{grid-template-columns:1fr}.approved-client .pc-bfo-period select{min-width:0;width:100%}.approved-client .pc-bfo-intro h2{font-size:26px}}

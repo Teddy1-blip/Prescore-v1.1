@@ -54,7 +54,7 @@ export function CompanySources({view,id,bankInn,openBank,onCompany}:{view:string
   event.preventDefault();
   const form=event.currentTarget,data=new FormData(form);if(company)data.set('id',company.id);
   setBusy(true);setError('');setNotice('');
-  try{const result=await read<{duplicate:boolean;dossierId:string}>('/api/dossier',{method:'POST',body:data});if(!company){location.assign(dossierHref(result.dossierId,view));return;}setNotice(result.duplicate?'Этот документ уже учтён.':'Документ сохранён.');form.reset();setRevision(n=>n+1);}
+  try{const result=await read<{duplicate:boolean;dossierId:string}>('/api/dossier',{method:'POST',body:data});if(!company){location.assign(dossierHref(result.dossierId,view));return;}setNotice(result.duplicate?'Этот документ уже учтён.':view==='bfo'?'Отчётность сохранена. Если документ требует OCR, ниже появится проверка полей.':'Документ сохранён.');form.reset();setRevision(n=>n+1);}
   catch(e){setError((e as Error).message);}finally{setBusy(false);}
  }
  const years=profile?.financial?.history??[],period=years.find(p=>p.id===selectedYear)??years.at(-1);
@@ -63,6 +63,74 @@ export function CompanySources({view,id,bankInn,openBank,onCompany}:{view:string
  const relevantClaims=profile?.claims.filter(c=>view==='home'||view==='analysis'||view==='actions'||view==='financing'&&c.stage==='product'||c.sources.some(s=>view==='bfo'?['BFO','QUARTERLY'].includes(s.type):view==='obligations'?s.type==='BKI'||profile.sources.some(r=>c.sourceIds.includes(r.id)&&r.kind==='CREDIT_DOCUMENT'):false))??[];
  const [side,setSide]=useState<'buyers'|'suppliers'|'all'>('all');
  const currentLedger=profile?.ledger.filter(l=>l.kind===(view==='obligations'?'DEBT_LEDGER':'COUNTERPARTIES')&&(view!=='counterparties'||side==='all'||(side==='buyers'?l.account.startsWith('62'):l.account.startsWith('60'))))??[];
+
+ const bfoClaims=profile?.claims.filter(c=>c.sources.some(s=>['BFO','QUARTERLY','CHECKO'].includes(s.type)))??[];
+ if(view==='bfo'){
+  const metrics=period?.groups.flatMap(g=>g.metrics)??[];
+  const keys=['REVENUE','NET_PROFIT','ASSETS_TOTAL','EQUITY','RECEIVABLES','PAYABLES','TOTAL_BORROWINGS','currentRatio'];
+  const kpis=metrics.filter(m=>keys.includes(m.key)&&m.value!==null);
+  const stages=[
+   {key:'expert',title:'Экспертность',empty:'Финансовые выводы появятся после получения подтверждённых показателей.'},
+   {key:'stop',title:'Стоп-факторы',empty:'Отдельный подтверждённый стоп-фактор по доступным источникам не опубликован.'},
+   {key:'recommendation',title:'Рекомендации',empty:'Добавьте финансовые показатели для формирования адресных рекомендаций.'},
+   {key:'product',title:'Предложения',empty:'Финансирование подбирается по общему кредитному профилю, а не по одному балансу.'},
+   {key:'plan',title:'План 7 / 30 / 60',empty:'План действий формируется по подтверждённым фактам компании.'}
+  ] as const;
+  async function lookup(){
+   setBusy(true);setError('');setNotice('');
+   try{
+    let found:PublicProfile|null=null;
+    let checkoMessage='';
+    try{
+     const result=await read<{profile:PublicProfile|null;status:string}>('/api/dossier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'preview',inn})});
+     found=result.profile;
+     if(!found)checkoMessage='Данные Checko сейчас недоступны; компания будет сохранена без вымышленных показателей.';
+    }catch{checkoMessage='Checko не ответил. Компания будет сохранена без внешних показателей.';}
+    const result=await read<{company:Company}>('/api/dossier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'save',inn,attachPublic:!!found})});
+    if(checkoMessage)setNotice(checkoMessage);
+    location.assign(dossierHref(result.company.id,'bfo'));
+   }catch(e){setError((e as Error).message);}
+   finally{setBusy(false);}
+  }
+  const selectedReview=profile?.reviews.filter(r=>profile.sources.some(s=>s.id===r.id&&s.kind==='BFO_REVIEW'))??[];
+  return <div className="ws pc-company-sources pc-bfo" aria-label="Финансовый профиль БФО">
+   <div className="pc-bfo-intro"><span>ФИНАНСОВАЯ АНАЛИТИКА PRESCORE</span><h2>Бухгалтерская отчётность</h2><p>Финансовые показатели, динамика и выводы по подтверждённым источникам. Начните с ИНН или загрузите отчётность.</p></div>
+   <div className="pc-bfo-start">
+    <section className="pc-bfo-input">
+     <h3>Найти компанию по ИНН</h3><p>Проверим доступные сведения через Checko и откроем финансовый профиль.</p>
+     <form onSubmit={e=>{e.preventDefault();void lookup()}}>
+      <label htmlFor="bfo-company-inn">ИНН компании</label>
+      <div className="pc-bfo-inline"><input id="bfo-company-inn" required inputMode="numeric" pattern="[0-9]{10}|[0-9]{12}" value={inn} onChange={e=>setInn(e.target.value.replace(/\D/g,'').slice(0,12))} placeholder="10 или 12 цифр" disabled={busy}/><button type="submit" disabled={busy}>Получить данные</button></div>
+     </form>
+     {companies.length>0&&<label className="pc-bfo-existing">Мои компании <select value={company?.id??''} onChange={e=>{if(e.target.value)location.assign(dossierHref(e.target.value,'bfo'))}}><option value="">Выберите компанию</option>{companies.map(c=><option key={c.id} value={c.id}>{c.inn}</option>)}</select></label>}
+    </section>
+    <section className="pc-bfo-input">
+     <h3>Загрузить баланс и Ф2</h3><p>Годовую или промежуточную отчётность — одним способом. Период определяет существующий парсер.</p>
+     <form onSubmit={upload}>
+      <input type="hidden" name="kind" value="AUTO_BFO"/>
+      <label htmlFor="bfo-upload-file">Файл отчётности (PDF, Excel, CSV)</label>
+      <input id="bfo-upload-file" type="file" name="file" accept=".pdf,.xls,.xlsx,.csv" required disabled={busy}/>
+      <button type="submit" disabled={busy}>Загрузить и проанализировать</button>
+     </form>
+    </section>
+   </div>
+   {profile&&<section className="pc-bfo-dashboard" aria-label="Дашборд бухгалтерской отчётности">
+    <div className="pc-bfo-identity"><div><span>ФИНАНСОВЫЙ ПРОФИЛЬ</span><h2>{profile.publicProfile?.company.name||'Компания · ИНН '+company?.inn}</h2><p>ИНН {company?.inn}{profile.publicProfile?.company.region?' · '+profile.publicProfile.company.region:''}{profile.publicProfile?.company.status?' · '+profile.publicProfile.company.status:''}</p></div>
+     {company&&(period||profile.publicProfile)&&<button type="button" disabled={busy} onClick={async()=>{setBusy(true);setError('');try{const report=await read<{snapshot:string}>('/api/dossier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'issue-report',id:company.id})});router.push('/dashboard/report-v2?'+new URLSearchParams({dossierId:company.id,snapshotId:report.snapshot,print:'1'}));}catch(e){setError((e as Error).message);setBusy(false);}}}>Отчёт PDF</button>}
+    </div>
+    {period&&<div className="pc-bfo-period"><label htmlFor="bfo-reporting-period">Отчётный период</label><select id="bfo-reporting-period" value={period.id} onChange={e=>setYear(e.target.value)}>{years.map(p=><option key={p.id} value={p.id}>{p.period.from||'Дата не указана'} — {p.period.to||p.period.asOf||'Дата не указана'}</option>)}</select><span>{period.source==='BFO'?'Годовая отчётность':'Промежуточная отчётность'}</span></div>}
+    {period?<><div className="pc-bfo-kpis">{kpis.map(m=><article key={m.key} className="pc-bfo-kpi"><h3>{m.label}</h3><strong>{numeric(m.value,m.status,m.unit).replace(/[\u00a0\u202f]/g,' ')}</strong><span>{m.periodFrom&&m.periodTo?m.periodFrom+' — '+m.periodTo:m.asOf??period.period.asOf}</span><small>{label(m.origin)} · {label(m.confidence)}</small></article>)}</div>
+     <div className="pc-bfo-charts"><FinancialDynamics history={years}/></div>
+     <div className="pc-bfo-balance"><h3>Контроль отчётности</h3><p>{period.quality.balanceReconciled===true?'Баланс сходится: активы согласованы с капиталом и обязательствами.':period.quality.balanceReconciled===false?'Обнаружено расхождение баланса. Проверьте строки и единицы измерения.':'Сверка баланса требует дополнительных подтверждённых строк.'}</p>{periodSource&&<small>Источник: {periodSource.name}</small>}</div>
+     <details className="pc-bfo-detail"><summary>Все финансовые коэффициенты и строки Ф1 / Ф2</summary>{period.groups.map(g=><section key={g.key}><h3>{g.title}</h3><dl>{g.metrics.filter(m=>m.value!==null).map(m=><div key={m.key}><dt>{m.label}</dt><dd>{numeric(m.value,m.status,m.unit)}</dd></div>)}</dl></section>)}</details>
+    </>:<div className="pc-bfo-no-finances"><h3>Компания добавлена в финансовый профиль</h3><p>{profile.publicProfile?'Данные Checko доступны в пределах текущего тарифа. Загрузите БФО, чтобы получить показатели и динамику в этом разделе.':'Загрузите БФО либо получите доступные сведения Checko по ИНН. Финансовые цифры без источников не создаются.'}</p></div>}
+   </section>}
+   {profile&&<section className="pc-bfo-insights" aria-label="Экспертные выводы по БФО"><header><h2>Экспертность и следующие действия</h2><p>Все выводы видны сразу. Содержание зависит от подтверждённых данных компании.</p></header><div className="pc-bfo-insight-grid">{stages.map((stage,i)=>{const items=bfoClaims.filter(c=>c.stage===stage.key);const balanceText=stage.key==='expert'&&period?(period.quality.balanceReconciled===true?'БФО: баланс сходится':period.quality.balanceReconciled===false?'БФО: баланс требует сверки':'БФО: сверка баланса не подтверждена'):null;return <article className="pc-bfo-insight" key={stage.key}><span>{i+1} / 5</span><h3>{stage.title}</h3>{balanceText&&<p className="pc-bfo-main-fact">{balanceText}</p>}{items.length>0?<ul>{items.map(c=><li key={c.id}><strong>{c.horizon?({'DAY_7':'7 дней','DAY_30':'30 дней','DAY_60':'60 дней'}[c.horizon])+' · ':''}{c.title}</strong><p>{c.text}</p>{c.sources.length>0&&<small>Основание: {c.sources.map(s=>s.type+' · '+s.date).join('; ')}</small>}</li>)}</ul>:!balanceText&&<p>{stage.empty}</p>}</article>})}</div></section>}
+   {selectedReview.map(review=><SourceReview key={review.id} review={review} recognize={async(layout)=>{if(!company)return;await read('/api/dossier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'recognize',id:company.id,sourceId:review.id,layout})});setRevision(v=>v+1);}} save={async(field,value)=>{if(!company)return;await read('/api/dossier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'verify-field',id:company.id,sourceId:review.id,field,value,previous:review.verified[field]})});setRevision(v=>v+1);}}/>)}
+   {error&&<p role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
+  </div>;
+ }
+
  return <div className="ws pc-company-sources" aria-label="Источники компании">
  {(!company||view==='home')&&<Panel title="Компания по ИНН">
  {companies.length>0&&<label>Мои досье <select value={company?.id??''} onChange={e=>{if(e.target.value)location.assign(dossierHref(e.target.value,view))}}><option value="">Выберите компанию</option>{companies.map(c=><option key={c.id} value={c.id}>{c.inn}</option>)}</select></label>}

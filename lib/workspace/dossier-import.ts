@@ -17,7 +17,7 @@ import {parseCreditHistoryText} from '../credit-history.ts';
 import {financialTableRows} from '../document-poc/financial-layout.ts';
 import {validInn} from '../external/checko-inn.ts';
 import {ownedDossier,saveDossier} from './dossier.ts';
-export const uploadKinds=['BFO','QUARTERLY','BKI','COUNTERPARTIES','DEBT_LEDGER','CREDIT_DOCUMENT','COMMERCIAL_DOCUMENT','BFO_REVIEW'] as const;
+export const uploadKinds=['BFO','QUARTERLY','BKI','COUNTERPARTIES','DEBT_LEDGER','CREDIT_DOCUMENT','COMMERCIAL_DOCUMENT','BFO_REVIEW','AUTO_BFO'] as const;
 type Kind=typeof uploadKinds[number];
 export class InputError extends Error {}
 export async function importSource(db:TransactionPool,owner:string,id:string,kind:Kind,file:File) {
@@ -25,14 +25,30 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
   if(id&&!dossier)return null;
   const ext=file.name.split('.').pop()?.toLowerCase()??'';
   const ledger=kind==='COUNTERPARTIES'||kind==='DEBT_LEDGER';
-  const reviewKind=kind==='CREDIT_DOCUMENT'||kind==='COMMERCIAL_DOCUMENT'||kind==='BFO_REVIEW';
+  const autoFinancial=kind==='AUTO_BFO';
+  let reviewKind=kind==='CREDIT_DOCUMENT'||kind==='COMMERCIAL_DOCUMENT'||kind==='BFO_REVIEW';
   const allowed=kind==='CREDIT_DOCUMENT'||kind==='COMMERCIAL_DOCUMENT'?['pdf','docx']:kind==='BKI'||reviewKind?['pdf']:ledger?['xls','xlsx','csv']:['pdf','xls','xlsx','csv'];
   if(!allowed.includes(ext)||file.name.length>180||!file.size||file.size>(kind==='BKI'?35:25)*1024*1024)throw new InputError('Проверьте размер и формат файла.');
   const bytes=new Uint8Array(await file.arrayBuffer());
   const hash=createHash('sha256').update(bytes).digest('hex');
   if(ext==='xlsx')try{validateZipBudget(bytes);}catch{throw new InputError('Проверьте размер и структуру архива XLSX.');}
   let text='';
-  if(!reviewKind)try{text=await extractDocumentText(file.name,ext==='pdf'?bytes.slice():bytes,kind==='BKI'?'bureau':'financial');}catch{throw new InputError('Не удалось прочитать документ.');}
+  if(!reviewKind)try{text=await extractDocumentText(file.name,ext==='pdf'?bytes.slice():bytes,kind==='BKI'?'bureau':'financial');}catch{
+    if(autoFinancial&&ext==='pdf'){kind='BFO_REVIEW';reviewKind=true;}
+    else throw new InputError('Не удалось прочитать документ.');
+  }
+  if(kind==='AUTO_BFO'){
+    try{
+      const detected=parseQuarterlyReportText(text,file.name);
+      const periodKind=detected.financialMetadataV2?.period.kind;
+      if(periodKind==='ANNUAL')kind='BFO';
+      else if(periodKind==='INTERIM')kind='QUARTERLY';
+      else throw new Error('Период отчётности требует подтверждения');
+    }catch{
+      if(ext==='pdf'){kind='BFO_REVIEW';reviewKind=true;}
+      else throw new InputError('Не удалось определить отчётный период. Проверьте дату и единицы измерения в файле.');
+    }
+  }
   let inn=dossier?.inn;
   if(!inn){
     if(kind==='BFO'||kind==='QUARTERLY')inn=parseQuarterlyReportText(text,file.name).companyInn??undefined;
