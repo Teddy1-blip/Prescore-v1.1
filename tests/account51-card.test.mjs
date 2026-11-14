@@ -47,3 +47,22 @@ test('XLSX keeps one multiline description inside one posting row',()=>{
  assert.equal(card.operations[1].amount,150);
  assert.equal(card.reconciled,true);
 });
+
+test('Internal 51-to-51 transfer does not create external cash movement',()=>{
+ const transfer=['17.01.2025','Between own bank accounts','Own A','Own B','51',500,'','51',500,'','Д',1100];
+ const card=parseAccount51Card([...head,incoming,outgoing,transfer]);
+ assert.equal(card.operations.at(-1).direction,'INTERNAL_TRANSFER');
+ assert.equal(card.operations.at(-1).amount,500);
+ assert.equal(card.reconciled,true);
+});
+test('Unbalanced internal transfer needs review rather than being netted',()=>{
+ const transfer=['17.01.2025','Between own bank accounts','Own A','Own B','51',500,'','51',499,'','Д',1100];
+ assert.throws(()=>parseAccount51Card([...head,incoming,outgoing,transfer]),/ACCOUNT51_INTERNAL_TRANSFER_UNBALANCED/);
+});
+test('Negative 1C debit balance remains visible and cannot pass clean reconciliation',()=>{
+ const debit=['17.01.2025','Additional payment','Vendor','Bank','60.01','','','51',2500,'','Д',-1400];
+ const card=parseAccount51Card([...head,incoming,outgoing,debit]);
+ assert.equal(card.operations.at(-1).balanceAfter,-1400);
+ assert.equal(card.reconciled,false);
+ assert.ok(card.warnings.some(code=>code.startsWith('ACCOUNT51_NEGATIVE_DEBIT_BALANCE:')));
+});
