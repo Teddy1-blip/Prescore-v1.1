@@ -31,8 +31,9 @@ export async function dossierBrowser({page,pool,out,origin,signup,signInAsRole,r
  const first=await actor(1);
  await page.getByLabel('ИНН компании',{exact:true}).fill(inn);await page.getByRole('button',{name:'Проверить ИНН'}).click();
  await page.getByRole('heading',{name:profile.company.name,exact:true}).first().waitFor();const combined=await saveCompany();ok('ИНН без файлов: публичный профиль Checko из тестового кэша и сохранение компании');
- await actor(2);const accounting=await saveCompany();await tab(accounting,'bfo');
+ await actor(2);await page.goto(origin+'/dashboard?view=bfo');
  await upload('Годовая бухгалтерская отчётность',financialFile(inn,'csv',{period:'2024 год'}));
+ await page.waitForURL(/dossierId=/);const accounting=new URL(page.url()).searchParams.get('dossierId');assert.ok(accounting);
  await page.getByRole('heading',{name:'Финансовый профиль БФО'}).waitFor();await page.screenshot({path:path.join(evidence,'bfo-one-year.png'),fullPage:true});
  await upload('Годовая бухгалтерская отчётность',financialFile(inn,'csv',{period:'2025 год'}));await page.waitForFunction(()=>[...document.querySelectorAll('select')].some(s=>s.options.length===2&&s.textContent.includes('2024')&&s.textContent.includes('2025')));
  await page.screenshot({path:path.join(evidence,'bfo-two-years.png'),fullPage:true});ok('БФО без банка: два периода FinancialAnalysisV2');

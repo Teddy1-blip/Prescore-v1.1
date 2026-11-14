@@ -11,11 +11,11 @@ const terms:Record<string,[string,string]>={
  currency:['Валюта',''],credit_amount:['Сумма кредита',''],credit_limit:['Лимит по договору',''],interest_rate:['Процентная ставка','%'],
  start_date:['Дата начала',''],maturity_date:['Срок погашения',''],product_type:['Вид кредита',''],fees:['Комиссия',''],collateral:['Обеспечение','']};
 const contractLabels:Record<string,string>={CONTRACT_DATE:'Дата договора',CONTRACT_AMOUNT:'Цена договора',ADVANCE_MAX_PERCENT:'Предельный аванс',ADVANCE_TIMING:'Срок аванса',FINAL_PAYMENT:'Окончательный расчёт',WORK_END:'Завершение работ',ASSIGNMENT:'Уступка',PAYMENT_SCHEDULE:'График платежей'};
-export function reviewFields(id:string,pages:EvidencePage[],total:number,family:UploadFamily,layout:'SINGLE'|'TWO_UP_ROTATED',warnings:string[]=[]):DocumentReview{
+export function reviewFields(id:string,pages:EvidencePage[],total:number,family:UploadFamily,layout:'SINGLE'|'TWO_UP_ROTATED',warnings:string[]=[],tables?:Input['financialTables']):DocumentReview{
  const routing=routeDocument({pages,totalPhysicalPages:total,expectedFamily:family,layout,extractionWarnings:warnings});
  const result:DocumentReview={version:EXTRACTOR_VERSION,status:routing.status,fields:[],issues:[...routing.warnings]};
  if(routing.status!=='READY_FOR_REVIEW'||!routing.parser)return result;
- const input:Input={id,issues:[],lines:pages.flatMap(p=>p.text.split(/\r?\n/).map(text=>({text,confidence:p.method==='TEXT'?'HIGH':'MEDIUM',page:p.page,pdf:true})))};
+ const input:Input={id,issues:[],financialTables:tables,lines:pages.flatMap(p=>p.text.split(/\r?\n/).map(text=>({text,confidence:p.method==='TEXT'?'HIGH':'MEDIUM',page:p.page,pdf:true})))};
  function add(key:string,label:string,unit:string,f:Field<unknown>){result.fields.push({key,label,unit,value:f.value==null?null:String(f.value),page:f.source_page,fragment:f.source_text,status:f.status});}
  if(routing.parser==='CREDIT_AGREEMENT'){
   const agreement=creditAgreement(input);

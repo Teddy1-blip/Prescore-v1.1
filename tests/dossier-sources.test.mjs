@@ -36,9 +36,9 @@ test('Private company dossier, independent inputs and canonical combined analysi
     assert.equal((await read(id,publicOwner)).publicProfile.inn,inn);
   });
   await t.test('BFO-only supports two periods and authentic originals without bank rows',async()=>{
-    const user=actor(2),id=await save(user);
+    const user=actor(2);let id='';
     for(const year of [2024,2025]){
-      const file=financialFile(inn,'csv',{period:year+' год'});const r=await attach(id,'BFO',file,user);assert.equal(r.status,201,await r.clone().text());
+      const file=financialFile(inn,'csv',{period:year+' год'});const r=await attach(id,'BFO',file,user);assert.equal(r.status,201,await r.clone().text());id=(await r.json()).dossierId;assert.ok(id);
       assert.equal((await attach(id,'BFO',file,user)).status,200);
     }
     const d=await read(id,user);assert.equal(d.versions.length,0);assert.equal(d.sources.length,2);assert.equal(d.financial.history.length,2);assert.equal(d.entitlement,'BASIC');

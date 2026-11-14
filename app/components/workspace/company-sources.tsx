@@ -1,4 +1,5 @@
 'use client';
+import {useRouter} from 'next/navigation';
 import {useEffect,useState} from 'react';
 import type {FormEvent} from 'react';
 import type {sourceProjection} from '../../../lib/workspace/dossier-sources';
@@ -11,7 +12,7 @@ import {numeric,Warnings} from './client-financials';
 import {Panel} from './client-insights';
 
 type Company={id:string;inn:string};
-type PublicProfile={company:{name:string;status?:string;region?:string};fetchedAt:string;publicRisks?:{enforcementDetected:boolean|null;legalEventsDetected:boolean|null};contracts?:{totalCount:number|null};legal?:{legalCases:number|null;enforcements:number|null}};
+type PublicProfile={company:{name:string;status?:string;region?:string};fetchedAt:string;publicRisks?:{enforcementDetected:boolean|null;legalEventsDetected:boolean|null};contracts?:{totalCount:number|null};legal?:{legalCases:number|null;enforcements:number|null};externalFacts?:{cases:{reference:string|null;title:string|null;date:string|null;receiptId:string}[];enforcements:{reference:string|null;title:string|null;date:string|null;receiptId:string}[];procurement:{items:{number:string;law:string;subject:string|null;amount:number|null;signedAt:string|null}[]}}};
 type Profile=ReturnType<typeof sourceProjection>&{company:Company;versions:{id:string;name:string;start:string;end:string}[];publicProfile:PublicProfile|null;entitlement:string};
 const labels:Record<string,string>={BFO:'Годовая бухгалтерская отчётность',QUARTERLY:'Промежуточная отчётность',BKI:'Корпоративный отчёт БКИ',COUNTERPARTIES:'ОСВ 60, 62 и 76',DEBT_LEDGER:'ОСВ 66 и 67',CHECKO:'Публичные сведения',BANK_STATEMENT:'Банковская выписка',CALENDAR:'Календарь',CREDIT_DOCUMENT:'Кредитный договор PDF',COMMERCIAL_DOCUMENT:'Торговый договор PDF',BFO_REVIEW:'Проверка полей БФО PDF'};
 const kinds:Record<string,string[]>={bfo:['BFO','QUARTERLY','BFO_REVIEW'],obligations:['BKI','DEBT_LEDGER','CREDIT_DOCUMENT'],counterparties:['COUNTERPARTIES','COMMERCIAL_DOCUMENT'],documents:['BFO','QUARTERLY','BKI','COUNTERPARTIES','DEBT_LEDGER','BFO_REVIEW','CREDIT_DOCUMENT','COMMERCIAL_DOCUMENT']};
@@ -23,9 +24,13 @@ async function read<T>(url:string,options?:RequestInit):Promise<T>{
 }
 function PublicFacts({profile}:{profile:PublicProfile}){
  return <section><h3>{profile.company.name}</h3><p>{[profile.company.status,profile.company.region].filter(Boolean).join(' · ')}</p><dl>
- {([['Судебные события',profile.legal?.legalCases??profile.publicRisks?.legalEventsDetected],['Исполнительные производства',profile.legal?.enforcements??profile.publicRisks?.enforcementDetected],['Контракты',profile.contracts?.totalCount]] as const).map(([label,value])=>value!=null&&<div key={label}><dt>{label}</dt><dd>{typeof value==='boolean'?(value?'Есть записи':'Записи не найдены'):value}</dd></div>)}</dl><small>Checko · {profile.fetchedAt.slice(0,10)}</small></section>;
+ {([['Судебные события',profile.legal?.legalCases??profile.publicRisks?.legalEventsDetected],['Исполнительные производства',profile.legal?.enforcements??profile.publicRisks?.enforcementDetected],['Контракты',profile.contracts?.totalCount]] as const).map(([label,value])=>value!=null&&<div key={label}><dt>{label}</dt><dd>{typeof value==='boolean'?(value?'Есть записи':'Записи не найдены'):value}</dd></div>)}</dl><small>Checko · {profile.fetchedAt.slice(0,10)}</small>
+ {profile.externalFacts&&<>{([['Судебные дела',profile.externalFacts.cases],['Исполнительные производства',profile.externalFacts.enforcements]] as const).map(([title,rows])=>rows.length>0&&<details key={title}><summary>{title}</summary>{rows.map((r,i)=><p key={r.receiptId+i}>{[r.date,r.reference,r.title].filter(Boolean).join(' · ')}</p>)}</details>)}
+ {profile.externalFacts.procurement.items.length>0&&<details><summary>Государственные контракты</summary>{profile.externalFacts.procurement.items.map(r=><p key={r.law+r.number}>{[r.law,r.number,r.signedAt,r.subject,r.amount==null?null:numeric(r.amount,'KNOWN','RUB')].filter(Boolean).join(' · ')}</p>)}</details>}</>}
+ </section>;
 }
 export function CompanySources({view,id,bankInn,openBank,onCompany}:{view:string;id:string;bankInn?:string;openBank:()=>void;onCompany:(inn:string)=>void}){
+ const router=useRouter();
  const [inn,setInn]=useState(bankInn??''),[companies,setCompanies]=useState<Company[]>([]),[profile,setProfile]=useState<Profile|null>(null),[preview,setPreview]=useState<PublicProfile|null>(null);
  const [error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[revision,setRevision]=useState(0),[selectedYear,setYear]=useState('');
  useEffect(()=>{const ctrl=new AbortController();(async()=>{
@@ -45,14 +50,14 @@ export function CompanySources({view,id,bankInn,openBank,onCompany}:{view:string
   }catch(e){setError((e as Error).message);}finally{setBusy(false);}
  }
  async function upload(event:FormEvent<HTMLFormElement>){
-  event.preventDefault();if(!company)return;
-  const form=event.currentTarget,data=new FormData(form);data.set('id',company.id);
+  event.preventDefault();
+  const form=event.currentTarget,data=new FormData(form);if(company)data.set('id',company.id);
   setBusy(true);setError('');setNotice('');
-  try{const result=await read<{duplicate:boolean}>('/api/dossier',{method:'POST',body:data});setNotice(result.duplicate?'Этот документ уже учтён.':'Документ сохранён.');form.reset();setRevision(n=>n+1);}
+  try{const result=await read<{duplicate:boolean;dossierId:string}>('/api/dossier',{method:'POST',body:data});if(!company){location.assign(dossierHref(result.dossierId,view));return;}setNotice(result.duplicate?'Этот документ уже учтён.':'Документ сохранён.');form.reset();setRevision(n=>n+1);}
   catch(e){setError((e as Error).message);}finally{setBusy(false);}
  }
  const years=profile?.financial?.history??[],period=years.find(p=>p.id===selectedYear)??years.at(-1);
- const relevantClaims=profile?.claims.filter(c=>view==='home'||view==='analysis'||view==='actions'||c.sources.some(s=>view==='bfo'?['BFO','QUARTERLY'].includes(s.type):view==='obligations'?s.type==='BKI'||profile.sources.some(r=>c.sourceIds.includes(r.id)&&r.kind==='CREDIT_DOCUMENT'):false))??[];
+ const relevantClaims=profile?.claims.filter(c=>view==='home'||view==='analysis'||view==='actions'||view==='financing'&&c.stage==='product'||c.sources.some(s=>view==='bfo'?['BFO','QUARTERLY'].includes(s.type):view==='obligations'?s.type==='BKI'||profile.sources.some(r=>c.sourceIds.includes(r.id)&&r.kind==='CREDIT_DOCUMENT'):false))??[];
  const [side,setSide]=useState<'buyers'|'suppliers'|'all'>('all');
  const currentLedger=profile?.ledger.filter(l=>l.kind===(view==='obligations'?'DEBT_LEDGER':'COUNTERPARTIES')&&(view!=='counterparties'||side==='all'||(side==='buyers'?l.account.startsWith('62'):l.account.startsWith('60'))))??[];
  return <div className="ws pc-company-sources" aria-label="Источники компании">
@@ -62,7 +67,8 @@ export function CompanySources({view,id,bankInn,openBank,onCompany}:{view:string
  {preview&&<PublicFacts profile={preview}/>}
  </Panel>}
  {company&&<><p>Досье компании · ИНН {company.inn}</p>
- {['home','bfo','analysis','documents'].includes(view)&&(profile.financial||profile.obligations.length>0||profile.publicProfile)&&<button type="button" disabled={busy} onClick={async()=>{setBusy(true);setError('');try{const report=await read<{snapshot:string}>('/api/dossier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'issue-report',id:company.id})});location.assign('/dashboard/report-v2?'+new URLSearchParams({dossierId:company.id,snapshotId:report.snapshot,print:'1'}));}catch(e){setError((e as Error).message);setBusy(false);}}}>Версия отчёта для PDF</button>}
+ {['home','bfo','analysis','documents'].includes(view)&&(profile.financial||profile.obligations.length>0||profile.publicProfile)&&<button type="button" disabled={busy} onClick={async()=>{setBusy(true);setError('');try{const report=await read<{snapshot:string}>('/api/dossier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'issue-report',id:company.id})});router.push('/dashboard/report-v2?'+new URLSearchParams({dossierId:company.id,snapshotId:report.snapshot,print:'1'}));}catch(e){setError((e as Error).message);setBusy(false);}}}>Версия отчёта для PDF</button>}
+ {view==='bfo'&&profile.financial?.history.length&&profile.versions.length>0?<Panel title="Сверка с выписками">{profile.versions.map(v=><p key={v.id}><a href={'/dashboard?'+new URLSearchParams({analysisId:v.id,view:'banking'})}>Сверка X02/X03 · {v.start} — {v.end}</a></p>)}</Panel>:null}
  {view==='home'&&<>{profile.publicProfile&&<PublicFacts profile={profile.publicProfile}/>}<button onClick={openBank}>Загрузить банковскую выписку</button></>}
  {(view==='home'||view==='analysis'||view==='documents')&&profile.versions.length>0&&<Panel title="Сохранённые банковские анализы">{profile.versions.map(v=><p key={v.id}><a href={'/dashboard?'+new URLSearchParams({analysisId:v.id,view:view==='documents'?'documents':'analysis'})}>{v.name} · {v.start} — {v.end}</a></p>)}</Panel>}
 
@@ -78,7 +84,7 @@ export function CompanySources({view,id,bankInn,openBank,onCompany}:{view:string
  {view==='calendar'&&profile.schedule.length>0&&<Panel title="Даты по обязательствам">{profile.schedule.map(e=><p key={e.id}>{e.date} · {e.creditor} · {e.contract} · {e.amount==null?'Сумма не указана':numeric(e.amount,'KNOWN','RUB')}</p>)}</Panel>}
  {view==='calendar'&&<CalendarEntries items={profile.calendar} save={async(entry,key)=>{await read('/api/dossier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'calendar',id:company.id,entry,key})});setRevision(v=>v+1);}}/>}
  {profile.reviews.filter(review=>view==='documents'||kinds[view]?.includes(profile.sources.find(s=>s.id===review.id)?.kind??'')).map(review=><SourceReview key={review.id} review={review} recognize={async(layout)=>{await read('/api/dossier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'recognize',id:company.id,sourceId:review.id,layout})});setRevision(v=>v+1);}} save={async(field,value)=>{await read('/api/dossier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'verify-field',id:company.id,sourceId:review.id,field,value,previous:review.verified[field]})});setRevision(v=>v+1);}}/>)}
- {(kinds[view]??[]).length>0&&<section className="pc-panel pc-source-intake"><h2>Добавить источник</h2>{(kinds[view]??[]).map(kind=><form onSubmit={upload} key={kind}><input name="kind" type="hidden" value={kind}/><label>{labels[kind]} <input aria-label={labels[kind]} name="file" required type="file" accept={['BKI','CREDIT_DOCUMENT','COMMERCIAL_DOCUMENT','BFO_REVIEW'].includes(kind)?'.pdf':kind.endsWith('LEDGER')||kind==='COUNTERPARTIES'?'.csv,.xlsx':'.pdf,.xlsx,.csv'}/></label> <button disabled={busy}>Добавить документ</button></form>)}</section>}
+
  {view==='documents'&&profile.sources.some(s=>s.documentId&&/\.pdf$/i.test(s.name))&&<DocumentOcrPreview documents={profile.sources.flatMap(s=>s.documentId&&/\.pdf$/i.test(s.name)?[{id:s.documentId,fileName:s.name,category:labels[s.kind]??s.kind}]:[])}/>}
  {view==='obligations'&&profile.obligations.length>0&&<Panel title="Подтверждённые обязательства"><p>Данные на {profile.portfolioAsOf}</p>{profile.obligations.map(o=><p key={o.id}>{o.creditor} · {o.contract??'Номер договора не указан'} · {o.principal==null?'Остаток не указан':numeric(o.principal,'KNOWN','RUB')} · {o.maturity??'Срок не указан'}{o.limit!==null&&' · Лимит '+numeric(o.limit,'KNOWN','RUB')}{o.original!==null&&' · Сумма договора '+numeric(o.original,'KNOWN','RUB')}{o.rate!==null&&' · Ставка '+o.rate+'%'}</p>)}</Panel>}
  {['counterparties','obligations'].includes(view)&&<details><summary>Формат импорта ОСВ</summary><p>Одна строка на счёт, контрагента, договор и дату. Заголовки колонок: ИНН организации, Дата остатка, Счёт, Контрагент, Договор, Дебет, руб., Кредит, руб. Дата в формате ГГГГ-ММ-ДД. CSV с разделителем «точка с запятой» или XLSX. Дополнительно: ИНН контрагента, Вид задолженности, Дата платежа по договору. Для основного долга укажите «Основной долг» и номер договора.</p></details>}
@@ -86,6 +92,7 @@ export function CompanySources({view,id,bankInn,openBank,onCompany}:{view:string
  {currentLedger.length>0&&<Panel title="Остатки по документам ОСВ"><div className="pc-table-scroll"><table><thead><tr>{['Счёт','Контрагент','Договор','Дата','Дебет, ₽','Кредит, ₽','Источник'].map(s=><th key={s}>{s}</th>)}</tr></thead><tbody>{currentLedger.map(l=><tr key={l.sourceId+':'+l.row}><td>{l.account}</td><td>{l.party}{l.partyInn&&<small>ИНН {l.partyInn}</small>}</td><td>{l.contract??'—'}{l.due&&<small>Платёж по договору · {l.due}</small>}</td><td>{l.asOf}</td><td>{l.debit??'—'}</td><td>{l.credit??'—'}</td><td>{profile.sources.find(s=>s.id===l.sourceId)?.name}, строка {l.row}</td></tr>)}</tbody></table></div></Panel>}
  {(view==='documents'||view==='home'||view==='bfo')&&profile.sources.length>0&&<Panel title="Источники досье">{profile.sources.map(s=><p key={s.id}>{s.documentId?<a href={'/api/documents?download='+encodeURIComponent(s.documentId)}>{s.name}</a>:s.name} · {labels[s.kind]??'Документ'} · {s.received.slice(0,10)}</p>)}</Panel>}
  </>}
+ {(kinds[view]??[]).length>0&&<section className="pc-panel pc-source-intake"><h2>Добавить источник</h2>{(kinds[view]??[]).filter(kind=>company||!['BFO_REVIEW','CREDIT_DOCUMENT','COMMERCIAL_DOCUMENT'].includes(kind)).map(kind=><form onSubmit={upload} key={kind}><input name="kind" type="hidden" value={kind}/><label>{labels[kind]} <input aria-label={labels[kind]} name="file" required type="file" accept={['BKI','CREDIT_DOCUMENT','COMMERCIAL_DOCUMENT','BFO_REVIEW'].includes(kind)?'.pdf':kind.endsWith('LEDGER')||kind==='COUNTERPARTIES'?'.csv,.xlsx':'.pdf,.xlsx,.csv'}/></label> <button disabled={busy}>Добавить документ</button></form>)}</section>}
  {error&&<p role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
  </div>;
 }

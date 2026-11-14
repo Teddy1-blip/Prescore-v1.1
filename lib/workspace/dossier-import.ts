@@ -11,13 +11,17 @@ import {adaptFinancialReport} from '../credit-engine/financial-analysis/quarterl
 import {parseLedger} from './ledger-import.ts';
 import {withDossierSources} from './dossier-bank.ts';
 import type {AnalysisResult} from '../prescore.ts';
-import {ownedDossier} from './dossier.ts';
+import {parseQuarterlyReportText} from '../quarterly-report.ts';
+import {parseCreditHistoryText} from '../credit-history.ts';
+import {financialTableRows} from '../document-poc/financial-layout.ts';
+import {validInn} from '../external/checko-inn.ts';
+import {ownedDossier,saveDossier} from './dossier.ts';
 export const uploadKinds=['BFO','QUARTERLY','BKI','COUNTERPARTIES','DEBT_LEDGER','CREDIT_DOCUMENT','COMMERCIAL_DOCUMENT','BFO_REVIEW'] as const;
 type Kind=typeof uploadKinds[number];
 export class InputError extends Error {}
 export async function importSource(db:TransactionPool,owner:string,id:string,kind:Kind,file:File) {
-  const dossier=await ownedDossier(db,owner,id);
-  if(!dossier)return null;
+  const dossier=id?await ownedDossier(db,owner,id):undefined;
+  if(id&&!dossier)return null;
   const ext=file.name.split('.').pop()?.toLowerCase()??'';
   const ledger=kind==='COUNTERPARTIES'||kind==='DEBT_LEDGER';
   const reviewKind=kind==='CREDIT_DOCUMENT'||kind==='COMMERCIAL_DOCUMENT'||kind==='BFO_REVIEW';
@@ -25,19 +29,32 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
   if(!allowed.includes(ext)||file.name.length>180||!file.size||file.size>(kind==='BKI'?35:25)*1024*1024)throw new InputError('Проверьте размер и формат файла.');
   const bytes=new Uint8Array(await file.arrayBuffer());
   const hash=createHash('sha256').update(bytes).digest('hex');
-  const sourceId=kind.toLowerCase()+':'+hash, now=new Date().toISOString(),inn=dossier.inn;
+  if(ext==='xlsx')try{validateZipBudget(bytes);}catch{throw new InputError('Проверьте размер и структуру архива XLSX.');}
+  let text='';
+  if(!reviewKind)try{text=await extractDocumentText(file.name,ext==='pdf'?bytes.slice():bytes,kind==='BKI'?'bureau':'financial');}catch{throw new InputError('Не удалось прочитать документ.');}
+  let inn=dossier?.inn;
+  if(!inn){
+    if(kind==='BFO'||kind==='QUARTERLY')inn=parseQuarterlyReportText(text,file.name).companyInn??undefined;
+    else if(kind==='BKI')inn=parseCreditHistoryText(text,file.name).subjectInn??undefined;
+    else if(ledger){
+      const [head,...rows]=text.trim().replace(/^\uFEFF/,'').split(/\r?\n/);
+      const col=head.split('\t').map(s=>s.trim()).indexOf('ИНН организации');
+      const identities=new Set(rows.filter(r=>r.trim()).map(r=>r.split('\t')[col]?.trim()));
+      if(identities.size===1)inn=[...identities][0];
+    }
+    if(!inn||!validInn(inn))throw new InputError('Для этого документа выберите досье по ИНН или загрузите файл с идентифицируемой организацией.');
+  }
+  const sourceId=kind.toLowerCase()+':'+hash, now=new Date().toISOString();
   const envelope:SourceEnvelope={sourceId,sourceType:ledger||reviewKind?'OTHER':kind as 'BFO'|'QUARTERLY'|'BKI',fileName:file.name,
     status:'READY',companyInn:inn,warnings:[],confidence:null,receivedAt:now,contentHash:hash,rawReference:'sha256:'+hash};
   const payload:PrivateSource={envelope};
   try{
-    if(ext==='xlsx')validateZipBudget(bytes);
     if(reviewKind){
       const family=kind==='CREDIT_DOCUMENT'?'CREDIT':kind==='BFO_REVIEW'?'BFO':'COMMERCIAL';
-      const pages=await mapPdfPages(bytes.slice(),64,true,async(text,p)=>({page:p.pageNumber,logicalPage:p.pageNumber,method:text.trim()?'TEXT' as const:'UNREADABLE' as const,text}));
-      payload.review=reviewFields(sourceId,pages,pages.length,family,'SINGLE');
+      const pages=await mapPdfPages(bytes.slice(),64,true,async(text,p,items)=>({tables:family==='BFO'?financialTableRows(items,p.pageNumber):[],page:p.pageNumber,logicalPage:p.pageNumber,method:text.trim()?'TEXT' as const:'UNREADABLE' as const,text}));
+      payload.review=reviewFields(sourceId,pages,pages.length,family,'SINGLE',[],pages.flatMap(p=>p.tables));
       envelope.status='PROCESSING';
     }else{
-    const text=await extractDocumentText(file.name,ext==='pdf'?bytes.slice():bytes,kind==='BKI'?'bureau':'financial');
     if(ledger)payload.ledger=parseLedger(text,inn,kind);
     else if(kind==='BKI'){
       const bki=parseAuthoritativeCreditHistoryText({text,fileName:file.name,analysisInn:inn,relationship:'Не указано'});
@@ -59,9 +76,10 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
   const storage=documentStorage();let storageKey:string|undefined;
   try{
     await tx.query('BEGIN');
+    if(!id)id=(await saveDossier(tx,owner,inn)).id;
     await tx.query('SELECT id FROM company_dossiers WHERE id=$1 AND owner_email=$2 FOR UPDATE',[id,owner]);
     const prior=await tx.query('SELECT document_id FROM dossier_sources WHERE dossier_id=$1 AND source_id=$2',[id,sourceId]);
-    if(prior.rows.length){await tx.query('COMMIT');return {id:sourceId,duplicate:true};}
+    if(prior.rows.length){await tx.query('COMMIT');return {id:sourceId,dossierId:id,duplicate:true};}
     const doc=randomUUID();
     const mime=ext==='xlsx'?'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':ext==='pdf'?'application/pdf':'text/csv';
     storageKey=(await storage.put(bytes,mime)).key;
@@ -78,7 +96,7 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
       }
     }
     await tx.query('COMMIT');
-    return {id:sourceId,duplicate:false};
+    return {id:sourceId,dossierId:id,duplicate:false};
   }catch(error){
     await tx.query('ROLLBACK');
     if(storageKey && !(await db.query('SELECT id FROM client_documents WHERE storage_key=$1',[storageKey])).rows.length) await storage.delete(storageKey);
