@@ -344,6 +344,7 @@ try {
   await page.getByRole('heading', { name: 'Бухгалтерская финансовая отчётность', exact: true }).first().waitFor();
   const updated = await json(endpoint, ownerRole);
   assert.ok(updated.full.report.financialAnalysis?.history.length);
+  await page.locator('.pc-metric-group summary').first().click();
   await page.getByRole('table', { name: 'Финансовые показатели' }).first().waitFor();
   ok('Загрузка квартального CSV и обновление БФО на соседней вкладке');
   await nav('Досье клиента').click();
