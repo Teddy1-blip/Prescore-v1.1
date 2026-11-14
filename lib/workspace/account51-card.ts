@@ -3,7 +3,7 @@ export type Account51Entry = {
   row: number;
   date: string;
   document: string;
-  direction: 'INFLOW' | 'OUTFLOW';
+  direction: 'INFLOW' | 'OUTFLOW' | 'INTERNAL_TRANSFER';
   amount: number;
   correspondingAccount: string;
   analytic: string;
@@ -43,8 +43,9 @@ function signed(row: readonly Cell[], marker: number): number | null {
   if (n === null) return null;
   const side = value(row, marker).toUpperCase();
   if (side !== 'Д' && side !== 'К') throw Error('ACCOUNT51_BALANCE_SIDE_MISSING');
-  if (n < 0) throw Error('ACCOUNT51_BALANCE_SIGN_CONFLICT');
-  return side === 'К' ? -n : n;
+  // Some 1C exports show negative running debit balances. Keep the source sign
+  // and flag it for reconciliation instead of discarding the entire card.
+  return side === 'К' ? -Math.abs(n) : n;
 }
 function cents(n: number): number { return Math.round(n * 100); }
 
@@ -83,11 +84,15 @@ export function parseAccount51Card(rows: readonly (readonly Cell[])[]): Account5
     if (/^Сальдо\s+на\s+начало/i.test(first)) {
       if (openingBalance !== null || operations.length) throw Error('ACCOUNT51_OPENING_POSITION_INVALID');
       openingBalance = signed(row, balance);
+      if (value(row, balance) === 'Д' && openingBalance !== null && openingBalance < 0)
+        warnings.push('ACCOUNT51_NEGATIVE_DEBIT_BALANCE:' + (i + 1));
       previous = openingBalance === null ? null : cents(openingBalance);
       continue;
     }
     if (/^Сальдо\s+на\s+конец/i.test(first)) {
       closingBalance = signed(row, balance);
+      if (value(row, balance) === 'Д' && closingBalance !== null && closingBalance < 0)
+        warnings.push('ACCOUNT51_NEGATIVE_DEBIT_BALANCE:' + (i + 1));
       continue;
     }
     if (/^Оборот(?:ы)?\b|^Итого\b|^Всего\b/i.test(first)) continue;
@@ -101,21 +106,29 @@ export function parseAccount51Card(rows: readonly (readonly Cell[])[]): Account5
     if (occurred < periodFrom || occurred > periodTo) throw Error('ACCOUNT51_DATE_OUTSIDE_PERIOD');
     const dr = value(row, debit), cr = value(row, credit);
     const isDr = is51(dr), isCr = is51(cr);
-    if (isDr === isCr) throw Error('ACCOUNT51_AMBIGUOUS_POSTING');
-    const direction = isDr ? 'INFLOW' : 'OUTFLOW';
-    const amount = decimal(row[isDr ? debit + 1 : credit + 1]);
+    if (!isDr && !isCr) throw Error('ACCOUNT51_AMBIGUOUS_POSTING');
+    const drAmount = decimal(row[debit + 1]), crAmount = decimal(row[credit + 1]);
+    // Dr 51 / Cr 51 is an internal transfer. Never count it as two external
+    // cash movements, and reject an unbalanced transfer rather than netting it.
+    if (isDr && isCr && (drAmount === null || crAmount === null ||
+        cents(drAmount) !== cents(crAmount)))
+      throw Error('ACCOUNT51_INTERNAL_TRANSFER_UNBALANCED');
+    const direction = isDr && isCr ? 'INTERNAL_TRANSFER' : isDr ? 'INFLOW' : 'OUTFLOW';
+    const amount = isDr ? drAmount : crAmount;
     if (amount === null || amount <= 0) throw Error('ACCOUNT51_AMOUNT_MISSING');
-    if (decimal(row[isDr ? credit + 1 : debit + 1]) !== null)
+    if (!(isDr && isCr) && (isDr ? crAmount : drAmount) !== null)
       throw Error('ACCOUNT51_TWO_AMOUNT_COLUMNS');
     const balanceAfter = signed(row, balance);
+    if (value(row, balance) === 'Д' && balanceAfter !== null && balanceAfter < 0)
+      warnings.push('ACCOUNT51_NEGATIVE_DEBIT_BALANCE:' + (i + 1));
     const current = balanceAfter === null ? null : cents(balanceAfter);
     if (previous !== null && current !== null) {
-      const expected = previous + (isDr ? 1 : -1) * cents(amount);
+      const expected = previous + (direction === 'INTERNAL_TRANSFER' ? 0 : isDr ? 1 : -1) * cents(amount);
       if (Math.abs(current - expected) > 1) warnings.push('ACCOUNT51_RUNNING_BALANCE_MISMATCH:' + (i + 1));
     }
     previous = current;
     operations.push({row:i + 1,date:occurred,document:value(row, 1),direction,amount,
-      correspondingAccount:isDr ? cr : dr,analytic:value(row, isDr ? 3 : 2),balanceAfter});
+      correspondingAccount:isDr ? cr : dr,analytic:direction === 'INTERNAL_TRANSFER' ? [value(row, 2),value(row, 3)].join(' / ') : value(row, isDr ? 3 : 2),balanceAfter});
   }
   if (!operations.length) throw Error('ACCOUNT51_NO_TRANSACTIONS');
   if (closingBalance !== null && previous !== null && cents(closingBalance) !== previous)
