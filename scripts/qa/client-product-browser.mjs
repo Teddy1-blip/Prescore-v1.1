@@ -22,7 +22,7 @@ page.on('pageerror',e=>errors.push(e.message));
 // New approved-client shell and the original legacy client have different navigation semantics.
 // Keep the historical regression branch below, while testing the currently shipped shell directly.
 async function verifyApprovedClient(seed){
-  const views=['home','analysis','banking','financing','documents','applications','actions','counterparties','billing'];
+  const views=['home','bfo','counterparties','obligations','calendar','analysis','documents','financing','analyst','banking','applications','actions','billing'];
   const full=await(await page.request.get(origin+'/api/workspace-model?analysisId='+seed.id)).json();
   assert.equal(full.entitlement,'FULL');
   assert.ok(full.full?.report,'Full canonical analysis expected');
@@ -47,11 +47,20 @@ async function verifyApprovedClient(seed){
       checks.push('approved '+view+' '+width);
     }
   }
+  await page.setViewportSize({width:1440,height:750});
+  await page.goto(origin+'/dashboard?analysisId='+seed.id+'&view=home');
+  await page.locator('#approved-side').waitFor();
+  const sidebar=await page.locator('#approved-side').evaluate(el=>({scrollHeight:el.scrollHeight,clientHeight:el.clientHeight,overflowY:getComputedStyle(el).overflowY}));
+  assert.equal(sidebar.overflowY,'auto');
+  assert.ok(sidebar.scrollHeight>sidebar.clientHeight,'sidebar should scroll at desktop with short viewport');
+  await page.locator('#approved-side').evaluate(el=>{el.scrollTop=el.scrollHeight;});
+  assert.ok(await page.locator('#approved-side').evaluate(el=>el.scrollTop>0),'sidebar scrolls to bottom');
+  checks.push('approved desktop sidebar scroll reaches bottom navigation');
   await page.setViewportSize({width:390,height:844});
   await page.goto(origin+'/dashboard?analysisId='+seed.id+'&view=home');
   const toggle=page.getByRole('button',{name:'Открыть меню'});
   await toggle.click();
-  await page.getByRole('navigation',{name:'Разделы кабинета'}).getByRole('link',{name:'Документы',exact:true}).click();
+  await page.getByRole('navigation',{name:'Разделы кабинета'}).getByRole('link',{name:'Досье клиента',exact:true}).click();
   assert.equal(await toggle.getAttribute('aria-expanded'),'false');
   checks.push('approved mobile menu navigation');
   const basic=structuredClone(full);
