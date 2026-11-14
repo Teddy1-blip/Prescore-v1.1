@@ -16,6 +16,7 @@ export async function recognizeDossierBatch(db:QueryExecutor,owner:string,id:str
  const family=row&&families[row.source_type as keyof typeof families];
  if(!row||!family)return {status:404,error:'Документ недоступен.'};
  const payload=row.payload as PrivateSource,previous=payload.ocr;
+ if(payload.review?.anchor==='paragraph')return {status:400,error:'Документ Word уже разобран по абзацам.'};
  if(Object.keys(payload.verified??{}).length)return {status:409,error:'В документе уже есть подтверждённые поля.'};
  if(previous&&previous.layout!==layout)return {status:409,error:'Продолжите в выбранной раскладке страниц.'};
  if(previous&&previous.through===previous.total)return {status:200,through:previous.through,total:previous.total};

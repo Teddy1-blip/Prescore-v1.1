@@ -18,7 +18,7 @@ ARG SOURCE_SHA=UNKNOWN
 ARG BUILD_TIMESTAMP=UNKNOWN
 LABEL org.opencontainers.image.source="https://github.com/Teddy1-blip/Prescore-v1.1" org.opencontainers.image.revision=$SOURCE_SHA org.opencontainers.image.created=$BUILD_TIMESTAMP org.opencontainers.image.version="PRESCORE-V1-RC3-20261019" prescore.schema="0012_dossier_reports.sql"
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates curl gnupg libfontconfig1 libfreetype6 libstdc++6 libgcc-s1 libuuid1 poppler-utils tesseract-ocr tesseract-ocr-rus tesseract-ocr-eng \
+ && apt-get install -y --no-install-recommends ca-certificates curl gnupg libfontconfig1 libfreetype6 libstdc++6 libgcc-s1 libuuid1 poppler-utils python3-xlrd tesseract-ocr tesseract-ocr-rus tesseract-ocr-eng \
  && install -d -m 0755 /usr/share/postgresql-common/pgdg \
  && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
  && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" > /etc/apt/sources.list.d/pgdg.list \

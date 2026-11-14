@@ -25,7 +25,7 @@ export async function dossierBrowser({page,pool,out,origin,signup,signInAsRole,r
  async function upload(label,file){
    const input=page.getByLabel(label,{exact:true});await input.setInputFiles({name:file.name,mimeType:file.type||'application/octet-stream',buffer:Buffer.from(await file.arrayBuffer())});
    const pending=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/dossier'&&r.request().method()==='POST');
-   await input.locator('..').locator('..').getByRole('button',{name:'Добавить документ'}).click();const r=await pending;assert.ok(r.ok(),await r.text());
+   await input.locator('..').locator('..').getByRole('button',{name:'Добавить документ'}).click();const r=await pending;assert.ok(r.ok(),'HTTP '+r.status()+' при загрузке документа');
  }
  const ledger=new File(['ИНН организации;Дата остатка;Счёт;Контрагент;Договор;Дебет, руб.;Кредит, руб.\n'+inn+';2025-12-31;62.01;Учебный покупатель;Д-1;1800;'],'osv.csv');
  const first=await actor(1);
@@ -50,11 +50,11 @@ export async function dossierBrowser({page,pool,out,origin,signup,signInAsRole,r
    await page.locator('input[type=file]').first().setInputFiles({name:'synthetic.txt',mimeType:'text/plain',buffer:Buffer.from(statementFixture({inn}))});
    const pending=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/analysis'&&r.request().method()==='POST');
    const submit=page.getByRole('button',{name:'Рассчитать по выбранным файлам'});
-   await submit.click();const r=await pending;assert.ok(r.ok(),await r.text());return (await r.json()).analysis.id;
+   await submit.click();const r=await pending;assert.ok(r.ok(),'HTTP '+r.status()+' при загрузке документа');return (await r.json()).analysis.id;
  }
  await bank();ok('Банковская выписка как первый источник');
  await actor(4);const debt=await saveCompany();await tab(debt,'obligations');await upload('Корпоративный отчёт БКИ',corporateBkiFile(inn));await page.getByRole('heading',{name:'Подтверждённые обязательства'}).waitFor();ok('Кредитный портфель только по БКИ');
- await upload('Кредитный договор PDF',new File([syntheticPdf(['Кредитный договор','Кредитор: Банк Тест','Заёмщик: Компания Тест','ИНН заёмщика: '+inn,'Номер договора: Т-002','Дата договора: 2025-01-01','Валюта: RUB','Кредитный лимит: 100000'])],'review-credit.pdf',{type:'application/pdf'}));
+ await upload('Кредитный договор PDF или DOCX',new File([syntheticPdf(['Кредитный договор','Кредитор: Банк Тест','Заёмщик: Компания Тест','ИНН заёмщика: '+inn,'Номер договора: Т-002','Дата договора: 2025-01-01','Валюта: RUB','Кредитный лимит: 100000'])],'review-credit.pdf',{type:'application/pdf'}));
  await page.getByRole('button',{name:'Распознать страницы для проверки'}).click();
  await page.getByText('Обработано страниц: 1 из 1').waitFor();
  const credit=page.getByLabel('Кредитор',{exact:false}).first();await credit.fill('Банк Тест');

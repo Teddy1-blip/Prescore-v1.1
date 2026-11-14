@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {extractDocumentText} from '../../lib/credit-engine/server/document-extraction.ts';
+import {parseLedger} from '../../lib/workspace/ledger-import.ts';
+const name='tests/fixtures/synthetic-ledger.xls';
+const bytes=await readFile(name);
+const text=await extractDocumentText(name,bytes);
+const [line]=parseLedger(text,'7707083893','COUNTERPARTIES');
+assert.equal(line.asOf,'2025-12-31');
+assert.equal(line.contract,'Д-42');
+assert.equal(line.debit,1850.75);
+assert.equal(line.credit,null);
+await assert.rejects(extractDocumentText('invalid.xls',bytes.subarray(0,50)));
+console.log('PASS legacy XLS • date, contract, debit and missing credit');

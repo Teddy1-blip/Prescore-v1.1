@@ -4,6 +4,7 @@ import {validateZipBudget} from '../release/archive-limits.ts';
 import type {TransactionPool} from '../db/compatibility.ts';
 import type {SourceEnvelope} from '../credit-engine/contracts/sources.ts';
 import type {PrivateSource} from './dossier-sources.ts';
+import {wordParagraphs} from '../document-poc/word-paragraphs.ts';
 import {reviewFields} from '../document-poc/review-fields.ts';
 import {mapPdfPages,extractDocumentText} from '../credit-engine/server/document-extraction.ts';
 import {parseAuthoritativeBfoText,parseAuthoritativeQuarterlyText,parseAuthoritativeCreditHistoryText} from '../credit-engine/source-foundation.ts';
@@ -25,7 +26,7 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
   const ext=file.name.split('.').pop()?.toLowerCase()??'';
   const ledger=kind==='COUNTERPARTIES'||kind==='DEBT_LEDGER';
   const reviewKind=kind==='CREDIT_DOCUMENT'||kind==='COMMERCIAL_DOCUMENT'||kind==='BFO_REVIEW';
-  const allowed=kind==='BKI'||reviewKind?['pdf']:ledger?['xlsx','csv']:['pdf','xlsx','csv'];
+  const allowed=kind==='CREDIT_DOCUMENT'||kind==='COMMERCIAL_DOCUMENT'?['pdf','docx']:kind==='BKI'||reviewKind?['pdf']:ledger?['xls','xlsx','csv']:['pdf','xls','xlsx','csv'];
   if(!allowed.includes(ext)||file.name.length>180||!file.size||file.size>(kind==='BKI'?35:25)*1024*1024)throw new InputError('Проверьте размер и формат файла.');
   const bytes=new Uint8Array(await file.arrayBuffer());
   const hash=createHash('sha256').update(bytes).digest('hex');
@@ -51,8 +52,21 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
   try{
     if(reviewKind){
       const family=kind==='CREDIT_DOCUMENT'?'CREDIT':kind==='BFO_REVIEW'?'BFO':'COMMERCIAL';
-      const pages=await mapPdfPages(bytes.slice(),64,true,async(text,p,items)=>({tables:family==='BFO'?financialTableRows(items,p.pageNumber):[],page:p.pageNumber,logicalPage:p.pageNumber,method:text.trim()?'TEXT' as const:'UNREADABLE' as const,text}));
-      payload.review=reviewFields(sourceId,pages,pages.length,family,'SINGLE',[],pages.flatMap(p=>p.tables));
+      if(ext==='docx'){
+        const paragraphs=wordParagraphs(bytes);
+        // Route the document as one text, then bind each extracted fragment to its paragraph.
+        const page={page:1,logicalPage:1,method:'TEXT' as const,text:paragraphs.map(p=>p.text).join('\n')};
+        const review=reviewFields(sourceId,[page],1,family,'SINGLE',[]);
+        for(const field of review.fields){
+          const matches=field.fragment?paragraphs.filter(p=>p.text.includes(field.fragment!)):[];
+          field.page=matches.length===1?matches[0].page:null;
+        }
+        review.anchor='paragraph';
+        payload.review=review;
+      }else{
+        const pages=await mapPdfPages(bytes.slice(),64,true,async(text,p,items)=>({tables:family==='BFO'?financialTableRows(items,p.pageNumber):[],page:p.pageNumber,logicalPage:p.pageNumber,method:text.trim()?'TEXT' as const:'UNREADABLE' as const,text}));
+        payload.review=reviewFields(sourceId,pages,pages.length,family,'SINGLE',[],pages.flatMap(p=>p.tables));
+      }
       envelope.status='PROCESSING';
     }else{
     if(ledger)payload.ledger=parseLedger(text,inn,kind);
@@ -81,7 +95,7 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
     const prior=await tx.query('SELECT document_id FROM dossier_sources WHERE dossier_id=$1 AND source_id=$2',[id,sourceId]);
     if(prior.rows.length){await tx.query('COMMIT');return {id:sourceId,dossierId:id,duplicate:true};}
     const doc=randomUUID();
-    const mime=ext==='xlsx'?'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':ext==='pdf'?'application/pdf':'text/csv';
+    const mime=ext==='xls'?'application/vnd.ms-excel':ext==='docx'?'application/vnd.openxmlformats-officedocument.wordprocessingml.document':ext==='xlsx'?'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':ext==='pdf'?'application/pdf':'text/csv';
     storageKey=(await storage.put(bytes,mime)).key;
     await tx.query(`INSERT INTO client_documents(id,company_inn,category,file_name,mime_type,size_bytes,content_base64,uploaded_by,owner_email,storage_key)
       VALUES($1,$2,$3,$4,$5,$6,'',$7,$7,$8)`,[doc,inn,kind,file.name,mime,bytes.length,owner,storageKey]);

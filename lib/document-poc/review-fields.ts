@@ -5,7 +5,7 @@ import {extractContractReview} from './contract-facts.ts';
 import {EXTRACTOR_VERSION,type Field,type Input} from './fields.ts';
 import {routeDocument,type EvidencePage,type UploadFamily} from './document-routing.ts';
 export type ReviewField={key:string;label:string;value:string|null;unit:string;page:number|null;fragment:string|null;status:string};
-export type DocumentReview={version:string;status:string;fields:ReviewField[];issues:string[]};
+export type DocumentReview={anchor?:'paragraph';version:string;status:string;fields:ReviewField[];issues:string[]};
 const terms:Record<string,[string,string]>={
  creditor:['Кредитор',''],borrower:['Заёмщик',''],agreement_number:['Номер договора',''],agreement_date:['Дата договора',''],
  currency:['Валюта',''],credit_amount:['Сумма кредита',''],credit_limit:['Лимит по договору',''],interest_rate:['Процентная ставка','%'],

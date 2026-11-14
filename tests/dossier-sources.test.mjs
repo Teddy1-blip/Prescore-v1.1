@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {zipSync,strToU8} from 'fflate';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
@@ -95,6 +96,17 @@ test('Private company dossier, independent inputs and canonical combined analysi
     const event={action:'calendar',id,key:crypto.randomUUID(),entry:{direction:'IN',amount:500,date:'2027-01-02',purpose:'Поставка',source:'Договор Т',certainty:'SCENARIO'}};
     assert.equal((await post(event,publicOwner)).status,404);assert.equal((await post(event,user)).status,200);assert.equal((await post(event,user)).status,200);
     assert.equal((await post({...event,entry:{...event.entry,amount:600}},user)).status,409);assert.equal((await read(id,user)).calendar.length,1);
+  });
+  await t.test('Word agreements preserve native paragraph evidence without treating paragraphs as PDF pages',async()=>{
+    const user=actor(8),id=await save(user);
+    const lines=['Кредитный договор','Кредитор: Банк Тест','Заёмщик: Компания Тест','ИНН заёмщика: '+inn,'Номер договора: 12345','Дата договора: 01.01.2025','Валюта: RUB','Лимит кредита: 100000'];
+    const xml='<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'+lines.map(s=>'<w:p><w:r><w:t>'+s+'</w:t></w:r></w:p>').join('')+'</w:body></w:document>';
+    const doc=new File([zipSync({'word/document.xml':strToU8(xml)})],'agreement.docx');
+    const upload=await attach(id,'CREDIT_DOCUMENT',doc,user);assert.equal(upload.status,201,await upload.clone().text());
+    const data=await read(id,user),review=data.reviews[0];assert.equal(review.anchor,'paragraph');
+    const field=review.fields.find(f=>f.key==='creditor');assert.equal(field.page,2);assert.equal(field.fragment,lines[1]);
+    assert.equal(data.obligations.length,0);
+    assert.equal((await post({action:'recognize',id,sourceId:review.id,layout:'SINGLE'},user)).status,400);
   });
   await t.test('confirmed financial rows require identity, dates, unit and source evidence',async()=>{
     const {reviewedFinancial}=await import('../lib/workspace/reviewed-financial.ts');

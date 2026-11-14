@@ -1,3 +1,5 @@
+import {execFile} from 'node:child_process';
+import {resolve} from 'node:path';
 import { strFromU8, unzipSync } from "fflate";
 
 export type PdfTextItem = { str?: string; width?: number; transform?: number[] };
@@ -113,9 +115,24 @@ export function extractCsvText(bytes: Uint8Array) {
   return [...rows, row].join("\n");
 }
 
+function extractLegacyXls(bytes: Uint8Array): Promise<string> {
+  if (bytes.length > 25 * 1024 * 1024 || Buffer.from(bytes.subarray(0, 8)).toString('hex') !== 'd0cf11e0a1b11ae1') {
+    return Promise.reject(Error('Некорректный файл Excel 97–2003.'));
+  }
+  return new Promise((accept, reject) => {
+    const child = execFile('python3', ['-I', resolve('lib/release/read-legacy-xls.py')], {
+      timeout: 12000, killSignal: 'SIGKILL', maxBuffer: 8 * 1024 * 1024,
+      encoding: 'utf8', env: {PATH: process.env.PATH, LANG: 'C.UTF-8'}
+    }, (error, output) => error ? reject(Error('Не удалось прочитать книгу XLS.')) : accept(output));
+    child.stdin?.on('error', () => reject(Error('Не удалось передать книгу XLS для чтения.')));
+    child.stdin?.end(bytes);
+  });
+}
+
 export async function extractDocumentText(fileName: string, bytes: Uint8Array, kind: "financial" | "bureau" = "financial") {
   const lower = fileName.toLowerCase();
   if (lower.endsWith(".pdf")) return extractPdfText(bytes, Number.POSITIVE_INFINITY, kind === "financial");
+  if (lower.endsWith(".xls")) return extractLegacyXls(bytes);
   if (lower.endsWith(".xlsx")) return extractXlsxText(bytes);
   if (lower.endsWith(".csv")) return extractCsvText(bytes);
   throw new Error("Формат файла не поддерживается.");
