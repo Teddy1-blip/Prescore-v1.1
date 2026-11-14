@@ -16,6 +16,12 @@ function calendarDay(s: string) {
 }
 function reportingSpan(text: string): Span | null {
   const raw = text.replace(/[–—]/g, '-').trim();
+  // Russian interim/annual statements label columns with cumulative month ranges.
+  const monthsRange=raw.match(/^(?:за\s+)?январь\s*-\s*([а-яё]+)\s+(20\d{2})(?:\s*г\.?)?$/i);
+  if(monthsRange){
+    const month=monthNumber(monthsRange[1]),year=Number(monthsRange[2]);
+    if([3,6,9,12].includes(month))return {start:year+'-01-01',end:new Date(Date.UTC(year,month,0)).toISOString().slice(0,10)};
+  }
   const range = raw.match(/(?:^|за\s+)(\d\d\.\d\d\.\d{4})\s*-\s*([а-яё]+)\s+(\d{4})/i);
   if (range) {
     const start = date(range[1]),

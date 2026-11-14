@@ -4,7 +4,6 @@ export type ContractFactKey='CONTRACT_DATE'|'CONTRACT_AMOUNT'|'ADVANCE_MAX_PERCE
 export type ContractFact={key:ContractFactKey;value:string|null;status:'REVIEW'|'UNKNOWN';pdfPage:number|null;logicalPage:number|null;sourceText:string|null;note:string};
 export type ContractExtractionV1={version:'CONTRACT-CASHFLOW-REVIEW-0.1';facts:ContractFact[];warnings:string[];automaticAccountingPostings:false;automaticCreditDecision:false};
 const months:Record<string,number>={января:1,февраля:2,марта:3,апреля:4,мая:5,июня:6,июля:7,августа:8,сентября:9,октября:10,ноября:11,декабря:12};
-const money=(s:string)=>{const digits=s.replace(/\s/g,'');return /^\d{4,15}$/.test(digits)?Number(digits):null};
 const roundCents=(n:number)=>String(Math.round((n+Number.EPSILON)*100)/100);
 const clean=(v:string)=>v.replace(/\s+/g,' ').trim();
 function snippet(page:OcrPage,index:number,count=4){const lines=page.text.split(/\n/).map(s=>s.trim()).filter(Boolean);return clean(lines.slice(Math.max(0,index-1),Math.min(lines.length,index+count)).join(' ')).slice(0,950)}
@@ -18,8 +17,16 @@ export function extractContractReview(pages:OcrPage[]):ContractExtractionV1{
  let dateValue:string|null=null;
  if(date){const m=date.context.match(/(\d{1,2})»?\s+(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\s+(20\d{2})/iu);if(m&&Number(m[1])<=31)dateValue=`${m[3]}-${String(months[m[2].toLowerCase()]).padStart(2,'0')}-${m[1].padStart(2,'0')}`;}
  facts.push(fact('CONTRACT_DATE',dateValue,date,'Дата, извлечённая из скана; проверить по подлиннику.'));
- const price=find(ordered,/цена\s+договора\s+составля[ею]т\s+[\d\s]{5,}/iu);
- const amount=price?money(price.context.match(/цена\s+договора\s+составля[ею]т\s+([\d ]{5,21})(?=\s*\()/iu)?.[1]??''):null;
+ const pricePattern=/(?:цена|стоимость|сумма)\s+(?:договора|контракта)\s*(?:составля[ею]т|[:—–-])\s*([\d][\d \u00a0]*(?:[.,]\d{1,2})?)\s*(?:\([^)]{0,180}\)\s*)?(?:руб(?:л(?:ей|я|ь))?\.?|₽|RUB)(?![а-яё])(?:\s*(\d{1,2})\s*(?:копе(?:ек|йки|йка)|коп\.?(?![а-яё])))?/iu;
+ const price=find(ordered,pricePattern);
+ const parts=price?.context.match(pricePattern);
+ const rubles=parts?.[1].replace(/\s/g,'').replace(',','.');
+ let amount=rubles?Number(rubles):null;
+ if(rubles&&parts?.[2]){
+   const kopecks=Number(parts[2]);
+   if(!rubles.includes('.'))amount=Number(rubles)+kopecks/100;
+   else if(Number(rubles.split('.')[1].padEnd(2,'0'))!==kopecks)amount=null;
+ }
  facts.push(fact('CONTRACT_AMOUNT',amount===null?null:String(amount),price,'Цена договора, а не сумма текущей дебиторской задолженности.'));
  const a=clause(ordered,'5.1')??find(ordered,/аванс.{0,80}\d{1,2}\s*%/iu);
  const percentage=a?.sourceText.match(/аванс.{0,130}?(?:до|ло)\s*(\d{1,2}(?:[.,]\d+)?)\s*%/iu)

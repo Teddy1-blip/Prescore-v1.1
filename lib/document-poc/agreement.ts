@@ -115,6 +115,24 @@ export function creditAgreement(input: Input) {
     guarantor_presence: find('поручительство|поручитель|guarantor', booleanValue),
     schedule_presence: schedulePresence
   };
+  // Common prose in Russian originals. Only an explicit, uniquely supported
+  // term can supplement the labelled form; conflicting evidence stays in review.
+  function supplement<T>(prior:Field<T>,pattern:RegExp,parse:(value:string)=>T|null){
+    const candidate=capture(input,pattern,parse);
+    if(candidate.status==='MISSING'||prior.status==='REVIEW')return prior;
+    if(prior.status==='MISSING')return candidate;
+    if(prior.value!==candidate.value){
+      issue(input,'REVIEW','CONFLICTING_FIELD',candidate.source_page??undefined);
+      return field<T>(input.id);
+    }
+    return prior;
+  }
+  const heading=/^(?:кредитный договор|договор (?:займа|об открытии (?:возобновляемой |невозобновляемой )?кредитной линии))\s*№\s*([\p{L}\d._/-]+)(?:\s|$)/iu;
+  terms.agreement_number=supplement(terms.agreement_number,heading,plain);
+  terms.agreement_date=supplement(terms.agreement_date,/^(?:кредитный договор|договор займа|договор об открытии [^№]{0,55}кредитной линии)\s*№\s*[^\s]+\s+от\s+(\d{2}\.\d{2}\.\d{4})(?:\s|$)/iu,date);
+  terms.credit_amount=supplement(terms.credit_amount,/(?:^|\s)сумма кредита составляет\s+([\d][\d \u00a0]*(?:[,.]\d{1,2})?)\s+(?:рублей|рубля|рубль|RUB|USD|EUR)(?!\s*\d+\s*коп)(?=\s|[.,]|$)/iu,numeric);
+  terms.interest_rate=supplement(terms.interest_rate,/(?:^|\s)процентная ставка (?:по кредиту )?(?:составляет|установлена в размере)\s+(\d{1,3}(?:[,.]\d+)?)\s*%\s*годовых/iu,numeric);
+  terms.maturity_date=supplement(terms.maturity_date,/(?:^|\s)(?:дата окончательного (?:возврата|погашения) кредита|окончательный срок возврата кредита)\s*(?:[:—–-]|установлен[а]? на)\s*(\d{2}\.\d{2}\.\d{4})(?=\s|[.,]|$)/iu,date);
   if (!terms.agreement_number.value || !terms.borrower.value || !terms.creditor.value || !terms.agreement_date.value) issue(input, 'REVIEW', 'AGREEMENT_IDENTITY_INCOMPLETE');
   if (terms.credit_amount.value === null && terms.credit_limit.value === null) issue(input, 'REVIEW', 'AMOUNT_OR_LIMIT_MISSING');
   if (!terms.currency.value) issue(input, 'REVIEW', 'CURRENCY_MISSING');

@@ -110,7 +110,9 @@ for(const failure of [{modelError:'Model unavailable'},{modelLoading:true}]){
 }
 test('BKI upload remains reachable in Obligations when the analytical model fails',()=>{
  const tree=harness({view:'obligations',selectedId:company.id,modelError:'Model unavailable'}).render();
- assert.deepEqual(named(tree,'SourceUpload').map(n=>n.props.kind),['BKI']);
+ // The unified portfolio form owns BKI intake for the client, including during a model error.
+ assert.deepEqual(named(tree,'CompanySources').map(n=>[n.props.view,n.props.bankInn]),[['obligations',company.companyInn]]);
+ assert.equal(named(tree,'SourceUpload').length,0);
  assert.equal(named(tree,'DebtPortfolio').length,0);
  assert.match(text(tree),/Обязательства/);
 });

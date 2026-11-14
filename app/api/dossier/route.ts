@@ -2,6 +2,8 @@ import {reviewedFinancial} from '../../../lib/workspace/reviewed-financial';
 import {nullableFinancialNumber} from '../../../lib/credit-engine/financial-analysis/normalizer';
 import {withDossierSources} from '../../../lib/workspace/dossier-bank';
 import type {AnalysisResult} from '../../../lib/prescore';
+import {bureauRoles,readBureau,bureauEnvelope} from '../../../lib/workspace/bureau-review';
+import type {PrivateSource} from '../../../lib/workspace/dossier-sources';
 import {recognizeDossierBatch} from '../../../lib/workspace/dossier-ocr';
 import {calendarEntry} from '../../../lib/workspace/calendar-entry';
 import {getRuntime} from '../../../lib/platform/runtime';
@@ -33,7 +35,9 @@ export async function POST(request:Request){
       const form=await request.formData(), file=form.get('file');
       const kind=uploadKinds.find(k=>k===form.get('kind'));
       if(!kind||!(file instanceof File))return reply({error:'Выберите источник и файл.'},400);
-      const saved=await importSource(pool,user.email,String(form.get('id')??''),kind,file);
+      const role=bureauRoles.find(r=>r===(form.get('relationship')??'Компания-заёмщик'));
+      if(!role)return reply({error:'Проверьте роль субъекта отчёта.'},400);
+      const saved=await importSource(pool,user.email,String(form.get('id')??''),kind,file,String(form.get('inn')??''),role);
       return saved?reply(saved,saved.duplicate?200:201):reply({error:'Досье недоступно.'},404);
     }
     const body=await request.json(),inn=typeof body.inn==='string'?body.inn.trim():'';
@@ -48,10 +52,34 @@ export async function POST(request:Request){
       const result=await recognizeDossierBatch(pool,user.email,String(body.id??''),String(body.sourceId??''),body.layout);
       return reply(result,result.status);
     }
+    if(body.action==='confirm-bureau'){
+      const tx=await pool.connect();
+      try{
+        await tx.query('BEGIN');
+        const row=(await tx.query(`SELECT s.payload,s.document_id,d.company_inn FROM dossier_sources s JOIN company_dossiers d ON d.id=s.dossier_id
+          WHERE d.owner_email=$1 AND d.id=$2 AND s.source_id=$3 AND s.source_type='BKI' FOR UPDATE OF d,s`,[user.email,body.id,body.sourceId])).rows[0];
+        if(!row){await tx.query('ROLLBACK');return reply({error:'Документ недоступен.'},404);}
+        const payload=row.payload as PrivateSource;
+        if(payload.bki){await tx.query('COMMIT');return reply({confirmed:true});}
+        if(!payload.ocr||payload.ocr.through!==payload.ocr.total||payload.review?.status!=='BUREAU_CONFIRM'){
+          await tx.query('ROLLBACK');return reply({error:'Сначала проверьте полный отчёт и его владельца.'},409);
+        }
+        const bki=readBureau(payload.ocr.pages.map(p=>p.text).join('\n\f\n'),payload.envelope.fileName??'',String(row.company_inn),payload.relationship??'Компания-заёмщик');
+        payload.bki=bki;payload.envelope=bureauEnvelope(payload,bki);payload.review!.status='BUREAU_CONFIRMED';
+        await tx.query('UPDATE dossier_sources SET payload=$1 WHERE dossier_id=$2 AND source_id=$3',[JSON.stringify(payload),body.id,body.sourceId]);
+        const current=(await tx.query("SELECT id,payload FROM analyses WHERE owner_email=$1 AND company_inn=$2 AND archive_state='ACTIVE' ORDER BY created_at DESC,id DESC LIMIT 1 FOR UPDATE",[user.email,row.company_inn])).rows[0];
+        if(current){
+          const updated=withDossierSources(JSON.parse(String(current.payload)),[{id:body.sourceId,kind:'BKI',documentId:String(row.document_id),payload}]);
+          await tx.query('UPDATE analyses SET payload=$1 WHERE id=$2 AND owner_email=$3',[JSON.stringify(updated),current.id,user.email]);
+        }
+        await tx.query('COMMIT');return reply({confirmed:true});
+      }catch(error){await tx.query('ROLLBACK');throw error;}finally{tx.release();}
+    }
     if(body.action==='verify-field'){
       const company=await ownedDossier(pool,user.email,String(body.id??''));
       if(!company)return reply({error:'Досье недоступно.'},404);
       const source=(await dossierSources(pool,user.email,company.id)).find(r=>r.id===body.sourceId);
+      if(source?.payload.ocr&&source.payload.ocr.through!==source.payload.ocr.total)return reply({error:'Дождитесь распознавания всех страниц.'},409);
       const matches=source?.payload.review?.fields.filter(f=>f.key===body.field)??[];
       const field=matches.length===1?matches[0]:null;
       if(!source||!field?.page||!field.fragment||typeof body.value!=='string'||!body.value.trim()||body.value.length>400)return reply({error:'Нужны поле, значение и подтверждённая страница документа.'},400);
@@ -63,6 +91,7 @@ export async function POST(request:Request){
         await tx.query('BEGIN');
         await tx.query('SELECT id FROM company_dossiers WHERE id=$1 AND owner_email=$2 FOR UPDATE',[company.id,user.email]);
       const saved=await tx.query(`UPDATE dossier_sources SET payload=jsonb_set(payload,'{verified}',coalesce(payload->'verified','{}') || jsonb_build_object($1::text,$2::jsonb)) WHERE dossier_id=$3 AND source_id=$4
+       AND (payload->'ocr' IS NULL OR payload->'ocr'->>'through'=payload->'ocr'->>'total')
        AND (payload->'verified'->$1::text IS NOT DISTINCT FROM $5::jsonb OR payload->'verified'->$1::text=$2::jsonb) RETURNING source_id`,[field.key,JSON.stringify(patch),company.id,source.id,body.previous?JSON.stringify(body.previous):null]);
         if(saved.rows.length&&(source.kind==='CREDIT_DOCUMENT'||source.kind==='BFO_REVIEW')){
           const stored=(await tx.query('SELECT payload FROM dossier_sources WHERE dossier_id=$1 AND source_id=$2',[company.id,source.id])).rows[0];

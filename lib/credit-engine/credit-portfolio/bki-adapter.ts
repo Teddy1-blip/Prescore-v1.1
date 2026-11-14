@@ -27,7 +27,7 @@ export type UploadedBkiContext = { companyInn: string; source: SourceEnvelope; r
   confirmedZeroFields?: Record<string, string[]>; identityHints?: Record<string, PortfolioIdentityHints>; creditHistoryRequestId?: string; consentArtifactId?: string };
 export function adaptUploadedBki(report: CreditHistoryReport, context: UploadedBkiContext): CanonicalCreditHistorySnapshot {
   const s = context.source, asOf = validDate(report.reportDate) ? report.reportDate : null;
-  const provider = context.provider ?? (report.source === "НБКИ" ? "NBKI" : report.source === "СБ БКИ" ? "SBKI" : "UPLOADED_FILE");
+  const provider = context.provider ?? (report.source === "ОКБ" ? "OKB" : report.source === "НБКИ" ? "NBKI" : report.source === "СБ БКИ" ? "SBKI" : "UPLOADED_FILE");
   const available = s.sourceType === "BKI" && ["READY", "STALE"].includes(s.status);
   const c = available ? weakest(confidence(report.parserConfidence), confidence(s.confidence), s.status === "STALE" ? "LOW" : "HIGH") : "UNKNOWN";
   const warnings = [...(!available ? ["SOURCE_NOT_READY"] : []), ...(s.status === "STALE" ? ["SOURCE_STALE"] : [])];

@@ -14,7 +14,7 @@ import {publicReceipt,type DecisionReceipt} from '../credit-engine/explainabilit
 
 export function dossierDecisions(rows:SourceRow[],inn:string,financial:FinancialAnalysisV2|undefined,portfolio:CreditPortfolioV1,asOfDate:string){
  const profile=rows.flatMap(r=>r.payload.publicProfile??[]).at(-1);
- const bureau=rows.filter(r=>r.payload.bki).sort((a,b)=>a.payload.bki!.reportDate.localeCompare(b.payload.bki!.reportDate)||a.id.localeCompare(b.id)).at(-1);
+ const bureau=rows.filter(r=>r.payload.bki?.affectsCompanyDebt).sort((a,b)=>a.payload.bki!.reportDate.localeCompare(b.payload.bki!.reportDate)||a.id.localeCompare(b.id)).at(-1);
  const input:ProfileRiskInput={analysis:{companyInn:inn,financialAnalysisV2:financial,creditPortfolioV1:portfolio,creditHistory:bureau?.payload.bki,
    sourceManifest:{bankStatements:[],bki:bureau?.payload.envelope,financialUploads:rows.filter(r=>r.payload.snapshot).map(r=>r.payload.envelope)}},companyProfile:profile,asOfDate};
  const financialInputs=financialFacts(input);

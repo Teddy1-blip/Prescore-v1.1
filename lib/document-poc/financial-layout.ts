@@ -26,10 +26,22 @@ export type PdfFinancialRow = {
   cells: PdfCell[];
   headings: string[];
 };
-function columnsAt(items: Token[], header: Token): Column[] {
+function columnsAt(items: Token[], header: Token, raster: boolean): Column[] {
   const band = items.filter(t => t.x > header.x + header.w / 2 + 2 && Math.abs(t.y - header.y) < header.h * 1.9);
   const markers = band.filter(t => /^(?:на|за|current|previous)(?:\s|$)/i.test(t.s)).sort((a, b) => a.x - b.x);
   if (markers.length < 2 || markers.length > 3) return [];
+  if(raster){
+    // Tesseract emits individual words at slightly different baselines. Bind each
+    // heading to its own printed column before parsing the date or any values.
+    return markers.map((start,i)=>{
+      const right=markers[i+1]?.x??Infinity;
+      const words=band.filter(t=>t.x>=start.x-2&&t.x<right-2&&!/^[|¦]+$/.test(t.s));
+      const first=words.filter(t=>Math.abs(t.y-start.y)<start.h*.7 || /^[-–—]$/.test(t.s)).sort((a,b)=>a.x-b.x);
+      const lower=words.filter(t=>t.y<start.y-start.h*.7 && !first.includes(t)).sort((a,b)=>a.x-b.x);
+      const end=first.reduce((x,t)=>Math.max(x,t.x+t.w),start.x+start.w);
+      return {start,center:(start.x+end)/2,heading:[...first,...lower].map(t=>t.s).join(' ')};
+    });
+  }
   const cols = markers.map((start, i) => {
     const next = markers[i + 1];
     const same = band.filter(t => t.x >= start.x && (!next || t.x < next.x) && Math.abs(t.y - start.y) < 1.6 && t.h >= start.h * 0.8).sort((a, b) => a.x - b.x);
@@ -132,7 +144,7 @@ function accountingTokens(tokens: Token[], cols: Column[]): Token[] {
   }
   return result;
 }
-export function financialTableRows(source: PdfTextItem[], page: number): PdfFinancialRow[] {
+export function financialTableRows(source: PdfTextItem[], page: number,raster=false): PdfFinancialRow[] {
   const items: Token[] = source.flatMap(i => i.str?.trim() && i.transform ? [{
     s: i.str.trim(),
     x: i.transform[4],
@@ -143,7 +155,7 @@ export function financialTableRows(source: PdfTextItem[], page: number): PdfFina
   const headers = items.filter(t => /^(код(?: строки)?|line code)$/i.test(t.s)).sort((a, b) => b.y - a.y);
   const output: PdfFinancialRow[] = [];
   for (const [h, header] of headers.entries()) {
-    const cols = columnsAt(items, header);
+    const cols = columnsAt(items, header,raster);
     if (!cols.length) continue;
     const codeCenter = header.x + header.w / 2;
     const codes = items.filter(t => t.y < header.y - header.h * .6 && (!headers[h + 1] || t.y > headers[h + 1].y) && /^[12]\d{3}$/.test(t.s) && Math.abs(t.x + t.w / 2 - codeCenter) < header.h * .95);
@@ -151,7 +163,7 @@ export function financialTableRows(source: PdfTextItem[], page: number): PdfFina
       const rowBand = items.filter(t => Math.abs(t.y - code.y) <= Math.max(4, code.h * .55));
       // A nearby line number or a note outside the code column cannot anchor a row.
       const label = rowBand.filter(t => t.x + t.w < code.x && /[А-Яа-яA-Za-z]/.test(t.s)).sort((a, b) => a.x - b.x).map(t => t.s).join(' ');
-      const dataTokens = rowBand.filter(t => t.x > code.x + code.w);
+      const dataTokens = rowBand.filter(t => t.x > code.x + code.w && (!raster||!/^\|+$/.test(t.s)));
       const overlap = dataTokens.some(t => codes.some(c => c !== code && Math.abs(t.y - c.y) <= Math.max(4, c.h * .55)));
       const numericTokens = accountingTokens(dataTokens, cols);
       const cells = cols.map((col, i) => {
