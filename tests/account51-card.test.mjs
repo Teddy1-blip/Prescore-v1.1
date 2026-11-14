@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {parseAccount51Card} from '../lib/workspace/account51-card.ts';
+import {extractXlsxRows} from '../lib/credit-engine/server/document-extraction.ts';
+import {buildXlsx} from '../lib/excel-export.ts';
 const head = [
   ['ООО «Тест»'],['Карточка счета 51 за 01.01.2025 - 30.06.2025'],[],
   ['Выводимые данные: БУ'],[],
@@ -34,4 +36,14 @@ test('No ambiguous entry is accepted as account 51 cash flow',()=>{
 test('Invalid or missing dates cannot become confirmed 51 movements',()=>{
  const x=[...incoming];x[0]='31.02.2025';
  assert.throws(()=>parseAccount51Card([...head,x]),/ACCOUNT51_BAD_DATE/);
+});
+
+test('XLSX keeps one multiline description inside one posting row',()=>{
+ const bytes=buildXlsx([{name:'Card 51',rows:[...head,incoming,outgoing]}]);
+ const rows=extractXlsxRows(bytes);
+ const card=parseAccount51Card(rows);
+ assert.equal(card.operations.length,2);
+ assert.equal(card.operations[0].document,'Поступление\nпо договору № 1');
+ assert.equal(card.operations[1].amount,150);
+ assert.equal(card.reconciled,true);
 });
