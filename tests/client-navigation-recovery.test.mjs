@@ -81,17 +81,17 @@ test('home still starts without selecting a historical analysis',()=>{
  assert.equal(named(tree,'ClientOverview').length,0);
  assert.equal(h.values[2],'');
 });
-test('clicking Finance without an analysis changes content, not only the highlighted menu',()=>{
+test('clicking the cash flow section without an analysis changes content, not only the highlighted menu',()=>{
  const h=harness();
  named(h.render(),'ClientShell')[0].props.choose('banking');
  const tree=h.render();
  assert.equal(h.values[3],'banking');
  assert.equal(new URL(h.window.location.href).searchParams.get('view'),'banking');
  assert.equal(named(tree,'EmptyHome').length,0);
- assert.ok(named(tree,'Panel').some(n=>n.props.title==='Финансы'));
+ assert.ok(named(tree,'Panel').some(n=>n.props.title==='Движение денег'));
  assert.match(text(tree),/Создайте первый кредитный профиль по банковской выписке/);
 });
-for(const [view,title]of Object.entries({analysis:'Кредитный профиль',banking:'Финансы',obligations:'Кредитный портфель',financing:'Финансирование',documents:'Документы',applications:'Заявки',analyst:'Спросить Prescore',billing:'Подписка компании'})){
+for(const [view,title]of Object.entries({analysis:'Кредитный профиль',banking:'Движение денег',obligations:'Кредитный портфель',financing:'Финансирование',documents:'Досье клиента',applications:'Заявки',analyst:'Кредитный эксперт',billing:'Подписка компании'})){
  test(`unselected ${view} has its own section title and explicit company selection`,()=>{
   const tree=harness({view}).render();
   assert.equal(named(tree,'EmptyHome').length,0);
