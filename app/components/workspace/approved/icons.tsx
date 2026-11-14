@@ -7,6 +7,9 @@ const shapes: Record<string, React.ReactNode> = {
       <rect x="14" y="14" width="7" height="7" rx="1.5" />
     </>
   ),
+  bfo: (<><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8M8 12h8m-8 4h5"/></>),
+  calendar: (<><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 10h18m-13 4h3m3 0h3"/></>),
+  analyst: (<><path d="M4 5h16v13H8l-4 3V5Z"/><path d="M8 10h8m-8 4h5"/></>),
   finance: (
     <>
       <path d="M4 20h17M6 15V9m6 6V4m6 11v-5" />

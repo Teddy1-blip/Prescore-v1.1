@@ -135,7 +135,7 @@ export function ClientShell(p: Workspace) {
 export function LivePage({ children }: { children: ReactNode }) {
   const c = useContext(ScreenContext);
   if (!c?.renderPage || !Object.hasOwn(pages, c.view)) return <>{children}</>;
-  if (c.view === 'obligations') return <div className="ws">{children}</div>;
+  if (['obligations', 'bfo', 'calendar', 'analyst'].includes(c.view)) return <div className="ws">{children}</div>;
   const page = c.view as Page;
   const billing = page === 'billing',
     ar = page === 'counterparties';
@@ -156,7 +156,7 @@ export function LivePage({ children }: { children: ReactNode }) {
       }))}
       newApp={c.open}
       operations={billing ? children : undefined}
-      details={billing || ar ? undefined : <div className="ws">{children}</div>}
+      details={billing || ar ? undefined : page === 'home' ? undefined : <div className="ws">{children}</div>}
     />
   );
 }

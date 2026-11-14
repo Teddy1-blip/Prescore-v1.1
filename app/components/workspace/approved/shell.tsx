@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { pages, focusLabels, type Page } from './types';
+import { pages, clientNavigation, focusLabels, type Page } from './types';
 import { Drawer } from './primitives';
 import { NavIcon } from './icons';
 type Choice = { id: string; label: string };
@@ -62,7 +62,7 @@ export function ApprovedShell(p: ShellProps) {
   }, [menu]);
   const extra: Record<string, readonly string[]> = {
     upload: ['Загрузка', 'Обновление данных', 'Банковские выписки компании'],
-    analyst: ['Объяснение', 'Спросить Prescore', 'Вопросы по выбранному анализу'],
+    analyst: ['Кредитный эксперт', 'Кредитный эксперт', 'Вопросы по выбранному анализу'],
   };
   const [label, title, subtitle] = pages[p.page as Page] ?? extra[p.page] ?? pages.home;
   const go = (v: string) => {
@@ -96,9 +96,11 @@ export function ApprovedShell(p: ShellProps) {
           </div>
           <div className="nav-label">ФИНАНСОВАЯ КАРТИНА</div>
           <nav className="nav" aria-label="Разделы кабинета">
-            {Object.entries(pages)
-              .filter(([id]) => p.available.includes(id))
-              .map(([id, [name]]) => (
+            {clientNavigation
+              .filter(id => p.available.includes(id))
+              .map(id => {
+                const [name] = pages[id];
+                return (
                 <a
                   key={id}
                   href={link(id)}
@@ -114,9 +116,11 @@ export function ApprovedShell(p: ShellProps) {
                   <NavIcon id={id} />
                   <span>{name}</span>
                 </a>
-              ))}
+                );
+              })}
           </nav>
           <div className="side-bottom">
+            {p.available.includes('billing') && <button type="button" className="side-billing" onClick={() => go('billing')}>Подписка и доступ</button>}
             <strong>Prescore для бизнеса</strong>
             <span className="status-dot" />
             {p.preview ? 'Интерактивный стенд' : p.readOnly ? 'Доступ для просмотра' : 'Кабинет компании'}

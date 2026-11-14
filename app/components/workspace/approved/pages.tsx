@@ -130,6 +130,7 @@ export function ApprovedPage(p: ScreenProps) {
                 Открыть заключение ↗
               </button>
               {d.tasks.length > 0 && <span className="chip dark">{d.tasks.length} действий в плане</span>}
+              {p.availableViews?.includes('upload') && <button className="btn" onClick={() => go('upload')}>Загрузить банковскую выписку ↗</button>}
             </div>
           </div>
           <div className="hero-score">
