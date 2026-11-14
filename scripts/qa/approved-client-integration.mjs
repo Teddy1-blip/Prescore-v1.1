@@ -1,5 +1,6 @@
 // Exercise the built dashboard against native auth, application APIs and an isolated migrated PostgreSQL.
 import assert from 'node:assert/strict';
+import {dossierBrowser} from './dossier-browser.mjs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -8,6 +9,9 @@ import { chromium } from 'playwright';
 import { corpusFiles } from '../../lib/credit-engine/credit-lab/business-corpus.mjs';
 const sectionRoutes = [
   'home',
+  'bfo',
+  'calendar',
+  'analyst',
   'banking',
   'analysis',
   'obligations',
@@ -138,7 +142,8 @@ try {
   await page.waitForURL('**/dashboard**');
   ok('Вход клиента через форму и управление видимостью пароля с клавиатуры');
   await page.goto(origin + '/dashboard?view=counterparties');
-  await page.getByRole('heading', { name: 'Покупатели', exact: true }).waitFor();
+  await page.getByRole('heading', { name: 'Контрагенты', exact: true }).waitFor();
+  await page.getByRole('button',{name:'Сохранить компанию в досье'}).waitFor();
   ok('Пустой кабинет и Контрагенты без выписки');
   const files = corpusFiles(),
     dir = 'CL-RU-BUS-001/',
@@ -254,7 +259,7 @@ try {
       started();
       await gate;
       await route.fulfill({ response });
-    } finally {
+} finally {
       finished();
     }
   };
@@ -396,6 +401,7 @@ try {
   await page.goto(origin + '/dashboard?analysisId=' + A.id + '&view=actions');
   for(const horizon of combined.actionPlan.horizons) {
     const block=page.locator('.pc-panel').filter({has:page.getByRole('heading',{name:new RegExp(horizon.title)})});
+    await block.first().waitFor();
     assert.equal(await block.locator('.pc-timeline > li').count(),horizon.items.length);
     for (const item of horizon.items) {
       assert.ok(await block.locator('[id="'+item.id+'"]').count());
@@ -438,7 +444,8 @@ try {
     await page.setViewportSize({ width, height });
     for (const key of sectionRoutes) {
       await page.goto(origin + '/dashboard?analysisId=' + A.id + '&view=' + key);
-      await page.locator('.approved-client .client-hero,.approved-client .card,.approved-client .pc-panel').first().waitFor();
+      if (key === 'analyst') await page.getByRole('heading', { name: 'Кредитный аналитик Prescore' }).waitFor();
+      else await page.locator('.approved-client .client-hero,.approved-client .card,.approved-client .pc-panel').first().waitFor();
       await page.waitForFunction(
         () => document.querySelector("select[aria-label='Период']")?.options.length > 1,
       );
@@ -529,6 +536,8 @@ try {
   ok('Истечение сессии и сохранность после повторного входа');
   assert.deepEqual(errors, []);
   ok('Без ошибок JavaScript');
+  await page.setViewportSize({width:1440,height:1100});
+  await dossierBrowser({page,pool,out,origin,signup,signInAsRole,roleName,ok});
 } finally {
   await fs.writeFile(path.join(out, 'integration.json'), JSON.stringify({ checks, errors }, null, 2));
   await browser.close();

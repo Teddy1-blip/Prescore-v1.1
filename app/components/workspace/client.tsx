@@ -44,14 +44,14 @@ export function clientSectionTitle(view:string){
 export default function ClientWorkspace(){
  const [analyses,setAnalyses]=useState<StoredAnalysis[]>([]),[deals,setDeals]=useState<Deal[]|null>(null),[selectedId,setSelectedId]=useState(''),[view,setView]=useState('home'),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState(''),[readOnly,setReadOnly]=useState(false),[revision,setRevision]=useState(0),[modules,setModules]=useState<Record<string,boolean>>({}),[modulesLoading,setModulesLoading]=useState(true);
  const [operationsError,setOperationsError]=useState(''),[operationsLoading,setOperationsLoading]=useState(false),[uploadReceipt,setUploadReceipt]=useState<{id:string;receipt:UploadReceipt}|null>(null);
- const [dossierId,setDossierId]=useState('');
+ const [dossierId,setDossierId]=useState(''),[agentWorkspace,setAgentWorkspace]=useState(false);
  const operationsReady=deals!==null;
  const operationsRequest=useRef(0),scope=useRef(''),selection=useRef(''),draftRequests=useRef(new Map<string,string>());
  const state=useWorkspaceModel(selectedId,revision);
  const unavailable=state.error==='Эта версия анализа недоступна.'||state.error.startsWith('Сессия завершена');
  const selected=unavailable?undefined:analyses.find(a=>a.id===selectedId),model=selected?state.model:null;
  const locked=readOnly||!!model?.access.readOnly;
- useEffect(()=>{const c=new AbortController();const q=new URLSearchParams(window.location.search),client=q.get('client');scope.current=client??'';
+ useEffect(()=>{const c=new AbortController();const q=new URLSearchParams(window.location.search),client=q.get('client');scope.current=client??'';setAgentWorkspace(!!client);
  const initialView=resolveClientView(q.get('view'));
  const initialEndpoint=client?`/api/workspace?client=${encodeURIComponent(client)}&from=agent`:initialView==='applications'?'/api/workspace':'/api/workspace?projection=summary';
  fetch(initialEndpoint,{signal:c.signal,cache:'no-store'}).then(async r=>{if(!r.ok)throw Error(r.status===401?'Сессия завершена. Войдите в кабинет повторно.':r.status===403?'Нет доступа к этому кабинету.':'Не удалось открыть кабинет.');return r.json();}).then(data=>{const rows=(data.analyses??[]) as StoredAnalysis[];setAnalyses(rows);setDeals(initialEndpoint==='/api/workspace?projection=summary'?null:data.deals??[]);setReadOnly(!!data.readOnly);const wanted=q.get('analysisId')??client;const latest=rows.filter(a=>a.historyPurpose!=='QA').sort((a,b)=>String(b.createdAt??b.periodTo).localeCompare(String(a.createdAt??a.periodTo)))[0]?.id??'';const dossier=client||wanted?'':q.get('dossierId')??'';setDossierId(dossier);const id=wanted??(dossier?'':latest);selection.current=id;setSelectedId(id);if(id)selectAnalysis(id);setView(resolveClientView(q.get('view')));}).catch(e=>{if(!c.signal.aborted)setError(e.message);}).finally(()=>{if(!c.signal.aborted)setLoading(false);});
@@ -96,7 +96,7 @@ export default function ClientWorkspace(){
  {view==='applications'&&operationsReady&&!operationsError&&<><div className="pc-page-title"><div><h1>Заявки</h1><p>Сохранённые заявки, статусы и переписка</p></div><button disabled={operationsLoading} onClick={()=>void refresh()}>{operationsLoading?'Обновляем…':'Обновить'}</button></div><Crm key={selectedId} readOnly={locked} deals={deals.filter(d=>d.analysisId===selectedId)} analyses={[selected]} selected={selected} addDeal={addDeal} updateDeal={updateDeal}/>{!locked&&<RecipientApplications key={selectedId} analysis={selected} saved={refresh}/>}</>}
  {view==='analyst'&&model&&(model.full?<AiAnalyst key={selectedId} analysisId={selectedId}/>:<FullAccessNotice model={model} retry={refresh}/>)}
  </>}</LivePage>
- {!loading&&!modulesLoading&&!disabled&&!error&&!locked&&!scope.current&&!unavailable&&(!selectedId||!!selected)&&['home','bfo','counterparties','obligations','documents','analysis'].includes(view)&&<CompanySources key={(dossierId||selectedId)+view} view={view} id={dossierId} bankInn={selected?.companyInn} openBank={()=>choose('upload')}/>}
+ {!loading&&!modulesLoading&&!disabled&&!error&&!locked&&!agentWorkspace&&!unavailable&&(!selectedId||!!selected)&&['home','bfo','counterparties','obligations','documents','analysis','calendar'].includes(view)&&<CompanySources key={(dossierId||selectedId)+view} view={view} id={dossierId} bankInn={selected?.companyInn} openBank={()=>choose('upload')}/>}
  {showApproved&&model&&(['home','bfo','counterparties','obligations'] as string[]).includes(view)&&<ClientAnalyticPipeline key={selectedId+view} model={model} scope={view as 'home'|'bfo'|'counterparties'|'obligations'} choose={choose}/>}
  </ClientShell>;
 }

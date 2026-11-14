@@ -5,6 +5,7 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {createWorkspaceRuntime} from './fixtures/workspace-runtime.mjs';
 import {financialFile,corporateBkiFile} from './fixtures/polish-sources.mjs';
+import {syntheticPdf} from '../scripts/release/pdf-fixture.mjs';
 import {statementFixture} from './fixtures/block1-statements.mjs';
 import {corporation,checkoDouble} from './fixtures/stage4-external.mjs';
 
@@ -54,6 +55,22 @@ test('Private company dossier, independent inputs and canonical combined analysi
   await t.test('BKI-only resolves contractual debt through BLK-06.5 without capacity',async()=>{
     const user=actor(4),id=await save(user),r=await attach(id,'BKI',corporateBkiFile(inn),user);assert.equal(r.status,201,await r.clone().text());
     const d=await read(id,user);assert.equal(d.obligations.length,1);assert.equal(d.obligations[0].principal,120000);assert.equal(d.capacity,undefined);assert.equal(d.versions.length,0);
+  });
+  await t.test('credit agreement review and calendar persist with ownership, provenance and idempotency',async()=>{
+    const user=actor(6),id=await save(user),doc=new File([syntheticPdf(['Кредитный договор','Кредитор: Банк Тест','Заёмщик: Компания Тест','ИНН заёмщика: '+inn,'Номер договора: Т-001','Дата договора: 2025-01-01','Валюта: RUB','Кредитный лимит: 100000','Вид кредита: кредитная линия'])],'credit.pdf');
+    const before=await attach(id,'CREDIT_DOCUMENT',doc,user);assert.equal(before.status,201,await before.clone().text());
+    let d=await read(id,user);assert.equal(d.obligations.length,0);const review=d.reviews[0];assert.equal(review.status,'READY_FOR_REVIEW');assert.ok(review.documentId);
+    for(const key of ['borrower','borrower_inn','creditor','agreement_number','agreement_date','currency','credit_limit','product_type']){
+      const f=review.fields.find(f=>f.key===key);assert.ok(f?.value,key);
+      const change={action:'verify-field',id,sourceId:review.id,field:key,value:f.value};
+      assert.equal((await post(change,publicOwner)).status,404);
+      const approved=await post(change,user);assert.equal(approved.status,200,await approved.clone().text());
+    }
+    d=await read(id,user);assert.equal(d.obligations.length,1);assert.equal(d.obligations[0].principal,null);assert.equal(d.obligations[0].limit,100000);
+    assert.equal(d.reviews[0].verified.credit_limit.page,1);assert.equal((await attach(id,'CREDIT_DOCUMENT',doc,user)).status,200);
+    const event={action:'calendar',id,key:crypto.randomUUID(),entry:{direction:'IN',amount:500,date:'2027-01-02',purpose:'Поставка',source:'Договор Т',certainty:'SCENARIO'}};
+    assert.equal((await post(event,publicOwner)).status,404);assert.equal((await post(event,user)).status,200);assert.equal((await post(event,user)).status,200);
+    assert.equal((await post({...event,entry:{...event.entry,amount:600}},user)).status,409);assert.equal((await read(id,user)).calendar.length,1);
   });
   const ledger=new File(['ИНН организации;Дата остатка;Счёт;Контрагент;Договор;Дебет, руб.;Кредит, руб.\n'+inn+';2025-12-31;62.01;Покупатель;Д-1;1800;'],'balances.csv');
   await t.test('OSV-only preserves missing credit balance and tenant boundaries',async()=>{

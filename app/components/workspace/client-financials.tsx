@@ -45,7 +45,7 @@ export function numeric(value:number|string|null,status:string,unit:string){
 }
 
 function MetricTable({metrics}:{metrics:PublicFinancialMetric[]}){
- return <div className="pc-table-scroll" tabIndex={0} aria-label="Финансовые показатели"><table><thead><tr><th>Показатель</th><th>Значение</th><th>Качество и период</th></tr></thead><tbody>{metrics.filter(m=>m.value!==null && (m.status==='KNOWN'||m.status==='PARTIAL')).map(m=><tr key={m.key}><th scope="row">{m.label}</th><td>{numeric(m.value,m.status,m.unit)}</td><td>{label(m.status)} · {label(m.confidence)} · {label(m.origin)}<small>{m.periodFrom||m.periodTo?date(m.periodFrom)+' — '+date(m.periodTo):date(m.asOf)}</small><Warnings items={m.warnings}/></td></tr>)}</tbody></table></div>;
+ return <div className="pc-table-scroll" tabIndex={0} aria-label="Финансовые показатели"><table aria-label="Финансовые показатели"><thead><tr><th>Показатель</th><th>Значение</th><th>Качество и период</th></tr></thead><tbody>{metrics.filter(m=>m.value!==null && (m.status==='KNOWN'||m.status==='PARTIAL')).map(m=><tr key={m.key}><th scope="row">{m.label}</th><td>{numeric(m.value,m.status,m.unit)}</td><td>{label(m.status)} · {label(m.confidence)} · {label(m.origin)}<small>{m.periodFrom||m.periodTo?date(m.periodFrom)+' — '+date(m.periodTo):date(m.asOf)}</small><Warnings items={m.warnings}/></td></tr>)}</tbody></table></div>;
 }
 
 // Reuses the retired conclusion's preview, keeping annual and interim periods separate.

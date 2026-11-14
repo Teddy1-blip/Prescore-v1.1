@@ -1,3 +1,6 @@
+import * as dossier from '../lib/workspace/dossier.ts';
+import * as dossierSources from '../lib/workspace/dossier-sources.ts';
+import * as dossierBank from '../lib/workspace/dossier-bank.ts';
 import { decisionSnapshot } from "../lib/credit-engine/production/snapshot.ts";
 import * as brokerAuthorization from '../lib/auth/broker-authorizations.ts';
 import * as checkoCache from "../lib/external/checko-cache.ts";
@@ -57,6 +60,8 @@ for (const ownerFull of [false, true]) test(ownerFull
   let current = { email: "workspace-owner@test.invalid", isAdmin: false };
   const apiAuth = load("app/api/api-auth.ts", { "../chatgpt-auth": { getChatGPTUser: async () => null } });
   const analysisRoute = load("app/api/analysis/route.ts", {
+    '../../../lib/workspace/dossier':dossier,'../../../lib/workspace/dossier-sources':dossierSources,'../../../lib/workspace/dossier-bank':dossierBank,
+
     "../../../lib/external/checko-cache":checkoCache,
     "../../../lib/platform/runtime": { getRuntime: () => ({ DB: db }) },
     "../../../lib/prescore": prescore,
@@ -80,7 +85,7 @@ for (const ownerFull of [false, true]) test(ownerFull
   });
 
   try {
-    for (const migration of ["0001_product.sql", "0002_platform_auth.sql", "0003_runtime_indexes.sql", "0009_analysis_archive.sql", "0010_decision_revisions.sql"]) {
+    for (const migration of ["0001_product.sql", "0002_platform_auth.sql", "0003_runtime_indexes.sql", "0009_analysis_archive.sql", "0010_decision_revisions.sql","0011_company_dossiers.sql"]) {
       await pg.exec(fs.readFileSync("lib/db/migrations/" + migration, "utf8"));
     }
 

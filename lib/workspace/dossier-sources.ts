@@ -1,3 +1,4 @@
+import {verifiedCreditDocument} from './contract-portfolio.ts';
 import {financialFacts} from '../credit-engine/risk/adapters/financial.ts';
 import {financialRules} from '../credit-engine/risk/rules/financial.ts';
 import {evaluateRiskFacts} from '../credit-engine/risk/engine.ts';
@@ -14,7 +15,7 @@ import {publicFinancialAnalysis} from '../credit-engine/client-report/source-det
 import {buildCreditPortfolio} from '../credit-engine/credit-portfolio/resolver.ts';
 import {adaptUploadedBki} from '../credit-engine/credit-portfolio/bki-adapter.ts';
 
-export type PrivateSource={envelope:SourceEnvelope; snapshot?:FinancialStatementSnapshot; bki?:CreditHistoryReport; ledger?:LedgerBalance[]};
+export type PrivateSource={publicProfile?:import("../company-profile.ts").CompanyProfileData;envelope:SourceEnvelope; snapshot?:FinancialStatementSnapshot; bki?:CreditHistoryReport; ledger?:LedgerBalance[]; calendar?:import("./calendar-entry.ts").CalendarEntry; review?:import("../document-poc/review-fields.ts").DocumentReview; verified?:Record<string,{value:string;page:number;fragment:string}>};
 export type SourceRow={id:string;kind:string;documentId:string|null;payload:PrivateSource};
 export async function dossierSources(db:QueryExecutor,owner:string,id:string){
   const result=await db.query(`SELECT s.source_id AS id,s.source_type AS kind,s.document_id AS "documentId",s.payload
@@ -48,12 +49,15 @@ export function sourceProjection(rows:SourceRow[],inn:string){
     return [{id:f.findingId,rule:f.code,title:template.shortTitleRu,why:template.whyItMattersRu,scope:f.scope,value:f.actualValue,unit:f.unit,sourceIds:[...new Set(f.evidence.flatMap(e=>e.sourceId?[e.sourceId]:[]))],asOf:date}];
   });
   const bki=rows.flatMap(r=>r.payload.bki?[adaptUploadedBki(r.payload.bki,{companyInn:inn,source:r.payload.envelope})]:[]);
-  const asOf=rows.flatMap(r=>r.payload.bki?.reportDate?[r.payload.bki.reportDate]:[]).sort().at(-1);
-  const portfolio=bki.length&&asOf?buildCreditPortfolio({companyInn:inn,asOfDate:asOf,creditHistorySnapshots:bki}):null;
+  const documents=rows.flatMap(row=>verifiedCreditDocument(row,inn)??[]);
+  const asOf=[...documents.map(d=>d.observedAt),...rows.flatMap(r=>r.payload.bki?.reportDate?[r.payload.bki.reportDate]:[])].sort().at(-1);
+  const portfolio=(bki.length||documents.length)&&asOf?buildCreditPortfolio({companyInn:inn,asOfDate:asOf,creditHistorySnapshots:bki,documents}):null;
   return {
     sources:rows.map(r=>({id:r.id,kind:r.kind,documentId:r.documentId,name:r.payload.envelope.fileName??r.payload.envelope.sourceName??r.kind,received:r.payload.envelope.receivedAt})),
+    reviews:rows.flatMap(r=>r.payload.review?[{id:r.id,name:r.payload.envelope.fileName,documentId:r.documentId,...r.payload.review,verified:r.payload.verified??{}}]:[]),
+    calendar:rows.flatMap(r=>r.payload.calendar?[r.payload.calendar]:[]).sort((a,b)=>a.date.localeCompare(b.date)),
     financial,findings,
-    obligations:portfolio?.obligations.map(o=>({id:o.obligationId,creditor:o.identity.creditorName.value,contract:o.identity.contractNumber.value,principal:o.currentPosition.principalOutstanding.value,maturity:o.currentTerms.maturityDate.value,sourceIds:o.sourceIds}))??[],
+    obligations:portfolio?.obligations.map(o=>({id:o.obligationId,creditor:o.identity.creditorName.value,contract:o.identity.contractNumber.value,principal:o.currentPosition.principalOutstanding.value,original:o.currentTerms.originalAmount.value,limit:o.currentTerms.creditLimit.value,rate:o.currentTerms.annualRate.value,maturity:o.currentTerms.maturityDate.value,sourceIds:o.sourceIds}))??[],
     ledger:rows.flatMap(r=>(r.payload.ledger??[]).map(line=>({...line,kind:r.kind,sourceId:r.id})))
   };
 }

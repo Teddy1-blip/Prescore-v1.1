@@ -4,14 +4,15 @@ import {validateZipBudget} from '../release/archive-limits.ts';
 import type {TransactionPool} from '../db/compatibility.ts';
 import type {SourceEnvelope} from '../credit-engine/contracts/sources.ts';
 import type {PrivateSource} from './dossier-sources.ts';
-import {extractDocumentText} from '../credit-engine/server/document-extraction.ts';
+import {reviewFields} from '../document-poc/review-fields.ts';
+import {mapPdfPages,extractDocumentText} from '../credit-engine/server/document-extraction.ts';
 import {parseAuthoritativeBfoText,parseAuthoritativeQuarterlyText,parseAuthoritativeCreditHistoryText} from '../credit-engine/source-foundation.ts';
 import {adaptFinancialReport} from '../credit-engine/financial-analysis/quarterly-adapter.ts';
 import {parseLedger} from './ledger-import.ts';
 import {withDossierSources} from './dossier-bank.ts';
 import type {AnalysisResult} from '../prescore.ts';
 import {ownedDossier} from './dossier.ts';
-export const uploadKinds=['BFO','QUARTERLY','BKI','COUNTERPARTIES','DEBT_LEDGER'] as const;
+export const uploadKinds=['BFO','QUARTERLY','BKI','COUNTERPARTIES','DEBT_LEDGER','CREDIT_DOCUMENT','COMMERCIAL_DOCUMENT','BFO_REVIEW'] as const;
 type Kind=typeof uploadKinds[number];
 export class InputError extends Error {}
 export async function importSource(db:TransactionPool,owner:string,id:string,kind:Kind,file:File) {
@@ -19,16 +20,23 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
   if(!dossier)return null;
   const ext=file.name.split('.').pop()?.toLowerCase()??'';
   const ledger=kind==='COUNTERPARTIES'||kind==='DEBT_LEDGER';
-  const allowed=kind==='BKI'?['pdf']:ledger?['xlsx','csv']:['pdf','xlsx','csv'];
+  const reviewKind=kind==='CREDIT_DOCUMENT'||kind==='COMMERCIAL_DOCUMENT'||kind==='BFO_REVIEW';
+  const allowed=kind==='BKI'||reviewKind?['pdf']:ledger?['xlsx','csv']:['pdf','xlsx','csv'];
   if(!allowed.includes(ext)||file.name.length>180||!file.size||file.size>(kind==='BKI'?35:25)*1024*1024)throw new InputError('Проверьте размер и формат файла.');
   const bytes=new Uint8Array(await file.arrayBuffer());
   const hash=createHash('sha256').update(bytes).digest('hex');
   const sourceId=kind.toLowerCase()+':'+hash, now=new Date().toISOString(),inn=dossier.inn;
-  const envelope:SourceEnvelope={sourceId,sourceType:ledger?'OTHER':kind as 'BFO'|'QUARTERLY'|'BKI',fileName:file.name,
+  const envelope:SourceEnvelope={sourceId,sourceType:ledger||reviewKind?'OTHER':kind as 'BFO'|'QUARTERLY'|'BKI',fileName:file.name,
     status:'READY',companyInn:inn,warnings:[],confidence:null,receivedAt:now,contentHash:hash,rawReference:'sha256:'+hash};
   const payload:PrivateSource={envelope};
   try{
     if(ext==='xlsx')validateZipBudget(bytes);
+    if(reviewKind){
+      const family=kind==='CREDIT_DOCUMENT'?'CREDIT':kind==='BFO_REVIEW'?'BFO':'COMMERCIAL';
+      const pages=await mapPdfPages(bytes.slice(),64,true,async(text,p)=>({page:p.pageNumber,logicalPage:p.pageNumber,method:text.trim()?'TEXT' as const:'UNREADABLE' as const,text}));
+      payload.review=reviewFields(sourceId,pages,pages.length,family,'SINGLE');
+      envelope.status='PROCESSING';
+    }else{
     const text=await extractDocumentText(file.name,ext==='pdf'?bytes.slice():bytes,kind==='BKI'?'bureau':'financial');
     if(ledger)payload.ledger=parseLedger(text,inn,kind);
     else if(kind==='BKI'){
@@ -41,6 +49,7 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
       Object.assign(envelope,{periodFrom:report.financialMetadataV2?.period.from,periodTo:report.financialMetadataV2?.period.to,
         confidence:report.parserConfidence,warnings:report.warnings,parserVersion:kind==='BFO'?'PRESCORE-BFO-UPLOAD-1':'PRESCORE-QUARTERLY-PARSER-1'});
       payload.snapshot=adaptFinancialReport(report,envelope);
+    }
     }
   }catch(error){
     if(error instanceof InputError)throw error;
