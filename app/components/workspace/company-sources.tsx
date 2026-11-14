@@ -38,11 +38,16 @@ export function CompanySources({view,id,bankInn,openBank,onCompany,onSourceChang
  const [inn,setInn]=useState(bankInn??''),[companies,setCompanies]=useState<Company[]>([]),[profile,setProfile]=useState<Profile|null>(null),[preview,setPreview]=useState<PublicProfile|null>(null);
  const [error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[revision,setRevision]=useState(0),[selectedYear,setYear]=useState('');
  useEffect(()=>{const ctrl=new AbortController();(async()=>{
-   const list=await read<{companies:Company[]}>('/api/dossier',{signal:ctrl.signal});setCompanies(list.companies);
+   const list=await read<{companies:Company[]}>('/api/dossier',{signal:ctrl.signal});
+   if(ctrl.signal.aborted)return;
+   setCompanies(list.companies);
+   if(id){
+     const key='pc-ocr-notice:'+id,message=sessionStorage.getItem(key);
+     if(message){setError(message);sessionStorage.removeItem(key);}
+   }
    const matched=id||list.companies.find(c=>c.inn===bankInn)?.id;
    if(matched){const current=await read<Profile>('/api/dossier?id='+encodeURIComponent(matched),{signal:ctrl.signal});if(!ctrl.signal.aborted){setProfile(current);onCompany(current.company.inn);}}
  })().catch(e=>{if(!ctrl.signal.aborted)setError(e.message)});return()=>ctrl.abort();},[id,bankInn,revision,onCompany]);
- useEffect(()=>{const message=sessionStorage.getItem('pc-ocr-notice');if(message){setError(message);sessionStorage.removeItem('pc-ocr-notice');}},[]);
  const company=profile?.company;
  const mounted=useRef(true);
  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
@@ -77,7 +82,7 @@ export function CompanySources({view,id,bankInn,openBank,onCompany,onSourceChang
     form.reset();setRevision(n=>n+1);
     if(result.pending){
       try{await recognize(result.dossierId,result.id,result.layout??String(data.get('layout')??'SINGLE'));}
-      catch(e){if(company)throw e;sessionStorage.setItem('pc-ocr-notice',String((e as Error).message));}
+      catch(e){if(company)throw e;sessionStorage.setItem('pc-ocr-notice:'+result.dossierId,String((e as Error).message));}
     }
     if(!company){location.assign(dossierHref(result.dossierId,view));return;}
     if(!result.pending)await onSourceChanged?.();
