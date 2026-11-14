@@ -52,8 +52,6 @@ export function financialStatement(input: Input) {
       }))
     });
   }
-  const seen = new Set<string>();
-  const duplicates = new Set<string>();
   const rows = entries.flatMap(({
     line,
     code,
@@ -63,11 +61,6 @@ export function financialStatement(input: Input) {
     // Per-share supplementary disclosures do not have the form's monetary scale.
     if (['2900', '2910'].includes(code)) return [];
     if (!codes.has(code)) issue(input, 'INVALID', 'UNKNOWN_LINE_CODE', line.page);
-    if (seen.has(code)) {
-      duplicates.add(code);
-      issue(input, 'INVALID', 'DUPLICATE_LINE', line.page);
-    }
-    seen.add(code);
     const periodFields = headings.slice(0, 2).map(heading => {
       const span = columnPeriod(heading, asOf.value);
       return {
@@ -118,21 +111,41 @@ export function financialStatement(input: Input) {
       extractor_version: amount.extractor_version
     }];
   });
+  // A continuation/footnote can repeat a RAS code with empty cells. Do not
+  // invalidate a real value because of such a blank duplicate. Conflicting
+  // populated duplicates still block the financial figure.
+  type FinancialRow = (typeof rows)[number];
+  const hasEvidence = (row: FinancialRow) =>
+    [row.raw_current, row.raw_previous].some(raw => raw != null && /[0-9?]/.test(raw));
+  const byCode = new Map<string, FinancialRow[]>();
   for (const row of rows) {
-    if (duplicates.has(row.line_code.value ?? '')) {
-      for (const value of [row.current_period_value, row.previous_period_value]) {
-        value.value = null;
-        value.status = 'REVIEW';
-        value.confidence = 'LOW';
-      }
-      row.status = 'REVIEW';
-      row.confidence = 'LOW';
-    }
+    const code = row.line_code.value ?? '';
+    const group = byCode.get(code) ?? [];
+    group.push(row);
+    byCode.set(code, group);
   }
-  if (!rows.length || !rows.some(r => r.current_period_value.value !== null)) issue(input, 'REVIEW', 'NO_FINANCIAL_ROWS');
-  if (metadata.forms.some(f => f.value === 'Бухгалтерский баланс') && ['1600', '1700'].some(code => !rows.some(r => r.line_code.value === code && r.current_period_value.value !== null))) issue(input, 'REVIEW', 'BALANCE_TOTAL_MISSING');
+  const safeRows = rows.filter(row => {
+    const group = byCode.get(row.line_code.value ?? '') ?? [];
+    const evidenced = group.filter(hasEvidence);
+    return evidenced.length ? hasEvidence(row) : group[0] === row;
+  });
+  const duplicates = new Set([...byCode].filter(([, group]) =>
+    group.filter(hasEvidence).length > 1).map(([code]) => code));
+  for (const row of safeRows) {
+    if (!duplicates.has(row.line_code.value ?? '')) continue;
+    issue(input, 'INVALID', 'DUPLICATE_LINE', row.source_page);
+    for (const value of [row.current_period_value, row.previous_period_value]) {
+      value.value = null;
+      value.status = 'REVIEW';
+      value.confidence = 'LOW';
+    }
+    row.status = 'REVIEW';
+    row.confidence = 'LOW';
+  }
+  if (!safeRows.length || !safeRows.some(r => r.current_period_value.value !== null)) issue(input, 'REVIEW', 'NO_FINANCIAL_ROWS');
+  if (metadata.forms.some(f => f.value === 'Бухгалтерский баланс') && ['1600', '1700'].some(code => !safeRows.some(r => r.line_code.value === code && r.current_period_value.value !== null))) issue(input, 'REVIEW', 'BALANCE_TOTAL_MISSING');
   for (const col of ['current_period_value', 'previous_period_value'] as const) {
-    const get = (code: string) => rows.find(r => r.line_code.value === code)?.[col].value;
+    const get = (code: string) => safeRows.find(r => r.line_code.value === code)?.[col].value;
     function reconcile(codes: string[], residual: (v: number[]) => number, issueCode: string) {
       const values = codes.map(get);
       if (!unit.value || !values.every((v): v is number => v != null)) return;
@@ -150,7 +163,7 @@ export function financialStatement(input: Input) {
       company,
       inn
     },
-    rows
+    rows: safeRows
   };
 }
 export type FinancialStatementExtractionV1 = ReturnType<typeof financialStatement>;

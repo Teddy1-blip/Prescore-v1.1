@@ -113,3 +113,32 @@ test('Raw unit survives extraction and amounts are never silently rescaled; conf
   const r=inspect(entries,[...meta.slice(0,-1),'Единица измерения: млн ₽ по ОКЕИ 384']);
   assert.notEqual(r.status,'PASS');assert.equal(r.result.metadata.unit.value,null);assert.equal(r.result.rows[0].current_period_value.value,null);
 });
+
+test('A blank repeated RAS line does not invalidate the evidenced row', () => {
+  const totals = [
+    ...row('1600', 190, [['8750', 131], ['10500', 235]]),
+    ...row('1700', 180, [['8750', 131], ['10500', 235]])
+  ];
+  const evidenced = row('1520', 165, [['2375', 131], ['3300', 235]]);
+  const blank = row('1520', 146, []);
+  for (const entries of [[...totals, ...evidenced, ...blank], [...totals, ...blank, ...evidenced]]) {
+    const r = inspect(entries);
+    const relevant = r.result.rows.filter(row => row.line_code.value === '1520');
+    assert.equal(relevant.length, 1);
+    assert.equal(relevant[0].current_period_value.value, 2375);
+    assert.equal(relevant[0].previous_period_value.value, 3300);
+    assert.equal(r.input.issues.some(issue => issue.code === 'DUPLICATE_LINE'), false);
+  }
+});
+test('Conflicting populated RAS duplicates are invalid, never added together', () => {
+  const r = inspect([
+    ...row('1600', 190, [['8750', 131], ['10500', 235]]),
+    ...row('1700', 180, [['8750', 131], ['10500', 235]]),
+    ...row('1520', 165, [['2375', 131], ['3300', 235]]),
+    ...row('1520', 146, [['2400', 131], ['3300', 235]])
+  ]);
+  assert.equal(r.status, 'INVALID');
+  assert.ok(r.result.rows.filter(row => row.line_code.value === '1520').every(row =>
+    row.current_period_value.value === null && row.previous_period_value.value === null));
+  assert.ok(r.input.issues.some(issue => issue.code === 'DUPLICATE_LINE'));
+});
