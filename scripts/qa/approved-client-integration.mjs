@@ -174,7 +174,7 @@ try {
   await page.goto(origin + '/dashboard?analysisId=' + A.id + '&view=home');
   await waitModel();
   assert.match(await page.locator('.client-hero').innerText(), /FULL/);
-  await nav('План действий').click();
+  await page.goto(origin + '/dashboard?analysisId=' + A.id + '&view=actions');
   const basicPlan = page.locator('.approved-canonical-section');
   await basicPlan.locator('.ws-upgrade').waitFor();
   assert.equal(await basicPlan.locator('.pc-timeline').count(), 0);
@@ -213,15 +213,14 @@ try {
   ok('Index совпадает в Обзоре, Кредитном профиле и серверном снимке');
   const names = [
     'Обзор',
-    'Финансы',
-    'Кредитный профиль',
-    'Кредитный портфель',
+    'БФО',
     'Контрагенты',
+    'Кредитный портфель',
+    'Платёжный календарь',
+    'Кредитный профиль',
+    'Досье клиента',
     'Финансирование',
-    'Заявки',
-    'Документы',
-    'План действий',
-    'Подписка',
+    'Кредитный эксперт',
   ];
   for (const name of names) {
     await nav(name).click();
@@ -231,8 +230,10 @@ try {
     );
   }
   await page.goBack();
-  await page.getByRole('heading', { name: 'Что сделать дальше' }).waitFor();
+  await page.getByRole('heading', { name: 'Финансирование бизнеса' }).waitFor();
   await page.goForward();
+  await page.getByRole('heading', { name: 'Кредитный эксперт' }).first().waitFor();
+  await page.getByRole('button', { name: 'Подписка и доступ' }).click();
   await page.getByRole('heading', { name: 'Подписка компании' }).first().waitFor();
   ok('Все разделы, глубокие ссылки, Back/Forward');
   await page.getByLabel('Компания', { exact: true }).selectOption(B.id);
@@ -292,7 +293,7 @@ try {
   if (months.length) {
     const month = months.at(-1).month;
     await page.getByLabel('Период', { exact: true }).selectOption(month);
-    await nav('Финансы').click();
+    await page.goto(origin + '/dashboard?analysisId=' + A.id + '&view=banking&bankMonth=' + month);
     await page.getByRole('heading', { name: 'Месячные итоги' }).waitFor();
     assert.equal(await page.getByRole('table', { name: 'Месячные итоги' }).locator('tbody tr').count(), 1);
     await page.reload();
@@ -318,7 +319,7 @@ try {
   await page.getByRole('heading', { name: 'Соберём первое обращение' }).waitFor();
   ok('Заявка в PostgreSQL, повтор запроса, reload и изоляция компании');
   await page.getByLabel('Компания', { exact: true }).selectOption(A.id);
-  await nav('Документы').click();
+  await nav('Досье клиента').click();
   for (const id of ['source-bfo', 'source-quarterly', 'source-bki'])
     await page.locator('form#' + id).waitFor({ state: 'visible' });
   const quarter =
@@ -339,13 +340,13 @@ try {
     .getByText(/Документ добавлен/)
     .first()
     .waitFor();
-  await nav('Финансы').click();
-  await page.getByRole('button', { name: 'Бухгалтерская отчётность', exact: true }).click();
+  await nav('БФО').click();
+  await page.getByRole('heading', { name: 'Бухгалтерская финансовая отчётность', exact: true }).first().waitFor();
   const updated = await json(endpoint, ownerRole);
   assert.ok(updated.full.report.financialAnalysis?.history.length);
-  await page.getByRole('table', { name: 'Бухгалтерская отчётность' }).waitFor();
+  await page.getByRole('table', { name: 'Финансовые показатели' }).first().waitFor();
   ok('Загрузка квартального CSV и обновление БФО на соседней вкладке');
-  await nav('Документы').click();
+  await nav('Досье клиента').click();
   const bfoForm = page.locator('form#source-bfo');
   const annual = quarter.replace('за Январь - Март 2026 г.', 'за 2025 год')
     + '\nДенежные средства и денежные эквиваленты 1250 850\nДебиторская задолженность 1230 320';
@@ -364,7 +365,7 @@ try {
   assert.equal(revenue.difference,Math.abs(revenue.bank.value-1200000));
   assert.ok(revenue.context.some(f=>f.value===320000 && f.period.asOf==='2025-12-31'));
   assert.equal(rows.find(row=>row.accounting.label.includes('1250')).accounting.value,850000);
-  await nav('Финансы').click();
+  await page.goto(origin + '/dashboard?analysisId=' + A.id + '&view=banking');
   await page.getByRole('link', {name:/Сверка выписок и БФО/}).click();
   const comparison = page.getByTestId('bank-bfo');
   await comparison.waitFor();
@@ -391,7 +392,7 @@ try {
   }
   await nav('Обзор').click();
   await page.getByText('Не подтверждён юридический статус компании', {exact:false}).first().waitFor();
-  await nav('План действий').click();
+  await page.goto(origin + '/dashboard?analysisId=' + A.id + '&view=actions');
   for(const horizon of combined.actionPlan.horizons) {
     const block=page.locator('.pc-panel').filter({has:page.getByRole('heading',{name:new RegExp(horizon.title)})});
     assert.equal(await block.locator('.pc-timeline > li').count(),horizon.items.length);
@@ -421,7 +422,7 @@ try {
   assert.doesNotMatch(await (await req(printPath,ownerRole)).text(), /data-testid="bank-bfo"/);
   await pool.query("UPDATE analysis_entitlements SET tier='FULL' WHERE analysis_id=$1",[A.id]);
   ok('BASIC не раскрывает сверку и сохранённый полный выпуск');
-  await nav('Документы').click();
+  await nav('Досье клиента').click();
   await page.getByRole('button', { name: 'Новый анализ по выпискам' }).click();
   await page.locator('input[type=file]').first().waitFor({ state: 'attached' });
   assert.ok(!new URL(page.url()).searchParams.has('analysisId'));
@@ -465,7 +466,7 @@ try {
   await page.keyboard.press('Escape');
   assert.ok(await mobileMenu.evaluate((button) => document.activeElement === button));
   await mobileMenu.click();
-  await nav('Документы').click();
+  await nav('Досье клиента').click();
   await page.locator('form#source-bfo').waitFor({ state: 'visible' });
   ok('Мобильное меню, переход в Документы и возврат фокуса при Escape');
   await page.setViewportSize({ width: 1440, height: 1100 });
