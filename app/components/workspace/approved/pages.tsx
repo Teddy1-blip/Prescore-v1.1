@@ -8,7 +8,7 @@ export type ScreenProps = {
   data: ViewData;
   focus: string;
   availableViews?: readonly string[];
-  go: (p: Page) => void;
+  go: (p: Page | 'upload') => void;
   apps: Application[];
   details?: ReactNode;
   newApp?: (product?: string) => void;
