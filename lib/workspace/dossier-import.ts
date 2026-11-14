@@ -85,7 +85,7 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
       }
       envelope.status='PROCESSING';
     }else{
-    if(ledger)payload.ledger=parseLedger(text,inn,kind);
+    if(ledger)payload.ledger=parseLedger(text,inn,kind as 'COUNTERPARTIES'|'DEBT_LEDGER');
     else if(kind==='BKI'){
       const bki=parseAuthoritativeCreditHistoryText({text,fileName:file.name,analysisInn:inn,relationship:'Не указано'});
       if(bki.subjectInn!==inn||!bki.affectsCompanyDebt||!bki.reportDate)throw new InputError('Для самостоятельного портфеля требуется корпоративный отчёт БКИ с ИНН и датой.');
