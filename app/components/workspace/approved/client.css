@@ -176,7 +176,6 @@
   font-size: 11px;
   color: #8999b9;
 }
-.approved-client .side-billing { display:block; width:100%; text-align:left; border:0; border-radius:8px; background:#ffffff10; color:#e4dfff; cursor:pointer; padding:10px; margin-bottom:16px; }
 .approved-client .side-bottom strong {
   display: block;
   color: #d5ddee;

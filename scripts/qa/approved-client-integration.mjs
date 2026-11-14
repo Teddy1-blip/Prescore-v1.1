@@ -233,7 +233,7 @@ try {
   await page.getByRole('heading', { name: 'Финансирование бизнеса' }).waitFor();
   await page.goForward();
   await page.getByRole('heading', { name: 'Кредитный эксперт' }).first().waitFor();
-  await page.getByRole('button', { name: 'Подписка и доступ' }).click();
+  await nav('Подписка').click();
   await page.getByRole('heading', { name: 'Подписка компании' }).first().waitFor();
   ok('Все разделы, глубокие ссылки, Back/Forward');
   await page.getByLabel('Компания', { exact: true }).selectOption(B.id);

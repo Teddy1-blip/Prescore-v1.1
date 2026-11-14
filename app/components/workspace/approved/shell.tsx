@@ -120,7 +120,6 @@ export function ApprovedShell(p: ShellProps) {
               })}
           </nav>
           <div className="side-bottom">
-            {p.available.includes('billing') && <button type="button" className="side-billing" onClick={() => go('billing')}>Подписка и доступ</button>}
             <strong>Prescore для бизнеса</strong>
             <span className="status-dot" />
             {p.preview ? 'Интерактивный стенд' : p.readOnly ? 'Доступ для просмотра' : 'Кабинет компании'}
