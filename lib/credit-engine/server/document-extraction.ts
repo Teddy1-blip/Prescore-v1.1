@@ -122,7 +122,7 @@ function extractLegacyXls(bytes: Uint8Array): Promise<string> {
   return new Promise((accept, reject) => {
     const child = execFile('python3', ['-I', resolve('lib/release/read-legacy-xls.py')], {
       timeout: 12000, killSignal: 'SIGKILL', maxBuffer: 8 * 1024 * 1024,
-      encoding: 'utf8', env: {PATH: process.env.PATH, LANG: 'C.UTF-8'}
+      encoding: 'utf8', env: {PATH: process.env.PATH, LANG: 'C.UTF-8', NODE_ENV: process.env.NODE_ENV ?? 'production'}
     }, (error, output) => error ? reject(Error('Не удалось прочитать книгу XLS.')) : accept(output));
     child.stdin?.on('error', () => reject(Error('Не удалось передать книгу XLS для чтения.')));
     child.stdin?.end(bytes);
