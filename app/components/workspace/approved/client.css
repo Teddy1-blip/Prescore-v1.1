@@ -1508,3 +1508,16 @@
   max-width: 100%;
   box-sizing: border-box;
 }
+
+/* One concise analytical chain across client source pages; no duplicate long report. */
+.approved-client .pc-analytic-rail { margin:26px 0; padding:20px; border:1px solid var(--border); border-radius:var(--radius); background:var(--white); }
+.approved-client .pc-analytic-rail > header h2 { margin:0 0 5px; font-size:18px; color:var(--ink); }
+.approved-client .pc-analytic-rail > header p { margin:0 0 15px; color:var(--muted); font-size:12px; }
+.approved-client .pc-analytic-rail ol { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); list-style:none; gap:10px; padding:0; margin:0; }
+.approved-client .pc-analytic-rail li { min-width:0; background:var(--bg); border-radius:11px; padding:13px; display:flex; flex-direction:column; gap:7px; }
+.approved-client .pc-analytic-step { color:var(--accent); font-size:10px; font-weight:700; }
+.approved-client .pc-analytic-rail li h3 { margin:0; font-size:12px; line-height:1.35; }
+.approved-client .pc-analytic-rail li p { margin:0; color:var(--muted); font-size:12px; line-height:1.45; overflow-wrap:anywhere; }
+.approved-client .pc-analytic-rail li button { margin-top:auto; text-align:left; padding:7px 0 0; background:transparent; border:0; color:var(--accent); cursor:pointer; font-size:11px; }
+@media(max-width:1150px){.approved-client .pc-analytic-rail ol{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media(max-width:600px){.approved-client .pc-analytic-rail ol{grid-template-columns:1fr;}.approved-client .pc-analytic-rail{padding:14px;}}

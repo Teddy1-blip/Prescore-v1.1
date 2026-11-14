@@ -1,6 +1,7 @@
 "use client";
 import {BankBfoReconciliation} from './bank-bfo-reconciliation';
 import {ClientPaymentCalendar} from './client-payment-calendar';
+import {ClientAnalyticPipeline} from './client-analytic-pipeline';
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Analyze, Crm, ScreeningSummary, type UploadReceipt, type StoredAnalysis, type Deal } from "./client-operations";
 import { EmptyHome, FullAccessNotice, date } from "./presentation";
@@ -93,5 +94,6 @@ export default function ClientWorkspace(){
  {view==='applications'&&operationsReady&&!operationsError&&<><div className="pc-page-title"><div><h1>Заявки</h1><p>Сохранённые заявки, статусы и переписка</p></div><button disabled={operationsLoading} onClick={()=>void refresh()}>{operationsLoading?'Обновляем…':'Обновить'}</button></div><Crm key={selectedId} readOnly={locked} deals={deals.filter(d=>d.analysisId===selectedId)} analyses={[selected]} selected={selected} addDeal={addDeal} updateDeal={updateDeal}/>{!locked&&<RecipientApplications key={selectedId} analysis={selected} saved={refresh}/>}</>}
  {view==='analyst'&&model&&(model.full?<AiAnalyst key={selectedId} analysisId={selectedId}/>:<FullAccessNotice model={model} retry={refresh}/>)}
  </>}</LivePage>
+ {showApproved&&model&&(['home','bfo','counterparties','obligations'] as string[]).includes(view)&&<ClientAnalyticPipeline key={selectedId+view} model={model} scope={view as 'home'|'bfo'|'counterparties'|'obligations'} choose={choose}/>}
  </ClientShell>;
 }
