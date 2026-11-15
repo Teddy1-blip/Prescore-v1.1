@@ -117,3 +117,18 @@ test("rejects another INN and exposes an explicit per-file screening result", ()
   assert.deepEqual(screened.unrecognizedFiles, ["unknown.txt"]);
   assert.equal(screened.screeningResults.find((item) => item.fileName === "foreign.txt")?.status, "COMPANY_MISMATCH");
 });
+
+test("personal 40817 TXT cannot enter company B-Score even if payment contains an INN", () => {
+  const personal = statement({ account: "40817" + "0".repeat(15), inn: "5032333146", company: "ООО Тест", bank: "Банк" });
+  assert.throws(() => inspectBankStatement(personal, "personal.txt"), /Личный счёт 40817/);
+  assert.throws(() => analyzeBankStatements([{ text: personal, fileName: "personal.txt" }]), /Личный счёт 40817/);
+  const screened = screenBankStatements([{ text: personal, fileName: "personal.txt" }]);
+  assert.equal(screened.accepted.length, 0);
+});
+test("genuine 1C account sections without operations do not prove zero company turnover", () => {
+  const active = statement({ account: "40702810111110000001", inn: "5032333146", company: "ООО Тест", bank: "Банк" });
+  const idle = active.replace(/СекцияДокумент=[\s\S]*?КонецДокумента\n/, "");
+  assert.throws(() => inspectBankStatement(idle, "idle.txt"), /В выписке нет операций/);
+  const screened = screenBankStatements([{ text: idle, fileName: "idle.txt" }]);
+  assert.equal(screened.accepted.length, 0);
+});
