@@ -126,15 +126,26 @@ export function financialMetadata(input: Input) {
       line,
       value: calendarDay(prior[1])
     });
-    // Annual FNS cover sheet: require both the full-year period code and its printed year.
-    const fns = t.match(/отч[её]тный период\s*\(код\)\*?\s+3\s*4\s+отч[её]тный год\s+((?:\d\s*){4})$/i);
+    // Historical FNS/KND 0710099 codes: 21/31/33 (quarter/half-year/
+    // nine months), 34 (year). Later formats also use 91/92/93.
+    // Only an explicit code AND a printed year can establish a period:
+    // https://www.garant.ru/products/ipo/prime/doc/70007791/
+    // https://base.garant.ru/414388745/f7ee959fd36b5699076b35abf4f52c5c/
+    const fns = t.match(/отч[её]тный период\s*\(код\)\*?\s+([239]\s*\d)\s+отч[её]тный год\s+((?:\d\s*){4})$/i);
     if (fns) {
-      const year = fns[1].replace(/\s/g, '');
-      addSpan(line, year);
-      dates.push({
-        line,
-        value: date(year + '-12-31')
-      });
+      const code = fns[1].replace(/\s/g, '');
+      const year = fns[2].replace(/\s/g, '');
+      const monthsByCode: Record<string, number> = {
+        '21': 3, '31': 6, '33': 9, '34': 12,
+        '91': 3, '92': 6, '93': 9,
+      };
+      const month = monthsByCode[code];
+      if (month && /^(?:19|20)\d{2}$/.test(year)) {
+        const end = new Date(Date.UTC(Number(year), month, 0)).toISOString().slice(0, 10);
+        const endMonth = ({3:'Март',6:'Июнь',9:'Сентябрь',12:'Декабрь'} as Record<number,string>)[month];
+        addSpan(line, month === 12 ? year : 'Январь - ' + endMonth + ' ' + year);
+        dates.push({line, value:end});
+      }
     }
   }
   const formLines = [...forms.values()];
