@@ -67,8 +67,14 @@ export function financialStatement(input: Input) {
     entry.cells.every(c => !c.uncertain && /^[-–—]$/.test(c.raw.trim()));
   const hasNumericCell = (entry: typeof entries[number]) =>
     entry.cells.some(c => !c.uncertain && numeric(c.raw.replace(/−/g, '-')) !== null);
+  // Only FNS's explicitly printed NPO alternative has these optional
+  // duplicate equity codes. Do not infer it from two equal-looking rows.
+  const npoPages = new Set(input.lines.filter(line =>
+    /III\.\s*ЦЕЛЕВОЕ\s+ФИНАНСИРОВАНИЕ\b/iu.test(line.text)).map(line=>line.page));
+  const npoCodes = new Set(['1300','1310','1320','1350','1360','1370']);
   const filteredEntries = entries.filter(entry => {
-    if (!/^13[0-9]{2}$/.test(entry.code) || !explicitDashes(entry)) return true;
+    if (!npoPages.has(entry.line.page) || !npoCodes.has(entry.code) ||
+        !explicitDashes(entry)) return true;
     const alternatives = entriesByCode.get(entry.code) ?? [];
     // Exactly one independently numeric alternative; conflicts remain invalid.
     return alternatives.filter(hasNumericCell).length !== 1;
