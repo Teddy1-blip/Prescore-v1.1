@@ -205,3 +205,16 @@ test("normalizes 10,000 transactions from 30 sources in bounded time", () => {
   assert.equal(result.retained.length, 10_000);
   assert.ok(performance.now() - started < 5_000);
 });
+
+test("an explicitly unassigned 1C document never borrows the first settlement account", () => {
+  const source = { Номер: "99", Дата: "17.07.2026", Сумма: "25.00", __account: "" };
+  const context = raw({ companyAccounts: ["40702810111110000001"] });
+  const withoutEvidence = adaptOneCDocument(source, context);
+  assert.equal(withoutEvidence.statementAccount, null);
+  const normalized = normalizeTransaction(withoutEvidence);
+  assert.equal(normalized.direction, "UNKNOWN");
+  assert.equal(normalized.companyAccount, null);
+  // Legacy adapters that omit this optional hint retain their old behavior.
+  const legacy = adaptOneCDocument({ Номер: "99", Дата: "17.07.2026", Сумма: "25.00" }, context);
+  assert.equal(legacy.statementAccount, "40702810111110000001");
+});
