@@ -19,5 +19,5 @@ export function selectAccountingSheet(sheets:readonly AccountingSheet[],family:A
  if(!Array.isArray(sheets)||sheets.length<1||sheets.length>32)throw Error('ACCOUNTING_XLSX_SHEET_LIMIT');
  const matches=sheets.filter(s=>recognized(s,family));
  if(matches.length!==1)throw Error(matches.length?'ACCOUNTING_XLSX_MULTIPLE_SOURCE_SHEETS':'ACCOUNTING_XLSX_SOURCE_SHEET_NOT_FOUND');
- return {...matches[0],rows:matches[0].rows.map(r=>Array.from({length:r.length},(_,i)=>String(r[i]??'')))};
+ return {...matches[0],rows:matches[0].rows.map((r:string[])=>Array.from({length:r.length},(_,i)=>String(r[i]??'')))};
 }
