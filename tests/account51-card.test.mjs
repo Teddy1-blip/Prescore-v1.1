@@ -3,6 +3,14 @@ import assert from 'node:assert/strict';
 import {parseAccount51Card} from '../lib/workspace/account51-card.ts';
 import {extractXlsxRows} from '../lib/credit-engine/server/document-extraction.ts';
 import {buildXlsx} from '../lib/excel-export.ts';
+import {strToU8, zipSync} from 'fflate';
+
+test('XLSX decodes numeric Cyrillic references once in inline and shared strings',()=>{
+ const sheet='<worksheet><sheetData><row><c r="A1" t="inlineStr"><is><t>&#1057;&#x447;&#1077;&#1090; 51</t></is></c><c r="B1" t="s"><v>0</v></c></row></sheetData></worksheet>';
+ const shared="<sst><si><t>&#1048;&#1053;&#1053; &amp;#1057; &apos;</t></si></sst>";
+ const bytes=zipSync({'xl/worksheets/sheet1.xml':strToU8(sheet),'xl/sharedStrings.xml':strToU8(shared)});
+ assert.deepEqual(extractXlsxRows(bytes),[['Счет 51',"ИНН &#1057; '"]]);
+});
 const head = [
   ['ООО «Тест»'],['Карточка счета 51 за 01.01.2025 - 30.06.2025'],[],
   ['Выводимые данные: БУ'],[],

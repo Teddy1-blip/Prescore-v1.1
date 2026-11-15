@@ -61,8 +61,16 @@ export async function extractPdfText(bytes: Uint8Array, maxPages = Number.POSITI
   return pages.join("\n\f\n");
 }
 
+const xmlEntities: Record<string, string> = { lt: "<", gt: ">", amp: "&", quot: '"', apos: "'" };
+
 function decodeXml(value: string) {
-  return value.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").replace(/&quot;/g, "\"").replace(/&#39;/g, "'");
+  return value.replace(/&(lt|gt|amp|quot|apos|#\d+|#x[\da-fA-F]+);/g, (reference, entity: string) => {
+    if (!entity.startsWith("#")) return xmlEntities[entity];
+    const hex = entity.startsWith("#x");
+    const code = Number.parseInt(entity.slice(hex ? 2 : 1), hex ? 16 : 10);
+    if (code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff)) return reference;
+    return String.fromCodePoint(code);
+  });
 }
 
 export function extractXlsxRows(bytes: Uint8Array): string[][] {
