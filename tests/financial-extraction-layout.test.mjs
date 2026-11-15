@@ -113,3 +113,47 @@ test('Raw unit survives extraction and amounts are never silently rescaled; conf
   const r=inspect(entries,[...meta.slice(0,-1),'Единица измерения: млн ₽ по ОКЕИ 384']);
   assert.notEqual(r.status,'PASS');assert.equal(r.result.metadata.unit.value,null);assert.equal(r.result.rows[0].current_period_value.value,null);
 });
+
+test('FNS blank alternative section III does not erase the populated commercial equity rows',()=>{
+  const page=(text)=>({text,page:3,confidence:'HIGH'});
+  const input={id:'synthetic-fns-two-section-form',issues:[],lines:[
+    ...meta.map(page),
+    page('Капитал | 1310 | 10 | 10 | 10'),
+    page('Капитал и резервы | 1300 | (5388) | (6199) | (7186)'),
+    page('Целевой капитал | 1310 | - | - | -'),
+    page('Целевое финансирование | 1300 | — | — | —'),
+    page('БАЛАНС | 1600 | 10630 | 396 | 133'),
+    page('БАЛАНС | 1700 | 10630 | 396 | 133'),
+  ]};
+  const result=financialStatement(input);
+  const own=result.rows.filter(x=>x.line_code.value==='1300');
+  assert.equal(own.length,1);
+  assert.equal(own[0].current_period_value.value,-5388);
+  assert.equal(own[0].previous_period_value.value,-6199);
+  assert.equal(result.rows.find(x=>x.line_code.value==='1310')?.current_period_value.value,10);
+  assert.equal(input.issues.some(x=>x.code==='DUPLICATE_LINE'),false);
+});
+test('FNS two populated alternative financial rows must still invalidate both numbers',()=>{
+  const page=(text)=>({text,page:3,confidence:'HIGH'});
+  const input={id:'synthetic-fns-conflict',issues:[],lines:[
+    ...meta.map(page),
+    page('Капитал и резервы | 1300 | (5388) | (6199)'),
+    page('Другой капитал | 1300 | (5389) | (6199)'),
+  ]};
+  const result=financialStatement(input);
+  assert.equal(validation(input.issues),'INVALID');
+  assert.ok(input.issues.some(x=>x.code==='DUPLICATE_LINE'));
+  assert.equal(result.rows.filter(x=>x.line_code.value==='1300').length,2);
+  assert.ok(result.rows.filter(x=>x.line_code.value==='1300').every(r=>r.current_period_value.value===null));
+});
+test('An unreadable second section III row cannot be silently ignored as a blank template',()=>{
+  const page=(text)=>({text,page:3,confidence:'HIGH'});
+  const input={id:'synthetic-ambiguous',issues:[],lines:[
+    ...meta.map(page),
+    page('Капитал и резервы | 1300 | (5388) | (6199)'),
+    page('Целевое финансирование | 1300 | ? | -'),
+  ]};
+  const result=financialStatement(input);
+  assert.equal(validation(input.issues),'INVALID');
+  assert.ok(result.rows.filter(r=>r.line_code.value==='1300').every(r=>r.current_period_value.value===null));
+});
