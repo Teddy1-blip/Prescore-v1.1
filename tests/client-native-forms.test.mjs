@@ -7,6 +7,14 @@ import {nativePartyLedger} from '../lib/workspace/one-c-ledger.ts';
 import {parseAccount51Card} from '../lib/workspace/account51-card.ts';
 import {settlementPositions} from '../lib/workspace/settlement-positions.ts';
 
+test('Native hierarchical 1C balances reconcile signed subtotals without adding tax-id detail twice',()=>{
+ const header=['Счет','Сальдо на начало периода','','Обороты за период','','Сальдо на конец периода',''];
+ const row=(name,dr='',cr='')=>[name,'','','','',dr,cr];
+ const book=[['Оборотно-сальдовая ведомость по счету 60 за 2024 г.'],header,['Контрагенты','Дебет','Кредит','Дебет','Кредит','Дебет','Кредит'],['Контрагенты.ИНН'],row('60','20'),row('60.01','','10'),row('Поставщик','','10'),row('9909000011','','10'),row('60.02','30'),row('Поставщик','30'),row('9909000011','30'),row('Итого','20')];
+ const result=nativePartyLedger(book,'9909000011',true);assert.equal(result.length,2);assert.equal(result[0].credit,10);assert.equal(result[1].debit,30);assert.equal(result[0].asOf,'2024-12-31');
+ const inconsistent=structuredClone(book);inconsistent[7][6]='11';assert.throws(()=>nativePartyLedger(inconsistent,'9909000011',true));
+});
+
 test('Recognized 1C months, quarter and leap-year end dates',()=>{
  assert.deepEqual(oneCPeriod('Карточка счета 51 за Октябрь 2023 г. - Сентябрь 2024 г.'),{from:'2023-10-01',to:'2024-09-30'});
  assert.deepEqual(oneCPeriod('ОСВ за 1 квартал 2024 г.'),{from:'2024-01-01',to:'2024-03-31'});

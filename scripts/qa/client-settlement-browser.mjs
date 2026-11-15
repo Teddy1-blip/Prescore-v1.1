@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {chromium} from 'playwright';
+import {statementFixture} from '../../tests/fixtures/block1-statements.mjs';
 const port=Number(process.argv[2]??4188);
 assert.ok(Number.isInteger(port)&&port>0&&port<=65535);
 const base='http://127.0.0.1:'+port;
@@ -30,6 +31,11 @@ const csv=[columns,[company.inn,shift(-1),'62.01','Учебный покупат
 const file={name:'ОСВ — учебный пример.csv',mimeType:'text/csv',buffer:Buffer.from('\uFEFF'+csv)};
 const evidence={checks:[],pages:[],errors};
 try{
+ await page.goto(base+'/dashboard');
+ const initialPassport=page.getByRole('region',{name:'Паспорт компании',exact:true});
+ await initialPassport.getByText(/9909000011/).waitFor();
+ assert.equal(new URL(page.url()).searchParams.get('dossierId'),company.id);
+ evidence.checks.push('Чистый вход /dashboard открывает паспорт выбранного досье.');
  await page.goto(url('counterparties'));const buyers=page.getByRole('table',{name:'Покупатели',exact:true});
  await buyers.waitFor();await page.getByRole('table',{name:'Поставщики',exact:true}).waitFor();
  const form=page.locator('form').filter({has:page.locator('input[value="COUNTERPARTIES"]')});
@@ -50,6 +56,8 @@ try{
  for(const view of ['home','banking','bfo','obligations','analysis','analyst','financing','documents']){
   await page.goto(url(view));await page.waitForLoadState('networkidle');const body=await page.locator('body').innerText();
   assert.ok(body.trim().length>110,view+' empty');evidence.pages.push(view);
+  assert.equal(new URL(page.url()).searchParams.get('dossierId'),company.id);
+  if(view==='banking'||view==='obligations')await page.screenshot({path:path.join(out,view==='banking'?'desktop-banking.png':'desktop-portfolio.png')});
   if(view==='analysis'){await page.getByText('Демонстрационная оценка бизнеса',{exact:true}).click();await page.getByLabel('Свободный поток для компании (FCFF), год 1',{exact:true}).fill('100000');}
  }
  const issued=await json('/api/dossier',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'issue-report',id:company.id})});
@@ -106,5 +114,55 @@ try{
  for(const [role,route,pattern] of [['broker','/agent',/агент|агентск/i],['admin','/prescore-control',/администр|управлен|систем/i]]){
    const context=await browser.newContext();await context.addCookies([{name:'qa-role',value:role,url:base}]);const other=await context.newPage();await other.goto(base+route);await other.waitForLoadState('networkidle');assert.match(await other.locator('body').innerText(),pattern);await context.close();evidence.pages.push(route);
  }
+ const isolated=await browser.newContext({viewport:{width:1440,height:1000}});
+ await isolated.addCookies([{name:'qa-role',value:'stranger',url:base}]);
+ const next=await isolated.newPage();next.on('pageerror',e=>errors.push(String(e)));
+ await next.goto(base+'/dashboard');await next.getByLabel('ИНН новой компании').fill('9909000029');
+ await next.getByRole('button',{name:'+ Добавить компанию',exact:true}).click();
+ const pass=next.getByRole('region',{name:'Паспорт компании',exact:true});
+ await pass.getByText(/9909000029/).waitFor();
+ const selectedDossier=new URL(next.url()).searchParams.get('dossierId');assert.ok(selectedDossier);
+ assert.equal(new URL(next.url()).searchParams.has('analysisId'),false);
+ await next.reload();await pass.getByText(/9909000029/).waitFor();
+ await pass.getByRole('button',{name:/Загрузить выписку/}).click();
+ const sample=statementFixture({inn:'9909000029',company:'ООО Учебное досье',amount:'125000.00',openingBalance:'0.00',endingBalance:'125000.00'});
+ await next.locator('input[type=file]').first().setInputFiles({name:'control.txt',mimeType:'text/plain',buffer:Buffer.from(sample)});
+ const [uploaded]=await Promise.all([next.waitForResponse(r=>r.url().endsWith('/api/analysis')&&r.request().method()==='POST'),next.getByRole('button',{name:'Рассчитать по выбранным файлам'}).click()]);
+ assert.ok(uploaded.ok(),'Банковская выписка '+uploaded.status());const bank=await uploaded.json();
+ assert.equal(bank.analysis.companyInn,'9909000029');await pass.getByText(/9909000029/).waitFor();
+ assert.equal(new URL(next.url()).searchParams.get('dossierId'),selectedDossier);
+ assert.equal(new URL(next.url()).searchParams.get('analysisId'),bank.analysis.id);
+ await next.getByRole('link',{name:'Движение денег',exact:true}).click();
+ await next.waitForLoadState('networkidle');assert.equal(new URL(next.url()).searchParams.get('analysisId'),bank.analysis.id);
+ const modelResponse=await isolated.request.get(base+'/api/workspace-model?analysisId='+bank.analysis.id);
+ const savedModel=await modelResponse.json();assert.equal(savedModel.basic.analysis.company.inn,'9909000029');
+ await next.goto(base+'/dashboard');await pass.getByText(/9909000029/).waitFor();
+ assert.equal(new URL(next.url()).searchParams.get('dossierId'),selectedDossier);
+ const bfoUrl=new URL(next.url());bfoUrl.searchParams.set('view','bfo');await next.goto(bfoUrl.href);
+ const annual=['Бухгалтерская (финансовая) отчетность за 2024 год','ИНН 9909000029','Бухгалтерский баланс на 31 декабря 2024 г.',
+   'Единица измерения: тыс. руб. (ОКЕИ 384)','БАЛАНС 1600 1000 900 800','Капитал и резервы 1300 400 300 200',
+   'Долгосрочные обязательства 1400 100 100 100','Краткосрочные обязательства 1500 500 500 500','БАЛАНС 1700 1000 900 800',
+   'Отчет о финансовых результатах за Январь - Декабрь 2024 г.','Выручка 2110 1800 1600','Чистая прибыль (убыток) 2400 75 60'].join('\n');
+ const uploadAnnual=async()=>{
+   await next.locator('#bfo-upload-file').setInputFiles({name:'annual-2024.csv',mimeType:'text/csv',buffer:Buffer.from(annual)});
+   const [response]=await Promise.all([next.waitForResponse(r=>r.url().endsWith('/api/dossier')&&r.request().method()==='POST'),next.getByRole('button',{name:'Загрузить и проанализировать'}).click()]);
+   assert.ok(response.ok(),'Годовая БФО: '+response.status()+' '+(response.ok()?'':await response.text()));
+   const data=await response.json();assert.equal(data.dossierId,selectedDossier);return data;
+ };
+ assert.equal((await uploadAnnual()).duplicate,false);
+ const yearSelect=next.locator('#bfo-reporting-period');await yearSelect.waitFor();
+ await next.getByText('Годовая отчётность',{exact:true}).waitFor();
+ const uploadedRevenue=next.locator('.pc-bfo-kpis strong').filter({hasText:/1\s*800\s*000/});
+ await uploadedRevenue.waitFor();const uploadedPeriodId=await yearSelect.inputValue();
+ const beforePeriods=await yearSelect.locator('option').allTextContents();
+ assert.equal(beforePeriods.filter(t=>t.includes('2024-12-31')).length,1);
+ assert.equal((await uploadAnnual()).duplicate,true);await next.reload();
+ await yearSelect.locator('option').filter({hasText:/2024-12-31/}).waitFor({state:'attached'});
+ await yearSelect.selectOption(uploadedPeriodId);await uploadedRevenue.waitFor();
+ assert.deepEqual(await yearSelect.locator('option').allTextContents(),beforePeriods);
+ assert.equal(new URL(next.url()).searchParams.get('dossierId'),selectedDossier);
+ evidence.checks.push('Годовая БФО загружена через форму Free и привязана к тому же досье. Выручка 1 800 000 ₽. Повторная загрузка и F5 оставили один экземпляр загруженного периода и сохранили другие годы.');
+ await isolated.close();
+ evidence.checks.push('Новая компания без выписки сохранена. После загрузки TXT, смены раздела и повторного входа видны то же досье и его банковский анализ.');
  assert.deepEqual(errors,[]);evidence.status='PASS';
 }finally{await fs.writeFile(path.join(out,'result.json'),JSON.stringify(evidence,null,2));await browser.close();}

@@ -54,6 +54,20 @@ function transactionFromCase(item, ordinal = 1) {
   return tx;
 }
 
+test('primary document wording distinguishes tax, refunds, debt service and unrelated charges',()=>{
+ const classify=(direction,purpose,counterparty='ООО Учебный контрагент')=>classifyEconomicTransaction(transactionFromCase({direction,purpose,counterparty})).primaryCategory;
+ assert.notEqual(classify('OUT','Оплата счета без налога (НДС)'), 'TAX_PAYMENT');
+ assert.equal(classify('OUT','Единый налоговый платеж','Казначейство России'),'TAX_PAYMENT');
+ assert.notEqual(classify('OUT','Штраф за нарушение','УФК Учебное'),'TAX_PAYMENT');
+ assert.notEqual(classify('OUT','Штраф по требованию','СФР Учебный'),'SOCIAL_CONTRIBUTION');
+ assert.notEqual(classify('OUT','Страховой взнос по договору ОСАГО'),'SOCIAL_CONTRIBUTION');
+ assert.equal(classify('IN','Возврат комиссии по карте. Без НДС','Учебный банк'),'REFUND_RECEIVED');
+ assert.notEqual(classify('OUT','Оплата по договору беспроцентного займа'),'INTEREST_PAYMENT');
+ assert.equal(classify('OUT','Погашение процентов по договору','Учебный банк'),'INTEREST_PAYMENT');
+ assert.equal(classify('OUT','Погашение по кредитному договору','Учебный банк'),'DEBT_SERVICE_UNSPLIT');
+ assert.notEqual(classify('OUT','Пени по договору лизинга'),'LEASING_PAYMENT');
+});
+
 test("classification registry is stable, versioned and free of duplicate codes", () => {
   const validation = validateClassificationRegistry();
   assert.equal(validation.count, CLASSIFICATION_RULE_REGISTRY.length);

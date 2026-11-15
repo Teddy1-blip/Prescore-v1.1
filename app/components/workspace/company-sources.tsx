@@ -80,22 +80,29 @@ export function CompanySources({view,id,bankInn,bank,openBank,onCompany,onSource
  }
  async function upload(event:FormEvent<HTMLFormElement>){
   event.preventDefault();
-  const form=event.currentTarget,data=new FormData(form);if(company)data.set('id',company.id);else if(inn.trim())data.set('inn',inn.trim());
+  const form=event.currentTarget,data=new FormData(form),targetId=id||company?.id;
+  const submittedFrom=window.location.href;
+  if(targetId)data.set('id',targetId);else if(inn.trim())data.set('inn',inn.trim());
   setBusy(true);setError('');setNotice('');
   try{
     const result=await read<{id:string;duplicate:boolean;dossierId:string;pending:boolean;layout?:string}>('/api/dossier',{method:'POST',body:data});
+    if(targetId&&result.dossierId!==targetId)throw Error('Документ вернул ссылку на другое досье. Обновите страницу для проверки.');
+    if(!mounted.current)return;
+    if(view==='bfo'&&!result.pending)setYear(result.id);
     form.reset();setRevision(n=>n+1);
     if(result.pending){
       try{await recognize(result.dossierId,result.id,result.layout??String(data.get('layout')??'SINGLE'));}
       catch(e){if(company)throw e;sessionStorage.setItem('pc-ocr-notice:'+result.dossierId,String((e as Error).message));}
     }
-    if(!company){location.assign(dossierHref(result.dossierId,view));return;}
+    if(!mounted.current)return;
+    if(!targetId){if(window.location.href===submittedFrom)location.assign(dossierHref(result.dossierId,view));return;}
     if(!result.pending)await onSourceChanged?.();
     setNotice(result.duplicate?'Этот документ уже учтён.':result.pending?'Документ сохранён. Проверьте распознанные поля.':'Документ сохранён.');
   }
   catch(e){setError((e as Error).message);}finally{setBusy(false);}
  }
- const years=profile?.financial?.history??[],period=years.find(p=>p.id===selectedYear)??years.at(-1);
+ const selectedPeriodId=profile?.lines.find(line=>line.sourceId===selectedYear)?.id??selectedYear;
+ const years=profile?.financial?.history??[],period=years.find(p=>p.id===selectedPeriodId)??years.at(-1);
  const periodSourceId=profile?.lines.find(s=>s.id===period?.id)?.sourceId;
  const periodSource=profile?.sources.find(s=>s.id===periodSourceId)??(period&&profile?.publicProfile&&[...profile.sources].reverse().find(s=>s.kind==='CHECKO'));
  const relevantClaims=profile?.claims.filter(c=>view==='home'||view==='analysis'||view==='actions'||view==='financing'&&c.stage==='product'||c.sources.some(s=>view==='bfo'?['BFO','QUARTERLY'].includes(s.type):view==='obligations'?s.type==='BKI'||profile.sources.some(r=>c.sourceIds.includes(r.id)&&r.kind==='CREDIT_DOCUMENT'):false))??[];
@@ -244,7 +251,7 @@ export function CompanySources({view,id,bankInn,bank,openBank,onCompany,onSource
    const accept=kind==='CALENDAR_SHEET'?'.xls,.xlsx,.csv':kind==='ACCOUNT_51'?'.xls,.xlsx':contract?'.pdf,.docx,.png,.jpg,.jpeg':scan?'.pdf,.png,.jpg,.jpeg':kind.endsWith('LEDGER')||kind==='COUNTERPARTIES'?'.csv,.xls,.xlsx':'.pdf,.xls,.xlsx,.csv';
    return <form onSubmit={upload} key={kind} aria-label={labels[kind]}><input name="kind" type="hidden" value={kind}/>
      <label>{labels[kind]} <input aria-label={labels[kind]} name="file" required type="file" accept={accept}/></label>
-     {kind==='COUNTERPARTIES'&&<label><input type="checkbox" name="identityConfirmed" value="yes"/> Подтверждаю компанию для ОСВ 1С без ИНН в шапке</label>}
+     {(kind==='COUNTERPARTIES'||kind==='DEBT_LEDGER')&&<label><input type="checkbox" name="identityConfirmed" value="yes"/> Подтверждаю компанию для ОСВ 1С без ИНН в шапке</label>}
      {bureau&&<label>Кому принадлежит отчёт <select name="relationship">{['Компания-заёмщик','ИП-заёмщик','Собственник','Руководитель','Поручитель'].map(r=><option key={r}>{r}</option>)}</select></label>}
      {scan&&<><ScanLayout/><small>{contract?'PDF, DOCX, JPG, PNG':'PDF, JPG, PNG'} · скан до 16 МБ</small></>}
      {bureau&&<label><input required type="checkbox"/> Подтверждаю право передать отчёт и согласие на обработку.</label>}

@@ -24,6 +24,35 @@ function statement({ account, inn, company, bank, date = "01.07.2026", amount = 
   ].join("\n");
 }
 
+test("dated account sections contribute only the last balance and reconstruct each day once", () => {
+  const account = "40702810111110000001";
+  const source = statement({ account, inn: "5032333146", company: "ООО Тест", bank: "Банк", amount: "100.00" });
+  const section = (day, opening, incoming, closing) => [
+    "СекцияРасчСчет", "ДатаНачала=" + day, "ДатаКонца=" + day, "РасчСчет=" + account,
+    "НачальныйОстаток=" + opening, "ВсегоПоступило=" + incoming, "ВсегоСписано=0.00",
+    "КонечныйОстаток=" + closing, "КонецРасчСчет",
+  ].join("\n");
+  const text = source.replace("ДатаКонца=31.07.2026", "ДатаКонца=02.07.2026")
+    .replace(/СекцияРасчСчет[\s\S]*?КонецРасчСчет/, [
+      section("01.07.2026", 500, 100, 600), section("02.07.2026", 600, 0, 600),
+    ].join("\n"));
+  const result = analyzeBankStatements([{ text, fileName: "daily.txt" }]);
+  assert.equal(result.statementBalanceCheck.state, "VERIFIED");
+  assert.equal(result.metrics.endingBalance, 600);
+  assert.equal(result.metrics.averageDailyBalance, 600);
+  assert.equal(result.metrics.minimumDailyBalance, 600);
+  assert.equal(result.metricsV2.liquidity.endingBalance.value, 600);
+});
+
+test("observed monthly debt preserves cents and uses the canonical debt-service series", () => {
+  const source = statement({ account: "40702810111110000001", inn: "5032333146", company: "ООО Тест", bank: "Банк", amount: "1234.56", incoming: false });
+  const text = source.replace("КонечныйОстаток=150000.00", "КонечныйОстаток=48765.44")
+    .replace("Оплата по договору за выполненные работы", "Погашение процентов по договору кредита");
+  const result = analyzeBankStatements([{ text, fileName: "interest.txt" }]);
+  assert.equal(result.metricsV2.debtService.interestPaid.value, 1234.56);
+  assert.equal(result.metrics.currentMonthlyDebtPayment, 1234.56);
+});
+
 test("recognizes the servicing bank from the company side of a generic 1C export", () => {
   const text = statement({ account: "40702810111110000001", inn: "5032333146", company: "ООО СИТИМЭЙТС", bank: "ПАО БАНК УРАЛСИБ" });
   const inspection = inspectBankStatement(text, "statement.txt");

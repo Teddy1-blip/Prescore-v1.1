@@ -35,7 +35,7 @@ test('T3 / Free ledger shows known zero but never an UNKNOWN ratio as cash fact'
   assert.match(html,/Налоги и взносы, всего/);
   assert.match(html,/В том числе лизинг/);
   assert.match(html,/banking-monthly-ledger/);
-  assert.match(html,/не остаток кредита/);
+  assert.match(html,/Остаток кредита на дату подтверждают БКИ или документы кредитора/);
   assert.equal(JSON.stringify(basic),before);
  } finally { await rt.close(); }
 });

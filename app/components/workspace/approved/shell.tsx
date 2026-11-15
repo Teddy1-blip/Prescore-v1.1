@@ -9,6 +9,7 @@ export type ShellProps = {
   available: string[];
   company: string;
   companyId: string;
+  analysisId?: string;
   dossierId?: string;
   companies: Choice[];
   period: string;
@@ -72,7 +73,7 @@ export function ApprovedShell(p: ShellProps) {
     p.choose(v);
   };
   function link(id: string) {
-    return clientNavigationHref(typeof window === 'undefined' ? '' : window.location.search, id, p.companyId, p.dossierId);
+    return clientNavigationHref(typeof window === 'undefined' ? '' : window.location.search, id, p.analysisId??(p.dossierId?'':p.companyId), p.dossierId);
   }
   return (
     <div className="approved-client">

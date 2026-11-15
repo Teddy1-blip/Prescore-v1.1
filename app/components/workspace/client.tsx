@@ -1,12 +1,13 @@
 "use client";
 import {CompanySources} from './company-sources';
+import {latestCompanyVersion,resolveClientSelection} from '../../../lib/workspace/client-navigation';
 import {BankBfoReconciliation} from './bank-bfo-reconciliation';
 import {ClientPaymentCalendar} from './client-payment-calendar';
 import {ClientAnalyticPipeline} from './client-analytic-pipeline';
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Analyze, Crm, ScreeningSummary, type UploadReceipt, type StoredAnalysis, type Deal } from "./client-operations";
 import { EmptyHome, FullAccessNotice, date } from "./presentation";
-import { useWorkspaceModel, selectAnalysis } from "./use-model";
+import { useWorkspaceModel } from "./use-model";
 import {  SourceUpload, RecipientApplications } from "./source-operations";
 import {ClientBilling} from './billing';
 import {ClientShell,LivePage} from './approved/live-shell';
@@ -45,6 +46,7 @@ export default function ClientWorkspace(){
  const [analyses,setAnalyses]=useState<StoredAnalysis[]>([]),[deals,setDeals]=useState<Deal[]|null>(null),[selectedId,setSelectedId]=useState(''),[view,setView]=useState('home'),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState(''),[readOnly,setReadOnly]=useState(false),[revision,setRevision]=useState(0),[modules,setModules]=useState<Record<string,boolean>>({}),[modulesLoading,setModulesLoading]=useState(true);
  const [operationsError,setOperationsError]=useState(''),[operationsLoading,setOperationsLoading]=useState(false),[uploadReceipt,setUploadReceipt]=useState<{id:string;receipt:UploadReceipt}|null>(null);
  const [dossierId,setDossierId]=useState(''),[dossierInn,setDossierInn]=useState(''),[agentWorkspace,setAgentWorkspace]=useState(false);
+ const [companies,setCompanies]=useState<{id:string;inn:string}[]>([]);
  const operationsReady=deals!==null;
  const operationsRequest=useRef(0),scope=useRef(''),selection=useRef(''),draftRequests=useRef(new Map<string,string>());
  const state=useWorkspaceModel(selectedId,revision);
@@ -54,17 +56,58 @@ export default function ClientWorkspace(){
  useEffect(()=>{const c=new AbortController();const q=new URLSearchParams(window.location.search),client=q.get('client');scope.current=client??'';
  const initialView=resolveClientView(q.get('view'));
  const initialEndpoint=client?`/api/workspace?client=${encodeURIComponent(client)}&from=agent`:initialView==='applications'?'/api/workspace':'/api/workspace?projection=summary';
- fetch(initialEndpoint,{signal:c.signal,cache:'no-store'}).then(async r=>{if(!r.ok)throw Error(r.status===401?'Сессия завершена. Войдите в кабинет повторно.':r.status===403?'Нет доступа к этому кабинету.':'Не удалось открыть кабинет.');return r.json();}).then(data=>{setAgentWorkspace(!!client);const rows=(data.analyses??[]) as StoredAnalysis[];setAnalyses(rows);setDeals(initialEndpoint==='/api/workspace?projection=summary'?null:data.deals??[]);setReadOnly(!!data.readOnly);const wanted=q.get('analysisId')??client;const latest=rows.filter(a=>a.historyPurpose!=='QA').sort((a,b)=>String(b.createdAt??b.periodTo).localeCompare(String(a.createdAt??a.periodTo)))[0]?.id??'';const dossier=client||wanted?'':q.get('dossierId')??'';setDossierId(dossier);const id=wanted??(dossier?'':latest);selection.current=id;setSelectedId(id);if(id)selectAnalysis(id);setView(resolveClientView(q.get('view')));}).catch(e=>{if(!c.signal.aborted)setError(e.message);}).finally(()=>{if(!c.signal.aborted)setLoading(false);});
+ async function initialize(){
+  const response=await fetch(initialEndpoint,{signal:c.signal,cache:'no-store'});
+  if(!response.ok)throw Error(response.status===401?'Сессия завершена. Войдите в кабинет повторно.':response.status===403?'Нет доступа к этому кабинету.':'Не удалось открыть кабинет.');
+  const data=await response.json(),rows:StoredAnalysis[]=data.analyses??[];
+  let directory:{id:string;inn:string}[]=[];
+  if(!client&&!data.readOnly){
+   const result=await fetch('/api/dossier',{signal:c.signal,cache:'no-store'});
+   if(!result.ok)throw Error('Не удалось загрузить список компаний. Обновите кабинет.');
+   directory=(await result.json()).companies;
+  }
+  if(c.signal.aborted)return;
+  let remembered='';try{remembered=sessionStorage.getItem('prescore.selectedDossier')??'';}catch{}
+  const {dossier,version}=resolveClientSelection(q,directory,rows,remembered);
+  const id=initialView==='upload'?'':version;
+  setAgentWorkspace(!!client);setCompanies(directory);setAnalyses(rows);
+  setDeals(initialEndpoint==='/api/workspace?projection=summary'?null:data.deals??[]);setReadOnly(!!data.readOnly);
+  setDossierId(dossier?.id??'');setDossierInn(dossier?.inn??'');selection.current=id;setSelectedId(id);setView(initialView);
+  if(dossier){
+   try{sessionStorage.setItem('prescore.selectedDossier',dossier.id);}catch{}
+   const url=new URL(window.location.href);url.searchParams.set('dossierId',dossier.id);
+   if(id)url.searchParams.set('analysisId',id);else url.searchParams.delete('analysisId');
+   window.history.replaceState(null,'',url);
+  }
+ }
+ void initialize().catch(e=>{if(!c.signal.aborted)setError(e.message);}).finally(()=>{if(!c.signal.aborted)setLoading(false);});
  fetch('/api/modules',{signal:c.signal}).then(r=>r.json()).then(d=>setModules(d.modules??{})).catch(()=>{}).finally(()=>{if(!c.signal.aborted)setModulesLoading(false);});return()=>c.abort();},[]);
- function choose(v:string){setView(v);const url=new URL(window.location.href);if(v==='upload'){selection.current='';setSelectedId('');setUploadReceipt(null);setNotice('');url.searchParams.delete('analysisId');}if(v!=='upload'&&selection.current)url.searchParams.set('analysisId',selection.current);url.searchParams.set('view',v);if(url.href!==window.location.href)(window.history.pushState??window.history.replaceState).call(window.history,null,'',url);}
- useEffect(()=>{const restore=()=>{const q=new URLSearchParams(window.location.search);if((q.get('client')??'')!==scope.current){window.location.reload();return;}const id=q.get('analysisId')??'';selection.current=id;setSelectedId(id);setDossierId(id||scope.current?'':q.get('dossierId')??'');setView(resolveClientView(q.get('view')));setNotice('');setUploadReceipt(null);};window.addEventListener('popstate',restore);return()=>window.removeEventListener('popstate',restore);},[]);
+ function choose(v:string){setView(v);const url=new URL(window.location.href);if(v==='upload'){selection.current='';setSelectedId('');setUploadReceipt(null);setNotice('');url.searchParams.delete('analysisId');}if(v!=='upload'&&!selection.current&&dossierId){
+   const latest=latestCompanyVersion(analyses,dossierInn);
+   if(latest){selection.current=latest.id;setSelectedId(latest.id);}
+  }
+  if(v!=='upload'&&selection.current)url.searchParams.set('analysisId',selection.current);url.searchParams.set('view',v);if(url.href!==window.location.href)(window.history.pushState??window.history.replaceState).call(window.history,null,'',url);}
+ useEffect(()=>{const restore=()=>window.location.reload();window.addEventListener('popstate',restore);return()=>window.removeEventListener('popstate',restore);},[]);
  const loadOperations=useCallback(async()=>{const request=++operationsRequest.current;setOperationsLoading(true);try{const r=await fetch(scope.current?`/api/workspace?client=${encodeURIComponent(scope.current)}&from=agent`:'/api/workspace',{cache:'no-store'});const d=await r.json();if(!r.ok){if(request===operationsRequest.current&&[401,403].includes(r.status)){setAnalyses([]);setDeals(null);}throw Error(r.status===401?'Сессия завершена. Войдите в кабинет повторно.':d.error||'Не удалось обновить заявки');}if(request===operationsRequest.current){setAnalyses(d.analyses??[]);setDeals(d.deals??[]);setReadOnly(!!d.readOnly);setOperationsError('');}return true;}catch(e){if(request===operationsRequest.current)setOperationsError(e instanceof Error?e.message:'Не удалось обновить данные');return false;}finally{if(request===operationsRequest.current)setOperationsLoading(false);}},[]);
  const reloadModel=state.refresh;
  const refresh=useCallback(async()=>{await loadOperations();await reloadModel();},[loadOperations,reloadModel]);
  const refreshSource=useCallback(async()=>{await loadOperations();if(!await reloadModel())throw Error('Документ сохранён, но обновление анализа не подтверждено. Нажмите «Повторить» в сообщении над разделом.');},[loadOperations,reloadModel]);
  useEffect(()=>{if(!['applications','financing'].includes(view)||loading)return;const timer=setTimeout(()=>void loadOperations(),0);return()=>clearTimeout(timer);},[view,loading,loadOperations]);
- function chooseAnalysis(id:string){setDossierId('');selection.current=id;setSelectedId(id);const u=new URL(window.location.href);u.searchParams.set('analysisId',id);u.searchParams.delete('dossierId');u.searchParams.delete('bankMonth');u.searchParams.delete('cashMonth');u.searchParams.delete('cashSeries');if(u.href!==window.location.href)window.history.pushState(null,'',u);setUploadReceipt(null);setNotice('');}
- async function accept(result:StoredAnalysis,receipt?:UploadReceipt){setAnalyses(items=>[result,...items.filter(a=>a.id!==result.id)]);chooseAnalysis(result.id);setUploadReceipt({id:result.id,receipt:receipt??{screeningResults:result.screeningResults}});choose('home');setRevision(x=>x+1);setNotice('Банковский анализ сохранён.');}
+ function chooseAnalysis(id:string,inn=analyses.find(a=>a.id===id)?.companyInn,directory=companies){
+  const company=directory.find(item=>item.inn===inn);
+  const retained=!agentWorkspace&&(company?.id||(dossierId&&dossierInn===inn?dossierId:''));
+  setDossierId(retained||'');setDossierInn(retained?inn??'':'');selection.current=id;setSelectedId(id);
+  const u=new URL(window.location.href);u.searchParams.set('analysisId',id);
+  if(retained)u.searchParams.set('dossierId',retained);else u.searchParams.delete('dossierId');
+  for(const key of ['bankMonth','cashMonth','cashSeries','cashFor','cashMode'])u.searchParams.delete(key);
+  if(u.href!==window.location.href)window.history.pushState(null,'',u);setUploadReceipt(null);setNotice('');
+ }
+ async function accept(result:StoredAnalysis,receipt?:UploadReceipt){setAnalyses(items=>[result,...items.filter(a=>a.id!==result.id)]);let directory=companies;
+  if(!agentWorkspace&&!directory.some(d=>d.inn===result.companyInn)){
+   const response=await fetch('/api/dossier',{cache:'no-store'});
+   if(response.ok){directory=(await response.json()).companies;setCompanies(directory);}
+  }
+  chooseAnalysis(result.id,result.companyInn,directory);setUploadReceipt({id:result.id,receipt:receipt??{screeningResults:result.screeningResults}});choose('home');setRevision(x=>x+1);setNotice('Банковский анализ сохранён.');}
  async function addDeal(input:Omit<Deal,'id'>){if(locked)throw Error('Изменения недоступны в режиме чтения');const key=JSON.stringify(input),id=draftRequests.current.get(key)??crypto.randomUUID();draftRequests.current.set(key,id);try{const r=await fetch('/api/workspace',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'deal',deal:{...input,id}})});const d=await r.json();if(!r.ok||d.deal?.id!==id)throw Error(d.error||'Заявка не сохранена. Повторите попытку.');draftRequests.current.delete(key);}catch(e){throw Error(e instanceof TypeError?'Нет подтверждения сохранения. Проверьте список заявок перед повторной попыткой.':e instanceof Error?e.message:'Заявка не сохранена');}await refresh();if(selection.current===input.analysisId)setNotice('Сервер подтвердил сохранение черновика. Внешняя отправка не выполнялась.');}
  async function updateDeal(id:string,status:string){if(locked)throw Error('Изменения недоступны в режиме чтения');try{const r=await fetch('/api/workspace',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,status})});const d=await r.json();if(!r.ok)throw Error(d.error||'Статус не сохранён');}catch(e){throw Error(e instanceof TypeError?'Не удалось подтвердить действие. Обновите список перед повтором.':e instanceof Error?e.message:'Статус не сохранён');}await refresh();if(selection.current===selectedId)setNotice('Действие подтверждено сервером.');}
  const availableViews=clientAvailableViews(modules,locked||loading||modulesLoading);
@@ -75,7 +118,7 @@ export default function ClientWorkspace(){
  const companyName=model?.basic.analysis.company.name?.trim()||selected?.companyName?.trim()||'Ваш кредитный профиль';
  const sourcesVisible=!loading&&!modulesLoading&&!disabled&&!error&&!locked&&!agentWorkspace&&!unavailable&&(!selectedId||!!selected)&&['home','banking','bfo','counterparties','obligations','documents','analysis','calendar','actions','financing','billing'].includes(view);
  const sourcesWidget=sourcesVisible?<CompanySources key={'sources:'+(dossierId||selectedId)+':'+view} view={view} id={dossierId} bankInn={selected?.companyInn} bank={model?.basic} onCompany={setDossierInn} onSourceChanged={selectedId?refreshSource:undefined} openBank={()=>choose('upload')}/>:null;
- return <ClientShell key={selectedId} dossier={dossierId?{id:dossierId,inn:dossierInn}:undefined} selected={selected} analyses={unavailable||error?[]:analyses} model={model} locked={locked||loading||modulesLoading} select={chooseAnalysis} add={addDeal} deals={deals??[]}
+ return <ClientShell key={dossierId||selectedId} companies={companies} dossier={dossierId?{id:dossierId,inn:dossierInn}:undefined} selected={selected} analyses={unavailable||error?[]:analyses} model={model} locked={locked||loading||modulesLoading} select={chooseAnalysis} add={addDeal} deals={deals??[]}
  renderPage={showApproved} view={view} choose={choose} availableViews={availableViews} context={<div className="pc-company"><b>{companyName}</b><span>{selected?'ИНН '+(model?.basic.analysis.company.inn??selected.companyInn):'Кредитный профиль компании'}{model?' · '+date(model.basic.analysis.period.from)+' — '+date(model.basic.analysis.period.to):''}{locked?' · Режим просмотра':''}</span></div>}>
 
  {(error.startsWith('Сессия завершена')||state.error.startsWith('Сессия завершена')||operationsError.startsWith('Сессия завершена'))&&<p role="alert">Сессия завершена. <a href={'/login?returnTo='+encodeURIComponent('/dashboard?'+new URLSearchParams({view,...(selectedId?{analysisId:selectedId}:{})}))}>Войти снова</a></p>}
