@@ -54,16 +54,16 @@ export function inspectSberBusinessXlsxRows(rows:readonly BankXlsxRow[],rowNumbe
   const output:BankXlsxPreview={version:BANK_XLSX_INTAKE_VERSION,format:'UNSUPPORTED',status:'UNSUPPORTED',
     account:null,ownerInn:null,periodFrom:null,periodTo:null,currency:null,operations:[],
     totalInMinor:0,totalOutMinor:0,warnings:[],automaticApply:false,scoreUpdated:false};
-  if(rows.some(r=>r.length>120||r.some(c=>String(c??'').length>15_000)))throw Error('BANK_XLSX_CELL_LIMIT');
+  if(rows.some(r=>r.length>120||r.some((c:BankXlsxRow[number])=>String(c??'').length>15_000)))throw Error('BANK_XLSX_CELL_LIMIT');
   const head=rows.slice(0,35);
-  const sber=head.some(r=>r.some(c=>/сбербизнес|пао\s+сбербанк/iu.test(String(c??''))));
-  const headerIndex=head.findIndex(r=>r.some(c=>/дата\s+проводки/iu.test(String(c??'')))
-     &&r.some(c=>/сумма\s+по\s+дебету/iu.test(String(c??'')))
-     &&r.some(c=>/сумма\s+по\s+кредиту/iu.test(String(c??''))));
+  const sber=head.some(r=>r.some((c:BankXlsxRow[number])=>/сбербизнес|пао\s+сбербанк/iu.test(String(c??''))));
+  const headerIndex=head.findIndex(r=>r.some((c:BankXlsxRow[number])=>/дата\s+проводки/iu.test(String(c??'')))
+     &&r.some((c:BankXlsxRow[number])=>/сумма\s+по\s+дебету/iu.test(String(c??'')))
+     &&r.some((c:BankXlsxRow[number])=>/сумма\s+по\s+кредиту/iu.test(String(c??''))));
   if(!sber||headerIndex<0){output.warnings.push('BANK_XLSX_FORMAT_UNSUPPORTED');return output;}
   output.format='SBER_BUSINESS_OPERATIONS_XLSX';output.status='REVIEW_REQUIRED';
   const hdr=rows[headerIndex];
-  const column=(name:RegExp)=>hdr.findIndex(c=>name.test(single(String(c??''))));
+  const column=(name:RegExp)=>hdr.findIndex((c:BankXlsxRow[number])=>name.test(single(String(c??''))));
   const dateCol=column(/дата\s+проводки/iu),debitCol=column(/сумма\s+по\s+дебету/iu),creditCol=column(/сумма\s+по\s+кредиту/iu);
   const docCol=column(/^№\s*документа/iu),purposeCol=column(/назначение\s+платежа/iu);
   if([dateCol,debitCol,creditCol,purposeCol].some(x=>x<0))throw Error('BANK_XLSX_HEADER_INCOMPLETE');
@@ -83,8 +83,8 @@ export function inspectSberBusinessXlsxRows(rows:readonly BankXlsxRow[],rowNumbe
   const accountCol=column(/^сч[её]т$/iu);
   const next=rows[headerIndex+1]??[];
   const debitPartyCol=accountCol>=0&&/^дебет$/iu.test(cell(next,accountCol))?accountCol:-1;
-  const creditPartyCol=accountCol>=0?next.findIndex((s,i)=>i>accountCol&&/^кредит$/iu.test(single(String(s??'')))):-1;
-  const hasSecondaryHeader=next.some(c=>/^(?:дебет|кредит)$/iu.test(single(String(c??''))));
+  const creditPartyCol=accountCol>=0?next.findIndex((s:BankXlsxRow[number],i:number)=>i>accountCol&&/^кредит$/iu.test(single(String(s??'')))):-1;
+  const hasSecondaryHeader=next.some((c:BankXlsxRow[number])=>/^(?:дебет|кредит)$/iu.test(single(String(c??''))));
   let totalIn=0,totalOut=0,seenDates:string[]=[];
   for(let i=headerIndex+(hasSecondaryHeader?2:1);i<rows.length;i++){
     const row=rows[i],rawDate=cell(row,dateCol),debitText=cell(row,debitCol),creditText=cell(row,creditCol);
