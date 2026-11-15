@@ -52,9 +52,30 @@ export function financialStatement(input: Input) {
       }))
     });
   }
+  // Printed FNS forms may carry two alternative section III templates:
+  // commercial equity (with amounts) and NPO targeted funding (all dashes).
+  // An explicitly dash-only alternative is not a conflicting financial fact.
+  // Never suppress missing/uncertain cells or a second row containing numbers.
+  const entriesByCode = new Map<string, typeof entries>();
+  for (const entry of entries) {
+    const group = entriesByCode.get(entry.code) ?? [];
+    group.push(entry);
+    entriesByCode.set(entry.code, group);
+  }
+  const explicitDashes = (entry: typeof entries[number]) =>
+    entry.cells.length >= 2 &&
+    entry.cells.every(c => !c.uncertain && /^[-–—]$/.test(c.raw.trim()));
+  const hasNumericCell = (entry: typeof entries[number]) =>
+    entry.cells.some(c => !c.uncertain && numeric(c.raw.replace(/−/g, '-')) !== null);
+  const filteredEntries = entries.filter(entry => {
+    if (!/^13[0-9]{2}$/.test(entry.code) || !explicitDashes(entry)) return true;
+    const alternatives = entriesByCode.get(entry.code) ?? [];
+    // Exactly one independently numeric alternative; conflicts remain invalid.
+    return alternatives.filter(hasNumericCell).length !== 1;
+  });
   const seen = new Set<string>();
   const duplicates = new Set<string>();
-  const rows = entries.flatMap(({
+  const rows = filteredEntries.flatMap(({
     line,
     code,
     cells,
