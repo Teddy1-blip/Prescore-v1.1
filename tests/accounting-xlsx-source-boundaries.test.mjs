@@ -42,3 +42,36 @@ test('Unrelated workbook is not assigned to account 51 or receivables by filenam
  assert.throws(()=>selectAccountingSheet(extractXlsxSheets(bytes),'ACCOUNT_51'),/ACCOUNTING_XLSX_SOURCE_SHEET_NOT_FOUND/);
  assert.throws(()=>selectAccountingSheet(extractXlsxSheets(bytes),'OSV'),/ACCOUNTING_XLSX_SOURCE_SHEET_NOT_FOUND/);
 });
+
+test('physical Excel row number for grouped 1C OSV is preserved across missing sheet rows',()=>{
+ const r=(idx,cells)=>'<row r="'+idx+'">'+cells.map(([col,v])=>'<c r="'+col+idx+'" t="str"><v>'+esc(v)+'</v></c>').join('')+'</row>';
+ const cells=[
+   r(1,[['A','Оборотно-сальдовая ведомость по счету 67 за 01.01.2024 - 21.05.2025']]),
+   r(4,[['A','Счет'],['F','Сальдо на конец периода']]),
+   r(5,[['A','Контрагенты'],['F','Дебет'],['G','Кредит']]),
+   r(6,[['A','Контрагенты.ИНН']]),
+   r(8,[['A','67'],['G','150']]),
+   r(10,[['A','67.01'],['G','150']]),
+   r(13,[['A','Банк Контрольный'],['G','100']]),
+   r(14,[['A','7707083893'],['G','100']]),
+   r(17,[['A','Контрагент без ИНН'],['G','50']]),
+   r(18,[['A',''],['G','50']]),
+   r(20,[['A','Итого'],['G','150']]),
+ ];
+ const original=book('<worksheet><sheetData>'+cells.join('')+'</sheetData></worksheet>');
+ const selected=selectAccountingSheet(extractXlsxSheets(original),'OSV');
+ const balances=nativePartyLedger(selected.rows,'7700000000',true,'DEBT_LEDGER','',selected.rowNumbers);
+ assert.deepEqual(balances.map(x=>x.row),[13,17]);
+ assert.deepEqual(balances.map(x=>x.credit),[100,50]);
+ assert.equal(balances[0].partyInn,'7707083893');
+ assert.equal(balances[1].partyInn,undefined,'blank tax id must not be invented');
+ assert.ok(balances.every(x=>x.asOf==='2025-05-21'));
+});
+test('source row map must match matrix and be strictly increasing',()=>{
+ const selected=selectAccountingSheet(extractXlsxSheets(book(xml('Оборотно-сальдовая ведомость по счету 67','67'))),'OSV');
+ for(const invalid of [selected.rowNumbers.slice(1),selected.rowNumbers.map(()=>1),
+                         selected.rowNumbers.map((v,i)=>i===3?0:v)]){
+   assert.throws(()=>nativePartyLedger(selected.rows,'7700000000',true,'DEBT_LEDGER','ОСВ по счету 67 за 01.05.2024 - 19.05.2025.xlsx',invalid),
+     /ACCOUNTING_XLSX_SOURCE_ROWS_INVALID/);
+ }
+});
