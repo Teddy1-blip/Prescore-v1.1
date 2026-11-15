@@ -1,3 +1,4 @@
+import {bankBfoComparisons, type BankBfoComparison} from "./bank-bfo.ts";
 import type {CanonicalCreditAnalysisV1} from '../production/orchestrator.ts';
 import type {FinancialMetricResult} from '../contracts/financial-statements.ts';
 import type {ReconciliationFact} from '../contracts/reconciliation.ts';
@@ -11,6 +12,7 @@ export type PublicFinancialAnalysis = {
  warnings:string[];
 };
 export type PublicReconciliation = {
+ bankBfo?: BankBfoComparison[];
  confidence:string;
  findings:{id:string;title:string;outcome:string;comparability:string;confidence:string;requiresReview:boolean;warnings:string[];reasons:string[];left:PublicReconciliationFact[];right:PublicReconciliationFact[];absoluteDifference:number|null;relativeDifference:number|null;ratio:number|null;temporalGapDays:number|null}[];
  warnings:string[];
@@ -29,12 +31,15 @@ export function financialLabel(key:string):string {
 }
 const groupLabels={amounts:'Суммы отчётности',liquidity:'Ликвидность',capitalStructure:'Капитал и долг',profitability:'Рентабельность',activity:'Оборачиваемость',composition:'Структура активов и обязательств'};
 const metric=(key:string,m:FinancialMetricResult):PublicFinancialMetric=>({key,label:financialLabel(key),value:m.value,unit:m.unit,status:m.status,confidence:m.confidence,origin:m.origin,periodFrom:m.periodFrom,periodTo:m.periodTo,asOf:m.asOf,warnings:[...m.warnings]});
-export function publicFinancialAnalysis(r:CanonicalCreditAnalysisV1):PublicFinancialAnalysis|null {
+export function publicFinancialAnalysis(r:Pick<CanonicalCreditAnalysisV1,"financialAnalysis">):PublicFinancialAnalysis|null {
  const a=r.financialAnalysis;if(!a)return null;
  return {history:a.history.map(p=>({id:p.snapshot.snapshotId,source:p.snapshot.sourceType,period:{from:p.snapshot.period.from,to:p.snapshot.period.to,asOf:p.snapshot.period.asOf,kind:p.snapshot.period.kind,flowPeriodType:p.snapshot.period.flowPeriodType,monthsCovered:p.snapshot.period.monthsCovered},groups:Object.entries(groupLabels).map(([key,title])=>({key,title,metrics:Object.entries(p[key as keyof typeof groupLabels]).map(([k,m])=>metric(k,m))})),quality:{coreBalanceFieldCoverage:p.quality.coreBalanceFieldCoverage,coreIncomeFieldCoverage:p.quality.coreIncomeFieldCoverage,confidence:p.quality.confidence,balanceReconciled:p.quality.balanceReconciled,incomeReconciled:p.quality.incomeReconciled,warnings:[...p.quality.warnings]}})),trends:a.trends.map(t=>({label:financialLabel(t.metric),currentId:t.currentSnapshotId,previousId:t.previousSnapshotId,comparability:t.comparability,absolute:metric(t.metric,t.absoluteChange),relative:metric(t.metric,t.relativeChange)})),warnings:[...a.quality.warnings]};
 }
 const reconciliationTitles:Record<string,string>={'REC-REV':'Поступления и бухгалтерская выручка','REC-CASH':'Банковские остатки и отчётность','REC-BKI-1':'Кредитная история и заёмные средства','REC-BKI-2':'Платежи и кредитная история','REC-ID':'Принадлежность источников компании','REC-FIN':'Сопоставление отчётности'};
 function publicFact(f:ReconciliationFact):PublicReconciliationFact{return {label:financialLabel(f.semanticCode),sourceType:f.sourceType,value:f.semanticCode==='SUBJECT_INN'?null:f.value,unit:f.unit,status:f.status,confidence:f.confidence,period:{...f.period},warnings:[...f.warnings]};}
 export function publicReconciliation(r:CanonicalCreditAnalysisV1):PublicReconciliation {
- return {confidence:r.reconciliation.summary.confidence,warnings:[...r.reconciliation.summary.warnings],findings:r.reconciliation.findings.map((f,index)=>({id:"reconciliation-"+index,title:reconciliationTitles[f.code]??(f.code.startsWith('REC-FIN')?'Сопоставление отчётности':'Сопоставление источников'),outcome:f.outcome,comparability:f.comparability,confidence:f.evidenceConfidence,requiresReview:f.requiresDataReview,warnings:[...f.warnings],reasons:[...f.reasonCodes],left:f.leftFacts.map(publicFact),right:f.rightFacts.map(publicFact),absoluteDifference:f.absoluteDifference,relativeDifference:f.relativeDifference,ratio:f.ratio,temporalGapDays:f.temporalGapDays}))};
+ return {bankBfo:bankBfoComparisons(r.reconciliation),confidence:r.reconciliation.summary.confidence,warnings:[...r.reconciliation.summary.warnings],findings:r.reconciliation.findings.flatMap((f,index)=>{
+   const paired = f.code === 'REC-REV' || f.code === 'REC-CASH';
+   if (paired && [...f.leftFacts,...f.rightFacts].some(v=>v.companyInn !== r.reconciliation.companyInn)) return [];
+   return [{id:"reconciliation-"+index,title:reconciliationTitles[f.code]??(f.code.startsWith('REC-FIN')?'Сопоставление отчётности':'Сопоставление источников'),outcome:f.outcome,comparability:f.comparability,confidence:f.evidenceConfidence,requiresReview:f.requiresDataReview,warnings:[...f.warnings],reasons:[...f.reasonCodes],left:f.leftFacts.map(publicFact),right:f.rightFacts.map(publicFact),absoluteDifference:f.absoluteDifference,relativeDifference:f.relativeDifference,ratio:f.ratio,temporalGapDays:f.temporalGapDays}];})};
 }

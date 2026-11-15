@@ -1,6 +1,6 @@
 import {rnpFacts} from "./rnp.ts";
 import {activeLegalReceipt, legalReceiptCurrent} from "../../../legal-registry.ts";
-import type { EntityLifecycleState, RiskFact, RiskShadowInput } from "../../contracts/risk.ts";
+import type { EntityLifecycleState, RiskFact, ProfileRiskInput } from "../../contracts/risk.ts";
 import { fact, freshness, sourceConfidence, usable, weakest, validDate, RISK_SOURCE_FRESHNESS_DAYS as age } from "../common.ts";
 export function normalizeLifecycle(raw: string): EntityLifecycleState {
   const s = raw.normalize("NFKC").toLowerCase().trim().replace(/[.!]$/, "");
@@ -10,7 +10,7 @@ export function normalizeLifecycle(raw: string): EntityLifecycleState {
   if (["банкротство: действующая процедура", "действующая процедура банкротства", "bankruptcy_active"].includes(s)) return "BANKRUPTCY_ACTIVE";
   return s ? "OTHER" : "UNKNOWN";
 }
-function profileLegalFacts(input: RiskShadowInput, financial: RiskFact[]): RiskFact[] {
+function profileLegalFacts(input: ProfileRiskInput, financial: RiskFact[]): RiskFact[] {
   const { analysis: a, companyProfile: p, asOfDate } = input; if (!p || p.inn !== a.companyInn) return [];
   const date = p.fetchedAt?.slice(0, 10), sources = p.sourceManifest?.external ?? [];
   const source = (endpoint: string) => sources.find(s => s.rawReference?.startsWith(`external:/${endpoint}:`) || s.sourceId.startsWith(`external:${endpoint}:`));
@@ -49,7 +49,7 @@ function profileLegalFacts(input: RiskShadowInput, financial: RiskFact[]): RiskF
 
 // The existing legal adapter is the sole path into canonical lifecycle coverage.
 // A registry extract provides lifecycle only; it says nothing about claims/debt/address.
-export function legalFacts(input: RiskShadowInput, financial: RiskFact[]): RiskFact[] {
+export function legalFacts(input: ProfileRiskInput, financial: RiskFact[]): RiskFact[] {
   const out = profileLegalFacts(input, financial), r = activeLegalReceipt(input.analysis);
   const conflict = !r && input.analysis.legalRegistryV1?.history.some(h => h.reasons.includes('SAME_DATE_LIFECYCLE_CONFLICT'));
   if (!r && !conflict) return out;

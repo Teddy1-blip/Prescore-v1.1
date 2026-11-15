@@ -1,8 +1,12 @@
 import type {DebtCapacityInputV1,DebtCapacityPolicyV1,DebtCapacityOperatingBasisV1} from '../contracts/debt-capacity.ts';
 import {DEBT_CAPACITY_POLICY} from './policy.ts';
 import {average,median,money,amount,reference,rank,weakest,canonical,unique} from './common.ts';
-export function eligibleMonths(x:DebtCapacityInputV1){return x.bankMetrics.monthly.filter(m=>m.coverage==='FULL').sort((a,b)=>a.month.localeCompare(b.month));}
+export function eligibleMonths(x:DebtCapacityInputV1){return (x.bankMetrics?.monthly??[]).filter(m=>m.coverage==='FULL').sort((a,b)=>a.month.localeCompare(b.month));}
 export function operatingBasis(x:DebtCapacityInputV1,p:DebtCapacityPolicyV1=DEBT_CAPACITY_POLICY):DebtCapacityOperatingBasisV1{
+ if(x.sourceOnly){
+  const missing=amount(null,'UNKNOWN',[],'BANK_STATEMENTS_NOT_SUPPLIED');
+  return {fullMonthCount:0,eligibleMonths:[],excludedMonths:[],canonicalFullMonthAverage:missing,medianFullMonthOperatingReceipts:missing,recent3FullMonthAverage:missing,centralOperatingBasis:missing,conservativeOperatingBasis:missing,sourceMetricCodes:[],period:null,confidence:'UNKNOWN',complete:false,warnings:['OPERATING_BASIS_INSUFFICIENT_EVIDENCE']};
+ }
  const b=x.bankMetrics,ms=eligibleMonths(x),m=b.operating.fullMonthOperatingAverage;
  const confidence=m.confidence,adequate=m.status==='KNOWN'&&m.value!==null&&ms.every(v=>v.operatingReceipts!==null)&&rank(confidence)>=rank(p.minimumEvidenceConfidence);
  const mr=reference('BANK_METRIC','bankMetrics.operating.fullMonthOperatingAverage',m.value,confidence,{sourceMetricCode:m.code,asOf:m.periodTo,evidenceIds:m.evidence??[]});

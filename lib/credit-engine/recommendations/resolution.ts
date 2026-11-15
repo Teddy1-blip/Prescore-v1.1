@@ -17,7 +17,25 @@ export function resolveRecommendations(x:Input,raw:Rec[],p:Policy,registry:Regis
  // Resolve dependencies after dedupe and suppression. A verified identity needs
  // no invented unresolved-identity prerequisite; conditional steps retain theirs.
  for(const r of candidates){const d=registry.definitions.find(d=>d.code===r.definitionCode)!;r.prerequisiteRecommendationIds=unique(d.prerequisiteDefinitionCodes.flatMap(code=>candidates.filter(v=>v.definitionCode===code&&v.subjectKey===r.subjectKey).map(v=>v.recommendationId)));if(r.blockingReasonCodes.length)r.prerequisiteRecommendationIds=unique([...r.prerequisiteRecommendationIds,...candidates.filter(v=>v.category==='DATA_QUALITY'&&v.triggerCodes.some(c=>r.blockingReasonCodes.includes(c))).map(v=>v.recommendationId)]);}
- for(const e of x.riskAssessment.evaluations??[]){if(!e.suppressedBy)continue;for(const d of registry.definitions.filter(d=>d.triggerSpecification.some(t=>t.kind==='RISK_FINDING_CODE'&&t.code===e.ruleCode))){if(suppressed.some(s=>s.definitionCode===d.code&&s.subjectKey===(e.subjectKey??null)))continue;const fs=x.riskAssessment.facts.filter(f=>e.requiredFactCodes.includes(f.semanticCode)&&(!e.subjectKey||f.subjectKey===e.subjectKey));suppressed.push({recommendationId:id('upstream-suppressed-action',d.code,e.findingId),definitionCode:d.code,subjectKey:e.subjectKey??null,reasonCodes:['UPSTREAM_RULE_SUPPRESSION'],suppressedByRecommendationIds:candidates.filter(r=>r.riskFindingIds.includes(e.suppressedBy!)).map(r=>r.recommendationId),lineage:{...emptyLineage(),riskFactIds:fs.map(f=>f.factId),sourceIds:unique(fs.flatMap(f=>f.sourceIds))}});}}
+ for (const evaluation of x.riskAssessment.evaluations ?? []) {
+   const primaryId = evaluation.suppressedBy;
+   if (!primaryId) continue;
+   const subject = evaluation.subjectKey ?? null;
+   for (const definition of registry.definitions) {
+     if (!definition.triggerSpecification.some(t => t.kind === 'RISK_FINDING_CODE' && t.code === evaluation.ruleCode)) continue;
+     const hasSourceAction = raw.some(r => r.definitionCode === definition.code && r.subjectKey === subject
+       && r.triggerCodes.includes(evaluation.ruleCode) && r.riskFindingIds.includes(primaryId));
+     if (hasSourceAction || suppressed.some(s => s.definitionCode === definition.code && s.subjectKey === subject)) continue;
+     const facts = x.riskAssessment.facts.filter(f => evaluation.requiredFactCodes.includes(f.semanticCode)
+       && (!subject || f.subjectKey === subject));
+     suppressed.push({
+       recommendationId: id('upstream-suppressed-action', definition.code, evaluation.findingId),
+       definitionCode: definition.code, subjectKey: subject, reasonCodes: ['UPSTREAM_RULE_SUPPRESSION'],
+       suppressedByRecommendationIds: candidates.filter(r => r.riskFindingIds.includes(primaryId)).map(r => r.recommendationId),
+       lineage: {...emptyLineage(), riskFactIds: facts.map(f => f.factId), sourceIds: unique(facts.flatMap(f => f.sourceIds))},
+     });
+   }
+ }
  const ids=new Set(candidates.map(r=>r.recommendationId));for(const s of suppressed)s.suppressedByRecommendationIds=s.suppressedByRecommendationIds.filter(id=>ids.has(id));
  validateDependencies(candidates);return {recommendations:candidates,suppressed:suppressed.sort((a,b)=>stable(a).localeCompare(stable(b)))};
 }

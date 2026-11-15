@@ -90,7 +90,7 @@ export async function POST(request: Request) {
     if (!file.size || file.size > maxBytes) return Response.json({ error: "Файл пустой или превышает допустимый размер" }, { status: 413 });
     const lowerName = file.name.toLowerCase();
     if (sourceType === "BKI" && !lowerName.endsWith(".pdf")) return Response.json({ error: "Для БКИ поддерживается текстовый PDF" }, { status: 415 });
-    if (sourceType !== "BKI" && !/\.(pdf|xlsx|csv)$/.test(lowerName)) return Response.json({ error: "Поддерживаются PDF, XLSX и CSV" }, { status: 415 });
+    if (sourceType !== "BKI" && !/\.(pdf|xls|xlsx|csv)$/.test(lowerName)) return Response.json({ error: "Поддерживаются PDF, XLS, XLSX и CSV" }, { status: 415 });
 
     const db = await database();
     const row = await db.prepare("SELECT payload, owner_email AS ownerEmail FROM analyses WHERE archive_state = 'ACTIVE' AND id = ? LIMIT 1")

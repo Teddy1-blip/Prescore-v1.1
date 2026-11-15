@@ -18,13 +18,16 @@ export const bankingFieldLabels={
  averageDailyBalance:'Среднедневной остаток',
  minimumDailyBalance:'Минимальный остаток',
  lowLiquidityDays:'Дни низкой ликвидности',
- debtService:'Долговое обслуживание',
- loanPrincipalPayments:'Платежи основного долга',
- interestPayments:'Проценты',
- unsplitDebtPayments:'Неразделённые долговые платежи',
- leasingPayments:'Лизинг',
- taxPayments:'Налоги',
- socialContributions:'Социальные взносы',
+ debtService:'Долговое обслуживание, включая лизинг',
+ debtServiceToOperatingReceipts:'Доля обслуживания долга в операционных поступлениях',
+ loanPrincipalPayments:'В том числе основной долг',
+ interestPayments:'В том числе проценты',
+ unsplitDebtPayments:'В том числе неразделённые платежи',
+ leasingPayments:'В том числе лизинг',
+ taxAndSocialPayments:'Налоги и взносы, всего',
+ taxToOperatingCashReceipts:'Доля налогов и взносов в операционных поступлениях',
+ taxPayments:'В том числе налоги',
+ socialContributions:'В том числе страховые взносы',
  transfersToIndividuals:'Переводы физическим лицам',
  directCustomerTop1:'Доля крупнейшего прямого покупателя',
  directCustomerTop3:'Доля трёх крупнейших прямых покупателей'
@@ -35,7 +38,7 @@ type BankingField=keyof typeof bankingFieldLabels;
 const groups:Array<{title:string;hint:string;fields:BankingField[]}>= [
  {title:'Денежный поток',hint:'Сколько денег поступило от внешних контрагентов и сколько им перечислено?',fields:['operatingInflow','observedMonthlyOperatingAverage','fullMonthOperatingAverage','grossInflow','grossOutflow','netCashFlow']},
  {title:'Ликвидность',hint:'До какого уровня опускался остаток по представленным счетам?',fields:['endingBalance','averageDailyBalance','minimumDailyBalance','lowLiquidityDays']},
- {title:'Долг и обязательные платежи',hint:'Сколько компания фактически перечислила кредиторам и в бюджет?',fields:['debtService','loanPrincipalPayments','interestPayments','unsplitDebtPayments','leasingPayments','taxPayments','socialContributions','transfersToIndividuals']},
+ {title:'Долг и обязательные платежи',hint:'Суммы по выпискам; части уже включены в итоги. Доли рассчитаны ядром Prescore по операционным поступлениям, не по выручке БФО.',fields:['debtService','debtServiceToOperatingReceipts','loanPrincipalPayments','interestPayments','unsplitDebtPayments','leasingPayments','taxAndSocialPayments','taxToOperatingCashReceipts','taxPayments','socialContributions','transfersToIndividuals']},
  {title:'Концентрация покупателей',hint:'Какая доля операционных поступлений приходится на идентифицированных прямых покупателей?',fields:['directCustomerTop1','directCustomerTop3']}
 ];
 
@@ -56,7 +59,7 @@ const display=displayBankingFact;
 // The same published banking facts serve the executive summary and the detailed ledger.
 export function BankingSnapshot({model}:{model:WorkspaceModelV1}){
  const b=model.basic.bankingFacts,s=model.basic.sources.statements;
- const keys:BankingField[]=['operatingInflow','grossInflow','grossOutflow','netCashFlow','endingBalance','averageDailyBalance','minimumDailyBalance','lowLiquidityDays','taxPayments','socialContributions','loanPrincipalPayments','interestPayments','leasingPayments','unsplitDebtPayments','transfersToIndividuals','directCustomerTop1','directCustomerTop3'];
+ const keys:BankingField[]=['operatingInflow','grossInflow','grossOutflow','netCashFlow','endingBalance','averageDailyBalance','minimumDailyBalance','lowLiquidityDays','debtService','debtServiceToOperatingReceipts','taxAndSocialPayments','taxToOperatingCashReceipts','taxPayments','socialContributions','loanPrincipalPayments','interestPayments','leasingPayments','unsplitDebtPayments','transfersToIndividuals','directCustomerTop1','directCustomerTop3'];
  const known=keys.filter(k=>factValue(b[k])!==null&&b[k].status!=='NOT_APPLICABLE'),missing=keys.filter(k=>!known.includes(k));
  return <section className="pc-panel pc-banking-snapshot"><header><div><h2>Что уже известно по выпискам</h2><p>{date(model.basic.analysis.period.from)} — {date(model.basic.analysis.period.to)} · {s.bankNames?.join(' · ')||'Банк не указан'} · Счетов: {s.accountCount??'не подтверждено'}</p></div></header><dl className="pc-definition pc-bank-summary">{known.map(k=><Fact key={k} name={k} fact={b[k]} model={model}/>)}</dl>{!known.length&&<p>Выписка сохранена, но её поля не позволяют подтвердить денежные показатели. Проверьте формат и полноту операций.</p>}{missing.length>0&&<details><summary>Показатели, требующие уточнения ({missing.length})</summary><p>Эти значения не заменены нулями. Проверьте остатки, даты и состав операций в исходной выписке.</p><dl className="pc-definition">{missing.map(k=><Fact key={k} name={k} fact={b[k]} model={model}/>)}</dl></details>}<p className="pc-muted">Поступления по счёту не равны бухгалтерской выручке. Наблюдаемые долговые платежи не заменяют договорный график.</p></section>;
 }
@@ -89,9 +92,10 @@ export function BankingLedger({model}:{model:WorkspaceModelV1}){
    </article>)}</div>{!visibleGroups.length&&<p>Добавьте выписку за период, чтобы увидеть банковские показатели.</p>}
   </section>
 
-  <section className="pc-panel">
+  <section className="pc-panel" id="banking-monthly-ledger">
    <header><div><h2>Помесячная динамика</h2><p>Фактические значения по каждому месяцу исходного банковского периода.</p></div></header>
-   {b.monthly?.length?<div className="pc-table-scroll" tabIndex={0} aria-label="Помесячные банковские показатели"><table><thead><tr><th>Месяц</th><th>Операционные поступления</th><th>Внешние поступления</th><th>Внешние списания</th><th>Налоги</th><th>Обслуживание долга</th></tr></thead><tbody>{b.monthly.map(m=><tr key={m.month}><th scope="row">{m.month}<small>{m.coverage==='FULL'?'Полный месяц':m.coverage==='PARTIAL'?'Неполный месяц':m.coverage==='MISSING'?'Нет покрытия':m.coverage==='OVERLAP'?'Пересечение периодов':'Покрытие не подтверждено'}</small></th>{[m.operatingReceipts,m.externalInflows,m.externalOutflows,m.taxPayments,m.debtService].map((v,i)=><td key={i}>{money(v)}</td>)}</tr>)}</tbody></table></div>:<p>Помесячные сведения не опубликованы.</p>}
+   {b.monthly?.length?<div className="pc-table-scroll" tabIndex={0} aria-label="Помесячные банковские показатели"><table><thead><tr><th>Месяц</th><th>Операционные поступления</th><th>Внешние поступления</th><th>Внешние списания</th><th>Налоги и взносы</th><th>Долг и лизинг</th><th>В том числе лизинг</th></tr></thead><tbody>{b.monthly.map(m=><tr key={m.month}><th scope="row">{m.month}<small>{m.coverage==='FULL'?'Полный месяц':m.coverage==='PARTIAL'?'Неполный месяц':m.coverage==='MISSING'?'Нет покрытия':m.coverage==='OVERLAP'?'Пересечение периодов':'Покрытие не подтверждено'}</small></th>{[m.operatingReceipts,m.externalInflows,m.externalOutflows,m.taxPayments,m.debtService,m.leasing??null].map((v,i)=><td key={i}>{money(v)}</td>)}</tr>)}</tbody></table></div>:<p>Помесячные сведения не опубликованы.</p>}
+   <p className="pc-muted">Помесячные платежи — фактическое обслуживание долга, а не остаток кредита. Налоги и взносы включены в общий бюджетный итог и не суммируются с ним повторно. Выручка БФО рассчитывается отдельно.</p>
   </section>
 
   {b.seasonality&&<section className="pc-panel"><h2>Устойчивость поступлений и сезонность</h2><p>{b.seasonality.status==='ELIGIBLE'?'История позволяет проверить сезонные колебания; это не прогноз будущих поступлений.':'Для подтверждения сезонности нужна более длинная сопоставимая история. Краткосрочные колебания не считаются сезонностью.'}</p><dl className="pc-definition">{([['Тренд поступлений',b.seasonality.trend],['Изменчивость поступлений',b.seasonality.volatility],['Пиковый месяц к среднему',b.seasonality.peakToAverage]] as const).map(([name,f])=><div key={name}><dt>{name}</dt><dd>{factValue(f)===null?'Не определено':name==='Пиковый месяц к среднему'?new Intl.NumberFormat('ru-RU',{maximumFractionDigits:3}).format(f.value!)+' ×':displayBankingFact(f)}<small>{label(f.status)} · {label(f.confidence)}</small></dd></div>)}</dl></section>}

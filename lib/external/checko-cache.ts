@@ -4,14 +4,7 @@ import { cachedProfile } from './checko-profile.ts';
 import { acquireChecko, providerError } from './checko-provider.ts';
 import { DAY } from './records.ts';
 
-export function validInn(value: string) {
-  if (!/^\d{10}$|^\d{12}$/.test(value)) return false;
-  const digits = value.split("").map(Number);
-  const checksum = (weights: number[]) => weights.reduce((sum, weight, index) => sum + weight * digits[index], 0) % 11 % 10;
-  if (digits.length === 10) return checksum([2, 4, 10, 3, 5, 9, 4, 6, 8]) === digits[9];
-  return checksum([7, 2, 4, 10, 3, 5, 9, 4, 6, 8]) === digits[10]
-    && checksum([3, 7, 2, 4, 10, 3, 5, 9, 4, 6, 8]) === digits[11];
-}
+export {validInn} from './checko-inn.ts';
 
 export function checkoKey(env:Record<string,unknown>) {
   if (env.PRESCORE_RUNTIME_MODE==='release-candidate' && env.PRESCORE_CHECKO_ENABLED!=='1') return '';

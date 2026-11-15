@@ -1,3 +1,4 @@
+import {beforeBankBfoEvidence} from './fixtures/client-report/reconciliation-v1-baseline.mjs';
 import {bankProfileHashes as decisionReview} from './fixtures/historical-bank-inputs.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -32,7 +33,7 @@ for (const {caseId} of businessCatalog()) test(caseId+' historical snapshot and 
   assert.equal(fresh.debtCapacity.liquidityDiagnostics.minimumDailyBalance.value,null);
   assert.deepEqual(fresh.prescoreIndex,historical.prescoreIndex);
   assert.deepEqual(fresh.model,historical.model);
-  assert.equal(createHash('sha256').update(JSON.stringify(fresh)).digest('hex'),hash);
+  assert.equal(createHash('sha256').update(JSON.stringify(beforeBankBfoEvidence(fresh))).digest('hex'),hash);
 });
 test('fresh bank input satisfies all original capacity-pack business and pairwise assertions',()=>{
   const cases=entries();

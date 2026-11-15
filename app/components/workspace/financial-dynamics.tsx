@@ -1,11 +1,10 @@
 import type {PublicFinancialAnalysis,PublicFinancialMetric} from '../../../lib/credit-engine/client-report/source-detail';
+import {financialLabels} from '../../../lib/credit-engine/client-report/source-detail';
 import styles from './financial-dynamics.module.css';
 
 type Period = PublicFinancialAnalysis['history'][number];
-type Series = {key:string; label:string};
-const flows: Series[] = [{key:'REVENUE',label:'Выручка'},{key:'NET_PROFIT',label:'Чистая прибыль или убыток'}];
-const stocks: Series[] = [{key:'ASSETS_TOTAL',label:'Активы'},{key:'EQUITY',label:'Капитал'},
-  {key:'TOTAL_LIABILITIES',label:'Обязательства'},{key:'TOTAL_BORROWINGS',label:'В том числе заёмные средства'}];
+const flows = ['REVENUE', 'COST_OF_SALES', 'OPERATING_PROFIT', 'NET_PROFIT'];
+const stocks = ['ASSETS_TOTAL', 'CURRENT_ASSETS', 'NON_CURRENT_ASSETS', 'EQUITY', 'LONG_TERM_LIABILITIES', 'SHORT_TERM_LIABILITIES'];
 const rubles = new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2});
 const formatDate = (s:string|null) => s ? s.split('-').reverse().join('.') : 'дата не указана';
 
@@ -20,17 +19,37 @@ function flowGroup(row:Period) {
 function usable(m:PublicFinancialMetric|undefined) {
   return m && typeof m.value==='number' && m.status!=='UNKNOWN' && m.status!=='NOT_APPLICABLE' ? m.value : null;
 }
-function PeriodBars({periods,series,flow}:{periods:Period[];series:Series[];flow:boolean}) {
-  const rows=periods.map(p=>({p,values:series.map(s=>({s,n:usable(p.groups.flatMap(g=>g.metrics).find(m=>m.key===s.key))}))}));
-  const scale=Math.max(0,...rows.flatMap(row=>row.values.map(v=>Math.abs(v.n??0))));
-  return <div className={styles.periods}>{rows.map(({p,values})=><section className={styles.period} key={p.id} data-period={p.id}>
-    <h4>{flow ? formatDate(p.period.from)+' — '+formatDate(p.period.to) : 'На '+formatDate(p.period.asOf)}</h4>
-    <small>{p.source==='BFO'?'Бухгалтерская отчётность':'Промежуточная отчётность'} · ₽</small>
-    <dl>{values.map(({s,n},i)=><div key={s.key} data-financial-series={s.key}>
-      <dt>{s.label}</dt><dd>{n===null?'Не определено':rubles.format(n)+' ₽'}</dd>
-      {n!==null && <span aria-hidden="true" className={styles.track}><i className={n<0?styles.loss:i%2?styles.secondary:styles.primary} style={{width:(scale?100*Math.abs(n)/scale:0)+'%'}}/></span>}
-    </div>)}</dl>
-  </section>)}</div>;
+function PeriodBars({periods, series, flow}: {periods: Period[]; series: string[]; flow: boolean}) {
+  const rows = periods.map(p => {
+    const metrics = new Map(p.groups.flatMap(g => g.metrics).map(m => [m.key, m]));
+    return {p, values: series.flatMap(key => {
+      const amount = usable(metrics.get(key));
+      return amount === null ? [] : [{key, amount}];
+    })};
+  }).filter(row => row.values.length);
+  const amounts = rows.flatMap(row => row.values.map(v => v.amount));
+  const high = Math.max(0, ...amounts), low = Math.min(0, ...amounts);
+  // Keep a common scale and zero line across comparable periods.
+  const range = high - low || 1;
+  const baseline = high === low ? 50 : 100 * high / range;
+  return <div className={styles.periods}>{rows.map(({p, values}) =>
+    <section className={styles.period} key={p.id} data-period={p.id}>
+      <h4>{flow ? formatDate(p.period.from) + ' — ' + formatDate(p.period.to) : 'На ' + formatDate(p.period.asOf)}</h4>
+      <small>{p.source === 'BFO' ? 'Бухгалтерская отчётность' : 'Промежуточная отчётность'} · ₽</small>
+      <div className={styles.plot} aria-hidden="true">
+        <span className={styles.axis} style={{top: baseline + '%'}}/>
+        {values.map(({key, amount}) =>
+          <div className={styles.column} key={key}>
+            <i data-sign={Math.sign(amount)} style={{
+              top: (amount > 0 ? baseline - 100 * amount / range : baseline) + '%',
+              height: (100 * Math.abs(amount) / range) + '%'
+            }}/>
+          </div>)}
+      </div>
+      <dl>{values.map(({key, amount}) => <div key={key} data-financial-series={key}>
+        <dt>{financialLabels[key]}</dt><dd>{rubles.format(amount)} ₽</dd>
+      </div>)}</dl>
+    </section>)}</div>;
 }
 export function FinancialDynamics({history}:{history:Period[]}) {
   if(!history.length)return null;
@@ -38,7 +57,7 @@ export function FinancialDynamics({history}:{history:Period[]}) {
   for(const p of history){const key=flowGroup(p);if(key)groups.set(key,[...(groups.get(key)??[]),p]);}
   const dated=history.filter(p=>p.period.asOf);
   return <section className={['pc-panel',styles.section].filter(Boolean).join(' ')} aria-label="Динамика и структура отчётности">
-    <h2>Выручка и чистая прибыль</h2>
+    <h2>Финансовые результаты</h2>
     {[...groups].map(([label,periods])=><section key={label} data-flow-group={label}><h3>{label}</h3><PeriodBars periods={periods} series={flows} flow/></section>)}
     {history.some(p=>!flowGroup(p))&&<p>Для части отчётности период доходов и расходов не подтверждён.</p>}
     <h2>Активы, капитал и обязательства</h2>

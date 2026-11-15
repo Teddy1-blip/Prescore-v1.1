@@ -1,4 +1,6 @@
-export type CreditBureau = "СБ БКИ" | "НБКИ" | "БКИ";
+import {isOkbReport,okbFields} from "./credit-history-okb.ts";
+
+export type CreditBureau = "СБ БКИ" | "НБКИ" | "ОКБ" | "БКИ";
 export type CreditSubjectType = "Физическое лицо" | "Юридическое лицо" | "Не определён";
 export type CreditSubjectRelationship = "Компания-заёмщик" | "ИП-заёмщик" | "Собственник" | "Поручитель" | "Руководитель" | "Не указано";
 export type DebtServiceQuality =
@@ -452,7 +454,15 @@ function parseNbkiReport(source: string, fileName: string): CreditHistoryReport 
   const tableHeaders = [...text.matchAll(/(?:^|\n)\s*Счет\s+Договор\s+Состояние\s+Баланс\s*\n/g)];
   const simpleHeaders = [...text.matchAll(/(?:^|\n)\s*(?:Счет\s*\n\s*)?Вид:/g)];
   const headers = tableHeaders.length > 1 ? tableHeaders : simpleHeaders;
-  const parsed = headers.map((match, index) => parseNbkiObligation(text.slice(match.index, headers[index + 1]?.index ?? text.length), index)).filter((item): item is CreditObligation => Boolean(item));
+  const pageBreaks = [...text.matchAll(/\f/g)].map(match => match.index);
+  let page = 1;
+  const parsed = headers.map((match, index) => {
+    const offset = match.index + match[0].search(/\S/);
+    while (page <= pageBreaks.length && pageBreaks[page - 1] < offset) page++;
+    const item = parseNbkiObligation(text.slice(match.index, headers[index + 1]?.index ?? text.length), index);
+    if (item && pageBreaks.length) item.sourcePageHint = `Страница ${page} · ${item.sourcePageHint}`;
+    return item;
+  }).filter((item): item is CreditObligation => Boolean(item));
   const obligations = [...new Map(parsed.map((item) => [item.accountNumber || item.id, item])).values()];
   const summary = text.match(/Сводка\s+Счета[\s\S]*?(?=Субъект:\s*Кредитная история)/i)?.[0] ?? "";
   const warnings: string[] = [...parserCompletenessWarnings(obligations)];
@@ -538,9 +548,17 @@ function finishReport(input: FinishInput): CreditHistoryReport {
 
 export function parseCreditHistoryText(text: string, fileName = "credit-history.pdf"): CreditHistoryReport {
   const source = normalizedText(text);
+  if (isOkbReport(source)) {
+    const fields=okbFields(source,{date:dateValue,money:numberValue});
+    if(fields.subjectType==='Не определён')throw Error('Не удалось определить субъекта отчёта ОКБ.');
+    return finishReport({...fields,source:'ОКБ',subjectName:'',fileName,relationshipToCompany:'Не указано',
+      affectsCompanyDebt:false,bureauScore:null,bureauScoreMax:null,selfBanActive:false,
+      parserConfidence:parserConfidenceFromCompleteness(88,48,fields.obligations),
+      warnings:fields.obligations.length?parserCompletenessWarnings(fields.obligations):['Строки обязательств ОКБ требуют сверки с оригиналом.']});
+  }
   if (/Рейтинг и портрет заёмщика|Главное о кредитной истории/i.test(source)) return parseSbReport(source, fileName);
   if (/Субъект:\s*Кредитная история юридического лица|При наличии вопросов обратитесь в НБКИ/i.test(source)) return parseNbkiReport(source, fileName);
-  throw new Error("Формат БКИ пока не распознан. Нужен текстовый PDF СБ БКИ или НБКИ; скан можно будет подключить через OCR позднее.");
+  throw new Error("Формат БКИ пока не распознан. Проверьте, что выбран отчёт НБКИ, ОКБ или СБ БКИ.");
 }
 
 export function compareCreditPortfolio(input: {

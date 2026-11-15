@@ -9,7 +9,7 @@ const agentApi = readFileSync('app/api/agent/route.ts', 'utf8');
 
 test('landing offers a public financing enquiry separately from the analysis login', () => {
   assert.match(landing, /href="\/financing">Оставить заявку на финансирование/);
-  assert.match(landing, /href="\/login">Финансовый анализ/);
+  assert.match(landing, /href=\{configuredAppLink\('\/login'\)\}>Финансовый анализ/);
   assert.match(landing, /Обсудить финансирование/);
 });
 

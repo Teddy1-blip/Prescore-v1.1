@@ -39,6 +39,7 @@ async function ensureSchema(db: RuntimeDatabase) {
 }
 
 const MAX_BYTES = 1_250_000;
+const PDF_MAX_BYTES = 16 * 1024 * 1024;
 
 export async function GET(request: Request) {
   const user = await requireApiUser();
@@ -66,7 +67,7 @@ export async function GET(request: Request) {
       WHERE ${applicationId?'d.application_id':'d.company_inn'}=? AND (?=1 OR ${documentAccessSQL('d','actor.email')}) ORDER BY d.created_at DESC`)
       .bind(user.email,applicationId||inn,user.isAdmin?1:0);
     const result = await db.batch([query]);
-    return Response.json({ documents: result[0]?.results ?? [], maxBytes: MAX_BYTES, storage: "Пилотное защищённое хранилище" });
+    return Response.json({ documents: result[0]?.results ?? [], maxBytes: MAX_BYTES, pdfMaxBytes: PDF_MAX_BYTES, storage: "Пилотное защищённое хранилище" });
   } catch {
     return Response.json({ error: "Не удалось загрузить документы. Попробуйте позже." }, { status: 500 });
   }
@@ -80,9 +81,10 @@ export async function POST(request: Request) {
     const companyInn = String(body.companyInn || "").replace(/\D/g, "");
     const fileName = String(body.fileName || "").trim().slice(0, 240);
     const sizeBytes = Number(body.sizeBytes) || 0;
+    const limit = /\.pdf$/i.test(fileName) ? PDF_MAX_BYTES : MAX_BYTES;
     const contentBase64 = String(body.contentBase64 || "");
-    if (!/^(?:\d{10}|\d{12})$/.test(companyInn) || !fileName || sizeBytes <= 0 || sizeBytes > MAX_BYTES || !contentBase64) return Response.json({ error: `Файл должен быть до ${Math.round(MAX_BYTES / 1000)} КБ и привязан к корректному ИНН` }, { status: 400 });
-    if (contentBase64.length > Math.ceil(MAX_BYTES * 4 / 3) + 16) return Response.json({ error: "Размер содержимого превышен" }, { status: 400 });
+    if (!/^(?:\d{10}|\d{12})$/.test(companyInn) || !fileName || sizeBytes <= 0 || sizeBytes > limit || !contentBase64) return Response.json({ error: `Файл должен быть до ${Math.round(limit / 1000)} КБ и привязан к корректному ИНН` }, { status: 400 });
+    if (contentBase64.length > Math.ceil(limit * 4 / 3) + 16) return Response.json({ error: "Размер содержимого превышен" }, { status: 400 });
     const allowed = /\.(pdf|xlsx?|csv|txt|docx?)$/i;
     if (!allowed.test(fileName)) return Response.json({ error: "Допустимы PDF, Excel, CSV, TXT, DOC и DOCX" }, { status: 400 });
     const db = await database();
@@ -109,7 +111,7 @@ export async function POST(request: Request) {
     const id = crypto.randomUUID();
     const createdAt = new Date().toISOString();
     const bytes = Buffer.from(contentBase64,"base64");
-    if(bytes.length!==sizeBytes || bytes.length>MAX_BYTES) return Response.json({error:"Размер файла не совпадает с содержимым"},{status:400});
+    if(bytes.length!==sizeBytes || bytes.length>limit) return Response.json({error:"Размер файла не совпадает с содержимым"},{status:400});
     const stored = await documentStorage().put(bytes,String(body.mimeType || "application/octet-stream"));
     const storageKey = stored.key;
     try { await db.prepare(`INSERT INTO client_documents (id, company_inn, analysis_id, application_id, category, file_name, mime_type, size_bytes, content_base64, uploaded_by, status, storage_key, owner_email, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Загружен', ?, ?, ?)`)

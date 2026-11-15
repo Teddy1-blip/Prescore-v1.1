@@ -52,7 +52,7 @@ test('FULL calculation unavailable retains known banking facts without checkout 
  assert.equal(unavailable.entitlement,'FULL');assert.equal(unavailable.fullAvailability,'UNAVAILABLE');assert.equal(unavailable.state,'READY_BASIC');assert.equal(unavailable.basic.bankingFacts.operatingInflow.status,'KNOWN');
  for(const C of [Home,Financing]){const html=renderToStaticMarkup(React.createElement(C,{model:unavailable}));assert.doesNotMatch(html,/\/checkout\?/);assert.match(html,/Повторная оплата не требуется/);assert.match(html,/Повторить загрузку расчёта/);}
  const empty=renderToStaticMarkup(React.createElement(EmptyHome,{start(){}}));
- assert.match(empty,/<button[^>]*>Создать новый анализ/);
+ assert.match(empty,/<button[^>]*>Загрузить банковскую выписку/);
  assert.match(empty,/Загрузить банковскую выписку/);
  }finally{await rt.close();}
 });

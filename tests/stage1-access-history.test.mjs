@@ -39,13 +39,33 @@ test('actual owner summary labels only permitted QA; leaves all payloads, owners
   assert.deepEqual((await rt.pg.query('SELECT * FROM analyses ORDER BY id')).rows,before);
  }finally{await rt.close();restore();}
 });
-test('control page checks ADMIN on server and the old route is unavailable for every role',async()=>{
+test('control page checks ADMIN and the Studio route requires an internal development session',async()=>{
  let user={roles:['CLIENT']};const navigation={redirect:url=>{throw Error('REDIRECT:'+url);},notFound:()=>{throw Error('NOT_FOUND');}};
  const control=load('app/prescore-control/page.tsx',{'next/navigation':navigation,'../chatgpt-auth':{requireChatGPTUser:async path=>{assert.equal(path,'/prescore-control');if(!user)throw Error('LOGIN_REQUIRED');return user;}},'../admin/admin-dashboard':{default:()=>null},'react/jsx-runtime':{jsx:(type,props)=>({type,props})}});
  for(const roles of [['CLIENT'],['AGENT']]){user={roles};await assert.rejects(control.default(),/REDIRECT:\/dashboard/);}
  user=null;await assert.rejects(control.default(),/LOGIN_REQUIRED/);
  user={roles:['CLIENT','ADMIN']};assert.ok((await control.default()).type);
- const old=load('app/admin/page.tsx',{'next/navigation':navigation});await assert.rejects(old.default(),/NOT_FOUND/);
+ const old=load('app/admin/page.tsx', {
+   'next/navigation': navigation, 'react/jsx-runtime': await import('react/jsx-runtime'),
+   'next/link': {default: ({href,children}) => React.createElement('a',{href},children)},
+   'next/headers': {headers: async () => new Headers()},
+   '../../lib/auth/server': {getAuthSession: async () => user ? {user} : null},
+ });
+ const previousEnv=process.env;
+ try {
+   process.env={...previousEnv,NODE_ENV:'production',PRESCORE_STUDIO_INTERNAL:'1'};
+   for(const roles of [[],['CLIENT'],['AGENT'],['ADMIN']]){
+     user={roles};await assert.rejects(old.default(),/NOT_FOUND/);
+   }
+   process.env.NODE_ENV='development';
+   process.env.PRESCORE_STUDIO_INTERNAL='0';
+   await assert.rejects(old.default(),/NOT_FOUND/);
+   process.env.PRESCORE_STUDIO_INTERNAL='1';
+   for(const identity of [null,{roles:['CLIENT']},{roles:['AGENT']}]){
+     user=identity;await assert.rejects(old.default(),/NOT_FOUND/);
+   }
+   user={roles:['ADMIN']};assert.match(renderToStaticMarkup(await old.default()),/href="\/admin\/studio"/);
+ } finally {process.env=previousEnv;}
  for(const file of ['app/login/page.tsx','app/components/landing-v3/landing.tsx'])assert.doesNotMatch(fs.readFileSync(file,'utf8'),/href=["']\/(?:admin|prescore-control)/);
 });
 test('shared shell exposes only released navigation and no admin link in client or broker navigation',async()=>{

@@ -32,7 +32,9 @@ export function validateCapacityInput(x:DebtCapacityInputV1):void{
  if(a.financingCase.requestedAmount?.status==='KNOWN')nonnegative(a.financingCase.requestedAmount.value,'REQUESTED_AMOUNT');
  if(a.financingCase.definitionStatus!==y.caseDefinition.status||!same(a.financingCase.factIds,y.caseDefinition.facts.map(f=>f.factId)))fail('ASSESSMENT_CASE_COMPLETENESS');
  if(a.summary.status!==a.status||a.summary.indexValue!==i.value||a.summary.readinessLevel!==y.level)fail('ASSESSMENT_SUMMARY');
- if(!b||b.version!==BANK_STATEMENT_METRICS_VERSION||b.mode!=='SHADOW'||!Array.isArray(b.monthly)||!b.period||!b.quality)fail('BANK_VERSION_OR_SHAPE');
+ if(!b && !(x.sourceOnly===true&&b===null))fail('BANK_VERSION_OR_SHAPE');
+ if(b){
+ if(b.version!==BANK_STATEMENT_METRICS_VERSION||b.mode!=='SHADOW'||!Array.isArray(b.monthly)||!b.period||!b.quality)fail('BANK_VERSION_OR_SHAPE');
  availability(b.period.from,x.asOfDate);availability(b.period.to,x.asOfDate);if(b.period.from&&b.period.to&&b.period.from>b.period.to)fail('BANK_PERIOD_ORDER');
  validateConflictKnowledge(b);
  distinct(b.monthly.map(m=>m.month),'DUPLICATE_MONTH');
@@ -44,7 +46,9 @@ export function validateCapacityInput(x:DebtCapacityInputV1):void{
  if(op.value!==null)nonnegative(op.value,'NEGATIVE_OPERATING');if(debt.value!==null)nonnegative(debt.value,'NEGATIVE_DEBT_SERVICE');
  const avg=average(b.monthly.filter(m=>m.coverage==='FULL').map(m=>m.operatingReceipts).filter((v):v is number=>v!==null));if(op.status==='KNOWN'&&(avg===null||Math.abs(avg-op.value!)>.011))fail('CANONICAL_AVERAGE_MONTH_LINEAGE');
  if(b.quality.sourceIntegrityConfidence!==null&&(b.quality.sourceIntegrityConfidence<0||b.quality.sourceIntegrityConfidence>100))fail('BANK_QUALITY');
- scanAvailability(a,x.asOfDate);scanAvailability(b,x.asOfDate);
+ scanAvailability(b,x.asOfDate);
+ }
+ scanAvailability(a,x.asOfDate);
  const pf=x.creditPortfolio;if(pf){if(pf.version!==CREDIT_PORTFOLIO_VERSION||pf.mode!=='SHADOW'||pf.companyInn!==i.companyInn||pf.asOfDate!==x.asOfDate||pf.portfolioId!=='portfolio:'+i.companyInn)fail('PORTFOLIO_IDENTITY');scanAvailability(pf,x.asOfDate);distinct(pf.obligations.map(o=>o.obligationId),'DUPLICATE_OBLIGATION');distinct(pf.obligations.flatMap(o=>o.schedule.map(e=>e.scheduledEventId)),'DUPLICATE_SCHEDULE');
   for(const o of pf.obligations){if(o.companyInn!==i.companyInn)fail('OBLIGATION_COMPANY');if(!['KNOWN','PARTIAL','UNKNOWN','NOT_APPLICABLE'].includes(o.status.knowledge)||!confidence.includes(o.status.confidence)||o.status.knowledge==='KNOWN'&&!['ACTIVE','CLOSED','SUSPENDED','DETECTED','UNKNOWN'].includes(o.status.value!))fail('OBLIGATION_STATUS');if(!confidence.includes(o.identityConfidence)||!['FUNDED_DEBT','LEASE','CREDIT_LIMIT','FACTORING','CONTINGENT','OTHER','UNKNOWN'].includes(o.exposureClass))fail('OBLIGATION_STATE');for(const e of o.schedule){if(e.obligationId!==o.obligationId)fail('DANGLING_SCHEDULE_OBLIGATION');if(e.dueDate!==null&&!validDate(e.dueDate))fail('SCHEDULE_DATE');if(!['SCHEDULED','OBSERVED','MATCHED','PARTIALLY_MATCHED','UNKNOWN'].includes(e.status))fail('SCHEDULE_STATE');if(!['KNOWN','PARTIAL','UNKNOWN','NOT_APPLICABLE'].includes(e.amount.knowledge)||!['CONFIRMED','UNCONFIRMED','CONFLICTED'].includes(e.amount.verification))fail('SCHEDULE_KNOWLEDGE');if(e.amount.knowledge==='KNOWN'&&e.amount.value===null||['UNKNOWN','NOT_APPLICABLE'].includes(e.amount.knowledge)&&e.amount.value!==null||!confidence.includes(e.amount.confidence))fail('SCHEDULE_VALUE_STATE');if(e.amount.value!==null)nonnegative(e.amount.value,'NEGATIVE_SCHEDULE_AMOUNT');}}
   for(const e of [...pf.events,...pf.obligations.flatMap(o=>o.events)])if(e.obligationId!==null&&!pf.obligations.some(o=>o.obligationId===e.obligationId))fail('DANGLING_PORTFOLIO_EVENT');

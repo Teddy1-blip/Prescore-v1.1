@@ -1,7 +1,7 @@
 import {open,mkdir,realpath,unlink,rename}from'node:fs/promises';import{constants}from'node:fs';import{randomUUID}from'node:crypto';import{isAbsolute,join}from'node:path';
 export type DocumentMetadata={key:string;mimeType:string;sizeBytes:number;createdAt:string};
 export interface DocumentStorage{put(bytes:Uint8Array,mimeType:string):Promise<DocumentMetadata>;get(key:string):Promise<Uint8Array>;delete(key:string):Promise<void>;exists(key:string):Promise<boolean>;metadata(key:string):Promise<DocumentMetadata>}
-const ALLOWED=new Set(['application/pdf','application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','text/csv','text/plain','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/octet-stream']);
+const ALLOWED=new Set(['image/jpeg','image/png','application/pdf','application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','text/csv','text/plain','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/octet-stream']);
 export class LocalDocumentStorage implements DocumentStorage{
  readonly root:string;readonly maxBytes:number;
  constructor(root:string,maxBytes=35*1024*1024){if(!isAbsolute(root)||root==='/')throw Error('STORAGE_ROOT_INVALID');this.root=root;this.maxBytes=maxBytes;}

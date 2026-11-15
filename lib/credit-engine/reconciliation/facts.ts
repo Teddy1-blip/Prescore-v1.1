@@ -21,9 +21,9 @@ export function bankFacts(input: ReconciliationInput): Fact[] {
   const flow: Fact["period"] = { kind: "FLOW", from: bank.period.from, to: bank.period.to, asOf: null };
   const bankWarnings = bank.quality.warnings;
   function metric(code: string, m: MetricResult, period = flow): Fact {
-    return sourceBound({ ...seed(companyInn, "BANK_STATEMENT", ids, code, period, m.value, m.calculationBasis),
+    return sourceBound({ ...seed(companyInn, "BANK_STATEMENT", ids, code, period, m.unit === "RUB" ? m.value : null, m.calculationBasis),
       status: m.status, confidence: weakest(m.confidence, confidence), sourceMetricCode: m.code,
-      warnings: [...m.warnings, ...bankWarnings, ...(input.integrity?.warnings ?? [])] }, sources);
+      warnings: [...m.warnings, ...(m.unit === "RUB" ? [] : ["MONETARY_UNIT_UNKNOWN"]), ...bankWarnings, ...(input.integrity?.warnings ?? [])] }, sources);
   }
   const fields: Array<[string, MetricResult]> = [
     ["BANK_OPERATING_RECEIPTS", bank.operating.operatingCashReceipts],
@@ -35,14 +35,17 @@ export function bankFacts(input: ReconciliationInput): Fact[] {
     ["BANK_TAX_PAID", bank.tax.taxPaymentsAmount],
   ];
   const output = fields.map(([code, m]) => metric(code, m));
-  output.push(metric("BANK_ENDING_BALANCE", bank.liquidity.endingBalance, { kind: "SNAPSHOT", from: null, to: null, asOf: bank.period.to }));
+  const advance = bank.operating.customerAdvanceAmount;
+  if (advance?.status === "KNOWN" && advance.value !== null && advance.value > 0) output.push(metric("BANK_CUSTOMER_ADVANCES", advance, { ...flow, from: advance.periodFrom, to: advance.periodTo }));
+  const ending = bank.liquidity.endingBalance;
+  output.push(metric("BANK_ENDING_BALANCE", ending, { kind: "SNAPSHOT", from: null, to: null, asOf: ending.periodTo ?? null }));
   for (const month of bank.monthly) {
     const bounds = monthBounds(month.month), base = bank.operating.operatingCashReceipts;
     // Monthly aggregates have no independent confidence. Bound by the canonical parent metric.
-    output.push(sourceBound({ ...seed(companyInn, "BANK_STATEMENT", ids, "BANK_MONTHLY_OPERATING_RECEIPTS", { kind: "FLOW", ...bounds, asOf: null }, finite(month.operatingReceipts) ? month.operatingReceipts : null, "Block 4 monthly.operatingReceipts; no financing or gross-inflow substitution"),
+    output.push(sourceBound({ ...seed(companyInn, "BANK_STATEMENT", ids, "BANK_MONTHLY_OPERATING_RECEIPTS", { kind: "FLOW", ...bounds, asOf: null }, base.unit === "RUB" && finite(month.operatingReceipts) ? month.operatingReceipts : null, "Block 4 monthly.operatingReceipts; no financing or gross-inflow substitution"),
       coverage: month.coverage, sourceMetricCode: base.code,
       status: base.status === "UNKNOWN" || base.status === "NOT_APPLICABLE" ? "UNKNOWN" : month.coverage === "FULL" ? "KNOWN" : "PARTIAL",
-      confidence: weakest(base.confidence, confidence), warnings: [...month.warnings, ...base.warnings] }, sources));
+      confidence: weakest(base.confidence, confidence), warnings: [...month.warnings, ...base.warnings, ...(base.unit === "RUB" ? [] : ["MONETARY_UNIT_UNKNOWN"])] }, sources));
   }
   return output;
 }
@@ -57,7 +60,7 @@ export function financialFacts(input: ReconciliationInput): Fact[] {
       const flow = code in INCOME_CODES;
       const period: Fact["period"] = flow ? { kind: "FLOW", from: s.period.from, to: s.period.to, asOf: null } : { kind: "SNAPSHOT", from: null, to: null, asOf: s.period.asOf };
       const amount = analysis?.amounts[code];
-      const invalidBasis = s.accountingStandard !== "RAS" || s.confirmedScale == null || (flow && s.period.flowPeriodType === "UNKNOWN") || s.source.companyInn !== s.companyInn;
+      const invalidBasis = s.accountingStandard !== "RAS" || s.currency !== "RUB" || ![1, 1_000, 1_000_000].includes(s.confirmedScale ?? 0) || s.quality.warnings.includes("COMPANY_IDENTITY_NOT_REPORTED") || (flow && s.period.flowPeriodType === "UNKNOWN") || s.source.companyInn !== s.companyInn;
       return sourceBound({ ...seed(s.companyInn, s.sourceType, [s.sourceId], code, period, value.origin === "PROXY" || invalidBasis ? null : value.value, amount?.calculationBasis ?? `Canonical Block 5 ${code} normalized RUB`),
         factId: stableId(s.snapshotId, code, period), groupId: s.snapshotId, sourceScale: s.confirmedScale, accountingStandard: s.accountingStandard,
         status: value.origin === "PROXY" || invalidBasis ? "UNKNOWN" : value.status,
@@ -103,5 +106,5 @@ export function buildFacts(input: ReconciliationInput): ReconciliationDataset {
     if (s.sourceType === "BKI") continue;
     facts.push(sourceBound({ ...seed(s.companyInn, s.sourceType, [s.sourceId], "COMPANY_INN", identityPeriod, s.companyInn || null, "Canonical SourceEnvelope.companyInn"), unit: "TEXT" }, [s]));
   }
-  return { companyInn: input.companyInn, facts, sources: [...sources.values()], bankPeriod: input.bank?.period };
+  return { companyInn: input.companyInn, facts, sources: [...sources.values()], bankPeriod: input.bank?.period, calendarCoverage: input.integrity?.calendarCoverage };
 }

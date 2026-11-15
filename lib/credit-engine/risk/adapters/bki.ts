@@ -1,8 +1,8 @@
-import type { RiskFact, RiskShadowInput } from "../../contracts/risk.ts";
+import type { RiskFact, ProfileRiskInput } from "../../contracts/risk.ts";
 import { adaptUploadedBki } from "../../credit-portfolio/bki-adapter.ts";
 import { companyScope } from "../../credit-portfolio/observations.ts";
 import { fact, freshness, validDate, weakest, RISK_SOURCE_FRESHNESS_DAYS as age } from "../common.ts";
-export function bkiFacts({ analysis: a, asOfDate }: RiskShadowInput): RiskFact[] {
+export function bkiFacts({ analysis: a, asOfDate }: ProfileRiskInput): RiskFact[] {
   if (!a.creditHistory || !a.sourceManifest?.bki) return [];
   const snapshot = adaptUploadedBki(a.creditHistory, { companyInn: a.companyInn, source: a.sourceManifest.bki });
   if (!companyScope(snapshot, a.companyInn)) return [fact(a.companyInn, "BKI_SCOPE_EXCLUDED", "DATA_QUALITY", true, { sourceTypes: ["BKI"], sourceIds: [snapshot.sourceId], warnings: ["BKI_NOT_COMPANY_SCOPE"] })];

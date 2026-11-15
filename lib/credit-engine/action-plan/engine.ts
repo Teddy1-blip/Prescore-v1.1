@@ -1,3 +1,4 @@
+import type { RecommendationRegistryV1 } from '../contracts/recommendations.ts';
 import {ACTION_PLAN_VERSION,ACTION_PLAN_METHODOLOGY,type ActionPlanInputV1 as Input,type ActionPlanV1 as Output,type ActionPlanPolicyV1 as Policy,type ActionPlanItemV1 as Item,type ActionPlanHorizonV1 as Bucket} from '../contracts/action-plan.ts';
 import {ACTION_PLAN_POLICY,validateActionPlanPolicy,actionPlanPolicyFingerprint} from './policy.ts';
 import {validateActionPlanInput} from './validation.ts';
@@ -8,8 +9,8 @@ import {deferActionPlanRecommendations} from './deferrals.ts';
 import {actionPlanRerunTriggers,mergeActionPlanTriggers} from './rerun.ts';
 import {buildActionPlanRecheckPack} from './recheck.ts';
 import {id,canonical,unique,checkpointDate,CHECKPOINT_WARNING} from './common.ts';
-export function buildActionPlan(x:Input,p:Policy=ACTION_PLAN_POLICY):Output{
- validateActionPlanPolicy(p);validateActionPlanInput(x);
+export function buildActionPlan(x:Input,p:Policy=ACTION_PLAN_POLICY,registry?:RecommendationRegistryV1):Output{
+ validateActionPlanPolicy(p);validateActionPlanInput(x,registry);
  const s=x.recommendationSet,rs=s.recommendations,graph=resolveActionPlanDependencies(rs),compare=focusComparator(p,graph),orderedGraph=resolveActionPlanDependencies(rs,compare),assignments=assignActionPlanHorizons(rs,s.recommendationGroups,orderedGraph,p),byId=new Map(rs.map(r=>[r.recommendationId,r]));
  const excluded=new Set(rs.filter(r=>!allowedInPlan(r,s.status,p)).map(r=>r.recommendationId));for(const rid of orderedGraph.orderedIds)if(orderedGraph.prerequisites.get(rid)!.some(k=>excluded.has(k)))excluded.add(rid);
  const continuityBase=(r:typeof rs[number])=>id('plan-continuity',s.companyInn,r.definitionCode,r.subjectKey,unique(r.portfolioObligationIds));const continuityCounts=new Map<string,number>();for(const r of rs){const key=continuityBase(r);continuityCounts.set(key,(continuityCounts.get(key)??0)+1);}

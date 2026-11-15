@@ -3,6 +3,7 @@ import {readableAnalysis,requireApiUser,unauthorized} from "../api-auth";
 import {resolveAnalysisTier} from "../../../lib/entitlements";
 import {DIRECT_EIS} from "../../../lib/external/records";
 import {validInn, checkoKey, loadChecko} from "../../../lib/external/checko-cache";
+import {invalidInnMessage} from "../../../lib/external/checko-inn";
 import {profileView} from "../../../lib/external/checko-profile";
 import type {AnalysisResult} from "../../../lib/prescore";
 const json=(body:unknown,status=200)=>Response.json(body,{status,headers:{"Cache-Control":"private, no-store"}});
@@ -10,7 +11,8 @@ const json=(body:unknown,status=200)=>Response.json(body,{status,headers:{"Cache
 export async function GET(request:Request){
   const user=await requireApiUser();if(!user)return unauthorized();
   const params=new URL(request.url).searchParams,inn=(params.get("inn")??"").trim(),id=params.get("analysisId")??"";
-  if(!id||!validInn(inn))return json({error:"Укажите корректный анализ и ИНН"},400);
+  if(!id)return json({error:"Выберите анализ компании."},400);
+  if(!validInn(inn))return json({providerStatus:"FAILED",error:invalidInnMessage(inn)},400);
   try{
     const env=getRuntime(),db=env.DB;
     const access=await readableAnalysis(db,id,user);

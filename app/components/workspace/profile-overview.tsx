@@ -1,11 +1,11 @@
 import type {WorkspaceModelV1} from '../../../lib/workspace/model';
-import {checkoLabels} from '../../../lib/external/checko-summary';
+import {checkoStatusText} from '../../../lib/external/checko-summary';
 import {money,date} from './presentation';
 type Props={model:WorkspaceModelV1};
 export function CheckoOverview({model}:Props){
   const profile=model.full?.report.checko,state=profile??model.basic.checko;
   return <section className="pc-checko"><h3>Открытые сведения · Checko</h3>
-    <p><b>{state?checkoLabels[state.status]:'Ещё не запрашивался'}</b>{state?.fetchedAt&&<> · получено {date(state.fetchedAt.slice(0,10))}</>}</p>
+    <p><b>{state?checkoStatusText(state.status, model.basic.analysis.company.inn):'Ещё не запрашивался'}</b>{state?.fetchedAt&&<> · получено {date(state.fetchedAt.slice(0,10))}</>}</p>
     {!profile&&model.basic.checko?.identity&&<p>{[model.basic.checko.identity.status,model.basic.checko.identity.registered&&'Регистрация '+model.basic.checko.identity.registered].filter(Boolean).join(' · ')}</p>}
     {!!profile?.rows.length&&<details><summary>Сведения по ИНН {model.basic.analysis.company.inn}</summary><dl className="pc-definition">{profile.rows.map(r=><div key={r.label}><dt>{r.label}</dt><dd>{r.value}</dd></div>)}</dl></details>}
   </section>;

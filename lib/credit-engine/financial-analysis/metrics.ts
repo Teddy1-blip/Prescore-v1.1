@@ -1,9 +1,10 @@
+import type { CurrentRatioExpression } from '../experimental/contracts.ts';
 import { FINANCIAL_ANALYSIS_VERSION, BALANCE_CODES, INCOME_CODES, type FinancialMetricResult, type FinancialPeriodAnalysis, type FinancialStatementSnapshot, type FinancialValueStatus } from "../contracts/financial-statements.ts";
 import { financialIntegrity } from "./integrity.ts";
 import { weakest } from "./normalizer.ts";
 import { daysInPeriod } from "./periods.ts";
 
-export function analyzeFinancialPeriod(s: FinancialStatementSnapshot, opening?: FinancialStatementSnapshot): FinancialPeriodAnalysis {
+export function analyzeFinancialPeriod(s: FinancialStatementSnapshot, opening?: FinancialStatementSnapshot, currentRatio?: CurrentRatioExpression): FinancialPeriodAnalysis {
   const quality = financialIntegrity(s);
   const amounts: Record<string, FinancialMetricResult> = {};
   const groups: Record<string, FinancialMetricResult> = {};
@@ -22,7 +23,7 @@ export function analyzeFinancialPeriod(s: FinancialStatementSnapshot, opening?: 
   Object.assign(groups, amounts);
   function calculate(code: string, key: string, dependencies: string[], formula: (values: number[]) => number, basis: string, options: {
     unit?: FinancialMetricResult["unit"]; denominator?: number; nonPositiveEquity?: boolean; warning?: string;
-    status?: FinancialValueStatus; unavailable?: string; extraWarnings?: string[];
+    status?: FinancialValueStatus; unavailable?: string; extraWarnings?: string[]; expression?: boolean;
   } = {}): FinancialMetricResult {
     const deps = dependencies.map(k => groups[k]);
     const missing = deps.some(v => !v || v.value === null || v.status === "UNKNOWN" || v.status === "NOT_APPLICABLE");
@@ -33,7 +34,12 @@ export function analyzeFinancialPeriod(s: FinancialStatementSnapshot, opening?: 
     else if (options.denominator !== undefined && (deps[options.denominator].value === 0 || (options.nonPositiveEquity && deps[options.denominator].value! <= 0))) {
       status = "NOT_APPLICABLE"; warnings.push(options.nonPositiveEquity ? "NON_POSITIVE_EQUITY_DENOMINATOR" : options.warning ?? "ZERO_DENOMINATOR");
     } else {
-      const result = formula(deps.map(v => v.value!));
+      let result: number;
+      try { result = formula(deps.map(v => v.value!)); }
+      catch (error) {
+        if (!options.expression || !(error instanceof RangeError) || error.message !== "ZERO_DENOMINATOR") throw error;
+        result = NaN; warnings.push("ZERO_DENOMINATOR");
+      }
       if (!Number.isFinite(result)) { status = "UNKNOWN"; warnings.push("NON_FINITE_RESULT"); }
       else { value = result; status = options.status ?? (deps.some(v => v.status === "PARTIAL") ? "PARTIAL" : "KNOWN"); }
     }
@@ -53,7 +59,9 @@ export function analyzeFinancialPeriod(s: FinancialStatementSnapshot, opening?: 
   sum("FSM-INT-001", "QUICK_ASSETS", ["RECEIVABLES", "SHORT_TERM_FIN_INVESTMENTS", "CASH"]);
   sum("FSM-INT-002", "CASH_AND_INVESTMENTS", ["CASH", "SHORT_TERM_FIN_INVESTMENTS"]);
   const liquidity = {
-    currentRatio: ratio("FSM-LIQ-001", "CURRENT_RATIO", "CURRENT_ASSETS", "SHORT_TERM_LIABILITIES"),
+    currentRatio: currentRatio
+      ? calculate("FSM-LIQ-001", "CURRENT_RATIO", currentRatio.fields, currentRatio.evaluate, currentRatio.expression, { expression: true })
+      : ratio("FSM-LIQ-001", "CURRENT_RATIO", "CURRENT_ASSETS", "SHORT_TERM_LIABILITIES"),
     quickRatio: ratio("FSM-LIQ-002", "QUICK_RATIO", "QUICK_ASSETS", "SHORT_TERM_LIABILITIES"),
     absoluteLiquidity: ratio("FSM-LIQ-003", "ABSOLUTE_LIQUIDITY", "CASH_AND_INVESTMENTS", "SHORT_TERM_LIABILITIES"),
     netWorkingCapital: calculate("FSM-LIQ-004", "NET_WORKING_CAPITAL", ["CURRENT_ASSETS", "SHORT_TERM_LIABILITIES"], ([a, b]) => a - b, "CURRENT_ASSETS - SHORT_TERM_LIABILITIES", { unit: "RUB" }),

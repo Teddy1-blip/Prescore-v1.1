@@ -65,6 +65,12 @@ jobs:
       - name: Product regression suite
         # The previous step already built the exact SHA; run the full suite once.
         run: node --experimental-strip-types --test tests/*.test.mjs
+      - name: Verify native Excel 97–2003 import
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-xlrd
+          PATH="/usr/bin:$PATH" /usr/bin/python3 -I -c 'import xlrd'
+          PATH="$(dirname "$(command -v node)"):/usr/bin:$PATH" node --experimental-strip-types scripts/qa/legacy-xls-smoke.mjs
       - name: Canonical business acceptance
         run: npm run credit-lab:business -- "$RUNNER_TEMP/credit-lab-product-${{ github.run_id }}-${{ github.run_attempt }}"
       - name: Lint

@@ -1,3 +1,6 @@
+import {saveDossier,ownedDossier} from '../../../lib/workspace/dossier';
+import {dossierSources} from '../../../lib/workspace/dossier-sources';
+import {withDossierSources} from '../../../lib/workspace/dossier-bank';
 import type { StatementScreeningResult } from "../../../lib/credit-engine/contracts/sources";
 import {loadChecko,checkoKey,checkoState,validInn} from "../../../lib/external/checko-cache";
 import {safeErrorText} from '../../../lib/release/security';
@@ -15,7 +18,7 @@ export async function POST(request: Request) {
   const user = await requireApiUser();
   if (!user) return unauthorized();
   try {
-    const body = await request.json() as { statements?: Array<{fileName?:string;text?:string;base64?:string}> };
+    const body = await request.json() as { dossierId?:string; statements?: Array<{fileName?:string;text?:string;base64?:string}> };
     const statements = Array.isArray(body.statements) ? body.statements : [];
     if (!statements.length || statements.length > MAX_FILES) return Response.json({ error: "Добавьте от 1 до 30 выписок" }, { status: 400 });
     const candidates: StatementInput[] = [];
@@ -52,7 +55,7 @@ export async function POST(request: Request) {
     if (!screened.accepted.length) return Response.json({error:"Среди выбранных файлов нет пригодной выписки.", screeningResults}, {status:400});
     const safeStatements = screened.accepted;
     const rejectedFiles = [...screened.unrecognizedFiles,...Array.from(excluded.values(),r=>r.fileName)];
-    const result = analyzeBankStatements(safeStatements, { screeningResults });
+    let result = analyzeBankStatements(safeStatements, { screeningResults });
     const env = getRuntime();
     type Statement = { bind: (...values: unknown[]) => Statement; run: () => Promise<unknown>; first: <T = unknown>() => Promise<T | null> };
     const db = env.DB as unknown as { prepare: (query: string) => Statement; batch: (statements: Statement[]) => Promise<Array<{ results: unknown[] }>> };
@@ -62,6 +65,10 @@ export async function POST(request: Request) {
       readiness TEXT NOT NULL, payload TEXT NOT NULL, owner_email TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`).run();
     try { await db.prepare("ALTER TABLE analyses ADD COLUMN owner_email TEXT NOT NULL DEFAULT ''").run(); } catch { /* already migrated */ }
+    if(body.dossierId){
+        const selected=await ownedDossier(env.DB.pool,user.email,body.dossierId);
+        if(!validInn(result.companyInn)||selected?.inn!==result.companyInn)return Response.json({error:'ИНН выписки не совпадает с выбранным досье.'},{status:409});
+      }
     // Commit the external observation before the first read of the new decision.
     try {
       const acquired=validInn(result.companyInn)
@@ -69,10 +76,19 @@ export async function POST(request: Request) {
         : {status:'FAILED' as const};
       result.checkoAttempt=checkoState(acquired);
     } catch { result.checkoAttempt={status:'FAILED',fetchedAt:null}; }
-    const stored = analysisForStorage(result);
-    await db.prepare(`INSERT INTO analyses (id, company_name, company_inn, file_name, period_from, period_to, score, grade, readiness, payload, owner_email, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .bind(result.id, result.companyName, result.companyInn, result.fileName, result.periodFrom, result.periodTo, result.score, result.grade, result.readiness, JSON.stringify(stored), user.email, result.createdAt).run();
+    const company=validInn(result.companyInn)?await saveDossier(env.DB.pool,user.email,result.companyInn):null;
+    const tx=await env.DB.pool.connect();
+    try{
+      await tx.query('BEGIN');
+      if(company){
+        await tx.query('SELECT id FROM company_dossiers WHERE id=$1 AND owner_email=$2 FOR UPDATE',[company.id,user.email]);
+        result=withDossierSources(result,await dossierSources(tx,user.email,company.id));
+      }
+      const stored=analysisForStorage(result);
+      await tx.query(`INSERT INTO analyses (id, company_name, company_inn, file_name, period_from, period_to, score, grade, readiness, payload, owner_email, created_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,[result.id,result.companyName,result.companyInn,result.fileName,result.periodFrom,result.periodTo,result.score,result.grade,result.readiness,JSON.stringify(stored),user.email,result.createdAt]);
+      await tx.query('COMMIT');
+    }catch(error){await tx.query('ROLLBACK');throw error;}finally{tx.release();}
     await ensureFreeEntitlement(db, result.id, user.email, result.companyInn);
     try {
       const paid = await db.prepare(`SELECT id FROM payment_orders WHERE company_inn = ? AND user_email = ? AND status = 'Оплачен'

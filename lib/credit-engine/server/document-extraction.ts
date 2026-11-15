@@ -1,6 +1,8 @@
+import {execFile} from 'node:child_process';
+import {resolve} from 'node:path';
 import { strFromU8, unzipSync } from "fflate";
 
-type PdfTextItem = { str?: string; width?: number; transform?: number[] };
+export type PdfTextItem = { str?: string; width?: number; transform?: number[] };
 
 function pageText(items: PdfTextItem[], preserveColumns: boolean) {
   const rows: Array<{ y: number; items: Array<{ x: number; width: number; text: string }> }> = [];
@@ -32,25 +34,30 @@ function pageText(items: PdfTextItem[], preserveColumns: boolean) {
   }).join("\n");
 }
 
-export async function extractPdfText(bytes: Uint8Array, maxPages = Number.POSITIVE_INFINITY, preserveColumns = false) {
+export async function mapPdfPages<T>(bytes:Uint8Array,maxPages:number,preserveColumns:boolean,
+  visit:(text:string,page:import("pdfjs-dist/types/src/display/api").PDFPageProxy,items:PdfTextItem[])=>Promise<T>) {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   const document = await pdfjs.getDocument({
     data: bytes,
     isEvalSupported: false,
     useSystemFonts: true,
   }).promise;
-  const pages: string[] = [];
+  const pages: T[] = [];
   try {
     if (document.numPages > maxPages) throw new Error("PDF_PAGE_LIMIT");
     for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
       const page = await document.getPage(pageNumber);
       const content = await page.getTextContent();
-      pages.push(pageText(content.items as PdfTextItem[], preserveColumns));
+      pages.push(await visit(pageText(content.items as PdfTextItem[], preserveColumns),page,content.items as PdfTextItem[]));
       page.cleanup();
     }
   } finally {
     await document.destroy();
   }
+  return pages;
+}
+export async function extractPdfText(bytes: Uint8Array, maxPages = Number.POSITIVE_INFINITY, preserveColumns = false) {
+  const pages=await mapPdfPages(bytes,maxPages,preserveColumns,async text=>text);
   return pages.join("\n\f\n");
 }
 
@@ -108,9 +115,24 @@ export function extractCsvText(bytes: Uint8Array) {
   return [...rows, row].join("\n");
 }
 
+function extractLegacyXls(bytes: Uint8Array): Promise<string> {
+  if (bytes.length > 25 * 1024 * 1024 || Buffer.from(bytes.subarray(0, 8)).toString('hex') !== 'd0cf11e0a1b11ae1') {
+    return Promise.reject(Error('Некорректный файл Excel 97–2003.'));
+  }
+  return new Promise((accept, reject) => {
+    const child = execFile('python3', ['-I', resolve('lib/release/read-legacy-xls.py')], {
+      timeout: 12000, killSignal: 'SIGKILL', maxBuffer: 8 * 1024 * 1024,
+      encoding: 'utf8', env: {PATH: process.env.PATH, LANG: 'C.UTF-8', NODE_ENV: process.env.NODE_ENV ?? 'production'}
+    }, (error, output) => error ? reject(Error('Не удалось прочитать книгу XLS.')) : accept(output));
+    child.stdin?.on('error', () => reject(Error('Не удалось передать книгу XLS для чтения.')));
+    child.stdin?.end(bytes);
+  });
+}
+
 export async function extractDocumentText(fileName: string, bytes: Uint8Array, kind: "financial" | "bureau" = "financial") {
   const lower = fileName.toLowerCase();
   if (lower.endsWith(".pdf")) return extractPdfText(bytes, Number.POSITIVE_INFINITY, kind === "financial");
+  if (lower.endsWith(".xls")) return extractLegacyXls(bytes);
   if (lower.endsWith(".xlsx")) return extractXlsxText(bytes);
   if (lower.endsWith(".csv")) return extractCsvText(bytes);
   throw new Error("Формат файла не поддерживается.");

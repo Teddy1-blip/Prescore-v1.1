@@ -1,4 +1,5 @@
 import { stagingFullAccessEnabled } from "./platform/staging-access.ts";
+import { ownerPreviewFullAccess } from "./platform/owner-preview-access.ts";
 import type { AnalysisResult, NormalizedTransaction } from "./prescore";
 
 export type AnalysisTier = "FREE" | "FULL";
@@ -67,6 +68,12 @@ export async function setAnalysisTier(db: EntitlementDatabase, analysisId: strin
 
 export async function resolveAnalysisTier(db: EntitlementDatabase, input: { analysisId: string; userEmail: string; companyInn: string; privileged?: boolean; readOnly?: boolean }) {
   if (input.privileged) return "FULL" as const;
+  if (ownerPreviewFullAccess(input.userEmail)) {
+    // The owner preview is read-only at entitlement layer: do not create grants.
+    const owned = await db.prepare("SELECT id FROM analyses WHERE id = ? AND owner_email = ? LIMIT 1")
+      .bind(input.analysisId, input.userEmail.toLowerCase()).first<{id:string}>();
+    if (owned) return "FULL" as const;
+  }
   if (stagingFullAccessEnabled()) {
     const owned = await db.prepare("SELECT id FROM analyses WHERE id = ? AND owner_email = ? LIMIT 1")
       .bind(input.analysisId, input.userEmail.toLowerCase()).first<{ id: string }>();
