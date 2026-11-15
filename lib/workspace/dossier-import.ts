@@ -5,6 +5,7 @@ import type {TransactionPool} from '../db/compatibility.ts';
 import type {SourceEnvelope} from '../credit-engine/contracts/sources.ts';
 import type {PrivateSource} from './dossier-sources.ts';
 import {wordParagraphs} from '../document-poc/word-paragraphs.ts';
+import {wordReviewPages} from '../document-poc/word-review.ts';
 import {reviewFields} from '../document-poc/review-fields.ts';
 import {mapPdfPages,extractDocumentText} from '../credit-engine/server/document-extraction.ts';
 import {parseAuthoritativeBfoText,parseAuthoritativeQuarterlyText} from '../credit-engine/source-foundation.ts';
@@ -119,8 +120,8 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
       if(ext==='docx'){
         const paragraphs=wordParagraphs(bytes);
         // Route the document as one text, then bind each extracted fragment to its paragraph.
-        const page={page:1,logicalPage:1,method:'TEXT' as const,text:paragraphs.map(p=>p.text).join('\n')};
-        const review=reviewFields(sourceId,[page],1,family,'SINGLE',[]);
+        const pages=wordReviewPages(paragraphs);
+        const review=reviewFields(sourceId,pages,pages.length,family,'SINGLE',[]);
         for(const field of review.fields){
           const matches=field.fragment?paragraphs.filter(p=>p.text.includes(field.fragment!)):[];
           field.page=matches.length===1?matches[0].page:null;

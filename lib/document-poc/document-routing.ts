@@ -119,7 +119,7 @@ const rules: readonly Rule[] = [
   {family:'BFO',subtype:'EQUITY_STATEMENT',pattern:/^отчет\s+об\s+изменениях\s+капитала(?:\s|$)/iu},
   {family:'BFO',subtype:'AUDIT_REPORT',pattern:/^аудиторское\s+заключение(?:\s|$)/iu},
   {family:'BFO',subtype:'FINANCIAL_NOTES',pattern:/^пояснения\s+к\s+(?:бухгалтерскому\s+балансу|бухгалтерской\s+отчетности)(?:\s|$)/iu},
-  {family:'CREDIT',subtype:'CREDIT_LINE',pattern:/^(?:договор\s+(?:об?\s+)?(?:открытии\s+)?(?:возобновляемой\s+|невозобновляемой\s+)?кредитной\s+линии|кредитный\s+договор\s+.*кредитной\s+линии)(?:\s|$)/iu},
+  {family:'CREDIT',subtype:'CREDIT_LINE',pattern:/^(?:договор\s+(?:об?\s+)?(?:открытии\s+|о\s+предоставлении\s+)?(?:возобновляемой\s+|невозобновляемой\s+)?кредитной\s+линии|кредитный\s+договор\s+.*кредитной\s+линии)(?:\s|$)/iu},
   {family:'CREDIT',subtype:'OVERDRAFT',pattern:/^(?:договор\s+(?:кредитования\s+(?:в\s+форме\s+)?|о\s+предоставлении\s+)?овердрафта|овердрафт)(?:\s|$)/iu},
   {family:'CREDIT',subtype:'CREDIT_AGREEMENT',pattern:/^кредитный\s+договор(?:\s|$|№|N)/iu},
   {family:'CREDIT',subtype:'LOAN_AGREEMENT',pattern:/^договор\s+(?:(?:денежного|процентного|беспроцентного)\s+)?займа(?:\s|$|№|N)/iu},
