@@ -36,15 +36,38 @@ export function reviewFields(id:string,pages:EvidencePage[],total:number,family:
   // Appendices in a single annual filing can carry prior-year headings and the
   // same row codes. Only F1/F2 and their continuation pages feed their review.
   const eligible=new Set<number>();
-  let inStatements=false;
+  const supportingPages=new Set<number>();
+  let inStatements=false,seenBfo=false,serviceBoundary=false,mixedPhysicalPage=false;
   for(const page of pages){
-    const lead=page.text.split('\n').slice(0,12).join('\n');
-    if(/(?:^|\n)\s*(?:упрощ[её]нный )?(?:бухгалтерский баланс|отч[её]т о финансовых результатах)(?:\s|$)/im.test(lead))inStatements=true;
+    // The original package is preserved in full; only the F1/F2 review scope
+    // is restricted. Tax service receipts can contain other companies' INNs
+    // and quotes of balance-sheet figures.
+    const lead=page.text.split(/\r?\n/).slice(0,18).join('\n');
+    const financialStart=/(?:^|\n)\s*(?:упрощ[её]нный )?(?:бухгалтерский баланс|отч[её]т о финансовых результатах)(?:\s|$)/im.test(lead);
+    const fnsService=/(?:^|\n)\s*(?:(?:(?:код|форма)\s+по\s+)?кнд\s+116(?:600[27]|700[245])(?:\s|$)|информационное сообщение о представительстве|подтверждение даты отправки|квитанция о при[её]ме|извещение о (?:вводе сведений|получении электронного документа))(?:\s|$)/im.test(lead);
+    if(seenBfo&&fnsService)serviceBoundary=true;
+    if(serviceBoundary){
+      supportingPages.add(page.page);
+      if(financialStart||eligible.has(page.page))mixedPhysicalPage=true;
+      continue; // Never re-enter F1/F2 on an annex that quotes its contents.
+    }
+    if(financialStart){inStatements=true;seenBfo=true;}
     else if(/(?:^|\n)\s*(?:отч[её]т (?:об изменениях капитала|о движении денежных средств|о целевом использовании)|пояснения к |аудиторское заключение)/im.test(lead))inStatements=false;
     if(inStatements)eligible.add(page.page);
   }
-  const lines=eligible.size?input.lines.filter(l=>eligible.has(l.page)):input.lines;
-  const financialTables=eligible.size?tables?.filter(t=>eligible.has(t.line.page)):tables;
+  if(mixedPhysicalPage){
+    result.status='INCOMPLETE';
+    result.issues.push('BFO_MIXED_FINANCIAL_AND_SUPPORTING_PAGE_REVIEW');
+    return result;
+  }
+  if(supportingPages.size)result.issues.push('BFO_FNS_SUPPORTING_DOCUMENTS_SEPARATE_REVIEW');
+  if(!eligible.size){
+    result.status='INCOMPLETE';
+    result.issues.push('BFO_FINANCIAL_PAGE_BOUNDARY_UNVERIFIED');
+    return result;
+  }
+  const lines=input.lines.filter(l=>eligible.has(l.page));
+  const financialTables=tables?.filter(t=>eligible.has(t.line.page));
   const bfo=financialStatement({...input,lines,financialTables});
   const metadata=bfo.metadata;
   add('company_inn','ИНН организации','',metadata.inn);
