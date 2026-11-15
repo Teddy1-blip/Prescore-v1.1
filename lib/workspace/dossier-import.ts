@@ -12,7 +12,7 @@ import {parseAuthoritativeBfoText,parseAuthoritativeQuarterlyText} from '../cred
 import {adaptFinancialReport} from '../credit-engine/financial-analysis/quarterly-adapter.ts';
 import {calendarSheet} from './calendar-sheet.ts';
 import {parseAccount51Card} from './account51-card.ts';
-import {extractXlsxRows,extractXlsxSheets} from '../credit-engine/server/document-extraction.ts';
+import {extractXlsxRows,extractXlsxSheets,extractLegacyXlsSheets} from '../credit-engine/server/document-extraction.ts';
 import {nativePartyLedger} from './one-c-ledger.ts';
 import {selectAccountingSheet} from './accounting-xlsx-scope.ts';
 import {parseLedger} from './ledger-import.ts';
@@ -73,13 +73,13 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
           bureauScan=!bureauReport.obligations.length||!bureauReport.subjectInn||!bureauReport.reportDate;
         }catch{bureauScan=true;}
       }
-    }else if(ledger&&ext==='xlsx'){
-      accountingSheet=selectAccountingSheet(extractXlsxSheets(bytes),'OSV');
+    }else if(ledger&&(ext==='xlsx'||ext==='xls')){
+      accountingSheet=selectAccountingSheet(ext==='xlsx'?extractXlsxSheets(bytes):await extractLegacyXlsSheets(bytes),'OSV');
       text=accountingSheet.rows.map(r=>r.join('\t')).join('\n');
     }else text=await extractDocumentText(file.name,ext==='pdf'?bytes.slice():bytes,'financial');
   }catch(error){
-    if(ledger&&ext==='xlsx'&&error instanceof Error&&error.message.startsWith('ACCOUNTING_XLSX_'))
-      throw new InputError('В книге XLSX должен быть ровно один лист ОСВ с однозначным счётом. Выберите отдельную ведомость.');
+    if(ledger&&(ext==='xlsx'||ext==='xls')&&error instanceof Error&&error.message.startsWith('ACCOUNTING_XLSX_'))
+      throw new InputError('В книге Excel должен быть ровно один лист ОСВ с однозначным счётом. Выберите отдельную ведомость.');
     if(autoFinancial&&ext==='pdf'){kind='BFO_REVIEW';reviewKind=true;}
     else throw new InputError('Не удалось прочитать документ. Для БКИ нужен отчёт НБКИ, ОКБ или СБ БКИ до 180 страниц.');
   }
@@ -173,7 +173,8 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
         warnings:recognized.flatMap(s=>s.review.issues)});
     }else if(kind==='CALENDAR_SHEET'){payload.calendarSheet=calendarSheet(text);envelope.status='PROCESSING';}
     else if(kind==='ACCOUNT_51'){
-      const accountSheet=ext==='xlsx'?selectAccountingSheet(extractXlsxSheets(bytes),'ACCOUNT_51'):null;
+      const accountSheet=ext==='xlsx'?selectAccountingSheet(extractXlsxSheets(bytes),'ACCOUNT_51'):
+        ext==='xls'?selectAccountingSheet(await extractLegacyXlsSheets(bytes),'ACCOUNT_51'):null;
       const rows=accountSheet?.rows??(await extractDocumentText(file.name,bytes,'financial')).trimEnd().split(/\r?\n/).map(r=>r.split('\t'));
       const header=rows.findIndex(row=>String(row[0]??'').trim()==='Период');
       const identities=new Set(Array.from(rows.slice(0,header>=0?header:12).flat().join(' ').matchAll(/ИНН\s*[:№]?\s*(\d{10,12})\b/gi),m=>m[1]));
