@@ -5,6 +5,9 @@ import type {AnalysisResult} from '../../../lib/prescore';
 import {bureauRoles,readBureau,bureauEnvelope} from '../../../lib/workspace/bureau-review';
 import type {PrivateSource} from '../../../lib/workspace/dossier-sources';
 import {recognizeDossierBatch} from '../../../lib/workspace/dossier-ocr';
+import {settlementEvent} from '../../../lib/workspace/settlement-events';
+import {sourceProjection} from '../../../lib/workspace/dossier-sources';
+import {mapSheetRow} from '../../../lib/workspace/calendar-sheet';
 import {calendarEntry} from '../../../lib/workspace/calendar-entry';
 import {getRuntime} from '../../../lib/platform/runtime';
 import {checkoKey,loadChecko,validInn,checkoState} from '../../../lib/external/checko-cache';
@@ -23,6 +26,12 @@ export async function GET(request:Request){
   if(!id)return reply({companies:(await pool.query('SELECT id,company_inn AS inn FROM company_dossiers WHERE owner_email=$1 ORDER BY created_at DESC,id',[user.email])).rows});
   const company=await ownedDossier(pool,user.email,id);
   if(!company)return reply({error:'Досье недоступно.'},404);
+  const snapshotId=new URL(request.url).searchParams.get('snapshotId');
+  if(snapshotId){
+    if(!/^[0-9a-f]{64}$/.test(snapshotId))return reply({error:'Версия недоступна.'},404);
+    const {readDossierReport}=await import('../../../lib/workspace/dossier-report');
+    const model=await readDossierReport(pool,user,company,snapshotId);return model?reply({company,model}):reply({error:'Версия недоступна.'},404);
+  }
   const result=await visibleProjection(pool,user,company);
   const versions=await dossierVersions(pool,user.email,company.inn);
   return reply({company,...result,versions});
@@ -113,6 +122,47 @@ export async function POST(request:Request){
         }
         await tx.query('COMMIT');
       return saved.rows.length?reply({verified:patch}):reply({error:'Поле уже изменилось. Обновите досье.'},409);
+      }catch(e){await tx.query('ROLLBACK');throw e;}finally{tx.release();}
+    }
+    if(body.action==='settlement'){
+      if(!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(String(body.key))||typeof body.id!=='string'||!body.entry||typeof body.revision!=='string')return reply({error:'Проверьте поля изменения.'},400);
+      const tx=await pool.connect();
+      try{
+        await tx.query('BEGIN');
+        const company=(await tx.query('SELECT id,company_inn AS inn FROM company_dossiers WHERE owner_email=$1 AND id=$2 FOR UPDATE',[user.email,body.id])).rows[0] as {id:string;inn:string}|undefined;
+        if(!company){await tx.query('ROLLBACK');return reply({error:'Досье недоступно.'},404);}
+        if(['TASK','PROMISE'].includes(body.entry.kind)&&await dossierTier(tx,user,company)!=='FULL'){await tx.query('ROLLBACK');return reply({error:'Задачи и обещания доступны в полном кабинете.'},403);}
+        const sourceId='settlement:'+body.key;
+        const sources=await dossierSources(tx,user.email,company.id);
+        const prior=sources.find(r=>r.id===sourceId)?.payload.settlementEvent;
+        if(prior){
+          const repeat=prior.kind===body.entry.kind&&prior.position===body.entry.position&&prior.asOf===body.entry.asOf&&prior.note===String(body.entry.note).trim()&&(prior.kind==='PAYMENT'?prior.bankId===body.entry.bankId:prior.date===body.entry.date);
+          await tx.query('ROLLBACK');return repeat?reply({id:sourceId}):reply({error:'Номер операции уже использован.'},409);
+        }
+        const position=sourceProjection(sources,company.inn,false).settlements.find(p=>p.id===body.entry.position);
+        const entry=position&&position.revision===body.revision&&settlementEvent(body.entry,position);
+        if(!entry){await tx.query('ROLLBACK');return reply({error:'Проверьте актуальный остаток, срок и основание. Обновите реестр.'},409);}
+        const payload={settlementEvent:entry,envelope:{sourceId,sourceType:'OTHER',companyInn:company.inn,receivedAt:new Date().toISOString(),sourceName:'Подтверждение владельца досье',status:'READY',confidence:null,warnings:[]}};
+        await tx.query("INSERT INTO dossier_sources(dossier_id,source_id,source_type,payload) VALUES($1,$2,'SETTLEMENT_EVENT',$3)",[company.id,sourceId,JSON.stringify(payload)]);
+        await tx.query('COMMIT');return reply({id:sourceId},201);
+      }catch(e){await tx.query('ROLLBACK');throw e;}finally{tx.release();}
+    }
+    if(body.action==='confirm-sheet'){
+      const company=await ownedDossier(pool,user.email,String(body.id??''));
+      if(!company)return reply({error:'Досье недоступно.'},404);
+      if(await dossierTier(pool,user,company)!=='FULL')return reply({error:'Нужен полный доступ.'},403);
+      if(!Array.isArray(body.rows)||body.rows.length<1||body.rows.length>250||new Set(body.rows).size!==body.rows.length)return reply({error:'Выберите от 1 до 250 строк.'},400);
+      const tx=await pool.connect();
+      try{await tx.query('BEGIN');
+        const data=(await tx.query("SELECT payload FROM dossier_sources WHERE dossier_id=$1 AND source_id=$2 AND source_type='CALENDAR_SHEET' FOR UPDATE",[company.id,body.sourceId])).rows[0]?.payload as PrivateSource|undefined;
+        if(!data?.calendarSheet){await tx.query('ROLLBACK');return reply({error:'График недоступен.'},404);}
+        const entries=data.sheetEntries??{};
+        for(const index of body.rows){
+          const value=mapSheetRow(data.calendarSheet,body.mapping,index,data.envelope.fileName??'График');
+          if(!value||entries[index]&&Object.entries(value).some(([k,v])=>entries[index][k as keyof typeof value]!==v)){await tx.query('ROLLBACK');return reply({error:'Проверьте даты, суммы и ранее подтверждённые строки.'},409);}
+          entries[index]=value;
+        }
+        await tx.query('UPDATE dossier_sources SET payload=$1 WHERE dossier_id=$2 AND source_id=$3',[JSON.stringify({...data,sheetEntries:entries}),company.id,body.sourceId]);await tx.query('COMMIT');return reply({confirmed:body.rows.length});
       }catch(e){await tx.query('ROLLBACK');throw e;}finally{tx.release();}
     }
     if(body.action==='calendar'){

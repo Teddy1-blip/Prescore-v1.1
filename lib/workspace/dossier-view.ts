@@ -14,6 +14,7 @@ export async function visibleProjection(pool:QueryExecutor,user:{email:string;is
   const result=sourceProjection(rows,company.inn,entitled);
   if(!entitled){
     result.claims=[];
+    result.settlements=result.settlements.map(p=>({...p,history:p.history.filter(e=>e.kind!=='TASK'&&e.kind!=='PROMISE')}));
     result.bureauReports=[]; result.obligations=[]; result.schedule=[]; result.calendar=[]; result.portfolioAsOf=null;
     result.ledger=result.ledger.filter(row=>row.kind==='COUNTERPARTIES');
     result.reviews=result.reviews.filter(review=>!rows.some(r=>r.id===review.id&&['BKI','CREDIT_DOCUMENT'].includes(r.kind)));

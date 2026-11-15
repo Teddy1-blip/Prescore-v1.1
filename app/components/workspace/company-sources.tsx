@@ -5,6 +5,9 @@ import type {FormEvent} from 'react';
 import type {sourceProjection} from '../../../lib/workspace/dossier-sources';
 import {PLAN} from '../../../lib/billing/domain';
 import {SourceReview} from './source-review';
+import {LiquidityCalendar} from './liquidity-calendar';
+import {InvestmentProfile} from './investment-profile';
+import {CalendarSheetReview} from './calendar-sheet-review';
 import {CalendarEntries} from './calendar-entries';
 import {FinancialDynamics} from './financial-dynamics';
 import {label} from './credit-depth';
@@ -22,8 +25,8 @@ import type {PassportPublicProfile} from '../../../lib/workspace/public-passport
 type Company={id:string;inn:string};
 type PublicProfile=PassportPublicProfile;
 type Profile=ReturnType<typeof sourceProjection>&{company:Company;versions:{id:string;name:string;start:string;end:string}[];publicProfile:PublicProfile|null;entitlement:string};
-const labels:Record<string,string>={ACCOUNT_51:'Карточка счёта 51 · XLSX',BFO:'Годовая бухгалтерская отчётность',QUARTERLY:'Промежуточная отчётность',BKI:'БКИ · НБКИ, ОКБ или СБ БКИ',COUNTERPARTIES:'ОСВ 60, 62 и 76',DEBT_LEDGER:'ОСВ 66 и 67',CHECKO:'Публичные сведения',BANK_STATEMENT:'Банковская выписка',CALENDAR:'Календарь',CREDIT_DOCUMENT:'Кредитные договоры',COMMERCIAL_DOCUMENT:'Контракты и договоры контрагентов',BFO_REVIEW:'Проверка полей БФО PDF'};
-const kinds:Record<string,string[]>={banking:['ACCOUNT_51'],bfo:['BFO','QUARTERLY','BFO_REVIEW'],obligations:['BKI','DEBT_LEDGER','CREDIT_DOCUMENT'],counterparties:['COUNTERPARTIES','COMMERCIAL_DOCUMENT'],documents:['ACCOUNT_51','BFO','QUARTERLY','BKI','COUNTERPARTIES','DEBT_LEDGER','BFO_REVIEW','CREDIT_DOCUMENT','COMMERCIAL_DOCUMENT']};
+const labels:Record<string,string>={CALENDAR_SHEET:'График платежей · XLS, XLSX, CSV',ACCOUNT_51:'Карточка счёта 51 · XLSX',BFO:'Годовая бухгалтерская отчётность',QUARTERLY:'Промежуточная отчётность',BKI:'БКИ · НБКИ, ОКБ или СБ БКИ',COUNTERPARTIES:'ОСВ 60, 62 и 76',DEBT_LEDGER:'ОСВ 66 и 67',CHECKO:'Публичные сведения',BANK_STATEMENT:'Банковская выписка',CALENDAR:'Календарь',CREDIT_DOCUMENT:'Кредитные договоры',COMMERCIAL_DOCUMENT:'Контракты и договоры контрагентов',BFO_REVIEW:'Проверка полей БФО PDF'};
+const kinds:Record<string,string[]>={calendar:['CALENDAR_SHEET'],banking:['ACCOUNT_51'],bfo:['BFO','QUARTERLY','BFO_REVIEW'],obligations:['BKI','DEBT_LEDGER','CREDIT_DOCUMENT'],counterparties:['COUNTERPARTIES','COMMERCIAL_DOCUMENT'],documents:['ACCOUNT_51','BFO','QUARTERLY','BKI','COUNTERPARTIES','DEBT_LEDGER','BFO_REVIEW','CREDIT_DOCUMENT','COMMERCIAL_DOCUMENT']};
 const dossierHref=(id:string,view:string)=>'/dashboard?'+new URLSearchParams({dossierId:id,view});
 async function read<T>(url:string,options?:RequestInit):Promise<T>{
  const response=await fetch(url,{cache:'no-store',...options}),body=await response.json();
@@ -96,7 +99,7 @@ export function CompanySources({view,id,bankInn,bank,openBank,onCompany,onSource
  const relevantClaims=profile?.claims.filter(c=>view==='home'||view==='analysis'||view==='actions'||view==='financing'&&c.stage==='product'||c.sources.some(s=>view==='bfo'?['BFO','QUARTERLY'].includes(s.type):view==='obligations'?s.type==='BKI'||profile.sources.some(r=>c.sourceIds.includes(r.id)&&r.kind==='CREDIT_DOCUMENT'):false))??[];
  const [portfolioSource,setPortfolioSource]=useState('BKI');
  const portfolioTabs=[['BKI','БКИ'],['CREDIT_DOCUMENT','Кредитные договоры'],['DEBT_LEDGER','ОСВ 66 и 67']];
- const visibleKinds=view==='obligations'?[portfolioSource]:kinds[view]??[];
+ const visibleKinds=view==='calendar'&&profile?.entitlement!=='FULL'?[]:view==='obligations'?[portfolioSource]:kinds[view]??[];
  const currentLedger=profile?.ledger.filter(l=>l.kind===(view==='obligations'?'DEBT_LEDGER':'COUNTERPARTIES'))??[];
 
  const bfoClaims=profile?.claims.filter(c=>c.sources.some(s=>['BFO','QUARTERLY','CHECKO'].includes(s.type)))??[];
@@ -191,7 +194,7 @@ export function CompanySources({view,id,bankInn,bank,openBank,onCompany,onSource
   {view==='home'&&<button type="button" disabled={busy||!inn} onClick={()=>void submit('preview')}>Проверить Checko</button>}
   <button type="submit" disabled={busy||!inn}>+ Добавить компанию</button></form>
   </Panel>}
-  {view==='counterparties'&&<SettlementRegisters rows={profile?.settlements??[]}/>}
+  {view==='counterparties'&&<SettlementRegisters rows={profile?.settlements??[]} full={profile?.entitlement==='FULL'} save={async(entry,key,revision)=>{if(!company)throw Error('Выберите компанию.');await read('/api/dossier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'settlement',id:company.id,entry,key,revision})});setRevision(v=>v+1);}}/>}
   {view==='banking'&&<Account51Comparison cards={profile?.cards51??[]} bank={bank}/>}
   {view==='home'&&(company||preview)&&<CompanyPassport inn={company?.inn??inn} profile={profile?.publicProfile??preview} hasStatements={(profile?.versions.length??0)>0} hasAnnual={!!profile?.financial?.history.some(p=>p.period.kind==='ANNUAL')} full={profile?.entitlement==='FULL'} onBankUpload={openBank}/>}
   {view==='home'&&preview&&!company&&<p className="pc-muted">Публичная проверка выполнена для предварительного просмотра. Чтобы сохранить сведения в личном досье, нажмите «Добавить компанию».</p>}
@@ -213,7 +216,8 @@ export function CompanySources({view,id,bankInn,bank,openBank,onCompany,onSource
  {view==='billing'&&<Panel title="Подписка компании"><p>Текущий доступ · {profile.entitlement}</p><p>{PLAN.name} · {(PLAN.amountMinor/100).toLocaleString('ru-RU')} ₽</p></Panel>}
  {view==='financing'&&<Panel title="Финансирование">{profile.versions.length?<a href={'/dashboard?'+new URLSearchParams({analysisId:profile.versions[0].id,view:'financing'})}>Открыть подбор и заявки по сохранённому анализу</a>:<p>Предложения появятся при подтверждённом соответствии условиям продукта.</p>}</Panel>}
  {view==='calendar'&&profile.entitlement!=='FULL'&&<Panel title="Платёжный календарь"><p>График обязательств, сроки расчётов и сценарии движения денег доступны в полном кабинете.</p><a href={dossierHref(company.id,'billing')}>Посмотреть условия доступа</a></Panel>}
- {view==='calendar'&&profile.schedule.length>0&&<Panel title="Даты по обязательствам">{profile.schedule.map(e=><p key={e.id}>{e.date} · {e.creditor} · {e.contract} · {e.amount==null?'Сумма не указана':numeric(e.amount,'KNOWN','RUB')}</p>)}</Panel>}
+ {view==='calendar'&&profile.entitlement==='FULL'&&<><LiquidityCalendar profile={profile} bank={bank}/>{profile.sheets.map(sheet=><CalendarSheetReview key={sheet.id} sheet={sheet} confirm={async(mapping,rows)=>{await read('/api/dossier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'confirm-sheet',id:company.id,sourceId:sheet.id,mapping,rows})});setRevision(v=>v+1);}}/>)}</>}
+ {view==='analysis'&&profile.entitlement==='FULL'&&<InvestmentProfile/>}
  {view==='calendar'&&profile.entitlement==='FULL'&&<CalendarEntries items={profile.calendar} save={async(entry,key)=>{await read('/api/dossier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'calendar',id:company.id,entry,key})});setRevision(v=>v+1);}}/>}
    {reviewPanels}
 
@@ -227,7 +231,7 @@ export function CompanySources({view,id,bankInn,bank,openBank,onCompany,onSource
  </>}
  {visibleKinds.length>0&&<section className="pc-panel pc-source-intake"><h2>Добавить источник</h2>{visibleKinds.map(kind=>{
    const contract=['CREDIT_DOCUMENT','COMMERCIAL_DOCUMENT'].includes(kind),bureau=kind==='BKI',scan=contract||bureau||kind==='BFO_REVIEW';
-   const accept=kind==='ACCOUNT_51'?'.xlsx':contract?'.pdf,.docx,.png,.jpg,.jpeg':scan?'.pdf,.png,.jpg,.jpeg':kind.endsWith('LEDGER')||kind==='COUNTERPARTIES'?'.csv,.xls,.xlsx':'.pdf,.xls,.xlsx,.csv';
+   const accept=kind==='CALENDAR_SHEET'?'.xls,.xlsx,.csv':kind==='ACCOUNT_51'?'.xlsx':contract?'.pdf,.docx,.png,.jpg,.jpeg':scan?'.pdf,.png,.jpg,.jpeg':kind.endsWith('LEDGER')||kind==='COUNTERPARTIES'?'.csv,.xls,.xlsx':'.pdf,.xls,.xlsx,.csv';
    return <form onSubmit={upload} key={kind} aria-label={labels[kind]}><input name="kind" type="hidden" value={kind}/>
      <label>{labels[kind]} <input aria-label={labels[kind]} name="file" required type="file" accept={accept}/></label>
      {bureau&&<label>Кому принадлежит отчёт <select name="relationship">{['Компания-заёмщик','ИП-заёмщик','Собственник','Руководитель','Поручитель'].map(r=><option key={r}>{r}</option>)}</select></label>}

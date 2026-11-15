@@ -9,6 +9,7 @@ import {reviewFields} from '../document-poc/review-fields.ts';
 import {mapPdfPages,extractDocumentText} from '../credit-engine/server/document-extraction.ts';
 import {parseAuthoritativeBfoText,parseAuthoritativeQuarterlyText} from '../credit-engine/source-foundation.ts';
 import {adaptFinancialReport} from '../credit-engine/financial-analysis/quarterly-adapter.ts';
+import {calendarSheet} from './calendar-sheet.ts';
 import {parseAccount51Card} from './account51-card.ts';
 import {extractXlsxRows} from '../credit-engine/server/document-extraction.ts';
 import {parseLedger} from './ledger-import.ts';
@@ -23,19 +24,20 @@ import {financialTableRows} from '../document-poc/financial-layout.ts';
 import {validInn} from '../external/checko-inn.ts';
 import {dossierTier} from './dossier-view.ts';
 import {ownedDossier,saveDossier} from './dossier.ts';
-export const uploadKinds=['BFO','QUARTERLY','BKI','COUNTERPARTIES','DEBT_LEDGER','CREDIT_DOCUMENT','COMMERCIAL_DOCUMENT','BFO_REVIEW','AUTO_BFO','ACCOUNT_51'] as const;
+export const uploadKinds=['BFO','QUARTERLY','BKI','COUNTERPARTIES','DEBT_LEDGER','CREDIT_DOCUMENT','COMMERCIAL_DOCUMENT','BFO_REVIEW','AUTO_BFO','ACCOUNT_51','CALENDAR_SHEET'] as const;
 type Kind=typeof uploadKinds[number];
 export class InputError extends Error {}
 export class FullRequired extends Error {}
 export async function importSource(db:TransactionPool,owner:string,id:string,kind:Kind,file:File,selectedInn='',relationship:typeof bureauRoles[number]='Компания-заёмщик',isAdmin=false) {
   const dossier=id?await ownedDossier(db,owner,id):undefined;
   if(id&&!dossier)return null;
+  if(kind==='CALENDAR_SHEET'&&(!dossier||await dossierTier(db,{email:owner,isAdmin},dossier)!=='FULL'))throw new FullRequired('Для импорта графика выберите компанию с полным доступом.');
   const ext=file.name.split('.').pop()?.toLowerCase()??'';
   const ledger=kind==='COUNTERPARTIES'||kind==='DEBT_LEDGER';
   const autoFinancial=kind==='AUTO_BFO';
   let reviewKind=kind==='CREDIT_DOCUMENT'||kind==='COMMERCIAL_DOCUMENT'||kind==='BFO_REVIEW';
   const image=['jpg','jpeg','png'].includes(ext);
-  const allowed=kind==='ACCOUNT_51'?['xlsx']:reviewKind||kind==='BKI'?['pdf','png','jpg','jpeg']:ledger?['xls','xlsx','csv']:['pdf','xls','xlsx','csv',...(autoFinancial?['png','jpg','jpeg']:[])];
+  const allowed=kind==='CALENDAR_SHEET'?['xls','xlsx','csv']:kind==='ACCOUNT_51'?['xlsx']:reviewKind||kind==='BKI'?['pdf','png','jpg','jpeg']:ledger?['xls','xlsx','csv']:['pdf','xls','xlsx','csv',...(autoFinancial?['png','jpg','jpeg']:[])];
   if(kind==='CREDIT_DOCUMENT'||kind==='COMMERCIAL_DOCUMENT')allowed.push('docx');
   if(!allowed.includes(ext)||file.name.length>180||!file.size||file.size>(kind==='BKI'?35:25)*1024*1024)throw new InputError('Проверьте размер и формат файла.');
   const bytes=new Uint8Array(await file.arrayBuffer());
@@ -103,7 +105,7 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
   if(kind==='QUARTERLY'&&await dossierTier(db,{email:owner,isAdmin},{inn})!=='FULL')throw new FullRequired('Для промежуточной отчётности нужен полный доступ.');
   if((reviewKind||bureauScan)&&ext!=='docx'&&file.size>OCR_MAX_BYTES)throw new InputError('Для распознавания нужен файл размером до 16 МБ.');
   const sourceId=kind.toLowerCase()+':'+hash, now=new Date().toISOString();
-  const envelope:SourceEnvelope={sourceId,sourceType:ledger||reviewKind||kind==='ACCOUNT_51'?'OTHER':kind as 'BFO'|'QUARTERLY'|'BKI',fileName:file.name,
+  const envelope:SourceEnvelope={sourceId,sourceType:ledger||reviewKind||kind==='ACCOUNT_51'||kind==='CALENDAR_SHEET'?'OTHER':kind as 'BFO'|'QUARTERLY'|'BKI',fileName:file.name,
     status:'READY',companyInn:inn,warnings:[],confidence:null,receivedAt:now,contentHash:hash,rawReference:'sha256:'+hash};
   const payload:PrivateSource={envelope};
   try{
@@ -134,14 +136,15 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
       }
       envelope.status='PROCESSING';
     }else{
-    if(kind==='ACCOUNT_51'){
+    if(kind==='CALENDAR_SHEET'){payload.calendarSheet=calendarSheet(text);envelope.status='PROCESSING';}
+    else if(kind==='ACCOUNT_51'){
       const rows=extractXlsxRows(bytes);
       const identities=new Set(Array.from(rows.slice(0,25).flat().join(' ').matchAll(/ИНН\s*[:№]?\s*(\d{10,12})\b/gi),m=>m[1]));
       if(identities.size && (identities.size!==1 || !identities.has(inn)))throw new InputError('ИНН карточки счёта 51 не совпадает с досье.');
       const card=parseAccount51Card(rows);
       const sum=(direction:'INFLOW'|'OUTFLOW')=>card.operations.filter(row=>row.direction===direction).reduce((total,row)=>total+Math.round(row.amount*100),0)/100;
       Object.assign(envelope,{periodFrom:card.periodFrom,periodTo:card.periodTo,parserVersion:'1C-ACCOUNT-51-V1',warnings:card.warnings});
-      payload.account51={from:card.periodFrom,to:card.periodTo,opening:card.openingBalance,closing:card.closingBalance,inflow:sum('INFLOW'),outflow:sum('OUTFLOW'),entries:card.operations.length,requiresReview:!card.reconciled};
+      payload.account51={from:card.periodFrom,to:card.periodTo,opening:card.openingBalance,closing:card.closingBalance,inflow:sum('INFLOW'),outflow:sum('OUTFLOW'),entries:card.operations.length,requiresReview:!card.reconciled||card.closingBalance===null||card.openingBalance===null};
     }else if(ledger)payload.ledger=parseLedger(text,inn,kind as 'COUNTERPARTIES'|'DEBT_LEDGER');
     else if(kind==='BKI'){
       const bki=readBureau(text,file.name,inn,relationship);
