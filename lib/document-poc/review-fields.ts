@@ -53,6 +53,20 @@ export function reviewFields(id:string,pages:EvidencePage[],total:number,family:
   add('period_end','Конец периода','',metadata.period_end);
   add('statement_unit','Единица отчётности','',metadata.unit);
   for(const row of bfo.rows){const code=row.line_code.value;if(code)add(code,'Строка '+code,String(row.unit.value??''),row.current_period_value);}
+  // A recognized document heading or a successful OCR response is not proof
+  // that even one current-period financial value was read accurately.
+  const readable = bfo.rows.filter(row=>row.current_period_value.value!==null && row.current_period_value.status==='READ');
+  if(!readable.length){
+    result.status='INCOMPLETE';
+    result.issues.push('BFO_CURRENT_VALUES_UNVERIFIED');
+  }
+  // Balance 1600 alone is insufficient: the asset and liability totals must
+  // both be present as independent readable source rows before readiness.
+  if(metadata.forms.some(form=>form.value==='Бухгалтерский баланс') &&
+      !['1600','1700'].every(code=>readable.some(row=>row.line_code.value===code))){
+    result.status='INCOMPLETE';
+    result.issues.push('BFO_BALANCE_TOTALS_UNVERIFIED');
+  }
  }else{
   for(const [key,label,regex] of [
     ['contract_number','Номер договора',/^(?:(?:государственный |муниципальный )?контракт|договор)[^№\n]{0,90}№\s*([\p{L}\d._/-]+)(?=\s|$)/iu],
