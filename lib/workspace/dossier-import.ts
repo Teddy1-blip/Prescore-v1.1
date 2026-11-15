@@ -55,6 +55,10 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
   if(ext==='xlsx')try{validateZipBudget(bytes);}catch{throw new InputError('Проверьте размер и структуру архива XLSX.');}
   if(autoFinancial&&image){kind='BFO_REVIEW';reviewKind=true;}
   let text='';
+  // Keep selected worksheet's source row map alongside its cell matrix.
+  // Re-splitting a TSV transcript loses XLSX physical row identity and can
+  // corrupt cell boundaries if 1C descriptions contain embedded newlines.
+  let accountingSheet:ReturnType<typeof selectAccountingSheet>|null=null;
   let bureauScan=kind==='BKI'&&image;
   let bureauReport;
   if(!reviewKind&&!bureauScan&&!['ACCOUNT_51','BANK_XLSX','BANK_QUESTIONNAIRE'].includes(kind))try{
@@ -70,8 +74,8 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
         }catch{bureauScan=true;}
       }
     }else if(ledger&&ext==='xlsx'){
-      const selected=selectAccountingSheet(extractXlsxSheets(bytes),'OSV');
-      text=selected.rows.map(r=>r.join('\t')).join('\n');
+      accountingSheet=selectAccountingSheet(extractXlsxSheets(bytes),'OSV');
+      text=accountingSheet.rows.map(r=>r.join('\t')).join('\n');
     }else text=await extractDocumentText(file.name,ext==='pdf'?bytes.slice():bytes,'financial');
   }catch(error){
     if(ledger&&ext==='xlsx'&&error instanceof Error&&error.message.startsWith('ACCOUNTING_XLSX_'))
@@ -179,8 +183,8 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
       Object.assign(envelope,{periodFrom:card.periodFrom,periodTo:card.periodTo,parserVersion:'1C-ACCOUNT-51-V1',warnings:card.warnings});
       payload.account51={from:card.periodFrom,to:card.periodTo,opening:card.openingBalance,closing:card.closingBalance,inflow:sum('INFLOW'),outflow:sum('OUTFLOW'),entries:card.operations.length,requiresReview:!card.reconciled||card.closingBalance===null||card.openingBalance===null};
     }else if(ledger){
-      const rows=text.split(/\r?\n/).map(r=>r.split('\t'));
-      payload.ledger=nativePartyLedger(rows,inn,identityConfirmed,kind as 'COUNTERPARTIES'|'DEBT_LEDGER',file.name)??parseLedger(text,inn,kind as 'COUNTERPARTIES'|'DEBT_LEDGER');
+      const rows=accountingSheet?.rows??text.split(/\r?\n/).map(r=>r.split('\t'));
+      payload.ledger=nativePartyLedger(rows,inn,identityConfirmed,kind as 'COUNTERPARTIES'|'DEBT_LEDGER',file.name,accountingSheet?.rowNumbers)??parseLedger(text,inn,kind as 'COUNTERPARTIES'|'DEBT_LEDGER');
     }
     else if(kind==='BKI'){
       const bki=readBureau(text,file.name,inn,relationship);
