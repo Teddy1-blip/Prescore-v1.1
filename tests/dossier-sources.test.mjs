@@ -81,6 +81,28 @@ test('Private company dossier, independent inputs and canonical combined analysi
     const a=(await r.json()).analysis,d=await read(await save(user),user);
     assert.equal(d.versions[0].id,a.id);assert.ok(d.sources.some(s=>s.kind==='BANK_STATEMENT'));
   });
+  await t.test('accepted bank originals preserve their exact bytes once per eligible dossier',async t=>{
+    const user=actor(31),id=await save(user);
+    t.mock.method(rt.load('lib/platform/staging-access.ts'),'stagingOwnerWorkspace',email=>email===user.email);
+    const bytes=Buffer.from('\uFEFF'+statementFixture({inn}),'utf8');
+    const submit=(who,dossierId,statements)=>rt.request('/api/analysis',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({dossierId,statements})},who);
+    const accepted={fileName:'original.txt',base64:bytes.toString('base64')};
+    for (let attempt=0;attempt<2;attempt++){
+      const result=await submit(user,id,[accepted,{...accepted,fileName:'renamed.txt'},{fileName:'invalid.txt',base64:'YWJj'}]);
+      assert.equal(result.status,200,await result.clone().text());
+    }
+    const sources=(await read(id,user)).sources.filter(s=>s.kind==='BANK_STATEMENT');
+    assert.equal(sources.length,1);
+    assert.ok(sources[0].documentId);
+    const download='/api/documents?download='+sources[0].documentId;
+    assert.deepEqual(Buffer.from(await (await rt.request(download,{},user)).arrayBuffer()),bytes);
+    assert.equal((await rt.request(download,{},rt.stranger)).status,404);
+    assert.equal((await rt.pg.query('SELECT id FROM client_documents WHERE owner_email=$1',[user.email])).rows.length,1);
+    const ordinary=actor(32),ordinaryId=await save(ordinary);
+    assert.equal((await submit(ordinary,ordinaryId,[accepted])).status,200);
+    assert.equal((await read(ordinaryId,ordinary)).sources[0].documentId,null);
+    assert.equal((await submit(user,ordinaryId,[accepted])).status,409);
+  });
   await t.test('BKI-only resolves contractual debt through BLK-06.5 without capacity',async t=>{
     const user=actor(4),id=await save(user),r=await attach(id,'BKI',corporateBkiFile(inn),user);assert.equal(r.status,201,await r.clone().text());
     assert.deepEqual((await read(id,user)).obligations,[]);

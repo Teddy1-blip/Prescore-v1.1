@@ -1,3 +1,6 @@
+import {randomUUID} from 'node:crypto';
+import {documentStorage} from '../../../lib/storage/documents';
+import {stagingOwnerWorkspace} from '../../../lib/platform/staging-access';
 import {saveDossier,ownedDossier} from '../../../lib/workspace/dossier';
 import {dossierSources} from '../../../lib/workspace/dossier-sources';
 import {withDossierSources} from '../../../lib/workspace/dossier-bank';
@@ -23,6 +26,8 @@ export async function POST(request: Request) {
     const statements = Array.isArray(body.statements) ? body.statements : [];
     if (!statements.length || statements.length > MAX_FILES) return Response.json({ error: "Добавьте от 1 до 30 выписок" }, { status: 400 });
     const candidates: StatementInput[] = [];
+    const originals = new Map<string, Uint8Array>();
+    const keepOriginals = stagingOwnerWorkspace(user.email);
     const excluded = new Map<number, StatementScreeningResult>();
     let totalLength = 0;
     for (const [index, item] of statements.entries()) {
@@ -48,6 +53,7 @@ export async function POST(request: Request) {
         excluded.set(index,{fileName,status:"UNSUPPORTED",contentHash,sourceId:`statement:${contentHash}`,reason:"Банковский анализ принимает TXT 1CClientBankExchange в UTF-8 или Windows-1251."});
         continue;
       }
+      if (keepOriginals && typeof content !== "string") originals.set(contentHash, content);
       candidates.push({fileName,text,fileHash:typeof content!=="string",contentHash,sourceId:`statement:${contentHash}`});
     }
     stage='BANK_SCREEN';
@@ -82,18 +88,41 @@ export async function POST(request: Request) {
     } catch { result.checkoAttempt={status:'FAILED',fetchedAt:null}; }
     stage='BANK_SAVE';
     const company=validInn(result.companyInn)?await saveDossier(env.DB.pool,user.email,result.companyInn):null;
+    const storedKeys:string[]=[];
     const tx=await env.DB.pool.connect();
     try{
       await tx.query('BEGIN');
       if(company){
         await tx.query('SELECT id FROM company_dossiers WHERE id=$1 AND owner_email=$2 FOR UPDATE',[company.id,user.email]);
+        for (const source of result.sourceManifest?.bankStatements ?? []) {
+          const bytes = source.contentHash && originals.get(source.contentHash);
+          if (!bytes || source.companyInn !== company.inn) continue;
+          const existing = await tx.query('SELECT document_id FROM dossier_sources WHERE dossier_id=$1 AND source_id=$2',[company.id,source.sourceId]);
+          if (existing.rows[0]?.document_id) continue;
+          const documentId = randomUUID();
+          const {key} = await documentStorage().put(bytes,'text/plain');
+          storedKeys.push(key);
+          await tx.query(`INSERT INTO client_documents (id,company_inn,category,file_name,mime_type,size_bytes,content_base64,uploaded_by,owner_email,storage_key)
+            VALUES ($1,$2,'BANK_STATEMENT',$3,'text/plain',$4,'',$5,$5,$6)`,[documentId,company.inn,source.fileName,bytes.length,user.email,key]);
+          await tx.query(`INSERT INTO dossier_sources (dossier_id,source_id,source_type,payload,document_id)
+            VALUES ($1,$2,'BANK_STATEMENT',$3,$4)
+            ON CONFLICT (dossier_id,source_id) DO UPDATE SET document_id=EXCLUDED.document_id
+            WHERE dossier_sources.document_id IS NULL`,[company.id,source.sourceId,JSON.stringify({envelope:source}),documentId]);
+        }
         result=withDossierSources(result,await dossierSources(tx,user.email,company.id));
       }
       const stored=analysisForStorage(result);
       await tx.query(`INSERT INTO analyses (id, company_name, company_inn, file_name, period_from, period_to, score, grade, readiness, payload, owner_email, created_at)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,[result.id,result.companyName,result.companyInn,result.fileName,result.periodFrom,result.periodTo,result.score,result.grade,result.readiness,JSON.stringify(stored),user.email,result.createdAt]);
       await tx.query('COMMIT');
-    }catch(error){await tx.query('ROLLBACK');throw error;}finally{tx.release();}
+    } catch (error) {
+      await tx.query('ROLLBACK');
+      for (const key of storedKeys) {
+        const referenced = await tx.query('SELECT id FROM client_documents WHERE storage_key=$1',[key]);
+        if (!referenced.rows.length) await documentStorage().delete(key);
+      }
+      throw error;
+    } finally { tx.release(); }
     stage='BANK_ENTITLEMENT';
     await ensureFreeEntitlement(db, result.id, user.email, result.companyInn);
     try {
