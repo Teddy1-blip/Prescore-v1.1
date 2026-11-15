@@ -75,3 +75,8 @@
   }
   .cr-report .pc-table-scroll th small { display: block; }
 }
+
+.cr-download {max-width:1120px;margin:0 auto;padding:16px 24px;background:#fff}
+.cr-download button {border:0;border-radius:8px;padding:10px 18px;background:#075f56;color:white;font:inherit;font-weight:600;cursor:pointer}
+.cr-download [role=alert] {display:block;margin-top:8px}
+@media print {.cr-download {display:none}}

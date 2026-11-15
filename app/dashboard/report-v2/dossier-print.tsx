@@ -1,10 +1,11 @@
 import type {DossierReport} from '../../../lib/workspace/dossier-report';
-import {DossierSettlementBalances} from '../../components/workspace/dossier-settlement-balances';
+import {DossierSettlementBalances} from '../../components/workspace/dossier-settlement-balances.tsx';
 import {PrintControl} from './print-control';
+import {ReportDownload} from './report-download.tsx';
 type Result=DossierReport;
 export function DossierPrint({inn,result}:{inn:string;result:Result}){
  const name=result.name;
- return <main className="cr-report"><PrintControl/><header><h1>Финансовый профиль компании</h1><p>{name} · ИНН {inn} · {result.entitlement}</p></header>
+ return <main className="cr-report"><ReportDownload report={{inn,dossier:result}}/><PrintControl/><header><h1>Финансовый профиль компании</h1><p>{name} · ИНН {inn} · {result.entitlement}</p></header>
  {result.financial?.history.map(p=><section key={p.id}><h2>Бухгалтерская отчётность · {p.period.from} — {p.period.to}</h2>
  {p.groups.map(g=><section key={g.key}><h3>{g.title}</h3><dl>{g.metrics.filter(m=>m.value!==null).map(m=><div key={m.key}><dt>{m.label}</dt><dd>{typeof m.value==='number'?m.value.toLocaleString('ru-RU',{maximumFractionDigits:3}):m.value} {{RUB:'₽',PERCENT:'%',RATIO:'×',DAYS:'дн.',COUNT:''}[m.unit]}</dd></div>)}</dl></section>)}</section>)}
  {result.obligations.length>0&&<section><h2>Обязательства на {result.portfolioAsOf}</h2>{result.obligations.map(o=><p key={o.id}>{o.creditor} · {o.contract} · {o.principal==null?'Остаток не указан':o.principal.toLocaleString('ru-RU')+' ₽'}</p>)}</section>}

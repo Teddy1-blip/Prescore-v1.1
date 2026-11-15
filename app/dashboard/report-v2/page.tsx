@@ -17,14 +17,19 @@ export default async function ReportPage({searchParams}: {searchParams: Promise<
  const query = await searchParams;
  if(query.dossierId && !query.analysisId){
    const user=await requireApiUser();
-   if(!user)redirect('/login?returnTo='+encodeURIComponent('/dashboard/report-v2?'+new URLSearchParams({dossierId:query.dossierId,print:'1'})));
+   if(!user)redirect('/login?returnTo='+encodeURIComponent('/dashboard/report-v2?'+new URLSearchParams({dossierId:query.dossierId,...(query.snapshotId?{snapshotId:query.snapshotId}:{}),print:'1'})));
    const pool=getRuntime().DB.pool;
    const {ownedDossier}=await import('../../../lib/workspace/dossier');
    const company=await ownedDossier(pool,user.email,query.dossierId);
    if(!company)notFound();
-   const {readDossierReport}=await import('../../../lib/workspace/dossier-report');
+   const {readDossierReport,ownedReportDecision}=await import('../../../lib/workspace/dossier-report');
    const report=await readDossierReport(pool,user,company,query.snapshotId??'');
    if(!report)notFound();
+   if(report.decision){
+     const revision=await ownedReportDecision(getRuntime().DB,user,company,report.decision);
+     if(!revision)notFound();
+     return <PrintReport model={revision.model} banking={revision.banking} realAnalysisId={report.decision.analysisId} appendix={report}/>;
+   }
    const {DossierPrint}=await import('./dossier-print');
    return <DossierPrint inn={company.inn} result={report}/>;
  }
@@ -50,7 +55,7 @@ export default async function ReportPage({searchParams}: {searchParams: Promise<
    readAccess: id => readableAnalysis(db, id, user),
    readTier: (id, access) => resolveAnalysisTier(db, {analysisId:id,userEmail:access.row.ownerEmail ?? '',companyInn:access.row.companyInn,privileged:user.isAdmin || access.access === 'agent',readOnly: true}),
    readOperations: (id, access) => readWorkspaceOperations(db,id,access.row.companyInn,user),
-   recordDecision: ({canonical,report,access}) => persistDecisionRevision(db as unknown as DecisionRevisionDatabase,{canonical,report,access}).then(()=>undefined),
+   recordDecision: ({canonical,report,access,banking}) => persistDecisionRevision(db as unknown as DecisionRevisionDatabase,{canonical,report,access,banking}).then(()=>undefined),
    readProfile: async inn => {
     const row = await db.prepare('SELECT payload FROM checko_profiles WHERE inn = ? LIMIT 1').bind(inn).first<{payload:string}>();
     return row ? cachedProfile(row.payload,inn) : undefined;

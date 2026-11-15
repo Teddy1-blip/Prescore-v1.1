@@ -1,5 +1,8 @@
 import type {PrintBankingV1} from '../../../lib/workspace/print-banking.ts';
 import {checkoStatusText} from '../../../lib/external/checko-summary.ts';
+import type {DossierReport} from '../../../lib/workspace/dossier-report';
+import {DossierSettlementBalances} from '../../components/workspace/dossier-settlement-balances.tsx';
+import {ReportDownload} from './report-download.tsx';
 import {BankingAppendix} from './banking-appendix.tsx';
 import {publicText} from '../../../lib/credit-engine/client-report/copy.ts';
 import {SourceAppendix} from './source-appendix.tsx';
@@ -16,9 +19,12 @@ export function printPresentation(model:ClientReportModelV1):ClientReportModelV1
  return {...model,primaryFactors,contextHighlights,capacity,dataQuality,limitations,readiness,detailedSections};
 }
 // Same presentation model; no second analytical pipeline.
-export function PrintReport({model,realAnalysisId,banking}:{model:ClientReportModelV1;realAnalysisId?:string;banking?:PrintBankingV1|null}){
+export function PrintReport({model,realAnalysisId,banking,appendix}:{appendix?:DossierReport;model:ClientReportModelV1;realAnalysisId?:string;banking?:PrintBankingV1|null}){
  const full=model.meta.entitlement==='FULL';
  const presentation=printPresentation(model);
  if(full&&banking)presentation.sources=presentation.sources.map(s=>({...s,period:banking.sourcePeriods[s.id]?.join('; ')??s.period}));
- return <>{full&&model.checko&&<section><h2>Открытые сведения · Checko</h2><p>{checkoStatusText(model.checko.status, model.company.inn)}{model.checko.fetchedAt && ' · '+model.checko.fetchedAt.slice(0,10)}</p><dl>{model.checko.rows.map(r=><div key={r.label}><dt>{r.label}</dt><dd>{r.value}</dd></div>)}</dl></section>}<ClientReportShell model={presentation} realAnalysisId={realAnalysisId} print/>{full&&banking&&<BankingAppendix banking={banking}/>}<SourceAppendix model={model}/><div className="ex-print"><ExpertiseMemo model={model} print/></div>{full && model.meta.snapshot && <footer>Версия расчёта <code style={{overflowWrap:"anywhere"}}>{model.meta.snapshot.snapshotId}</code></footer>}</>;
+ return <>{full&&realAnalysisId&&<ReportDownload report={{inn:model.company.inn,decision:presentation,banking,dossier:appendix}}/>}<ClientReportShell model={presentation} realAnalysisId={realAnalysisId} print/>{full&&model.checko&&<section><h2>Открытые сведения · Checko</h2><p>{checkoStatusText(model.checko.status, model.company.inn)}{model.checko.fetchedAt && ' · '+model.checko.fetchedAt.slice(0,10)}</p><dl>{model.checko.rows.map(r=><div key={r.label}><dt>{r.label}</dt><dd>{r.value}</dd></div>)}</dl></section>}{full&&banking&&<BankingAppendix banking={banking}/>}<SourceAppendix model={model}/>
+ {appendix&&<section className="cr-report cr-source-appendix"><h2>Документы досье на момент выпуска</h2>
+ {appendix.settlements?.length?<DossierSettlementBalances rows={appendix.settlements}/>:null}
+ {appendix.sources.map(s=><p key={s.id}>{s.name} · {s.received.slice(0,10)}</p>)}</section>}<div className="ex-print"><ExpertiseMemo model={model} print/></div>{full && model.meta.snapshot && <footer>Версия расчёта <code style={{overflowWrap:"anywhere"}}>{model.meta.snapshot.snapshotId}</code></footer>}</>;
 }

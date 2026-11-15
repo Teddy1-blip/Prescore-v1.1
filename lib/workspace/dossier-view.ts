@@ -8,10 +8,10 @@ export async function dossierTier(pool:QueryExecutor,user:{email:string;isAdmin:
     WHERE s.owner_email=$1 AND s.company_inn=$2 AND s.status='ACTIVE' AND p.status='ACTIVE' AND now()>=s.access_from AND now()<s.access_until AND now()>=p.starts_at AND now()<p.ends_at LIMIT 1`,[user.email,company.inn])).rows.length>0;
  return full?'FULL' as const:'BASIC' as const;
 }
-export async function visibleProjection(pool:QueryExecutor,user:{email:string;isAdmin:boolean},company:{id:string;inn:string}){
+export async function visibleProjection(pool:QueryExecutor,user:{email:string;isAdmin:boolean},company:{id:string;inn:string},includeDecisions=true){
   const rows=await dossierSources(pool,user.email,company.id);
   const tier=await dossierTier(pool,user,company),entitled=tier==='FULL';
-  const result=sourceProjection(rows,company.inn,entitled);
+  const result=sourceProjection(rows,company.inn,entitled,includeDecisions);
   if(!entitled){
     result.claims=[];
     result.settlements=result.settlements.map(p=>({...p,history:p.history.filter(e=>e.kind!=='TASK'&&e.kind!=='PROMISE')}));

@@ -35,8 +35,10 @@ export async function GET(request:Request){
     const {readDossierReport}=await import('../../../lib/workspace/dossier-report');
     const model=await readDossierReport(pool,user,company,snapshotId);return model?reply({company,model}):reply({error:'Версия недоступна.'},404);
   }
-  const result=await visibleProjection(pool,user,company);
   const versions=await dossierVersions(pool,user.email,company.inn);
+  const selection=new URL(request.url).searchParams.get('analysisId');
+  if(selection&&!versions.some(v=>v.id===selection))return reply({error:'Анализ недоступен в этом досье.'},404);
+  const result=await visibleProjection(pool,user,company,!selection);
   return reply({company,...result,versions});
 }
 export async function POST(request:Request){
@@ -58,8 +60,15 @@ export async function POST(request:Request){
     if(body.action==='issue-report'){
       const company=await ownedDossier(pool,user.email,String(body.id??''));
       if(!company)return reply({error:'Досье недоступно.'},404);
-      const {issueDossierReport}=await import('../../../lib/workspace/dossier-report');
-      return reply({snapshot:await issueDossierReport(pool,user,company)});
+      const {issueDossierReport,ownedReportDecision}=await import('../../../lib/workspace/dossier-report');
+      let decision;
+      if(body.decision!==undefined){
+        const ref=body.decision;
+        if(!ref||typeof ref.analysisId!=='string'||typeof ref.snapshotId!=='string')return reply({error:'Укажите версию расчёта.'},400);
+        decision={analysisId:ref.analysisId,snapshotId:ref.snapshotId};
+        if(!await ownedReportDecision(env.DB,user,company,decision))return reply({error:'Версия расчёта недоступна в этом досье.'},404);
+      }
+      return reply({snapshot:await issueDossierReport(pool,user,company,decision)});
     }
     if(body.action==='recognize'){
       if(body.layout!=='SINGLE' && body.layout!=='TWO_UP_ROTATED')return reply({error:'Проверьте раскладку страниц.'},400);

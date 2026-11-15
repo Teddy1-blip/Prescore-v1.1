@@ -44,7 +44,7 @@ export async function dossierSources(db:QueryExecutor,owner:string,id:string){
   }
   return [...indexed.values()];
 }
-export function sourceProjection(rows:SourceRow[],inn:string,includeFull=true){
+export function sourceProjection(rows:SourceRow[],inn:string,includeFull=true,includeDecisions=true){
   const publicProfile=rows.flatMap(r=>r.payload.publicProfile??[]).at(-1);
   const supplied=publicProfile?.financialStatementsV2??[];
   const snapshots=[...supplied,...rows.flatMap(r=>r.payload.snapshot?[r.payload.snapshot]:[])];
@@ -59,7 +59,7 @@ export function sourceProjection(rows:SourceRow[],inn:string,includeFull=true){
   const asOf=[...ledger.map(o=>o.observedAt??''),...documents.map(d=>d.observedAt),...rows.flatMap(r=>r.payload.bki?.affectsCompanyDebt&&r.payload.bki.reportDate?[r.payload.bki.reportDate]:[])].sort().at(-1);
   const portfolio=(bki.length||documents.length||ledger.length)&&asOf?buildCreditPortfolio({companyInn:inn,asOfDate:asOf,creditHistorySnapshots:bki,documents,observations:ledger}):null;
   const informationDate=[...relevant.map(r=>r.payload.envelope.receivedAt.slice(0,10)),...(asOf?[asOf]:[])].sort().at(-1);
-  const decisionPortfolio=includeFull&&informationDate?buildCreditPortfolio({companyInn:inn,asOfDate:informationDate,creditHistorySnapshots:bki,documents,observations:ledger}):null;
+  const decisionPortfolio=includeFull&&includeDecisions&&informationDate?buildCreditPortfolio({companyInn:inn,asOfDate:informationDate,creditHistorySnapshots:bki,documents,observations:ledger}):null;
   const history:LoggedSettlementEvent[]=rows.flatMap(r=>r.payload.settlementEvent?[{...r.payload.settlementEvent,id:r.id,recordedAt:r.payload.envelope.receivedAt}]:[]);
   const bankPayments=new Map<string,PaymentFact|null>();
   for(const p of rows.flatMap(r=>r.payload.bankPayments??[])){
@@ -71,7 +71,8 @@ export function sourceProjection(rows:SourceRow[],inn:string,includeFull=true){
   return {
     settlements:settlementPositions(rows).map(p=>settlementState(p,history,payments)),
     cards51:rows.flatMap(r=>r.payload.account51?[{...r.payload.account51,id:r.id,name:r.payload.envelope.fileName??"Карточка 51"}]:[]),
-    sources:rows.filter(r=>!r.payload.settlementEvent&&(includeFull||!r.payload.counterpartyCheck)).map(r=>({id:r.id,kind:r.kind,documentId:r.documentId,name:r.payload.envelope.fileName??r.payload.envelope.sourceName??r.kind,received:r.payload.envelope.receivedAt})),
+    sources:rows.filter(r=>!r.payload.settlementEvent&&(includeFull||!r.payload.counterpartyCheck)).map(r=>({id:r.id,kind:r.kind,documentId:r.documentId,name:r.payload.envelope.fileName??r.payload.envelope.sourceName??r.kind,received:r.payload.envelope.receivedAt,
+      status:r.payload.envelope.status,from:r.payload.envelope.periodFrom,to:r.payload.envelope.periodTo})),
     bureauReports:rows.flatMap(r=>r.payload.bki?[{id:r.id,source:r.payload.bki.source,date:r.payload.bki.reportDate,companyDebt:r.payload.bki.affectsCompanyDebt,
       obligations:r.payload.bki.obligations.map(o=>({creditor:o.creditor,product:o.product,status:o.status,principal:o.outstandingPrincipal,total:o.totalOutstanding,overdue:o.overdueAmount,reference:o.sourcePageHint}))}]:[]),
     reviews:rows.flatMap(r=>r.payload.review?[{id:r.id,name:r.payload.envelope.fileName,documentId:r.documentId,...r.payload.review,
