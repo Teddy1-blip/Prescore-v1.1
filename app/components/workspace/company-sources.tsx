@@ -125,24 +125,19 @@ export function CompanySources({view,id,bankInn,openBank,onCompany,onSourceChang
        method:'POST',headers:{'Content-Type':'application/json'},
        body:JSON.stringify({action:nextAction,inn,attachPublic}),
      });
-     if(action==='preview'){
-       const result=await read<{profile:PublicProfile|null;status:string}>('/api/dossier',post('preview'));
-       setPreview(result.profile);
-       if(!result.profile)setNotice(({NOT_CONFIGURED:'Источник Checko не подключён.',RETRY_LATER:'Повторите проверку позже.',FAILED:'Источник Checko не ответил.'} as Record<string,string>)[result.status]??'Публичные сведения пока не получены.');
-     }else{
-       // Public provider availability must not block an INN-only dossier.
-       let attachPublic=!!preview;
-       if(view==='home'&&!attachPublic){
-         try{
-           const result=await read<{profile:PublicProfile|null;status:string}>('/api/dossier',post('preview'));
-           attachPublic=!!result.profile;
-         }catch{
-           // The company is still saved without an external response.
-         }
+     // A BFO entry always opens an existing company dossier. Checko is
+     // optional, and failed external lookup cannot block an INN-only company.
+     let attachPublic=!!preview;
+     if(!attachPublic){
+       try{
+         const result=await read<{profile:PublicProfile|null;status:string}>('/api/dossier',post('preview'));
+         attachPublic=!!result.profile;
+       }catch{
+         // Preserve the independent INN-only path.
        }
-       const result=await read<{company:Company}>('/api/dossier',post('save',attachPublic));
-       location.assign(dossierHref(result.company.id,view));
      }
+     const result=await read<{company:Company}>('/api/dossier',post('save',attachPublic));
+     location.assign(dossierHref(result.company.id,view));
    }catch(e){setError((e as Error).message);}
    finally{setBusy(false);}
   }
@@ -153,7 +148,7 @@ export function CompanySources({view,id,bankInn,openBank,onCompany,onSourceChang
      <h3>Найти компанию по ИНН</h3><p>Проверим доступные сведения через Checko и откроем финансовый профиль.</p>
      <form onSubmit={e=>{e.preventDefault();void lookup()}}>
       <label htmlFor="bfo-company-inn">ИНН компании</label>
-      <div className="pc-bfo-inline"><input id="bfo-company-inn" required inputMode="numeric" pattern="[0-9]{10}|[0-9]{12}" value={inn} onChange={e=>setInn(e.target.value.replace(/\D/g,'').slice(0,12))} placeholder="10 или 12 цифр" disabled={busy}/><button type="submit" disabled={busy}>Получить данные</button></div>
+      <div className="pc-bfo-inline"><input id="bfo-company-inn" required inputMode="numeric" pattern="[0-9]{10}|[0-9]{12}" value={inn} onChange={e=>{setInn(e.target.value.replace(/\D/g,'').slice(0,12));setPreview(null);}} placeholder="10 или 12 цифр" disabled={busy}/><button type="submit" disabled={busy}>Получить данные</button></div>
      </form>
      {companies.length>0&&<label className="pc-bfo-existing">Мои компании <select value={company?.id??''} onChange={e=>{if(e.target.value)location.assign(dossierHref(e.target.value,'bfo'))}}><option value="">Выберите компанию</option>{companies.map(c=><option key={c.id} value={c.id}>{c.inn}</option>)}</select></label>}
     </section>
