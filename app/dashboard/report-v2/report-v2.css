@@ -62,3 +62,16 @@
 .cr-report .cr-footer{background:#fff;color:#243746}
 .cr-banking table{width:100%;table-layout:fixed;overflow-wrap:anywhere}
 @media print{.cr-print-toolbar{display:none!important}.cr-report .cr-footer{color:#000;background:#fff}.cr-banking thead{display:table-header-group}.cr-banking tr{break-inside:avoid}}
+
+@media print {
+  .cr-report .pc-table-scroll { overflow: visible; }
+  .cr-report .pc-table-scroll table { width: 100%; min-width: 0; table-layout: fixed; }
+  .cr-report .pc-table-scroll :is(th, td) {
+    min-width: 0;
+    padding: 4pt;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    vertical-align: top;
+  }
+  .cr-report .pc-table-scroll th small { display: block; }
+}
