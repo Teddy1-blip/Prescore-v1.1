@@ -90,6 +90,16 @@ export function reviewFields(id:string,pages:EvidencePage[],total:number,family:
     result.status='INCOMPLETE';
     result.issues.push('BFO_BALANCE_TOTALS_UNVERIFIED');
   }
+  // A column may be read perfectly and still be arithmetically incompatible
+  // with the other fields. The review must never look complete in that case.
+  // Preserve source values and page fragments for manual verification.
+  if(input.issues.some(issue=>issue.status==='INVALID')){
+    result.status='INCOMPLETE';
+    result.issues.push('BFO_INTEGRITY_REVIEW_REQUIRED');
+    for(const item of result.fields){
+      if(/^\d{4}$/.test(item.key)&&item.status==='READ')item.status='REVIEW';
+    }
+  }
  }else{
   for(const [key,label,regex] of [
     ['contract_number','Номер договора',/^(?:(?:государственный |муниципальный )?контракт|договор)[^№\n]{0,90}№\s*([\p{L}\d._/-]+)(?=\s|$)/iu],
