@@ -5,16 +5,17 @@ import './client-passport.css';
 
 /** Existing dossier's public passport: no parallel profile, score or bank matcher. */
 export function CompanyPassport({
-  inn,profile,hasStatements,hasAnnual,full,onBankUpload,
+  inn,profile,hasStatements,hasAnnual,full,onBankUpload,dossier,
 }:{
   inn:string;
   profile:PassportPublicProfile|null;
+  dossier?:{statementCompanyName?:string};
   hasStatements:boolean;
   hasAnnual:boolean;
   full:boolean;
   onBankUpload:()=>void;
 }){
-  const passport=publicPassport(profile,inn,hasStatements,hasAnnual);
+  const passport=publicPassport(profile,inn,hasStatements,hasAnnual,dossier);
   const facts=[
     ['ОГРН',passport.company.ogrn],
     ['Дата регистрации',passport.company.registrationDate],
@@ -28,7 +29,7 @@ export function CompanyPassport({
       <div>
         <span className="pc-passport-eyebrow">PRESCORE · ПАСПОРТ КОМПАНИИ</span>
         <h2>{passport.company.title}</h2>
-        <p>ИНН {inn} · {profile?'Публичные сведения компании':'Добавьте подтверждённые сведения об организации'}</p>
+        <p>ИНН {inn} · {profile?'Публичные сведения компании':dossier?.statementCompanyName?'Наименование из банковской выписки':dossier?'Компания сохранена в досье':'Предварительный просмотр компании'}</p>
         <div className="pc-passport-tags">
           <span className="pc-passport-tag">Источник: {passport.source}</span>
           {passport.stale&&<span className="pc-passport-tag attention">Проверить актуальность сведений</span>}
@@ -37,33 +38,11 @@ export function CompanyPassport({
       </div>
       <button type="button" className="pc-passport-upload" onClick={onBankUpload}>+ Загрузить выписку</button>
     </div>
-    <div className="pc-passport-metrics">
-      <article>
-        <small>Регистрация</small>
-        <strong>{passport.company.registrationDate??'—'}</strong>
-        <span>Проверенное поле публичного профиля</span>
-      </article>
-      <article>
-        <small>Регион</small>
-        <strong>{passport.company.region??'—'}</strong>
-        <span>Без автоматического банковского вывода</span>
-      </article>
-      <article>
-        <small>Судебные события</small>
-        <strong>{passport.attention.some(item=>item.title.includes('Судебные'))?'Есть сведения':'Проверить источник'}</strong>
-        <span>Только подтверждённые и датированные записи</span>
-      </article>
-      <article>
-        <small>Исполнительные производства</small>
-        <strong>{passport.attention.some(item=>item.title.includes('Исполнительные'))?'Есть сведения':'Проверить источник'}</strong>
-        <span>Нужна оценка актуального состояния</span>
-      </article>
-    </div>
     <div className="pc-passport-grid">
       <div className="pc-passport-section">
         <div className="pc-passport-section-title"><h3>Основные сведения</h3><span>Checko / реестры</span></div>
         {facts.length?<dl className="pc-passport-facts">{facts.map(([name,value])=><div key={name}><dt>{name}</dt><dd>{value}</dd></div>)}</dl>
-          :<p>Сохраните компанию и загрузите доступные данные Checko для формирования паспорта.</p>}
+          :<p>{dossier?'Сведения о регистрации, регионе и ОКВЭД появятся после получения данных Checko.':'Сохраните компанию, чтобы привязать источники к досье.'}</p>}
       </div>
       <div className="pc-passport-section">
         <div className="pc-passport-section-title"><h3>Экспертная оценка · Free</h3><span>Из известных фактов</span></div>

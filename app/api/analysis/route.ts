@@ -3,7 +3,7 @@ import {dossierSources} from '../../../lib/workspace/dossier-sources';
 import {withDossierSources} from '../../../lib/workspace/dossier-bank';
 import type { StatementScreeningResult } from "../../../lib/credit-engine/contracts/sources";
 import {loadChecko,checkoKey,checkoState,validInn} from "../../../lib/external/checko-cache";
-import {safeErrorText} from '../../../lib/release/security';
+import {safeErrorText,logUploadFailure} from '../../../lib/release/security';
 import {getRuntime} from "../../../lib/platform/runtime";
 import { analysisForStorage, analyzeBankStatements, screenBankStatements, type StatementInput } from "../../../lib/prescore";
 import { sha256Hex } from "../../../lib/credit-engine/source-foundation";
@@ -17,6 +17,7 @@ const MAX_SOURCE_LENGTH = 60 * 1024 * 1024;
 export async function POST(request: Request) {
   const user = await requireApiUser();
   if (!user) return unauthorized();
+  let stage='BANK_DECODE';
   try {
     const body = await request.json() as { dossierId?:string; statements?: Array<{fileName?:string;text?:string;base64?:string}> };
     const statements = Array.isArray(body.statements) ? body.statements : [];
@@ -49,13 +50,16 @@ export async function POST(request: Request) {
       }
       candidates.push({fileName,text,fileHash:typeof content!=="string",contentHash,sourceId:`statement:${contentHash}`});
     }
+    stage='BANK_SCREEN';
     const screened = screenBankStatements(candidates);
     const receipts = screened.screeningResults[Symbol.iterator]();
     const screeningResults = statements.map((_,i) => excluded.get(i) ?? receipts.next().value!);
     if (!screened.accepted.length) return Response.json({error:"Среди выбранных файлов нет пригодной выписки.", screeningResults}, {status:400});
     const safeStatements = screened.accepted;
     const rejectedFiles = [...screened.unrecognizedFiles,...Array.from(excluded.values(),r=>r.fileName)];
+    stage='BANK_ANALYZE';
     let result = analyzeBankStatements(safeStatements, { screeningResults });
+    stage='BANK_DATABASE';
     const env = getRuntime();
     type Statement = { bind: (...values: unknown[]) => Statement; run: () => Promise<unknown>; first: <T = unknown>() => Promise<T | null> };
     const db = env.DB as unknown as { prepare: (query: string) => Statement; batch: (statements: Statement[]) => Promise<Array<{ results: unknown[] }>> };
@@ -76,6 +80,7 @@ export async function POST(request: Request) {
         : {status:'FAILED' as const};
       result.checkoAttempt=checkoState(acquired);
     } catch { result.checkoAttempt={status:'FAILED',fetchedAt:null}; }
+    stage='BANK_SAVE';
     const company=validInn(result.companyInn)?await saveDossier(env.DB.pool,user.email,result.companyInn):null;
     const tx=await env.DB.pool.connect();
     try{
@@ -89,6 +94,7 @@ export async function POST(request: Request) {
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,[result.id,result.companyName,result.companyInn,result.fileName,result.periodFrom,result.periodTo,result.score,result.grade,result.readiness,JSON.stringify(stored),user.email,result.createdAt]);
       await tx.query('COMMIT');
     }catch(error){await tx.query('ROLLBACK');throw error;}finally{tx.release();}
+    stage='BANK_ENTITLEMENT';
     await ensureFreeEntitlement(db, result.id, user.email, result.companyInn);
     try {
       const paid = await db.prepare(`SELECT id FROM payment_orders WHERE company_inn = ? AND user_email = ? AND status = 'Оплачен'
@@ -99,6 +105,7 @@ export async function POST(request: Request) {
         await db.prepare("UPDATE payment_orders SET analysis_id = ?, updated_at = ? WHERE id = ? AND analysis_id = ''").bind(result.id, new Date().toISOString(), paid.id).run();
       }
     } catch { /* payment schema can be migrated later */ }
+    stage='BANK_PROJECTION';
     const controls = await readControlState(db);
     const controlled = applyAnalysisControls(result, controls);
     const tier = await resolveAnalysisTier(db, { analysisId: result.id, userEmail: user.email, companyInn: result.companyInn, privileged: user.isAdmin });
@@ -110,6 +117,7 @@ export async function POST(request: Request) {
       screeningResults,
     });
   } catch (error) {
-    return Response.json({ error: safeErrorText(error, "Не удалось выполнить анализ") }, { status: 400 });
+    const diagnosticId=logUploadFailure(stage,error,request.headers.get('x-request-id'));
+    return Response.json({ error: safeErrorText(error, "Не удалось выполнить анализ"), diagnosticId }, { status: 400 });
   }
 }

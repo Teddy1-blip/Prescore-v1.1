@@ -16,6 +16,7 @@ type Workspace = {
   selected?: StoredAnalysis;
   dossier?: {id:string;inn:string};
   analyses: StoredAnalysis[];
+  companies?: {id:string;inn:string}[];
   model: WorkspaceModelV1 | null;
   locked: boolean;
   renderPage: boolean;
@@ -57,11 +58,12 @@ export function ClientShell(p: Workspace) {
   };
   const company = p.model?.basic.analysis.company.name || p.selected?.companyName || (p.dossier?.inn?'ИНН '+p.dossier.inn:'Кабинет компании');
   const data = liveView(p.model, company, period);
-  const options = p.analyses
-    .filter((a) => a.historyPurpose !== 'QA' || a.id === p.selected?.id)
-    .map((a) => ({ id: a.id, label: a.companyName + ' · ' + date(a.periodTo) }));
-  if(p.dossier)options.unshift({id:p.dossier.id,label:company});
-  else if (!p.selected) options.unshift({ id: '', label: 'Выберите компанию' });
+  const directory=p.companies??[];
+  const options=directory.map(d=>({id:'dossier:'+d.id,label:p.analyses.find(a=>a.companyInn===d.inn)?.companyName||'ИНН '+d.inn}));
+  for(const a of p.analyses.filter(a=>(a.historyPurpose!=='QA'||a.id===p.selected?.id)&&!directory.some(d=>d.inn===a.companyInn))){
+    options.push({id:a.id,label:a.companyName+' · '+date(a.periodTo)});
+  }
+  if(!p.dossier&&!p.selected)options.unshift({id:'',label:'Выберите компанию'});
   const open =
     p.selected && !p.locked && p.availableViews.includes('applications')
       ? (product = '') => setApplication(product)
@@ -85,10 +87,14 @@ export function ClientShell(p: Workspace) {
       context={p.context}
       page={p.view}
       company={company}
-      companyId={p.selected?.id ?? p.dossier?.id ?? ''}
+      companyId={p.dossier?'dossier:'+p.dossier.id:p.selected?.id??''}
+      analysisId={p.selected?.id}
       dossierId={p.dossier?.id}
       companies={options}
-      onCompany={id=>{if(id!==p.dossier?.id)p.select(id);}}
+      onCompany={id=>{const item=directory.find(d=>'dossier:'+d.id===id);
+        if(item){if(item.id!==p.dossier?.id)location.assign('/dashboard?'+new URLSearchParams({dossierId:item.id,view:p.view}));}
+        else if(id)p.select(id);
+      }}
       periods={[
         {
           id: '',
@@ -138,7 +144,10 @@ export function ClientShell(p: Workspace) {
 export function LivePage({ children }: { children: ReactNode }) {
   const c = useContext(ScreenContext);
   if (!c?.renderPage || !Object.hasOwn(pages, c.view)) return <>{children}</>;
-  if (['obligations', 'bfo', 'calendar', 'analyst'].includes(c.view)) return <div className="ws">{children}</div>;
+  if (['obligations', 'bfo', 'calendar', 'analyst'].includes(c.view)) {
+    if (children == null || typeof children === 'boolean') return null;
+    return <div className="ws">{children}</div>;
+  }
   const page = c.view as Page;
   const billing = page === 'billing',
     ar = page === 'counterparties';

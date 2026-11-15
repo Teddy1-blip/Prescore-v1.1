@@ -30,6 +30,7 @@ export function reviewFields(id:string,pages:EvidencePage[],total:number,family:
     add('schedule_date_'+i,'Дата платежа','',r.date);
     add('schedule_principal_'+i,'Погашение основного долга',agreement.terms.currency.value??'',r.principal);
     add('schedule_interest_'+i,'Проценты по графику',agreement.terms.currency.value??'',r.interest);
+    add('schedule_total_'+i,'Итого платёж по графику',agreement.terms.currency.value??'',r.total);
   }
  }else if(routing.parser==='FINANCIAL_STATEMENT'){
   // Appendices in a single annual filing can carry prior-year headings and the

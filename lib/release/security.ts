@@ -8,3 +8,23 @@ export async function withinBodyLimit(request:Request,max:number){const declared
 export function securityHeaders(nonce:string,https:boolean){return {'Content-Security-Policy':`default-src 'self'; script-src 'self' 'nonce-${nonce}' 'strict-dynamic'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`,'X-Content-Type-Options':'nosniff','Referrer-Policy':'strict-origin-when-cross-origin','Permissions-Policy':'camera=(), microphone=(), geolocation=()','X-Frame-Options':'DENY',...(https?{'Strict-Transport-Security':'max-age=31536000'}:{})};}
 
 export async function recordOperation(db:QueryExecutor,event:string,result:string){await db.query('INSERT INTO runtime_operations(id,event,result) VALUES($1,$2,$3)',[randomUUID(),event.slice(0,80),result.slice(0,40)]);await db.query("DELETE FROM runtime_operations WHERE id IN(SELECT id FROM runtime_operations WHERE created_at<now()-interval '30 days' ORDER BY created_at LIMIT 100)");}
+// A parser exception may include document text or an original file name.
+// Only fixed, recognized failure codes and a UUID reach the operational log.
+const uploadErrors = new Set([
+ 'OCR_BUSY','OCR_PAGE_RANGE','OCR_PAGE_LIMIT','OCR_SIZE_LIMIT','OCR_FORMAT_UNSUPPORTED',
+ 'OCR_PAGE_DIMENSIONS','OCR_PROCESS_TIMEOUT','OCR_BINARY_UNAVAILABLE','OCR_PROCESS_ERROR',
+ 'OCR_OUTPUT_LIMIT','OCR_CHUNK_TEXT_LIMIT','ENOENT','EACCES','ENOSPC','ENOMEM',
+ 'ECONNREFUSED','ETIMEDOUT','23505','23503','42501','42P01','42703',
+ 'UNCONFIRMED_PERIOD_OR_IDENTITY','DATABASE_CONFIGURATION_MISSING',
+]);
+export function logUploadFailure(stage:string, error:unknown, incomingId:string|null, fallback:'UNEXPECTED_ERROR'|'DOCUMENT_REJECTED'|'FULL_REQUIRED'='UNEXPECTED_ERROR') {
+ const diagnosticId=correlationId(incomingId && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(incomingId)?incomingId:null);
+ const cause=error instanceof Error && error.cause instanceof Error?error.cause:null;
+ const codes=error instanceof Error?[error.message,(error as NodeJS.ErrnoException).code,cause?.message,(cause as NodeJS.ErrnoException|null)?.code]:[];
+ const result=codes.find((code):code is string=>typeof code==='string'&&uploadErrors.has(code))
+   ?? (error instanceof SyntaxError?'INVALID_SYNTAX':error instanceof TypeError?'TYPE_ERROR':fallback);
+ const tool=error instanceof Error && 'tool' in error?error.tool:undefined;
+ const event=typeof tool==='string'&&['pdfinfo','pdftotext','pdftoppm','tesseract'].includes(tool)?stage+'_'+tool.toUpperCase():stage;
+ operationalLog({event,result,correlationId:diagnosticId});
+ return diagnosticId;
+}

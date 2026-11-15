@@ -1,3 +1,4 @@
+import * as releaseSecurity from '../lib/release/security.ts';
 import {routeDocument} from '../lib/document-poc/document-routing.ts';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url),ts=require('typescript');
@@ -6,6 +7,7 @@ const ID='12345678-1234-4234-9234-1234567890ab';
 function make({user={email:'owner@test.invalid',isAdmin:false},access=true,document={id:ID,fileName:'test.pdf',category:'Контракты, УПД и акты',sizeBytes:4,contentBase64:'',storageKey:'stored'},ocr=null}={}){
  let called=0,scoped=false,args=null;
  const deps={
+  '../../../lib/release/security':releaseSecurity,
   '../../../lib/auth/broker-authorizations':{documentAccessSQL:()=>{scoped=true;return 'd.owner_email=actor.email'}},
   '../../../lib/platform/runtime':{getRuntime:()=>({DB:{prepare:(sql)=>({bind:(...params)=>({sql,params})}),batch:async()=>[{results:access?[document]:[]}]}})},
   '../../../lib/storage/documents':{documentStorage:()=>({get:async()=>Buffer.from('FAKE')})},
@@ -53,4 +55,30 @@ test('contract filename/category cannot turn a balance sheet into contract hints
 });
 test('family arrays and objects cannot bypass request validation',async()=>{
  for(const expectedFamily of [['BFO'],{value:'BFO'}]){const m=make();assert.equal((await m.POST(request({documentId:ID,expectedFamily}))).status,400);assert.equal(m.counts().called,0);}
+});
+
+test('default batch lets the OCR engine clamp to the actual last page', async()=>{
+ const m=make();
+ assert.equal((await m.POST(request())).status,200);
+ assert.equal(m.counts().args.toPage,undefined);
+ assert.equal(m.counts().args.fromPage,1);
+});
+
+test('validates the public staging origin behind a reverse proxy', async(t)=>{
+ const previous=process.env.PRESCORE_BASE_URL;
+ process.env.PRESCORE_BASE_URL='https://prescore.test';
+ t.after(()=>{if(previous===undefined)delete process.env.PRESCORE_BASE_URL;else process.env.PRESCORE_BASE_URL=previous;});
+ const opts={method:'POST',headers:{'content-type':'application/json',origin:'https://prescore.test'},body:JSON.stringify({documentId:ID})};
+ assert.equal((await make().POST(new Request('http://localhost:3000/api/document-ocr',opts))).status,200);
+ assert.equal((await make().POST(new Request('http://localhost:3000/api/document-ocr',{...opts,headers:{...opts.headers,origin:'http://localhost:3000'}}))).status,403);
+});
+
+test('operational diagnostics contain no private document or exception text', t=>{
+ const entries=[];t.mock.method(console,'log',line=>entries.push(JSON.parse(line)));
+ const error=Object.assign(new Error('private.pdf / token=secret'),{code:'EACCES'});
+ const id=releaseSecurity.logUploadFailure('IMPORT_BFO',error,'private-document-name');
+ assert.match(id,/^[0-9a-f-]{36}$/);
+ assert.equal(entries[0].correlationId,id);
+ assert.equal(entries[0].result,'EACCES');
+ assert.doesNotMatch(JSON.stringify(entries),/private|secret|token/);
 });

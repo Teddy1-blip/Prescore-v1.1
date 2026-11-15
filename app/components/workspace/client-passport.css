@@ -9,12 +9,6 @@
 .ws .pc-passport-tag.attention{background:#fff2d821;color:#ffecc1}
 .ws .pc-passport-upload{color:#124448;background:#e0fff6;border:1px solid #c5f3e7;border-radius:8px;font-size:13px;font-weight:730;white-space:nowrap;min-height:44px;padding:10px 17px}
 .ws .pc-passport-upload:hover{background:white}
-.ws .pc-passport-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
-.ws .pc-passport-metrics article{background:#fff;border:1px solid var(--passport-line);border-radius:12px;padding:18px 16px;box-shadow:0 4px 15px rgba(6,41,49,.035)}
-.ws .pc-passport-metrics article:before{content:"";display:block;width:26px;height:3px;border-radius:9px;background:#73bbae;margin-bottom:15px}
-.ws .pc-passport-metrics small{font-size:11px;font-weight:650;color:#607b80;display:block}
-.ws .pc-passport-metrics strong{display:block;color:var(--passport-ink);font-size:18px;line-height:1.3;margin:7px 0;overflow-wrap:anywhere}
-.ws .pc-passport-metrics article>span{font-size:11px;line-height:1.35;color:#7b9193}
 .ws .pc-passport-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
 .ws .pc-passport-section{background:#fff;border:1px solid var(--passport-line);border-radius:12px;padding:23px 23px 21px;min-width:0;box-shadow:0 4px 15px rgba(6,41,49,.025)}
 .ws .pc-passport-section-title{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin-bottom:15px}
@@ -38,6 +32,5 @@
 .ws .pc-passport-actions li:before{content:counter(passport);position:absolute;left:0;top:4px;border-radius:6px;background:#e8f4f0;color:#206e61;font-size:11px;font-weight:750;width:22px;height:22px;display:grid;place-items:center}
 .ws .pc-passport-actions strong{font-size:13px;color:#224552}
 .ws .pc-passport-actions small{font-size:11px;color:#78918f}
-@media(max-width:1120px){.ws .pc-passport-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:780px){.ws .pc-passport-heading{flex-direction:column;align-items:flex-start;padding:23px 20px}.ws .pc-passport-grid{grid-template-columns:1fr}.ws .pc-passport-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.ws .pc-passport-section{padding:19px 16px}.ws .pc-passport-metrics article{padding:13px}}
-@media(max-width:420px){.ws .pc-passport-metrics{grid-template-columns:1fr}.ws .pc-passport-heading h2{font-size:24px}}
+@media(max-width:780px){.ws .pc-passport-heading{flex-direction:column;align-items:flex-start;padding:23px 20px}.ws .pc-passport-grid{grid-template-columns:1fr}.ws .pc-passport-section{padding:19px 16px}}
+@media(max-width:420px){.ws .pc-passport-heading h2{font-size:24px}}

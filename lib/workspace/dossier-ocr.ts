@@ -1,3 +1,4 @@
+import {logUploadFailure} from '../release/security.ts';
 import {createHash} from 'node:crypto';
 import {bureauReview} from './bureau-review.ts';
 import type {QueryExecutor} from '../db/compatibility.ts';
@@ -11,7 +12,7 @@ export type OcrProgress=Progress;
 const families={CREDIT_DOCUMENT:'CREDIT',COMMERCIAL_DOCUMENT:'COMMERCIAL',BFO_REVIEW:'BFO',BKI:'BKI'} as const;
 
 // One bounded batch per request. A concurrent reviewer wins over OCR, and page text comes from storage.
-export async function recognizeDossierBatch(db:QueryExecutor,owner:string,id:string,sourceId:string,layout:OcrLayout){
+export async function recognizeDossierBatch(db:QueryExecutor,owner:string,id:string,sourceId:string,layout:OcrLayout,requestId:string|null=null){
  const row=(await db.query(`SELECT s.source_type,s.payload,f.storage_key,f.size_bytes FROM dossier_sources s
    JOIN company_dossiers d ON d.id=s.dossier_id JOIN client_documents f ON f.id=s.document_id AND f.owner_email=d.owner_email
    WHERE d.id=$1 AND d.owner_email=$2 AND s.source_id=$3`,[id,owner,sourceId])).rows[0];
@@ -30,10 +31,11 @@ export async function recognizeDossierBatch(db:QueryExecutor,owner:string,id:str
  let batch;
  try{batch=await recognizeLocalDocument(bytes,{layout,bureau:family==='BKI',financial:family==='BFO',quality:'HIGH',forceRaster:family==='BFO',fromPage:(previous?.through??0)+1});}
  catch(error){
+   const diagnosticId=logUploadFailure('DOSSIER_OCR',error,requestId);
    const reason=error instanceof Error?error.message:'';
-   if(reason==='OCR_BUSY')return {status:429,error:'Сервер распознавания занят.'};
-   if(['OCR_BINARY_UNAVAILABLE','OCR_PROCESS_TIMEOUT'].includes(reason))return {status:503,error:'Локальное распознавание временно недоступно.'};
-   return {status:422,error:'Не удалось распознать страницы этого документа.'};
+   if(reason==='OCR_BUSY')return {status:429,diagnosticId,error:'Сервер распознавания занят.'};
+   if(['OCR_BINARY_UNAVAILABLE','OCR_PROCESS_TIMEOUT'].includes(reason))return {status:503,diagnosticId,error:'Локальное распознавание временно недоступно.'};
+   return {status:422,diagnosticId,error:'Не удалось распознать страницы этого документа.'};
  }
  const progress:Progress={layout,through:batch.processedTo,total:batch.pageCount,version:batch.version,
    pages:[...(previous?.pages??[]),...batch.pages],warnings:[...new Set([...(previous?.warnings??[]),...batch.warnings])]};

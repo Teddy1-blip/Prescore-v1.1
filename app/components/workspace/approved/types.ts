@@ -5,7 +5,7 @@ export const pages = {
   calendar: ['Платёжный календарь', 'Платёжный календарь', 'Будущие платежи и подтверждённые даты'],
   analysis: ['Кредитный профиль', 'Кредитный профиль', 'Выводы, их основания и ограничения'],
   obligations: ['Кредитный портфель', 'Кредитный портфель', 'Договоры, фактические выплаты и график'],
-  counterparties: ['Контрагенты', 'Расчёты с покупателями', 'Дебиторка, сроки и рабочие договорённости'],
+  counterparties: ['Контрагенты', 'Расчёты с контрагентами', 'Задолженность, авансы и договорные сроки'],
   financing: ['Финансирование', 'Финансирование бизнеса', 'От задачи до подготовленной заявки'],
   applications: ['Заявки', 'Ваши заявки', 'Документы, ответственные и следующий шаг'],
   documents: ['Досье клиента', 'Досье клиента', 'Источники и статусы обработки документов'],
@@ -13,7 +13,7 @@ export const pages = {
   analyst: ['Кредитный эксперт', 'Кредитный эксперт', 'Вопросы и пояснения по выбранному анализу'],
   billing: ['Подписка', 'Подписка компании', 'Доступ к рабочему пространству'],
 } as const;
-export const clientNavigation = ['home', 'bfo', 'counterparties', 'obligations', 'calendar', 'analysis', 'documents', 'financing', 'analyst', 'billing'] as const satisfies readonly (keyof typeof pages)[];
+export const clientNavigation = ['home', 'banking', 'bfo', 'counterparties', 'obligations', 'calendar', 'analysis', 'analyst', 'financing', 'documents', 'billing'] as const satisfies readonly (keyof typeof pages)[];
 export type Page = keyof typeof pages;
 export type Amount = number | null;
 export type Row = {

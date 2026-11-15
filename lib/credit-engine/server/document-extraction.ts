@@ -65,14 +65,14 @@ function decodeXml(value: string) {
   return value.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").replace(/&quot;/g, "\"").replace(/&#39;/g, "'");
 }
 
-export function extractXlsxText(bytes: Uint8Array) {
+export function extractXlsxRows(bytes: Uint8Array): string[][] {
   const archive = unzipSync(bytes);
   const sharedXml = archive["xl/sharedStrings.xml"] ? strFromU8(archive["xl/sharedStrings.xml"]) : "";
   const shared = [...sharedXml.matchAll(/<si[^>]*>([\s\S]*?)<\/si>/g)]
     .map((match) => decodeXml([...match[1].matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map((item) => item[1]).join("")));
   const sheets = Object.keys(archive).filter((name) => /^xl\/worksheets\/sheet\d+\.xml$/.test(name)).sort();
   if (!sheets.length) throw new Error("В Excel не найдены листы с данными.");
-  const lines: string[] = [];
+  const rows: string[][] = [];
   for (const sheet of sheets) {
     const xml = strFromU8(archive[sheet]);
     for (const row of xml.matchAll(/<row[^>]*>([\s\S]*?)<\/row>/g)) {
@@ -88,10 +88,16 @@ export function extractXlsxText(bytes: Uint8Array) {
         const index = column ? Array.from(column).reduce((n,c) => n*26+c.charCodeAt(0)-64,0)-1 : cells.length;
         if (index >= 0 && index < 16384) cells[index] = value.trim();
       }
-      if (cells.length) lines.push(cells.join("\t"));
+      if (cells.length) rows.push(cells);
     }
   }
-  return lines.join("\n");
+  return rows;
+}
+
+// Preserve cell boundaries for structured 1C adapters: descriptions may contain
+// embedded newlines and cannot be safely split back from a text-only export.
+export function extractXlsxText(bytes: Uint8Array) {
+  return extractXlsxRows(bytes).map(cells => cells.join("\t")).join("\n");
 }
 
 export function extractCsvText(bytes: Uint8Array) {

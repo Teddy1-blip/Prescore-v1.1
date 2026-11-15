@@ -49,7 +49,7 @@ async function exec(name:'pdfinfo'|'pdftotext'|'pdftoppm'|'tesseract',args:strin
     if(settled)return;
     settled=true;
     clearTimeout(timer);
-    if(err)reject(err);
+    if(err)reject(Object.assign(err,{tool:name}));
     else resolve(stdout);
   };
   const timer=setTimeout(()=>{child.kill('SIGKILL');finish(Error('OCR_PROCESS_TIMEOUT'))},MAX_PROCESS_MS);

@@ -9,6 +9,10 @@ import {reviewFields} from '../document-poc/review-fields.ts';
 import {mapPdfPages,extractDocumentText} from '../credit-engine/server/document-extraction.ts';
 import {parseAuthoritativeBfoText,parseAuthoritativeQuarterlyText} from '../credit-engine/source-foundation.ts';
 import {adaptFinancialReport} from '../credit-engine/financial-analysis/quarterly-adapter.ts';
+import {calendarSheet} from './calendar-sheet.ts';
+import {parseAccount51Card} from './account51-card.ts';
+import {extractXlsxRows} from '../credit-engine/server/document-extraction.ts';
+import {nativePartyLedger} from './one-c-ledger.ts';
 import {parseLedger} from './ledger-import.ts';
 import {withDossierSources} from './dossier-bank.ts';
 import type {AnalysisResult} from '../prescore.ts';
@@ -19,19 +23,22 @@ import {bureauRoles,readBureau,bureauEnvelope,bureauReview} from './bureau-revie
 import {parseCreditHistoryText} from '../credit-history.ts';
 import {financialTableRows} from '../document-poc/financial-layout.ts';
 import {validInn} from '../external/checko-inn.ts';
+import {dossierTier} from './dossier-view.ts';
 import {ownedDossier,saveDossier} from './dossier.ts';
-export const uploadKinds=['BFO','QUARTERLY','BKI','COUNTERPARTIES','DEBT_LEDGER','CREDIT_DOCUMENT','COMMERCIAL_DOCUMENT','BFO_REVIEW','AUTO_BFO'] as const;
+export const uploadKinds=['BFO','QUARTERLY','BKI','COUNTERPARTIES','DEBT_LEDGER','CREDIT_DOCUMENT','COMMERCIAL_DOCUMENT','BFO_REVIEW','AUTO_BFO','ACCOUNT_51','CALENDAR_SHEET'] as const;
 type Kind=typeof uploadKinds[number];
 export class InputError extends Error {}
-export async function importSource(db:TransactionPool,owner:string,id:string,kind:Kind,file:File,selectedInn='',relationship:typeof bureauRoles[number]='Компания-заёмщик') {
+export class FullRequired extends Error {}
+export async function importSource(db:TransactionPool,owner:string,id:string,kind:Kind,file:File,selectedInn='',relationship:typeof bureauRoles[number]='Компания-заёмщик',isAdmin=false,identityConfirmed=false) {
   const dossier=id?await ownedDossier(db,owner,id):undefined;
   if(id&&!dossier)return null;
+  if(kind==='CALENDAR_SHEET'&&(!dossier||await dossierTier(db,{email:owner,isAdmin},dossier)!=='FULL'))throw new FullRequired('Для импорта графика выберите компанию с полным доступом.');
   const ext=file.name.split('.').pop()?.toLowerCase()??'';
   const ledger=kind==='COUNTERPARTIES'||kind==='DEBT_LEDGER';
   const autoFinancial=kind==='AUTO_BFO';
   let reviewKind=kind==='CREDIT_DOCUMENT'||kind==='COMMERCIAL_DOCUMENT'||kind==='BFO_REVIEW';
   const image=['jpg','jpeg','png'].includes(ext);
-  const allowed=reviewKind||kind==='BKI'?['pdf','png','jpg','jpeg']:ledger?['xls','xlsx','csv']:['pdf','xls','xlsx','csv',...(autoFinancial?['png','jpg','jpeg']:[])];
+  const allowed=kind==='CALENDAR_SHEET'?['xls','xlsx','csv']:kind==='ACCOUNT_51'?['xls','xlsx']:reviewKind||kind==='BKI'?['pdf','png','jpg','jpeg']:ledger?['xls','xlsx','csv']:['pdf','xls','xlsx','csv',...(autoFinancial?['png','jpg','jpeg']:[])];
   if(kind==='CREDIT_DOCUMENT'||kind==='COMMERCIAL_DOCUMENT')allowed.push('docx');
   if(!allowed.includes(ext)||file.name.length>180||!file.size||file.size>(kind==='BKI'?35:25)*1024*1024)throw new InputError('Проверьте размер и формат файла.');
   const bytes=new Uint8Array(await file.arrayBuffer());
@@ -46,7 +53,7 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
   let text='';
   let bureauScan=kind==='BKI'&&image;
   let bureauReport;
-  if(!reviewKind&&!bureauScan)try{
+  if(!reviewKind&&!bureauScan&&kind!=='ACCOUNT_51')try{
     if(kind==='BKI'){
       const pages=await mapPdfPages(bytes.slice(),180,true,async content=>content);
       bureauScan=pages.some(content=>content.replace(/\s/g,'').length<25);
@@ -59,9 +66,9 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
         }catch{bureauScan=true;}
       }
     }else text=await extractDocumentText(file.name,ext==='pdf'?bytes.slice():bytes,'financial');
-  }catch{
+  }catch(error){
     if(autoFinancial&&ext==='pdf'){kind='BFO_REVIEW';reviewKind=true;}
-    else throw new InputError('Не удалось прочитать документ. Для БКИ нужен отчёт НБКИ, ОКБ или СБ БКИ до 180 страниц.');
+    else throw new InputError('Не удалось прочитать документ. Для БКИ нужен отчёт НБКИ, ОКБ или СБ БКИ до 180 страниц.',{cause:error});
   }
   let financialReport;
   let detectedInn;
@@ -79,7 +86,7 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
     }catch(error){
       if(error instanceof InputError)throw error;
       if(ext==='pdf'){kind='BFO_REVIEW';reviewKind=true;}
-      else throw new InputError('Не удалось определить ИНН, период или строки отчётности. Проверьте исходную таблицу.');
+      else throw new InputError('Не удалось определить ИНН, период или строки отчётности. Проверьте исходную таблицу.',{cause:error});
     }
   }
   if(selectedInn&&!validInn(selectedInn))throw new InputError('Проверьте ИНН компании.');
@@ -96,9 +103,10 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
     }
     if(!inn||!validInn(inn))throw new InputError('Для этого документа выберите досье по ИНН или загрузите файл с идентифицируемой организацией.');
   }
+  if(kind==='QUARTERLY'&&await dossierTier(db,{email:owner,isAdmin},{inn})!=='FULL')throw new FullRequired('Для промежуточной отчётности нужен полный доступ.');
   if((reviewKind||bureauScan)&&ext!=='docx'&&file.size>OCR_MAX_BYTES)throw new InputError('Для распознавания нужен файл размером до 16 МБ.');
   const sourceId=kind.toLowerCase()+':'+hash, now=new Date().toISOString();
-  const envelope:SourceEnvelope={sourceId,sourceType:ledger||reviewKind?'OTHER':kind as 'BFO'|'QUARTERLY'|'BKI',fileName:file.name,
+  const envelope:SourceEnvelope={sourceId,sourceType:ledger||reviewKind||kind==='ACCOUNT_51'||kind==='CALENDAR_SHEET'?'OTHER':kind as 'BFO'|'QUARTERLY'|'BKI',fileName:file.name,
     status:'READY',companyInn:inn,warnings:[],confidence:null,receivedAt:now,contentHash:hash,rawReference:'sha256:'+hash};
   const payload:PrivateSource={envelope};
   try{
@@ -129,7 +137,20 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
       }
       envelope.status='PROCESSING';
     }else{
-    if(ledger)payload.ledger=parseLedger(text,inn,kind as 'COUNTERPARTIES'|'DEBT_LEDGER');
+    if(kind==='CALENDAR_SHEET'){payload.calendarSheet=calendarSheet(text);envelope.status='PROCESSING';}
+    else if(kind==='ACCOUNT_51'){
+      const rows=ext==='xlsx'?extractXlsxRows(bytes):(await extractDocumentText(file.name,bytes,'financial')).trimEnd().split(/\r?\n/).map(r=>r.split('\t'));
+      const header=rows.findIndex(row=>String(row[0]??'').trim()==='Период');
+      const identities=new Set(Array.from(rows.slice(0,header>=0?header:12).flat().join(' ').matchAll(/ИНН\s*[:№]?\s*(\d{10,12})\b/gi),m=>m[1]));
+      if(identities.size && (identities.size!==1 || !identities.has(inn)))throw new InputError('ИНН карточки счёта 51 не совпадает с досье.');
+      const card=parseAccount51Card(rows);
+      const sum=(direction:'INFLOW'|'OUTFLOW')=>card.operations.filter(row=>row.direction===direction).reduce((total,row)=>total+Math.round(row.amount*100),0)/100;
+      Object.assign(envelope,{periodFrom:card.periodFrom,periodTo:card.periodTo,parserVersion:'1C-ACCOUNT-51-V1',warnings:card.warnings});
+      payload.account51={from:card.periodFrom,to:card.periodTo,opening:card.openingBalance,closing:card.closingBalance,inflow:sum('INFLOW'),outflow:sum('OUTFLOW'),entries:card.operations.length,requiresReview:!card.reconciled||card.closingBalance===null||card.openingBalance===null};
+    }else if(ledger){
+      const rows=text.split(/\r?\n/).map(r=>r.split('\t'));
+      payload.ledger=nativePartyLedger(rows,inn,identityConfirmed,kind as 'COUNTERPARTIES'|'DEBT_LEDGER')??parseLedger(text,inn,kind as 'COUNTERPARTIES'|'DEBT_LEDGER');
+    }
     else if(kind==='BKI'){
       const bki=readBureau(text,file.name,inn,relationship);
       payload.relationship=relationship;
@@ -144,7 +165,7 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
     }
   }catch(error){
     if(error instanceof InputError)throw error;
-    throw new InputError('Не удалось подтвердить формат, ИНН или период документа. Проверьте выбранный файл.');
+    throw new InputError('Не удалось подтвердить формат, ИНН или период документа. Проверьте выбранный файл.',{cause:error});
   }
   const tx=await db.connect();
   const storage=documentStorage();let storageKey:string|undefined;
@@ -175,7 +196,7 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
       VALUES($1,$2,$3,$4,$5,$6,'',$7,$7,$8)`,[doc,inn,kind,file.name,mime,bytes.length,owner,storageKey]);
     await tx.query('INSERT INTO dossier_sources(dossier_id,source_id,source_type,payload,document_id) VALUES($1,$2,$3,$4,$5)',[id,sourceId,kind,JSON.stringify(payload),doc]);
     // Update only the owner's latest working version. Previously issued report snapshots stay immutable.
-    if(payload.snapshot || payload.bki?.affectsCompanyDebt || kind==='DEBT_LEDGER'){
+    if(payload.snapshot || payload.bki?.affectsCompanyDebt || kind==='DEBT_LEDGER'||kind==='COUNTERPARTIES'&&payload.ledger?.some(r=>r.account.startsWith('76')&&r.contract&&r.component?.toLocaleLowerCase('ru')==='основной долг')){
       const current=(await tx.query("SELECT id,payload FROM analyses WHERE owner_email=$1 AND company_inn=$2 AND archive_state='ACTIVE' ORDER BY created_at DESC,id DESC LIMIT 1 FOR UPDATE",[owner,inn])).rows[0];
       if(current){
         const bank=JSON.parse(String(current.payload)) as AnalysisResult;

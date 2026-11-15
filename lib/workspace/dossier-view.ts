@@ -12,12 +12,24 @@ export async function visibleProjection(pool:QueryExecutor,user:{email:string;is
   const rows=await dossierSources(pool,user.email,company.id);
   const tier=await dossierTier(pool,user,company),entitled=tier==='FULL';
   const result=sourceProjection(rows,company.inn,entitled);
-  if(!entitled){result.claims=[];result.lines=result.lines.filter(s=>result.sources.some(r=>r.documentId&&r.id===s.sourceId));}
-  if(!entitled && result.financial){
-    const uploaded=new Set(rows.filter(r=>r.payload.snapshot).map(r=>r.payload.snapshot!.snapshotId));
-    result.financial.history=result.financial.history.filter(p=>uploaded.has(p.id));
-    result.financial.trends=[];
-    for(const period of result.financial.history)period.groups=period.groups.filter(g=>g.key==='amounts');
+  if(!entitled){
+    result.claims=[];
+    result.settlements=result.settlements.map(p=>({...p,history:p.history.filter(e=>e.kind!=='TASK'&&e.kind!=='PROMISE')}));
+    result.bureauReports=[]; result.obligations=[]; result.schedule=[]; result.calendar=[]; result.portfolioAsOf=null;
+    result.ledger=result.ledger.filter(row=>row.kind==='COUNTERPARTIES');
+    result.reviews=result.reviews.filter(review=>!rows.some(r=>r.id===review.id&&['BKI','CREDIT_DOCUMENT'].includes(r.kind)));
+    const annual=result.financial?.history.filter(p=>p.period.kind==='ANNUAL')??[];
+    const ids=new Set(annual.map(p=>p.id));
+    result.lines=result.lines.filter(s=>ids.has(s.id));
+    if(result.financial){
+      result.financial.history=annual;
+      const freeRatios=new Set(['currentRatio','netMargin']);
+      for(const period of annual){
+        period.groups=period.groups.map(g=>g.key==='amounts'?g:{...g,metrics:g.metrics.filter(m=>freeRatios.has(m.key))}).filter(g=>g.metrics.length);
+      }
+      const metrics=new Set(annual.flatMap(p=>p.groups.flatMap(g=>g.metrics.map(m=>m.key))));
+      result.financial.trends=result.financial.trends.filter(t=>ids.has(t.currentId)&&t.previousId!==null&&ids.has(t.previousId)&&metrics.has(t.absolute.key)&&t.comparability.startsWith('COMPARABLE'));
+    }
   }
   const saved=rows.filter(r=>r.kind==='CHECKO').at(-1)?.payload.publicProfile;
   return {...result,publicProfile:saved?profileView(saved,entitled?'FULL':'FREE'):null,entitlement:tier};

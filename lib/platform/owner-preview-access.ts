@@ -15,7 +15,11 @@ export function ownerPreviewFullAccess(email:string,env:Record<string,string|und
  if(!/^[0-9a-f]{64}$/.test(digest)||!email||email.length>320)return false;
  try{
   const origin=new URL(env.PRESCORE_BASE_URL??'');
-  if(!rcOrigins.has(origin.origin)||origin.pathname!=='/'||origin.search||origin.hash||origin.username||origin.password)return false;
+  const space=env.CODESPACE_NAME;
+  const ownCodespace=env.CODESPACES==='true'&&space&&/^[a-z0-9-]+$/.test(space)&&
+    origin.protocol==='https:'&&!origin.port&&/^\d{1,5}$/.test(origin.hostname.slice(space.length+1).split('.')[0])&&
+    origin.hostname.startsWith(space+'-')&&origin.hostname.endsWith('.app.github.dev')&&origin.hostname.split('.').length===4;
+  if(!(rcOrigins.has(origin.origin)||ownCodespace)||origin.pathname!=='/'||origin.search||origin.hash||origin.username||origin.password)return false;
   const actual=createHash('sha256').update(email.trim().toLowerCase()).digest();
   return timingSafeEqual(actual,Buffer.from(digest,'hex'));
  }catch{return false;}

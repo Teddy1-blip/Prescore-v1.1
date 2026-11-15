@@ -99,6 +99,8 @@ export async function POST(request: Request) {
     const analysis = safeJson<AnalysisResult>(row.payload);
     if (!analysis) return Response.json({ error: "Сохранённый анализ повреждён" }, { status: 409 });
 
+    if(sourceType==='QUARTERLY' && await resolveAnalysisTier(db,{analysisId,userEmail:row.ownerEmail||user.email,companyInn:analysis.companyInn,privileged:user.isAdmin})!=='FULL')
+      return Response.json({error:'Для промежуточной отчётности нужен полный доступ.'},{status:403});
     const bytes = new Uint8Array(await file.arrayBuffer());
     if(lowerName.endsWith('.xlsx'))validateZipBudget(bytes);if(file.name.length>180)return Response.json({error:'FILENAME_TOO_LONG'},{status:400});
     const contentHash = await sha256Hex(bytes);

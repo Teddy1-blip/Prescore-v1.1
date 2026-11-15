@@ -1,0 +1,9 @@
+.pc-settlement-registers{display:grid;gap:1.2rem;margin-block:1.3rem}
+.pc-company-sources .pc-table-scroll{max-width:100%;overflow-x:auto}
+.pc-company-sources .pc-table-scroll table{width:100%;border-collapse:collapse;table-layout:auto}
+.pc-company-sources .pc-table-scroll th,.pc-company-sources .pc-table-scroll td{padding:.75rem .85rem;white-space:normal;overflow-wrap:normal;vertical-align:top;text-align:left}
+.pc-settlement-registers .pc-table-scroll table{min-width:740px}
+.pc-company-sources .pc-register table{min-width:920px}
+.pc-company-sources .pc-table-scroll small{display:block;margin-top:.2rem}
+.pc-company-sources .pc-table-scroll th{letter-spacing:normal;line-height:1.35}
+.pc-company-sources .pc-panel>h2{margin-bottom:.75rem}

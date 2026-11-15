@@ -83,7 +83,7 @@ test('CLIENT product recovery keeps history out of the visible cabinet and prote
  const client=fs.readFileSync('app/components/workspace/client.tsx','utf8');
  const overview=fs.readFileSync('app/components/workspace/client-insights.tsx','utf8');
  assert.doesNotMatch(client,/Версия анализа|Последние активные анализы|Тестовые данные · \{qaAnalyses/);
- assert.match(client,/const latest=rows\.filter\(a=>a\.historyPurpose!==['"]QA['"]\)/);
+ assert.match(client,/resolveClientSelection\(q,directory,rows,remembered\)/);
  for(const required of ['Финансовая картина','ДЕНЬГИ','СЕЙЧАС В ФОКУСЕ','ФИНАНСИРОВАНИЕ','РЕКОМЕНДАЦИИ'])assert.ok(overview.includes(required),required);
  assert.doesNotMatch(overview,/buildPrescoreIndex|buildFinancingReadiness|buildCreditAssessment|buildDebtCapacity|estimatedLimit|stressLimit|baseMonthlyPaymentCapacity/);
 });

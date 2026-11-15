@@ -18,7 +18,7 @@ export function withDossierSources(bank:AnalysisResult, rows:SourceRow[]):Analys
   const financial=rows.flatMap(r=>r.payload.snapshot?[r.payload.snapshot]:[]);
   const bki=rows.flatMap(r=>r.payload.bki?.affectsCompanyDebt?[{report:r.payload.bki,source:r.payload.envelope}]:[]);
   const documents=rows.flatMap(row=>verifiedCreditDocument(row,bank.companyInn)??[]);
-  if(!financial.length&&!bki.length&&!documents.length)return bank;
+  if(!financial.length&&!bki.length&&!documents.length&&!ledger.length)return bank;
   const result={...bank,sourceManifest:manifest};
   if(financial.length){
     manifest.financialUploads=[...new Map([...financialSources(manifest),...financial.map(s=>s.source)].map(s=>[s.sourceId,s])).values()];

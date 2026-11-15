@@ -27,7 +27,7 @@ export type PassportPublicProfile = {
 export type PassportAction = {title: string; detail: string; evidence: string};
 export type PassportAttention = {title: string; detail: string; evidence: string};
 
-export function publicPassport(profile: PassportPublicProfile | null, inn: string, hasStatements: boolean, hasAnnual: boolean) {
+export function publicPassport(profile: PassportPublicProfile | null, inn: string, hasStatements: boolean, hasAnnual: boolean, dossier?: {statementCompanyName?: string}) {
   const identity = profile?.company;
   const checkoDate = typeof profile?.fetchedAt === 'string' && /^\d{4}-\d{2}-\d{2}/.test(profile.fetchedAt)
     ? profile.fetchedAt.slice(0, 10) : null;
@@ -35,7 +35,7 @@ export function publicPassport(profile: PassportPublicProfile | null, inn: strin
   const fact = (value: unknown): string | null =>
     typeof value === 'string' && value.trim() ? value.trim() : null;
   const company = {
-    title: fact(identity?.name) ?? 'Компания по ИНН ' + inn,
+    title: fact(identity?.name) ?? fact(dossier?.statementCompanyName) ?? 'Компания по ИНН ' + inn,
     inn,
     ogrn: fact(identity?.ogrn),
     region: fact(identity?.region),
@@ -91,6 +91,7 @@ export function publicPassport(profile: PassportPublicProfile | null, inn: strin
       ? 'Публичные события требуют предметной проверки. Без банковских и бухгалтерских данных они не определяют кредитоспособность.'
       : profile
         ? 'Паспорт компании сформирован по доступным публичным сведениям. Финансовые выводы углубляются по мере добавления документов.'
+        : dossier ? (hasStatements || hasAnnual ? 'Финансовый анализ доступен по загруженным документам. Публичные сведения Checko пока не получены.' : 'Компания сохранена. Загрузите выписку или бухгалтерскую отчётность, чтобы начать финансовый анализ.')
         : 'Добавьте компанию по ИНН и получите доступные публичные сведения. Финансовый анализ строится только на подтверждённых документах.',
   };
 }

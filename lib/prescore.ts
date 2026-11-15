@@ -35,7 +35,7 @@ import { linkInternalTransfersAndReversals } from "./credit-engine/normalization
 import type { ClassificationSummary, TransactionClassification } from "./credit-engine/contracts/classification.ts";
 import { classifyEconomicTransaction, summarizeClassifications } from "./credit-engine/classification/classifier.ts";
 import type { BankStatementMetricsV2, MetricsComparisonSummary } from "./credit-engine/contracts/metrics.ts";
-import { buildBankStatementMetricsV2 } from "./credit-engine/metrics/engine.ts";
+import { buildBankStatementMetricsV2, cashSeriesRows, classifyTransactions } from "./credit-engine/metrics/engine.ts";
 
 
 
@@ -786,30 +786,34 @@ function analyzeCombinedStatement(
   const supplierMonths = new Set(outgoing.filter((item) => item.category === "supplier").map((item) => item.date.slice(0, 7))).size;
   const supplierPaymentRegularity = months ? supplierMonths / months : 0;
   const riskyOutflow = outgoing.filter((item) => ["personal", "cash"].includes(item.category)).reduce((sum, item) => sum + item.amount, 0);
-  const debtOutflow = outgoing.filter((item) => ["debt", "leasing"].includes(item.category)).reduce((sum, item) => sum + item.amount, 0);
+  const debtPayments = cashSeriesRows(classifyTransactions(transactions), "debtService");
+  const debtOutflow = debtPayments.reduce((sum, item) => sum + Math.round(item.amount * 100), 0) / 100;
   const riskyOutflowShare = outflow ? riskyOutflow / outflow : 0;
   const debtServiceShare = inflow ? debtOutflow / inflow : 0;
-  const endingBalances = accounts.map((item) => item.endingBalance).filter((value): value is number => value !== null);
-  const endingBalance = endingBalances.length ? endingBalances.reduce((sum, value) => sum + value, 0) : null;
+  const statementBalanceCheck = reconcileStatementBalances(accounts, transactions,
+    canonicalBatch.normalization.invalidCount > 0 || !!canonicalBatch.deduplication.conflicts?.length);
+  const endingBalance = statementBalanceCheck.state === "VERIFIED" ? statementBalanceCheck.closing : reportedEndpoint(accounts);
   const avgDailyOutflow = outflow / Math.max(1, months * 30.4);
   const liquidityDays = endingBalance === null || !avgDailyOutflow ? null : endingBalance / avgDailyOutflow;
 
-  const openingBalances = accounts.map((item) => item.openingBalance).filter((value): value is number => value !== null);
   let averageDailyBalance: number | null = null;
   let minimumDailyBalance: number | null = null;
   let cashGapDays: number | null = null;
   let negativeBalanceDays: number | null = null;
-  if (openingBalances.length && periodFrom && periodTo) {
-    let balance = openingBalances.reduce((sum, value) => sum + value, 0);
+  if (statementBalanceCheck.state === "VERIFIED") {
+    let balanceCents = Math.round(statementBalanceCheck.opening * 100);
     const byDay = new Map<string, number>();
-    for (const item of external) byDay.set(item.date, (byDay.get(item.date) ?? 0) + (item.direction === "in" ? item.amount : item.direction === "out" ? -item.amount : 0));
+    for (const item of transactions) {
+      const cents = Math.round(item.amount * 100);
+      byDay.set(item.date, (byDay.get(item.date) ?? 0) + (item.direction === "in" ? cents : -cents));
+    }
     const daily: number[] = [];
-    const cursor = new Date(`${periodFrom}T00:00:00Z`);
-    const end = new Date(`${periodTo}T00:00:00Z`);
-    while (cursor <= end && daily.length < 740) {
+    const cursor = new Date(statementBalanceCheck.from + "T00:00:00Z");
+    const end = new Date(statementBalanceCheck.to + "T00:00:00Z");
+    while (cursor <= end) {
       const key = cursor.toISOString().slice(0, 10);
-      balance += byDay.get(key) ?? 0;
-      daily.push(balance);
+      balanceCents += byDay.get(key) ?? 0;
+      daily.push(balanceCents / 100);
       cursor.setUTCDate(cursor.getUTCDate() + 1);
     }
     if (daily.length) {
@@ -872,7 +876,11 @@ function analyzeCombinedStatement(
 
   const hasCritical = factors.some((item) => item.severity === "critical");
   const readiness = hasCritical ? "Нужна подготовка" : score >= 720 ? "Высокая готовность" : score >= 600 ? "Готовность с оговорками" : "Низкая готовность";
-  const currentMonthlyDebtPayment = months ? debtOutflow / months : 0;
+  const coveredMonths = statementBalanceCheck.state === "VERIFIED"
+    ? (Number(statementBalanceCheck.to.slice(0, 4)) - Number(statementBalanceCheck.from.slice(0, 4))) * 12
+      + Number(statementBalanceCheck.to.slice(5, 7)) - Number(statementBalanceCheck.from.slice(5, 7)) + 1
+    : months;
+  const currentMonthlyDebtPayment = coveredMonths ? debtOutflow / coveredMonths : 0;
   const referenceAnnualRate = 0.26;
   const referenceTermMonths = 24;
   const concentrationStress = clamp((topOneConcentration - 0.25) * 0.35, 0, 0.22);
@@ -1025,8 +1033,7 @@ function analyzeCombinedStatement(
   ];
 
   return {
-    statementBalanceCheck: reconcileStatementBalances(accounts, transactions,
-      canonicalBatch.normalization.invalidCount > 0 || !!canonicalBatch.deduplication.conflicts?.length),
+    statementBalanceCheck,
 
     id: globalThis.crypto?.randomUUID?.() ?? `analysis-${Date.now()}`,
     companyName: identity.name || field(header, "Отправитель") || "Компания",
@@ -1073,7 +1080,7 @@ function analyzeCombinedStatement(
       estimatedLimitMin: round(estimatedLimitMin, -3),
       estimatedLimitMax: round(estimatedLimitMax, -3),
       stressLimitMax: round(stressLimitMax, -3),
-      currentMonthlyDebtPayment: round(currentMonthlyDebtPayment, -3),
+      currentMonthlyDebtPayment: round(currentMonthlyDebtPayment, 2),
       baseMonthlyPaymentCapacity: round(baseMonthlyPaymentCapacity, -3),
       stressMonthlyPaymentCapacity: round(stressMonthlyPaymentCapacity, -3),
       stressMonthlyInflow: round(stressMonthlyInflow, -3),
