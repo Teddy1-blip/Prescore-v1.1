@@ -78,10 +78,30 @@ async function renderAndRead(source:string,dir:string,page:number,segment:'FULL'
  await exec('pdftoppm',[...args,source,prefix],15_000);
  return readImage(prefix+'.png',page,dpi,financial,bureau);
 }
+// Accept only distinct high-confidence financial line-code tokens as OCR evidence.
+export function financialOcrCodes(tsv:string):Set<string>{
+ const codes=new Set<string>();
+ for(const row of tsv.split('\n')){
+  const cols=row.split('\t'),word=cols[11]?.trim()??'';
+  if(cols[0]==='5'&&Number(cols[10])>=45&&/^(?:1[1-7]\d0|2[1-5]\d0)$/.test(word))codes.add(word);
+ }
+ return codes;
+}
+export function preferSparseFinancialOcr(primary:string,sparse:string):boolean{
+ const first=financialOcrCodes(primary),second=financialOcrCodes(sparse);
+ return second.size>first.size+1 || (second.has('1600')&&!first.has('1600')&&second.size>first.size);
+}
 async function readImage(path:string,page:number,dpi:number,financial:boolean,bureau:boolean) {
  const args=[path,'stdout','-l','rus+eng','--psm',bureau||financial?'6':'1'];
- if(!financial&&!bureau)return {text:await exec('tesseract',args),tables:undefined};
- const tsv=await exec('tesseract',[...args,'tsv']);
+ if(!financial&&!bureau)return {text:await exec('tesseract',args),tables:undefined,sparsePass:false};
+ let tsv=await exec('tesseract',[...args,'tsv']);
+ let sparsePass=false;
+ if(financial&&financialOcrCodes(tsv).size<7){
+  // Re-read one raster page when PSM6 lost tabular row codes.
+  // Select a whole pass, never combine its numbers with the other pass.
+  const sparse=await exec('tesseract',[path,'stdout','-l','rus+eng','--psm','11','tsv']);
+  if(preferSparseFinancialOcr(tsv,sparse)){tsv=sparse;sparsePass=true;}
+ }
  const lines=new Map<string,string[]>();
  const tokens=[];
  const bureauLines=new Map<string,{x:number;w:number;h:number;word:string}[]>();
@@ -127,11 +147,11 @@ async function readImage(path:string,page:number,dpi:number,financial:boolean,bu
      }
      if(candidates.size===1)text+='\nИНН: '+[...candidates][0];
    }
-   return {text,tables:undefined};
+   return {text,tables:undefined,sparsePass:false};
  }
  const tables=financialTableRows(tokens,page,true);
  for(const row of tables)row.line.confidence='MEDIUM';
- return {text:[...lines.values()].map(words=>words.join(' ')).join('\n'),tables};
+ return {text:[...lines.values()].map(words=>words.join(' ')).join('\n'),tables,sparsePass};
 }
 // Preserve tabular columns and physical-page breaks in native bureau PDFs.
 export async function nativeLayoutText(bytes:Uint8Array){
@@ -173,6 +193,7 @@ export async function recognizeLocalDocument(bytes:Uint8Array,options:OcrOptions
    };
    if(kind!=='PDF'){
     const result=await readImage(source,1,dpi,!!options.financial,!!options.bureau);
+    if(result.sparsePass)warnings.push('OCR_FINANCIAL_SPARSE_PASS:1');
     append(result.text,'FULL',1,'OCR',result.tables);continue;
    }
    const native=await exec('pdftotext',['-f',String(page),'-l',String(page),'-layout','-nopgbrk',source,'-'],MAX_PROCESS_BYTES);
@@ -186,10 +207,12 @@ export async function recognizeLocalDocument(bytes:Uint8Array,options:OcrOptions
       {segment:'RIGHT' as const,y:0,height:half,logicalPage:2*page}];
     for(const s of slices){
      const recognized=await renderAndRead(source,dir,page,s.segment,dpi,!!options.financial,!!options.bureau,{x:0,y:s.y,width:w,height:s.height});
+     if(recognized.sparsePass)warnings.push('OCR_FINANCIAL_SPARSE_PASS:'+page+':'+s.segment);
      append(recognized.text,s.segment,s.logicalPage,'OCR',recognized.tables);
     }
    }else{
     const recognized=await renderAndRead(source,dir,page,'FULL',dpi,!!options.financial,!!options.bureau);
+    if(recognized.sparsePass)warnings.push('OCR_FINANCIAL_SPARSE_PASS:'+page);
     append(recognized.text,'FULL',page,'OCR',recognized.tables);
    }
   }
