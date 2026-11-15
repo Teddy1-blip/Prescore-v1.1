@@ -86,6 +86,7 @@ export function ClientShell(p: Workspace) {
       page={p.view}
       company={company}
       companyId={p.selected?.id ?? p.dossier?.id ?? ''}
+      dossierId={p.dossier?.id}
       companies={options}
       onCompany={id=>{if(id!==p.dossier?.id)p.select(id);}}
       periods={[
