@@ -1,4 +1,5 @@
 """Read BIFF workbook cells as tabular text for the canonical import adapters."""
+import json
 import math
 import resource
 import sys
@@ -10,6 +11,12 @@ MAX_OUTPUT = 8 * 1024 * 1024
 
 
 def extract():
+    # Keep the established TSV output for existing finance imports; an opt-in
+    # structured mode retains worksheet and physical row evidence for 1C intake.
+    if len(sys.argv) > 2 or (len(sys.argv) == 2 and sys.argv[1] != '--sheets-json'):
+        raise ValueError()
+    structured = len(sys.argv) == 2
+    results = []
     resource.setrlimit(resource.RLIMIT_AS, (320 * 1024**2, 320 * 1024**2))
     resource.setrlimit(resource.RLIMIT_CPU, (8, 8))
     data = sys.stdin.buffer.read(MAX_INPUT + 1)
@@ -21,6 +28,7 @@ def extract():
         raise ValueError()
     for index in range(book.nsheets):
         sheet = book.sheet_by_index(index)
+        page_rows, physical_rows = [], []
         cells += sheet.nrows * sheet.ncols
         if cells > 300000:
             raise ValueError()
@@ -47,8 +55,22 @@ def extract():
             size += len(line.encode('utf-8'))
             if size > MAX_OUTPUT:
                 raise ValueError()
-            sys.stdout.write(line)
+            if structured:
+                # Omit physically empty rows, retaining their original 1-based
+                # coordinates for evidence and downstream reconciliation.
+                if any(values):
+                    page_rows.append(values)
+                    physical_rows.append(row + 1)
+            else:
+                sys.stdout.write(line)
+        if structured:
+            results.append({'sheet': sheet.name, 'rows': page_rows, 'rowNumbers': physical_rows})
         book.unload_sheet(index)
+    if structured:
+        payload = json.dumps(results, ensure_ascii=False, separators=(',', ':'))
+        if len(payload.encode('utf-8')) > MAX_OUTPUT:
+            raise ValueError()
+        sys.stdout.write(payload)
 
 
 if __name__ == '__main__':
