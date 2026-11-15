@@ -23,4 +23,5 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      - run: npm run build
       - run: node --experimental-strip-types --test tests/public-passport.test.mjs tests/owner-preview-access.test.mjs tests/client-navigation-links.test.mjs tests/client-banking-v2.test.mjs tests/client-bfo-checko-entry.test.mjs tests/complete-client-frontend.test.mjs tests/bank-statement-metrics-v2.test.mjs

@@ -1,4 +1,5 @@
 import test from 'node:test';
+import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import {conclusionFixture} from './fixtures/credit-conclusion.mjs';
 import {createWorkspaceRuntime} from './fixtures/workspace-runtime.mjs';
@@ -37,4 +38,12 @@ test('T3 / Free ledger shows known zero but never an UNKNOWN ratio as cash fact'
   assert.match(html,/не остаток кредита/);
   assert.equal(JSON.stringify(basic),before);
  } finally { await rt.close(); }
+});
+
+test('T3 does not duplicate the existing monthly banking ledger',()=>{
+ const page=fs.readFileSync('app/components/workspace/approved/pages.tsx','utf8');
+ const ledger=fs.readFileSync('app/components/workspace/banking-ledger.tsx','utf8');
+ assert.doesNotMatch(page,/title="Месячные итоги"/);
+ assert.match(page,/href="#banking-monthly-ledger"/);
+ assert.match(ledger,/id="banking-monthly-ledger"/);
 });
