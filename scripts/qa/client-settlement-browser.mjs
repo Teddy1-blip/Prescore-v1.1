@@ -52,11 +52,44 @@ try{
   assert.ok(body.trim().length>110,view+' empty');evidence.pages.push(view);
   if(view==='analysis'){await page.getByText('Демонстрационная оценка бизнеса',{exact:true}).click();await page.getByLabel('Свободный поток для компании (FCFF), год 1',{exact:true}).fill('100000');}
  }
+ const issued=await json('/api/dossier',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'issue-report',id:company.id})});
+ const snapshot=await json('/api/dossier?id='+company.id+'&snapshotId='+issued.snapshot);
+ await page.goto(base+'/dashboard/report-v2?'+new URLSearchParams({dossierId:company.id,snapshotId:issued.snapshot,print:'1'}));
+ await page.getByRole('heading',{name:'Финансовый профиль компании'}).waitFor();
+ assert.ok((await page.locator('main').innerText()).includes(company.inn));
+ const after=await json('/api/dossier?id='+company.id+'&snapshotId='+issued.snapshot);assert.deepEqual(snapshot.model,after.model);
+ await page.pdf({format:'A4',path:path.join(out,'synthetic-dossier.pdf')});evidence.checks.push('PDF сформирован Chromium по сохранённой версии досье.');
+ const canonical=await json('/api/workspace-model?analysisId='+version.id);
+ assert.ok(canonical.full?.report?.meta?.snapshot?.snapshotId);
+ await page.goto(base+'/dashboard/report-v2?'+new URLSearchParams({analysisId:version.id,print:'1'}));
+ await page.getByText(canonical.full.report.meta.snapshot.snapshotId,{exact:true}).first().waitFor();
+ await page.pdf({format:'A4',path:path.join(out,'synthetic-credit-report.pdf')});
+ evidence.checks.push('Кредитный PDF содержит идентификатор того же канонического расчёта, что и кабинет.');
  await page.goto(url('home'));await page.waitForLoadState('networkidle');await page.screenshot({path:path.join(out,'desktop-overview.png')});
+ await page.goto(url('banking'));
+ const cardForm=page.locator('form').filter({has:page.locator('input[value="ACCOUNT_51"]')});
+ await cardForm.locator('input[type=file]').setInputFiles('tests/fixtures/client-v2/account51-synthetic.xls');
+ const [cardResult]=await Promise.all([page.waitForResponse(r=>r.url().includes('/api/dossier')&&r.request().method()==='POST'),cardForm.getByRole('button',{name:'Добавить документ'}).click()]);assert.ok(cardResult.ok(),'Card 51 HTTP '+cardResult.status());
+ assert.ok((await get()).cards51.some(c=>c.closing===150&&c.inflow===50&&c.outflow===0));evidence.checks.push('Нативная карточка 51 XLS принята через форму. Конечное сальдо 150 ₽, поступление 50 ₽.');
+ await page.goto(url('counterparties'));
+ const ledgerForm=page.locator('form').filter({has:page.locator('input[value="COUNTERPARTIES"]')});
+ await ledgerForm.locator('input[name=identityConfirmed]').check();
+ await ledgerForm.locator('input[type=file]').setInputFiles('tests/fixtures/client-v2/account60-synthetic.xls');
+ const [ledgerResult]=await Promise.all([page.waitForResponse(r=>r.url().includes('/api/dossier')&&r.request().method()==='POST'),ledgerForm.getByRole('button',{name:'Добавить документ'}).click()]);assert.ok(ledgerResult.ok(),'Native OSV HTTP '+ledgerResult.status());
+ assert.ok((await get()).settlements.some(p=>p.party==='Учебный контрагент XLS'&&p.remaining===80));evidence.checks.push('ОСВ XLS подтвердила 80 ₽ на конец квартала. Начальное сальдо и обороты не сложились с долгом.');
  await page.setViewportSize({width:390,height:844});await page.goto(url('counterparties'));await buyers.getByText('Учебный покупатель',{exact:false}).first().waitFor();
  const mobile=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,viewport:innerWidth}));evidence.mobile=mobile;
  await page.screenshot({path:path.join(out,'mobile-registers.png')});
  assert.ok(mobile.scroll<=mobile.viewport+1,'Mobile document overflows: '+JSON.stringify(mobile));
  const stranger=await fetch(base+'/api/dossier?id='+company.id,{headers:{cookie:'qa-role=stranger'}});assert.equal(stranger.status,404);evidence.checks.push('Досье недоступно постороннему клиенту.');
+ const free={cookie:'qa-role=stranger','content-type':'application/json'};
+ const another=await json('/api/dossier',{method:'POST',headers:free,body:JSON.stringify({action:'save',inn:company.inn})});
+ const second=await json('/api/dossier?id='+another.company.id,{headers:free});
+ assert.equal(second.entitlement,'BASIC');assert.equal(second.settlements.length,0);assert.notEqual(second.company.id,company.id);
+ const blocked=await fetch(base+'/api/dossier',{method:'POST',headers:free,body:JSON.stringify({action:'calendar',id:second.company.id})});assert.equal(blocked.status,403);
+ evidence.checks.push('Два клиента с одинаковым ИНН видят независимые досье. Free получает 403 при записи платного события.');
+ for(const [role,route,pattern] of [['broker','/agent',/агент|агентск/i],['admin','/prescore-control',/администр|управлен|систем/i]]){
+   const context=await browser.newContext();await context.addCookies([{name:'qa-role',value:role,url:base}]);const other=await context.newPage();await other.goto(base+route);await other.waitForLoadState('networkidle');assert.match(await other.locator('body').innerText(),pattern);await context.close();evidence.pages.push(route);
+ }
  assert.deepEqual(errors,[]);evidence.status='PASS';
 }finally{await fs.writeFile(path.join(out,'result.json'),JSON.stringify(evidence,null,2));await browser.close();}

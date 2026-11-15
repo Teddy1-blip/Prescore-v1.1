@@ -8,6 +8,8 @@ import {recognizeDossierBatch} from '../../../lib/workspace/dossier-ocr';
 import {settlementEvent} from '../../../lib/workspace/settlement-events';
 import {sourceProjection} from '../../../lib/workspace/dossier-sources';
 import {mapSheetRow} from '../../../lib/workspace/calendar-sheet';
+import {manualDebt} from '../../../lib/workspace/manual-debt';
+import {createHash} from 'node:crypto';
 import {calendarEntry} from '../../../lib/workspace/calendar-entry';
 import {getRuntime} from '../../../lib/platform/runtime';
 import {checkoKey,loadChecko,validInn,checkoState} from '../../../lib/external/checko-cache';
@@ -46,7 +48,7 @@ export async function POST(request:Request){
       if(!kind||!(file instanceof File))return reply({error:'Выберите источник и файл.'},400);
       const role=bureauRoles.find(r=>r===(form.get('relationship')??'Компания-заёмщик'));
       if(!role)return reply({error:'Проверьте роль субъекта отчёта.'},400);
-      const saved=await importSource(pool,user.email,String(form.get('id')??''),kind,file,String(form.get('inn')??''),role,user.isAdmin);
+      const saved=await importSource(pool,user.email,String(form.get('id')??''),kind,file,String(form.get('inn')??''),role,user.isAdmin,form.get('identityConfirmed')==='yes');
       return saved?reply(saved,saved.duplicate?200:201):reply({error:'Досье недоступно.'},404);
     }
     const body=await request.json(),inn=typeof body.inn==='string'?body.inn.trim():'';
@@ -124,6 +126,27 @@ export async function POST(request:Request){
       return saved.rows.length?reply({verified:patch}):reply({error:'Поле уже изменилось. Обновите досье.'},409);
       }catch(e){await tx.query('ROLLBACK');throw e;}finally{tx.release();}
     }
+    if(body.action==='manual-debt'){
+      const company=await ownedDossier(pool,user.email,String(body.id??''));
+      if(!company)return reply({error:'Досье недоступно.'},404);
+      if(await dossierTier(pool,user,company)!=='FULL')return reply({error:'Для кредитного портфеля нужен полный доступ.'},403);
+      const now=new Date().toISOString(),entry=manualDebt(body.entry,now.slice(0,10));
+      if(!entry||body.confirmed!==true)return reply({error:'Проверьте договор, дату остатка и основание подтверждения.'},400);
+      const sourceId='manual-debt:'+createHash('sha256').update(JSON.stringify(entry)).digest('hex');
+      const payload:PrivateSource={manualDebt:entry,envelope:{sourceId,sourceType:'OTHER',sourceName:'Подтверждение клиента · '+entry.contract,receivedAt:now,companyInn:company.inn,status:'READY',warnings:[],confidence:null}};
+      const tx=await pool.connect();
+      try{await tx.query('BEGIN');await tx.query('SELECT id FROM company_dossiers WHERE owner_email=$1 AND id=$2 FOR UPDATE',[user.email,company.id]);
+        const inserted=await tx.query("INSERT INTO dossier_sources(dossier_id,source_id,source_type,payload) VALUES($1,$2,'MANUAL_DEBT',$3) ON CONFLICT DO NOTHING RETURNING source_id",[company.id,sourceId,JSON.stringify(payload)]);
+        if(inserted.rows.length){
+          const bank=(await tx.query("SELECT id,payload FROM analyses WHERE owner_email=$1 AND company_inn=$2 AND archive_state='ACTIVE' ORDER BY created_at DESC,id DESC LIMIT 1 FOR UPDATE",[user.email,company.inn])).rows[0];
+          if(bank){
+            const enriched=withDossierSources(JSON.parse(String(bank.payload)),[{id:sourceId,documentId:null,kind:'MANUAL_DEBT',payload}]);
+            await tx.query('UPDATE analyses SET payload=$1 WHERE owner_email=$2 AND id=$3',[JSON.stringify(enriched),user.email,bank.id]);
+          }
+        }
+        await tx.query('COMMIT');return reply({id:sourceId,duplicate:!inserted.rows.length},inserted.rows.length?201:200);
+      }catch(e){await tx.query('ROLLBACK');throw e;}finally{tx.release();}
+    }
     if(body.action==='settlement'){
       if(!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(String(body.key))||typeof body.id!=='string'||!body.entry||typeof body.revision!=='string')return reply({error:'Проверьте поля изменения.'},400);
       const tx=await pool.connect();
@@ -190,6 +213,21 @@ export async function POST(request:Request){
         result=await loadChecko(env.DB,inn,{key:checkoKey(env),cacheOnly:false});
       }
       return {limited:false as const,result};
+    }
+    if(body.action==='counterparty-check'){
+      const company=await ownedDossier(pool,user.email,String(body.id??''));
+      if(!company)return reply({error:'Досье недоступно.'},404);
+      if(await dossierTier(pool,user,company)!=='FULL')return reply({error:'Проверка контрагента доступна в полном кабинете.'},403);
+      const positions=(await dossierSources(pool,user.email,company.id)).flatMap(s=>s.kind==='COUNTERPARTIES'?s.payload.ledger??[]:[]);
+      if(inn.length!==10||!positions.some(p=>p.partyInn===inn))return reply({error:'Укажите ИНН юридического лица из загруженной ОСВ.'},400);
+      const found=await publicLookup();if(found.limited)return reply({error:'Лимит публичных проверок исчерпан.'},429);
+      const p=found.result.profile;
+      if(!p||p.inn!==inn)return reply({error:'Checko пока не вернул сведения об этом контрагенте.'},503);
+      const count=(name:string)=>{const r=p.externalFacts?.receipts.find(r=>r.method===name);return r?.status==='EMPTY'?0:r&&r.visible>0?r.total??r.visible:null;};
+      const counterpartyCheck={inn,fetchedAt:p.fetchedAt,cases:count('legal-cases'),enforcements:count('enforcements')};
+      const sourceId='checko-party:'+inn+':'+p.fetchedAt;
+      const payload={counterpartyCheck,envelope:{sourceId,companyInn:company.inn,sourceType:'OTHER',sourceName:'Checko · контрагент '+inn,receivedAt:p.fetchedAt,status:'READY',confidence:null,warnings:[]}};
+      await pool.query("INSERT INTO dossier_sources(dossier_id,source_id,source_type,payload) VALUES($1,$2,'COUNTERPARTY_CHECK',$3) ON CONFLICT DO NOTHING",[company.id,sourceId,JSON.stringify(payload)]);return reply({saved:true});
     }
     if(body.action==='preview'){
       const found=await publicLookup();if(found.limited)return reply({error:'Лимит публичных проверок исчерпан. Повторите позже.'},429);

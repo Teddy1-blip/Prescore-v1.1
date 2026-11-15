@@ -1,3 +1,4 @@
+import {oneCPeriod} from './one-c-period.ts';
 /** Read-only adapter for a structured 1C account 51 card. Not a bank statement. */
 export type Account51Entry = {
   row: number;
@@ -59,8 +60,8 @@ export function parseAccount51Card(rows: readonly (readonly Cell[])[]): Account5
   const title = rows.slice(0, 12).flatMap(row => row.map(c => String(c ?? '')))
     .find(text => /Карточка\s+сч[её]та\s+51\b/i.test(text));
   if (!title) throw Error('ACCOUNT51_HEADER_MISSING');
-  const period = /за\s+(\d{2}\.\d{2}\.\d{4})\s*[-–—]\s*(\d{2}\.\d{2}\.\d{4})/i.exec(title);
-  const periodFrom = period && date(period[1]), periodTo = period && date(period[2]);
+  const period=oneCPeriod(title);
+  const periodFrom=period?.from,periodTo=period?.to;
   if (!periodFrom || !periodTo || periodTo < periodFrom) throw Error('ACCOUNT51_PERIOD_INVALID');
   const headerIndex = rows.findIndex(row =>
     /^Период$/i.test(value(row, 0)) && row.some(c => String(c ?? '').trim() === 'Дебет')
@@ -73,6 +74,8 @@ export function parseAccount51Card(rows: readonly (readonly Cell[])[]): Account5
   const balance = header.findIndex(c => /Текущее\s+сальдо/i.test(String(c ?? '')));
   if (!(0 < debit && debit + 1 < credit && credit + 1 < balance && balance + 1 <= 16))
     throw Error('ACCOUNT51_COLUMNS_INVALID');
+  const analyticDr=header.findIndex(c=>/^Аналитика\s+Дт$/i.test(String(c??'').trim()));
+  const analyticCr=header.findIndex(c=>/^Аналитика\s+Кт$/i.test(String(c??'').trim()));
   const warnings: string[] = [];
   const operations: Account51Entry[] = [];
   let openingBalance: number | null = null, closingBalance: number | null = null;
@@ -89,7 +92,7 @@ export function parseAccount51Card(rows: readonly (readonly Cell[])[]): Account5
       previous = openingBalance === null ? null : cents(openingBalance);
       continue;
     }
-    if (/^Сальдо\s+на\s+конец/i.test(first)) {
+    if (/^(?:Обороты\s+за\s+период\s+и\s+)?Сальдо\s+на\s+конец/i.test(first)) {
       closingBalance = signed(row, balance);
       if (value(row, balance) === 'Д' && closingBalance !== null && closingBalance < 0)
         warnings.push('ACCOUNT51_NEGATIVE_DEBIT_BALANCE:' + (i + 1));
@@ -128,11 +131,12 @@ export function parseAccount51Card(rows: readonly (readonly Cell[])[]): Account5
     }
     previous = current;
     operations.push({row:i + 1,date:occurred,document:value(row, 1),direction,amount,
-      correspondingAccount:isDr ? cr : dr,analytic:direction === 'INTERNAL_TRANSFER' ? [value(row, 2),value(row, 3)].join(' / ') : value(row, isDr ? 3 : 2),balanceAfter});
+      correspondingAccount:isDr ? cr : dr,analytic:direction === 'INTERNAL_TRANSFER' ? [value(row,analyticDr>=0?analyticDr:2),value(row,analyticCr>=0?analyticCr:3)].join(' / ') : value(row,isDr?(analyticCr>=0?analyticCr:3):(analyticDr>=0?analyticDr:2)),balanceAfter});
   }
   if (!operations.length) throw Error('ACCOUNT51_NO_TRANSACTIONS');
   if (closingBalance !== null && previous !== null && cents(closingBalance) !== previous)
     warnings.push('ACCOUNT51_CLOSING_BALANCE_MISMATCH');
+  // Reconciliation here describes the postings. The dossier separately requires a dated closing balance.
   if (openingBalance === null) warnings.push('ACCOUNT51_OPENING_BALANCE_MISSING');
   if (operations.some(entry => entry.balanceAfter === null)) warnings.push('ACCOUNT51_RUNNING_BALANCE_MISSING');
   return {format:'1C_ACCOUNT51_CARD',periodFrom,periodTo,openingBalance,closingBalance,

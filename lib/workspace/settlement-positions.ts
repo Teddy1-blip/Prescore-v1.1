@@ -45,5 +45,14 @@ export function settlementPositions(sources:SourceRow[]):SettlementPosition[] {
     if(dates.size===1)position.due=[...dates][0];
     if(dates.size>1)position.conflict=true;
   }
+  const parents=new Map<string,typeof flat>();
+  for(const pos of flat){
+    const key=JSON.stringify([pos.account.slice(0,2),exact(pos.party)]);
+    const list=parents.get(key)??[];list.push(pos);parents.set(key,list);
+  }
+  for(const group of parents.values()){
+    const coarse=group.filter(p=>!p.contract&&p.account.length===2);
+    if(coarse.length&&group.some(p=>p.contract||p.account.length>2))for(const p of group)p.conflict=true;
+  }
   return flat.sort((a,b)=>a.party.localeCompare(b.party,'ru')||a.account.localeCompare(b.account));
 }

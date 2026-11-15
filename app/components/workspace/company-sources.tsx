@@ -14,8 +14,10 @@ import {label} from './credit-depth';
 import {numeric,Warnings} from './client-financials';
 import {Panel} from './client-insights';
 import DocumentsHub from '../../dashboard/documents-hub';
+import {ManualDebtForm} from './manual-debt-form';
 import {DossierPortfolio} from './dossier-portfolio';
 import './client-registers.css';
+import {ReceivablesReview} from './receivables-review';
 import {SettlementRegisters} from './settlement-registers';
 import {Account51Comparison} from './account51-comparison';
 import type {WorkspaceBasicV1} from '../../../lib/workspace/model';
@@ -25,7 +27,7 @@ import type {PassportPublicProfile} from '../../../lib/workspace/public-passport
 type Company={id:string;inn:string};
 type PublicProfile=PassportPublicProfile;
 type Profile=ReturnType<typeof sourceProjection>&{company:Company;versions:{id:string;name:string;start:string;end:string}[];publicProfile:PublicProfile|null;entitlement:string};
-const labels:Record<string,string>={CALENDAR_SHEET:'График платежей · XLS, XLSX, CSV',ACCOUNT_51:'Карточка счёта 51 · XLSX',BFO:'Годовая бухгалтерская отчётность',QUARTERLY:'Промежуточная отчётность',BKI:'БКИ · НБКИ, ОКБ или СБ БКИ',COUNTERPARTIES:'ОСВ 60, 62 и 76',DEBT_LEDGER:'ОСВ 66 и 67',CHECKO:'Публичные сведения',BANK_STATEMENT:'Банковская выписка',CALENDAR:'Календарь',CREDIT_DOCUMENT:'Кредитные договоры',COMMERCIAL_DOCUMENT:'Контракты и договоры контрагентов',BFO_REVIEW:'Проверка полей БФО PDF'};
+const labels:Record<string,string>={CALENDAR_SHEET:'График платежей · XLS, XLSX, CSV',ACCOUNT_51:'Карточка счёта 51 · XLS / XLSX',BFO:'Годовая бухгалтерская отчётность',QUARTERLY:'Промежуточная отчётность',BKI:'БКИ · НБКИ, ОКБ или СБ БКИ',COUNTERPARTIES:'ОСВ 60, 62 и 76',DEBT_LEDGER:'ОСВ 66, 67 и 76',CHECKO:'Публичные сведения',BANK_STATEMENT:'Банковская выписка',CALENDAR:'Календарь',CREDIT_DOCUMENT:'Кредитные договоры',COMMERCIAL_DOCUMENT:'Контракты и договоры контрагентов',BFO_REVIEW:'Проверка полей БФО PDF'};
 const kinds:Record<string,string[]>={calendar:['CALENDAR_SHEET'],banking:['ACCOUNT_51'],bfo:['BFO','QUARTERLY','BFO_REVIEW'],obligations:['BKI','DEBT_LEDGER','CREDIT_DOCUMENT'],counterparties:['COUNTERPARTIES','COMMERCIAL_DOCUMENT'],documents:['ACCOUNT_51','BFO','QUARTERLY','BKI','COUNTERPARTIES','DEBT_LEDGER','BFO_REVIEW','CREDIT_DOCUMENT','COMMERCIAL_DOCUMENT']};
 const dossierHref=(id:string,view:string)=>'/dashboard?'+new URLSearchParams({dossierId:id,view});
 async function read<T>(url:string,options?:RequestInit):Promise<T>{
@@ -98,7 +100,7 @@ export function CompanySources({view,id,bankInn,bank,openBank,onCompany,onSource
  const periodSource=profile?.sources.find(s=>s.id===periodSourceId)??(period&&profile?.publicProfile&&[...profile.sources].reverse().find(s=>s.kind==='CHECKO'));
  const relevantClaims=profile?.claims.filter(c=>view==='home'||view==='analysis'||view==='actions'||view==='financing'&&c.stage==='product'||c.sources.some(s=>view==='bfo'?['BFO','QUARTERLY'].includes(s.type):view==='obligations'?s.type==='BKI'||profile.sources.some(r=>c.sourceIds.includes(r.id)&&r.kind==='CREDIT_DOCUMENT'):false))??[];
  const [portfolioSource,setPortfolioSource]=useState('BKI');
- const portfolioTabs=[['BKI','БКИ'],['CREDIT_DOCUMENT','Кредитные договоры'],['DEBT_LEDGER','ОСВ 66 и 67']];
+ const portfolioTabs=[['BKI','БКИ'],['CREDIT_DOCUMENT','Кредитные договоры'],['DEBT_LEDGER','ОСВ 66, 67 и 76']];
  const visibleKinds=view==='calendar'&&profile?.entitlement!=='FULL'?[]:view==='obligations'?[portfolioSource]:kinds[view]??[];
  const currentLedger=profile?.ledger.filter(l=>l.kind===(view==='obligations'?'DEBT_LEDGER':'COUNTERPARTIES'))??[];
 
@@ -195,6 +197,7 @@ export function CompanySources({view,id,bankInn,bank,openBank,onCompany,onSource
   <button type="submit" disabled={busy||!inn}>+ Добавить компанию</button></form>
   </Panel>}
   {view==='counterparties'&&<SettlementRegisters rows={profile?.settlements??[]} full={profile?.entitlement==='FULL'} save={async(entry,key,revision)=>{if(!company)throw Error('Выберите компанию.');await read('/api/dossier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'settlement',id:company.id,entry,key,revision})});setRevision(v=>v+1);}}/>}
+  {view==='counterparties'&&company&&profile?.entitlement==='FULL'&&<ReceivablesReview rows={profile.settlements} checks={profile.counterpartyChecks} refresh={async inn=>{await read('/api/dossier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'counterparty-check',id:company.id,inn})});setRevision(n=>n+1);}}/>}
   {view==='banking'&&<Account51Comparison cards={profile?.cards51??[]} bank={bank}/>}
   {view==='home'&&(company||preview)&&<CompanyPassport inn={company?.inn??inn} profile={profile?.publicProfile??preview} hasStatements={(profile?.versions.length??0)>0} hasAnnual={!!profile?.financial?.history.some(p=>p.period.kind==='ANNUAL')} full={profile?.entitlement==='FULL'} onBankUpload={openBank}/>}
   {view==='home'&&preview&&!company&&<p className="pc-muted">Публичная проверка выполнена для предварительного просмотра. Чтобы сохранить сведения в личном досье, нажмите «Добавить компанию».</p>}
@@ -225,15 +228,17 @@ export function CompanySources({view,id,bankInn,bank,openBank,onCompany,onSource
 
  {view==='obligations'&&portfolioSource==='BKI'&&profile.bureauReports.map(report=><details key={report.id}><summary>{report.source} · {report.date} · {report.companyDebt?'Отчёт заёмщика':'Личный отчёт · вне долга компании'}</summary>{report.obligations.map((o,i)=><p key={i}>{o.creditor} · {o.product} · {o.status}{o.total!==null&&' · Общая задолженность '+o.total.toLocaleString('ru-RU')+' ₽'} · {o.reference}</p>)}</details>)}
  {view==='obligations'&&!bankInn&&<DossierPortfolio profile={profile} />}
+ {view==='obligations'&&profile.entitlement==='FULL'&&<ManualDebtForm save={async entry=>{await read('/api/dossier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'manual-debt',id:company.id,entry,confirmed:true})});setRevision(n=>n+1);await onSourceChanged?.();}}/>}
  {(view==='counterparties'||view==='obligations'&&portfolioSource==='DEBT_LEDGER')&&<details><summary>Формат импорта ОСВ</summary><p>Одна строка на счёт, контрагента, договор и дату. Заголовки колонок: ИНН организации, Дата остатка, Счёт, Контрагент, Договор, Дебет, руб., Кредит, руб. Дата в формате ГГГГ-ММ-ДД. CSV с разделителем «точка с запятой» либо книга XLS/XLSX. Дополнительно: ИНН контрагента, Вид задолженности, Дата платежа по договору. Для основного долга укажите «Основной долг» и номер договора.</p></details>}
  {view==='obligations'&&portfolioSource==='DEBT_LEDGER'&&currentLedger.length>0&&<Panel title="Остатки по документам ОСВ"><div className="pc-table-scroll"><table><thead><tr>{['Счёт','Контрагент','Договор','Дата','Дебет, ₽','Кредит, ₽','Источник'].map(s=><th key={s}>{s}</th>)}</tr></thead><tbody>{currentLedger.map(l=><tr key={l.sourceId+':'+l.row}><td>{l.account}</td><td>{l.party}{l.partyInn&&<small>ИНН {l.partyInn}</small>}</td><td>{l.contract??'—'}{l.due&&<small>Платёж по договору · {l.due}</small>}</td><td>{l.asOf}</td><td>{l.debit??'—'}</td><td>{l.credit??'—'}</td><td>{profile.sources.find(s=>s.id===l.sourceId)?.name}, строка {l.row}</td></tr>)}</tbody></table></div></Panel>}
  {(view==='documents'||view==='home'||view==='bfo')&&profile.sources.length>0&&<Panel title="Источники досье">{profile.sources.map(s=><p key={s.id}>{s.documentId?<a href={'/api/documents?download='+encodeURIComponent(s.documentId)}>{s.name}</a>:s.name} · {labels[s.kind]??'Документ'} · {s.received.slice(0,10)}</p>)}</Panel>}
  </>}
  {visibleKinds.length>0&&<section className="pc-panel pc-source-intake"><h2>Добавить источник</h2>{visibleKinds.map(kind=>{
    const contract=['CREDIT_DOCUMENT','COMMERCIAL_DOCUMENT'].includes(kind),bureau=kind==='BKI',scan=contract||bureau||kind==='BFO_REVIEW';
-   const accept=kind==='CALENDAR_SHEET'?'.xls,.xlsx,.csv':kind==='ACCOUNT_51'?'.xlsx':contract?'.pdf,.docx,.png,.jpg,.jpeg':scan?'.pdf,.png,.jpg,.jpeg':kind.endsWith('LEDGER')||kind==='COUNTERPARTIES'?'.csv,.xls,.xlsx':'.pdf,.xls,.xlsx,.csv';
+   const accept=kind==='CALENDAR_SHEET'?'.xls,.xlsx,.csv':kind==='ACCOUNT_51'?'.xls,.xlsx':contract?'.pdf,.docx,.png,.jpg,.jpeg':scan?'.pdf,.png,.jpg,.jpeg':kind.endsWith('LEDGER')||kind==='COUNTERPARTIES'?'.csv,.xls,.xlsx':'.pdf,.xls,.xlsx,.csv';
    return <form onSubmit={upload} key={kind} aria-label={labels[kind]}><input name="kind" type="hidden" value={kind}/>
      <label>{labels[kind]} <input aria-label={labels[kind]} name="file" required type="file" accept={accept}/></label>
+     {kind==='COUNTERPARTIES'&&<label><input type="checkbox" name="identityConfirmed" value="yes"/> Подтверждаю компанию для ОСВ 1С без ИНН в шапке</label>}
      {bureau&&<label>Кому принадлежит отчёт <select name="relationship">{['Компания-заёмщик','ИП-заёмщик','Собственник','Руководитель','Поручитель'].map(r=><option key={r}>{r}</option>)}</select></label>}
      {scan&&<><ScanLayout/><small>{contract?'PDF, DOCX, JPG, PNG':'PDF, JPG, PNG'} · скан до 16 МБ</small></>}
      {bureau&&<label><input required type="checkbox"/> Подтверждаю право передать отчёт и согласие на обработку.</label>}

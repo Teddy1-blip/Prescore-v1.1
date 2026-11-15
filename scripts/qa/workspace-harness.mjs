@@ -1,6 +1,7 @@
 // Isolated QA server: real production components and API handlers, synthetic data only.
 // No application route, deployment, external service, or production database.
 import fs from 'node:fs';
+import {createHash} from 'node:crypto';
 import {buildXlsx} from '../../lib/excel-export.ts';
 import {agentFixtureRoutes} from './agent-route-harness.mjs';
 import path from 'node:path';
@@ -37,7 +38,13 @@ async function seed(caseId='CL-RU-BUS-001',unavailable=false,stage5Ready=false){
     const prefix='9909'+caseId.slice(-3).padStart(5,'0');
     const checksum=[2,4,10,3,5,9,4,6,8].reduce((sum,w,i)=>sum+w*Number(prefix[i]),0)%11%10;
     const sourceInn=b.input.analysis.companyInn,displayInn=prefix+checksum;
-    b={...b,statements:JSON.parse(JSON.stringify(b.statements).replaceAll(sourceInn,displayInn)),input:JSON.parse(JSON.stringify(b.input).replaceAll(sourceInn,displayInn))};
+    let normalized=JSON.stringify(b.input).replaceAll(sourceInn,displayInn);
+    const statements=b.statements.map(statement=>{
+      const text=statement.text.replaceAll(sourceInn,displayInn),contentHash=createHash('sha256').update(text).digest('hex');
+      normalized=normalized.replaceAll(statement.contentHash,contentHash);
+      return {...statement,text,contentHash,sourceId:statement.sourceId.replace(statement.contentHash,contentHash)};
+    });
+    b={...b,statements,input:JSON.parse(normalized)};
   }
   const r=await rt.request('/api/analysis',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({statements:b.statements})});const payload=await r.json();if(!r.ok)throw Error(JSON.stringify(payload));// Attach normalized synthetic BFO/BKI source bundle; all metrics were computed by the corpus pipeline.
 const saved={...b.input.analysis,id:payload.analysis.id,createdAt:payload.analysis.createdAt};if(stage5Ready) saved.financingRequestV1={receivedAt:saved.periodTo,purpose:'WORKING_CAPITAL',product:'CREDIT_LINE',amount:300000,termMonths:12,annualRatePercent:18,urgency:'WITHIN_30_DAYS'};

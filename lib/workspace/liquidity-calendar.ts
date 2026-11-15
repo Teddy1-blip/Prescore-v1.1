@@ -7,10 +7,15 @@ export const shiftDate=(date:string,days:number)=>new Date(Date.parse(date)+8640
 const positive=(value:number|null):value is number=>value!==null&&Number.isFinite(value)&&value>0;
 export function calendarEvents(profile:CalendarSources):CashEvent[]{
   const events:CashEvent[]=[];
+  const scheduleByDay=new Map<string,CashEvent>();
   const name=(ids:string[])=>ids.map(id=>profile.sources.find(s=>s.id===id)?.name).filter(Boolean).join(', ')||'Кредитный портфель';
   for(const e of profile.schedule){
     if(e.type!=='PAYMENT_DUE'||e.exposure==='CONTINGENT'||e.status!=='SCHEDULED'||!positive(e.amount))continue;
-    events.push({id:e.id,date:e.date,amount:e.amount,direction:'OUT',label:[e.creditor,e.contract].filter(Boolean).join(' · ')||'Платёж по графику',basis:name(e.sourceIds),type:'Договор'});
+    const key=JSON.stringify([e.obligationId,e.date]),previous=scheduleByDay.get(key);
+    if(previous?.amount===e.amount)continue;
+    const item:CashEvent={id:e.id,date:e.date,amount:e.amount,direction:'OUT',label:[e.creditor,e.contract].filter(Boolean).join(' · ')||'Платёж по графику',basis:name(e.sourceIds),type:'Договор'};
+    if(previous){previous.ambiguous=true;item.ambiguous=true;}
+    scheduleByDay.set(key,item);events.push(item);
   }
   for(const o of profile.obligations){
     if(o.exposure==='CONTINGENT'||!positive(o.nextAmount)||!o.nextDate||profile.schedule.some(e=>e.obligationId===o.id&&e.type==='PAYMENT_DUE'&&e.date===o.nextDate))continue;

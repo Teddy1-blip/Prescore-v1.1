@@ -17,7 +17,8 @@ import {buildCreditPortfolio} from '../credit-engine/credit-portfolio/resolver.t
 import {adaptUploadedBki} from '../credit-engine/credit-portfolio/bki-adapter.ts';
 
 export type Account51Summary={from:string;to:string;opening:number|null;closing:number|null;inflow:number;outflow:number;entries:number;requiresReview:boolean};
-export type PrivateSource={calendarSheet?:string[][];sheetEntries?:Record<string,import('./calendar-entry.ts').CalendarEntry>;settlementEvent?:SettlementEvent;bankPayments?:PaymentFact[];account51?:Account51Summary;relationship?:import("../credit-history.ts").CreditSubjectRelationship;ocr?:import("./dossier-ocr.ts").OcrProgress;publicProfile?:import("../company-profile.ts").CompanyProfileData;envelope:SourceEnvelope; snapshot?:FinancialStatementSnapshot; bki?:CreditHistoryReport; ledger?:LedgerBalance[]; calendar?:import("./calendar-entry.ts").CalendarEntry; review?:import("../document-poc/review-fields.ts").DocumentReview; verified?:Record<string,{value:string;page:number;fragment:string}>};
+export type CounterpartyCheck={inn:string;fetchedAt:string;cases:number|null;enforcements:number|null};
+export type PrivateSource={counterpartyCheck?:CounterpartyCheck;manualDebt?:import('./manual-debt.ts').ManualDebt;calendarSheet?:string[][];sheetEntries?:Record<string,import('./calendar-entry.ts').CalendarEntry>;settlementEvent?:SettlementEvent;bankPayments?:PaymentFact[];account51?:Account51Summary;relationship?:import("../credit-history.ts").CreditSubjectRelationship;ocr?:import("./dossier-ocr.ts").OcrProgress;publicProfile?:import("../company-profile.ts").CompanyProfileData;envelope:SourceEnvelope; snapshot?:FinancialStatementSnapshot; bki?:CreditHistoryReport; ledger?:LedgerBalance[]; calendar?:import("./calendar-entry.ts").CalendarEntry; review?:import("../document-poc/review-fields.ts").DocumentReview; verified?:Record<string,{value:string;page:number;fragment:string}>};
 export type SourceRow={id:string;kind:string;documentId:string|null;payload:PrivateSource};
 export async function dossierSources(db:QueryExecutor,owner:string,id:string){
   const result=await db.query(`SELECT s.source_id AS id,s.source_type AS kind,s.document_id AS "documentId",s.payload
@@ -54,7 +55,7 @@ export function sourceProjection(rows:SourceRow[],inn:string,includeFull=true){
   const bki=rows.flatMap(r=>r.payload.bki?.affectsCompanyDebt?[adaptUploadedBki(r.payload.bki,{companyInn:inn,source:r.payload.envelope})]:[]);
   const documents=rows.flatMap(row=>verifiedCreditDocument(row,inn)??[]);
   const ledger=ledgerObservations(rows,inn);
-  const relevant=rows.filter(r=>r.payload.snapshot||r.payload.bki?.affectsCompanyDebt||r.payload.publicProfile||r.kind==='DEBT_LEDGER'||verifiedCreditDocument(r,inn));
+  const relevant=rows.filter(r=>r.payload.snapshot||r.payload.bki?.affectsCompanyDebt||r.payload.publicProfile||r.kind==='DEBT_LEDGER'||r.payload.manualDebt||verifiedCreditDocument(r,inn));
   const asOf=[...ledger.map(o=>o.observedAt??''),...documents.map(d=>d.observedAt),...rows.flatMap(r=>r.payload.bki?.affectsCompanyDebt&&r.payload.bki.reportDate?[r.payload.bki.reportDate]:[])].sort().at(-1);
   const portfolio=(bki.length||documents.length||ledger.length)&&asOf?buildCreditPortfolio({companyInn:inn,asOfDate:asOf,creditHistorySnapshots:bki,documents,observations:ledger}):null;
   const informationDate=[...relevant.map(r=>r.payload.envelope.receivedAt.slice(0,10)),...(asOf?[asOf]:[])].sort().at(-1);
@@ -70,12 +71,13 @@ export function sourceProjection(rows:SourceRow[],inn:string,includeFull=true){
   return {
     settlements:settlementPositions(rows).map(p=>settlementState(p,history,payments)),
     cards51:rows.flatMap(r=>r.payload.account51?[{...r.payload.account51,id:r.id,name:r.payload.envelope.fileName??"Карточка 51"}]:[]),
-    sources:rows.filter(r=>!r.payload.settlementEvent).map(r=>({id:r.id,kind:r.kind,documentId:r.documentId,name:r.payload.envelope.fileName??r.payload.envelope.sourceName??r.kind,received:r.payload.envelope.receivedAt})),
+    sources:rows.filter(r=>!r.payload.settlementEvent&&(includeFull||!r.payload.counterpartyCheck)).map(r=>({id:r.id,kind:r.kind,documentId:r.documentId,name:r.payload.envelope.fileName??r.payload.envelope.sourceName??r.kind,received:r.payload.envelope.receivedAt})),
     bureauReports:rows.flatMap(r=>r.payload.bki?[{id:r.id,source:r.payload.bki.source,date:r.payload.bki.reportDate,companyDebt:r.payload.bki.affectsCompanyDebt,
       obligations:r.payload.bki.obligations.map(o=>({creditor:o.creditor,product:o.product,status:o.status,principal:o.outstandingPrincipal,total:o.totalOutstanding,overdue:o.overdueAmount,reference:o.sourcePageHint}))}]:[]),
     reviews:rows.flatMap(r=>r.payload.review?[{id:r.id,name:r.payload.envelope.fileName,documentId:r.documentId,...r.payload.review,
       bureauPreview:r.payload.review.status==='BUREAU_CONFIRM'&&r.payload.ocr?readBureau(r.payload.ocr.pages.map(p=>p.text).join('\n\f\n'),r.payload.envelope.fileName??'',inn,r.payload.relationship??'Компания-заёмщик').obligations.map(o=>({creditor:o.creditor,contract:o.accountNumber,total:o.totalOutstanding,principal:o.outstandingPrincipal,reference:o.sourcePageHint})):undefined,
       bureauPages:r.kind==='BKI'&&r.payload.ocr&&!r.payload.bki?r.payload.ocr.pages.map(p=>({page:p.page,text:p.text})):undefined,ocr:r.payload.ocr?{through:r.payload.ocr.through,total:r.payload.ocr.total,layout:r.payload.ocr.layout,version:r.payload.ocr.version}:null,verified:r.payload.verified??{}}]:[]),
+    counterpartyChecks:includeFull?rows.flatMap(r=>r.payload.counterpartyCheck?[r.payload.counterpartyCheck]:[]).sort((a,b)=>b.fetchedAt.localeCompare(a.fetchedAt)):[],
     sheets:includeFull?rows.flatMap(r=>r.payload.calendarSheet?[{id:r.id,name:r.payload.envelope.fileName??'График',rows:r.payload.calendarSheet,confirmed:Object.keys(r.payload.sheetEntries??{}).map(Number)}]:[]):[],
     calendar:rows.flatMap(r=>r.payload.calendar?[r.payload.calendar]:Object.values(r.payload.sheetEntries??{})).sort((a,b)=>a.date.localeCompare(b.date)),
     financial,claims:informationDate&&decisionPortfolio?dossierDecisions(relevant,inn,financialAnalysis,decisionPortfolio,informationDate):[],
