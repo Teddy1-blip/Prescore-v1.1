@@ -157,3 +157,53 @@ test('An unreadable second section III row cannot be silently ignored as a blank
   assert.equal(validation(input.issues),'INVALID');
   assert.ok(result.rows.filter(r=>r.line_code.value==='1300').every(r=>r.current_period_value.value===null));
 });
+
+test('historical FNS cover periods 21/31/33 and annual 34 preserve exact reporting dates',()=>{
+ const expected={'21':['2023-01-01','2023-03-31'],'31':['2023-01-01','2023-06-30'],
+                 '33':['2023-01-01','2023-09-30'],'34':['2023-01-01','2023-12-31']};
+ for(const [code,[start,end]] of Object.entries(expected)){
+  const input={id:'synthetic-fns-period-'+code,issues:[],lines:[
+    'Бухгалтерский баланс',
+    'Форма по КНД 0710099',
+    'Номер корректировки 0 - - Отчетный период (код)* '+code.split('').join(' ')+' Отчетный год 2 0 2 3',
+    'Единица измерения: тыс. руб. по ОКЕИ 384',
+    'БАЛАНС | 1600 | 100 | 90',
+    'БАЛАНС | 1700 | 100 | 90',
+  ].map(text=>({text,page:1,confidence:'HIGH'}))};
+  const result=financialStatement(input);
+  assert.equal(result.metadata.period_start.value,start,'start '+code);
+  assert.equal(result.metadata.period_end.value,end,'end '+code);
+  assert.equal(result.metadata.reporting_date.value,end,'date '+code);
+  assert.equal(result.rows.find(x=>x.line_code.value==='1600')?.current_period_value.value,100);
+ }
+});
+test('new FNS 91/92/93 interim codes and missing year remain conservative',()=>{
+ for(const [code,end] of [['91','2026-03-31'],['92','2026-06-30'],['93','2026-09-30']]){
+  const input={id:'synthetic-fns-new-'+code,issues:[],lines:[
+    'Бухгалтерский баланс',
+    'Номер корректировки 0 - - Отчетный период (код)* '+code.split('').join(' ')+' Отчетный год 2 0 2 6',
+    'Единица измерения: тыс. руб. по ОКЕИ 384'
+  ].map(text=>({text,page:1,confidence:'HIGH'}))};
+  assert.equal(financialStatement(input).metadata.reporting_date.value,end);
+ }
+ const invalid={id:'synthetic-no-reporting-year',issues:[],lines:[
+  {text:'Бухгалтерский баланс',page:1,confidence:'HIGH'},
+  {text:'Отчетный период (код)* 3 3',page:1,confidence:'HIGH'},
+  {text:'Единица измерения: тыс. руб. по ОКЕИ 384',page:1,confidence:'HIGH'},
+ ]};
+ assert.equal(financialStatement(invalid).metadata.reporting_date.value,null);
+});
+test('FNS cover date and contradicatory report date block current-period amount extraction',()=>{
+ const input={id:'synthetic-period-conflict',issues:[],lines:[
+  'Бухгалтерский баланс',
+  'Отчетный период (код)* 3 3 Отчетный год 2 0 2 3',
+  'на 31 декабря 2023 г.',
+  'Единица измерения: тыс. руб. по ОКЕИ 384',
+  'БАЛАНС | 1600 | 100 | 90',
+  'БАЛАНС | 1700 | 100 | 90',
+ ].map(text=>({text,page:1,confidence:'HIGH'}))};
+ const result=financialStatement(input);
+ assert.equal(result.metadata.reporting_date.value,null);
+ assert.notEqual(validation(input.issues),'PASS');
+ assert.ok(input.issues.some(x=>x.code==='REPORTING_DATE_AMBIGUOUS'));
+});
