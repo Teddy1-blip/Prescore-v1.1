@@ -19,6 +19,7 @@ export type ShellProps = {
   focus: string;
   onFocus: (f: string) => void;
   onCompany: (id: string) => void;
+  onAddCompany?: () => void;
   onPeriod: (p: string) => void;
   choose: (p: string) => void;
   context?: ReactNode;
@@ -205,6 +206,9 @@ export function ApprovedShell(p: ShellProps) {
                         </option>
                       ))}
                     </select>
+                    {text === 'Компания' && p.onAddCompany && (
+                      <button className="text-link" type="button" onClick={p.onAddCompany}>+ Добавить компанию</button>
+                    )}
                   </div>
                 ))}
               </div>

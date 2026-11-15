@@ -77,6 +77,7 @@ export type ViewData = {
   obligations: string[][];
   sources: { label: string; date: string; status: string; route: Page }[];
   ar: AR | null;
+  buyerBalances?: {amount:number|null;note:string}|null;
 };
 const format = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 });
 export const rub = (v: number) => format.format(v) + ' ₽';

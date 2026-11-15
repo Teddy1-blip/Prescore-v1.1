@@ -25,6 +25,18 @@ export function settlementState(position:SettlementPosition,history:LoggedSettle
   return {...position,amount,paid,remaining,dueDate:due,conflict,history:events,candidates,revision:events.at(-1)?.id??''};
 }
 export type SettlementState=ReturnType<typeof settlementState>;
+// A single reconciled buyer position can be shown directly on the overview.
+// Several positions can cover different dates or overlapping account hierarchies.
+export function buyerBalanceSummary(rows: Pick<SettlementState,'side'|'conflict'|'remaining'|'paid'|'asOf'>[]) {
+ const buyers=rows.filter(row=>row.side==='buyers');
+ if(!buyers.length)return null;
+ const [row]=buyers;
+ if(buyers.length===1&&!row.conflict&&row.remaining!==null){
+   return {amount:row.remaining,note:'Одна позиция ОСВ 62 на '+row.asOf+(row.paid>0?' с учётом связанных оплат':'')};
+ }
+ return {amount:null,note:'Позиций в реестре ОСВ 62: '+buyers.length+'. Открыть остатки и основания'};
+}
+
 export function settlementEvent(input:Partial<SettlementEvent>,position:SettlementState):SettlementEvent|null{
   if(!input||position.conflict||position.side==='other'||input.position!==position.id||input.asOf!==position.asOf||typeof input.note!=='string'||!input.note.trim()||input.note.length>320)return null;
   const base={position:position.id,asOf:position.asOf,note:input.note.trim()};

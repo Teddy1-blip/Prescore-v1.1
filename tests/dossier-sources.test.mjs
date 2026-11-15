@@ -20,6 +20,11 @@ test('Private company dossier, independent inputs and canonical combined analysi
  async function post(body,user){
    return rt.request('/api/dossier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)},user);
  }
+ await t.test('ordinary accounts cannot opt into the owner workspace via request data',async()=>{
+   const result=await rt.request('/api/dossier?ownerTestWorkspace=true',{headers:{'x-owner-test':'true'}},rt.stranger);
+   assert.equal(result.status,200);
+   assert.equal((await result.json()).ownerTestWorkspace,false);
+ });
  async function attach(id,kind,file,user){
    const form=new FormData();form.set('id',id);form.set('kind',kind);form.set('file',file);
    return rt.request('/api/dossier',{method:'POST',body:form},user);
@@ -144,4 +149,14 @@ test('Private company dossier, independent inputs and canonical combined analysi
     assert.equal((await save(publicOwner)),id);
   });
  }finally{await rt.close();if(old===undefined)delete process.env.PRESCORE_STORAGE_ROOT;else process.env.PRESCORE_STORAGE_ROOT=old;await rm(root,{recursive:true,force:true});}
+});
+
+test('overview uses only unambiguous receivables from the selected register',async()=>{
+ const {buyerBalanceSummary}=await import('../lib/workspace/settlement-events.ts');
+ const one={side:'buyers',remaining:1800,conflict:false,paid:0,asOf:'2025-12-31'};
+ assert.equal(buyerBalanceSummary([{...one,side:'suppliers'}]),null);
+ assert.equal(buyerBalanceSummary([one]).amount,1800);
+ assert.equal(buyerBalanceSummary([{...one,remaining:0}]).amount,0);
+ assert.equal(buyerBalanceSummary([{...one,conflict:true}]).amount,null);
+ assert.equal(buyerBalanceSummary([one,{...one,asOf:'2025-01-01'}]).amount,null);
 });

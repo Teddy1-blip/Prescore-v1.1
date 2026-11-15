@@ -1,14 +1,21 @@
+import {stagingOwnerWorkspace} from '../platform/staging-access.ts';
+import type {SettlementState} from './settlement-events.ts';
 import {createHash} from 'node:crypto';
 import type {QueryExecutor} from '../db/compatibility.ts';
 import {dossierTier,visibleProjection} from './dossier-view.ts';
 import {stable} from '../credit-engine/credit-portfolio/common.ts';
 type Owner={email:string;isAdmin:boolean};
 type Company={id:string;inn:string};
-export type DossierReport=Pick<Awaited<ReturnType<typeof visibleProjection>>,'financial'|'obligations'|'portfolioAsOf'|'claims'|'entitlement'|'sources'>&{name:string|null};
+export type ReportSettlement=Pick<SettlementState,'party'|'contract'|'account'|'asOf'|'debit'|'credit'|'conflict'|'references'>;
+export type DossierReport=Pick<Awaited<ReturnType<typeof visibleProjection>>,'financial'|'obligations'|'portfolioAsOf'|'claims'|'entitlement'|'sources'>&{name:string|null;settlements?:ReportSettlement[]};
 export async function issueDossierReport(db:QueryExecutor,user:Owner,company:Company){
  const result=await visibleProjection(db,user,company);
  const model:DossierReport={name:result.publicProfile?.company.name??null,financial:result.financial,obligations:result.obligations,portfolioAsOf:result.portfolioAsOf,
    claims:result.claims,entitlement:result.entitlement,sources:result.sources.filter(s=>s.kind!=='CALENDAR')};
+ if(stagingOwnerWorkspace(user.email)&&result.settlements.length){
+   model.settlements=result.settlements.map(({party,contract,account,asOf,debit,credit,conflict,references})=>
+     ({party,contract,account,asOf,debit,credit,conflict,references}));
+ }
  const id=createHash('sha256').update(stable([company.id,model])).digest('hex');
  await db.query('INSERT INTO dossier_reports(id,dossier_id,tier,public_model) VALUES($1,$2,$3,$4) ON CONFLICT(id) DO NOTHING',[id,company.id,model.entitlement,JSON.stringify(model)]);
  return id;

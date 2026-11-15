@@ -1,3 +1,4 @@
+import {stagingOwnerWorkspace} from '../../../lib/platform/staging-access';
 import {reviewedFinancial} from '../../../lib/workspace/reviewed-financial';
 import {nullableFinancialNumber} from '../../../lib/credit-engine/financial-analysis/normalizer';
 import {withDossierSources} from '../../../lib/workspace/dossier-bank';
@@ -25,7 +26,7 @@ const reply=(body:unknown,status=200)=>Response.json(body,{status,headers:{'Cach
 export async function GET(request:Request){
   const user=await requireApiUser();if(!user)return unauthorized();
   const pool=getRuntime().DB.pool,id=new URL(request.url).searchParams.get('id');
-  if(!id)return reply({companies:(await pool.query('SELECT id,company_inn AS inn FROM company_dossiers WHERE owner_email=$1 ORDER BY created_at DESC,id',[user.email])).rows});
+  if(!id)return reply({ownerTestWorkspace:stagingOwnerWorkspace(user.email),companies:(await pool.query('SELECT id,company_inn AS inn FROM company_dossiers WHERE owner_email=$1 ORDER BY created_at DESC,id',[user.email])).rows});
   const company=await ownedDossier(pool,user.email,id);
   if(!company)return reply({error:'Досье недоступно.'},404);
   const snapshotId=new URL(request.url).searchParams.get('snapshotId');

@@ -154,8 +154,8 @@ export function ApprovedPage(p: ScreenProps) {
           {metric('Операционные поступления', money(d.operating), d.period, 'banking')}
           {metric(
             'Дебиторская задолженность',
-            money(d.ar?.total ?? null),
-            d.ar ? 'ОСВ · ' + d.ar.asOf : 'Для остатка нужна ОСВ 62',
+            money(d.buyerBalances?.amount ?? d.ar?.total ?? null),
+            d.buyerBalances?.note ?? (d.ar ? 'ОСВ · ' + d.ar.asOf : 'Для остатка нужна ОСВ 62'),
             'counterparties',
           )}
           {metric('Остаток основного долга', money(d.debt), d.debtDate, p.availableViews?.includes('obligations') ? 'obligations' : 'analysis')}

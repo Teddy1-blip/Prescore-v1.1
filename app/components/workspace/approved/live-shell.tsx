@@ -20,6 +20,8 @@ type Workspace = {
   model: WorkspaceModelV1 | null;
   locked: boolean;
   renderPage: boolean;
+  onAddCompany?: () => void;
+  buyerBalances?: ReturnType<typeof liveView>['buyerBalances'];
   deals: Deal[];
   select: (id: string) => void;
   add: (input: Omit<Deal, 'id'>) => Promise<void>;
@@ -57,7 +59,7 @@ export function ClientShell(p: Workspace) {
     history.pushState(null, '', u);
   };
   const company = p.model?.basic.analysis.company.name || p.selected?.companyName || (p.dossier?.inn?'ИНН '+p.dossier.inn:'Кабинет компании');
-  const data = liveView(p.model, company, period);
+  const data = {...liveView(p.model, company, period),buyerBalances:p.buyerBalances};
   const directory=p.companies??[];
   const options=directory.map(d=>({id:'dossier:'+d.id,label:p.analyses.find(a=>a.companyInn===d.inn)?.companyName||'ИНН '+d.inn}));
   for(const a of p.analyses.filter(a=>(a.historyPurpose!=='QA'||a.id===p.selected?.id)&&!directory.some(d=>d.inn===a.companyInn))){
@@ -91,6 +93,7 @@ export function ClientShell(p: Workspace) {
       analysisId={p.selected?.id}
       dossierId={p.dossier?.id}
       companies={options}
+      onAddCompany={p.onAddCompany}
       onCompany={id=>{const item=directory.find(d=>'dossier:'+d.id===id);
         if(item){if(item.id!==p.dossier?.id)location.assign('/dashboard?'+new URLSearchParams({dossierId:item.id,view:p.view}));}
         else if(id)p.select(id);
