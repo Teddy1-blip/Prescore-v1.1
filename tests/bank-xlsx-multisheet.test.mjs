@@ -25,3 +25,22 @@ test('Unrecognized worksheet never silently joins a recognized bank statement',(
  const r=inspectSberBusinessWorkbook(sheets);
  assert.equal(r.totalOperations,4);assert.ok(r.warnings.includes('BANK_XLSX_UNSUPPORTED_SHEETS'));
 });
+
+test('Two sheets for one account with overlapping operation dates require review',()=>{
+ const sources=extractXlsxSheets(bytes).slice(0,2);
+ sources[1].rows[0][12]=sources[0].rows[0][12];
+ const r=inspectSberBusinessWorkbook(sources);
+ assert.equal(r.accountCount,1);
+ assert.ok(r.warnings.includes('BANK_XLSX_ACCOUNT_PERIOD_OVERLAP_REVIEW_REQUIRED'));
+ assert.equal(r.automaticApply,false);assert.equal(r.scoreUpdated,false);
+});
+test('Same account on separate non-overlapping sheet periods is not an overlap',()=>{
+ const sources=extractXlsxSheets(bytes).slice(0,2);
+ sources[1].rows[0][12]=sources[0].rows[0][12];
+ sources[1].rows[3][1]='2025-06-01 09:00:00';
+ sources[1].rows[4][1]='2025-06-02 12:00:00';
+ const r=inspectSberBusinessWorkbook(sources);
+ assert.equal(r.totalOperations,4);
+ assert.equal(r.accountCount,1);
+ assert.equal(r.warnings.includes('BANK_XLSX_ACCOUNT_PERIOD_OVERLAP_REVIEW_REQUIRED'),false);
+});
