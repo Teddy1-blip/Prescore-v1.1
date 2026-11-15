@@ -87,6 +87,13 @@ export function financialOcrCodes(tsv:string):Set<string>{
  }
  return codes;
 }
+// Four real scanned F1 pages showed that a page with 11 apparently valid
+// codes may still be missing seven more. Retry weak financial tables, but
+// select the full sparse pass only when its evidence is strictly stronger.
+export function shouldRetryFinancialOcr(primary:string):boolean{
+ const codes=financialOcrCodes(primary);
+ return codes.size<16 || (!codes.has('1600')&&!codes.has('1700'));
+}
 export function preferSparseFinancialOcr(primary:string,sparse:string):boolean{
  const first=financialOcrCodes(primary),second=financialOcrCodes(sparse);
  return second.size>first.size+1 || (second.has('1600')&&!first.has('1600')&&second.size>first.size);
@@ -96,7 +103,7 @@ async function readImage(path:string,page:number,dpi:number,financial:boolean,bu
  if(!financial&&!bureau)return {text:await exec('tesseract',args),tables:undefined,sparsePass:false};
  let tsv=await exec('tesseract',[...args,'tsv']);
  let sparsePass=false;
- if(financial&&financialOcrCodes(tsv).size<7){
+ if(financial&&shouldRetryFinancialOcr(tsv)){
   // Re-read one raster page when PSM6 lost tabular row codes.
   // Select a whole pass, never combine its numbers with the other pass.
   const sparse=await exec('tesseract',[path,'stdout','-l','rus+eng','--psm','11','tsv']);
