@@ -11,9 +11,9 @@ import {checkoKey,loadChecko,validInn,checkoState} from '../../../lib/external/c
 import {profileView} from '../../../lib/external/checko-profile';
 import {rateLimit} from '../../../lib/release/security';
 import {ownedDossier,saveDossier,dossierVersions} from '../../../lib/workspace/dossier';
-import {visibleProjection} from '../../../lib/workspace/dossier-view';
+import {dossierTier,visibleProjection} from '../../../lib/workspace/dossier-view';
 import {dossierSources} from '../../../lib/workspace/dossier-sources';
-import {InputError,importSource,uploadKinds} from '../../../lib/workspace/dossier-import';
+import {FullRequired,InputError,importSource,uploadKinds} from '../../../lib/workspace/dossier-import';
 import {requireApiUser,unauthorized} from '../api-auth';
 export const dynamic='force-dynamic';
 const reply=(body:unknown,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'private, no-store'}});
@@ -37,7 +37,7 @@ export async function POST(request:Request){
       if(!kind||!(file instanceof File))return reply({error:'Выберите источник и файл.'},400);
       const role=bureauRoles.find(r=>r===(form.get('relationship')??'Компания-заёмщик'));
       if(!role)return reply({error:'Проверьте роль субъекта отчёта.'},400);
-      const saved=await importSource(pool,user.email,String(form.get('id')??''),kind,file,String(form.get('inn')??''),role);
+      const saved=await importSource(pool,user.email,String(form.get('id')??''),kind,file,String(form.get('inn')??''),role,user.isAdmin);
       return saved?reply(saved,saved.duplicate?200:201):reply({error:'Досье недоступно.'},404);
     }
     const body=await request.json(),inn=typeof body.inn==='string'?body.inn.trim():'';
@@ -99,6 +99,7 @@ export async function POST(request:Request){
           if(source.kind==='BFO_REVIEW'){
             const snapshot=reviewedFinancial(payload,company.inn);
             if(snapshot){
+              if(snapshot.period.kind!=='ANNUAL'&&await dossierTier(tx,user,company)!=='FULL'){await tx.query('ROLLBACK');return reply({error:'Для промежуточной отчётности нужен полный доступ.'},403);}
               payload={...payload,snapshot,envelope:snapshot.source};
               await tx.query('UPDATE dossier_sources SET payload=$1 WHERE dossier_id=$2 AND source_id=$3',[JSON.stringify(payload),company.id,source.id]);
             }else if(payload.snapshot){await tx.query('ROLLBACK');return reply({error:'Исправление противоречит периоду или единице уже подтверждённой отчётности.'},409);}
@@ -117,6 +118,7 @@ export async function POST(request:Request){
     if(body.action==='calendar'){
       const company=await ownedDossier(pool,user.email,String(body.id??''));
       if(!company)return reply({error:'Досье недоступно.'},404);
+      if(await dossierTier(pool,user,company)!=='FULL')return reply({error:'Платёжный календарь доступен в полном режиме.'},403);
       const entry=calendarEntry(body.entry);
       if(!entry||!/^\w{8}-[a-f\d-]{27}$/i.test(String(body.key??'')))return reply({error:'Проверьте поля события.'},400);
       const sourceId='calendar:'+body.key;
@@ -126,26 +128,33 @@ export async function POST(request:Request){
       return saved.rows.length?reply({id:sourceId}):reply({error:'Запись с этим номером уже существует.'},409);
     }
     if(!validInn(inn))return reply({error:'Проверьте ИНН и его контрольную цифру.'},400);
-    if(body.action==='preview'){
+    const ownerEmail=user.email;
+    async function publicLookup(){
       const cached=await loadChecko(env.DB,inn,{key:'',cacheOnly:true});
       let result=cached;
       if(cached.status!=='READY' && checkoKey(env)){
-        const limit=await rateLimit(pool,'checko-public-preview',user.email,3,60);
-        if(!limit.allowed)return reply({error:'Повторите запрос через минуту.'},429);
+        const limit=await rateLimit(pool,'checko-public-preview',ownerEmail,3,60);
+        if(!limit.allowed)return {limited:true as const};
         const global=await rateLimit(pool,'checko-public-preview','all-users',20,3600);
-        if(!global.allowed)return reply({error:'Лимит новых запросов Checko на этот час исчерпан.'},429);
+        if(!global.allowed)return {limited:true as const};
         result=await loadChecko(env.DB,inn,{key:checkoKey(env),cacheOnly:false});
       }
+      return {limited:false as const,result};
+    }
+    if(body.action==='preview'){
+      const found=await publicLookup();if(found.limited)return reply({error:'Лимит публичных проверок исчерпан. Повторите позже.'},429);
+      const result=found.result;
       return reply({status:checkoState(result).status,reason:result.reason??null,profile:result.profile?profileView(result.profile,'FREE'):null});
     }
     if(body.action!=='save')return reply({error:'Неизвестное действие.'},400);
     const company=await saveDossier(pool,user.email,inn);
-    if(body.attachPublic===true){
-      const {profile}=await loadChecko(env.DB,inn,{key:'',cacheOnly:true});
-      if(!profile)return reply({error:'Публичные сведения ещё не получены.',company},409);
+    if(body.attachPublic===true||body.refreshPublic===true){
+      const found=body.refreshPublic===true?await publicLookup().catch(()=>null):null;
+      const profile=found&&!found.limited?found.result.profile:(await loadChecko(env.DB,inn,{key:'',cacheOnly:true}).catch(()=>null))?.profile;
+      if(!profile)return reply({company,publicStatus:'PENDING'});
       const sourceId='checko:'+inn+':'+profile.fetchedAt;
       await pool.query(`INSERT INTO dossier_sources(dossier_id,source_id,source_type,payload) VALUES($1,$2,'CHECKO',$3) ON CONFLICT DO NOTHING`,[company.id,sourceId,JSON.stringify({publicProfile:profile,envelope:{sourceId,sourceType:'CHECKO',companyInn:inn,sourceName:'Checko',status:'READY',receivedAt:profile.fetchedAt,confidence:null,warnings:[]}})]);
     }
     return reply({company});
-  }catch(error){return error instanceof InputError?reply({error:error.message},400):reply({error:'Не удалось обработать источник.'},503);}
+  }catch(error){return error instanceof FullRequired?reply({error:error.message},403):error instanceof InputError?reply({error:error.message},400):reply({error:'Не удалось обработать источник.'},503);}
 }

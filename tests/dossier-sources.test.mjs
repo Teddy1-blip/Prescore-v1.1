@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {createHash} from 'node:crypto';
 import {zipSync,strToU8} from 'fflate';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -26,6 +27,10 @@ test('Private company dossier, independent inputs and canonical combined analysi
  async function read(id,user){const r=await rt.request('/api/dossier?id='+id,{},user);assert.equal(r.status,200);return r.json();}
  async function save(user){const r=await post({action:'save',inn},user);assert.equal(r.status,200);return (await r.json()).company.id;}
  const bank=async(dossierId,user)=>rt.request('/api/analysis',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({dossierId,statements:[{fileName:'bank.txt',text:statementFixture({inn})}]})},user);
+ function enablePersonalPreview(t,user){
+   const settings={PRESCORE_RUNTIME_MODE:'release-candidate',PRESCORE_OWNER_FULL_PREVIEW:'1',PRESCORE_BASE_URL:'https://prescore.ru',PRESCORE_OWNER_PREVIEW_EMAIL_SHA256:createHash('sha256').update(user.email).digest('hex')};
+   for(const [key,value] of Object.entries(settings)){const old=process.env[key];process.env[key]=value;t.after(()=>{if(old===undefined)delete process.env[key];else process.env[key]=old;});}
+ }
  const actor=n=>({roles:['CLIENT'],email:'source'+n+'@workspace.test'});
  try{
   let id,publicOwner=actor(1);
@@ -71,12 +76,16 @@ test('Private company dossier, independent inputs and canonical combined analysi
     const a=(await r.json()).analysis,d=await read(await save(user),user);
     assert.equal(d.versions[0].id,a.id);assert.ok(d.sources.some(s=>s.kind==='BANK_STATEMENT'));
   });
-  await t.test('BKI-only resolves contractual debt through BLK-06.5 without capacity',async()=>{
+  await t.test('BKI-only resolves contractual debt through BLK-06.5 without capacity',async t=>{
     const user=actor(4),id=await save(user),r=await attach(id,'BKI',corporateBkiFile(inn),user);assert.equal(r.status,201,await r.clone().text());
+    assert.deepEqual((await read(id,user)).obligations,[]);
+    enablePersonalPreview(t,user);
     const d=await read(id,user);assert.equal(d.obligations.length,1);assert.equal(d.obligations[0].principal,120000);assert.equal(d.capacity,undefined);assert.equal(d.versions.length,0);
   });
-  await t.test('credit agreement review and calendar persist with ownership, provenance and idempotency',async()=>{
+  await t.test('credit agreement review and calendar persist with ownership, provenance and idempotency',async t=>{
     const user=actor(6),id=await save(user),doc=new File([syntheticPdf(['Кредитный договор','Кредитор: Банк Тест','Заёмщик: Компания Тест','ИНН заёмщика: '+inn,'Номер договора: Т-001','Дата договора: 2025-01-01','Валюта: RUB','Кредитный лимит: 100000','Вид кредита: кредитная линия'])],'credit.pdf');
+    assert.equal((await post({action:'calendar',id},user)).status,403);
+    enablePersonalPreview(t,user);
     const before=await attach(id,'CREDIT_DOCUMENT',doc,user);assert.equal(before.status,201,await before.clone().text());
     let d=await read(id,user);assert.equal(d.obligations.length,0);const review=d.reviews[0];assert.equal(review.status,'READY_FOR_REVIEW');assert.ok(review.documentId);
     const recognize={action:'recognize',id,sourceId:review.id,layout:'SINGLE'};
@@ -97,8 +106,8 @@ test('Private company dossier, independent inputs and canonical combined analysi
     assert.equal((await post(event,publicOwner)).status,404);assert.equal((await post(event,user)).status,200);assert.equal((await post(event,user)).status,200);
     assert.equal((await post({...event,entry:{...event.entry,amount:600}},user)).status,409);assert.equal((await read(id,user)).calendar.length,1);
   });
-  await t.test('Word agreements preserve native paragraph evidence without treating paragraphs as PDF pages',async()=>{
-    const user=actor(8),id=await save(user);
+  await t.test('Word agreements preserve native paragraph evidence without treating paragraphs as PDF pages',async t=>{
+    const user=actor(8),id=await save(user);enablePersonalPreview(t,user);
     const lines=['Кредитный договор','Кредитор: Банк Тест','Заёмщик: Компания Тест','ИНН заёмщика: '+inn,'Номер договора: 12345','Дата договора: 01.01.2025','Валюта: RUB','Лимит кредита: 100000'];
     const xml='<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'+lines.map(s=>'<w:p><w:r><w:t>'+s+'</w:t></w:r></w:p>').join('')+'</w:body></w:document>';
     const doc=new File([zipSync({'word/document.xml':strToU8(xml)})],'agreement.docx');
@@ -122,7 +131,8 @@ test('Private company dossier, independent inputs and canonical combined analysi
     assert.equal((await rt.request('/api/dossier?id='+id,{},publicOwner)).status,404);
     assert.equal((await attach(id,'COUNTERPARTIES',ledger,publicOwner)).status,404);
   });
-  await t.test('combine in a single owner dossier, reload and keep historical report sources',async()=>{
+  await t.test('combine in a single owner dossier, reload and keep historical report sources',async t=>{
+    enablePersonalPreview(t,publicOwner);
     for(const [kind,file] of [['BFO',financialFile(inn)],['BKI',corporateBkiFile(inn)],['COUNTERPARTIES',ledger]]){
       const r=await attach(id,kind,file,publicOwner);assert.equal(r.status,201,await r.clone().text());
     }

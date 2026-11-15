@@ -1,3 +1,4 @@
+import {settlementPositions} from './settlement-positions.ts';
 import {readBureau} from './bureau-review.ts';
 import {ledgerObservations} from './ledger-observations.ts';
 import {dossierDecisions} from './dossier-decisions.ts';
@@ -14,7 +15,8 @@ import {publicFinancialAnalysis} from '../credit-engine/client-report/source-det
 import {buildCreditPortfolio} from '../credit-engine/credit-portfolio/resolver.ts';
 import {adaptUploadedBki} from '../credit-engine/credit-portfolio/bki-adapter.ts';
 
-export type PrivateSource={relationship?:import("../credit-history.ts").CreditSubjectRelationship;ocr?:import("./dossier-ocr.ts").OcrProgress;publicProfile?:import("../company-profile.ts").CompanyProfileData;envelope:SourceEnvelope; snapshot?:FinancialStatementSnapshot; bki?:CreditHistoryReport; ledger?:LedgerBalance[]; calendar?:import("./calendar-entry.ts").CalendarEntry; review?:import("../document-poc/review-fields.ts").DocumentReview; verified?:Record<string,{value:string;page:number;fragment:string}>};
+export type Account51Summary={from:string;to:string;opening:number|null;closing:number|null;inflow:number;outflow:number;entries:number;requiresReview:boolean};
+export type PrivateSource={account51?:Account51Summary;relationship?:import("../credit-history.ts").CreditSubjectRelationship;ocr?:import("./dossier-ocr.ts").OcrProgress;publicProfile?:import("../company-profile.ts").CompanyProfileData;envelope:SourceEnvelope; snapshot?:FinancialStatementSnapshot; bki?:CreditHistoryReport; ledger?:LedgerBalance[]; calendar?:import("./calendar-entry.ts").CalendarEntry; review?:import("../document-poc/review-fields.ts").DocumentReview; verified?:Record<string,{value:string;page:number;fragment:string}>};
 export type SourceRow={id:string;kind:string;documentId:string|null;payload:PrivateSource};
 export async function dossierSources(db:QueryExecutor,owner:string,id:string){
   const result=await db.query(`SELECT s.source_id AS id,s.source_type AS kind,s.document_id AS "documentId",s.payload
@@ -51,6 +53,8 @@ export function sourceProjection(rows:SourceRow[],inn:string,includeFull=true){
   const informationDate=[...relevant.map(r=>r.payload.envelope.receivedAt.slice(0,10)),...(asOf?[asOf]:[])].sort().at(-1);
   const decisionPortfolio=includeFull&&informationDate?buildCreditPortfolio({companyInn:inn,asOfDate:informationDate,creditHistorySnapshots:bki,documents,observations:ledger}):null;
   return {
+    settlements:settlementPositions(rows),
+    cards51:rows.flatMap(r=>r.payload.account51?[{...r.payload.account51,id:r.id,name:r.payload.envelope.fileName??"Карточка 51"}]:[]),
     sources:rows.map(r=>({id:r.id,kind:r.kind,documentId:r.documentId,name:r.payload.envelope.fileName??r.payload.envelope.sourceName??r.kind,received:r.payload.envelope.receivedAt})),
     bureauReports:rows.flatMap(r=>r.payload.bki?[{id:r.id,source:r.payload.bki.source,date:r.payload.bki.reportDate,companyDebt:r.payload.bki.affectsCompanyDebt,
       obligations:r.payload.bki.obligations.map(o=>({creditor:o.creditor,product:o.product,status:o.status,principal:o.outstandingPrincipal,total:o.totalOutstanding,overdue:o.overdueAmount,reference:o.sourcePageHint}))}]:[]),
@@ -62,7 +66,7 @@ export function sourceProjection(rows:SourceRow[],inn:string,includeFull=true){
     schedule:portfolio?.obligations.flatMap(o=>o.schedule.filter(e=>e.dueDate).map(e=>({id:e.scheduledEventId,date:e.dueDate!,type:e.type,amount:e.amount.value,creditor:o.identity.creditorName.value,contract:o.identity.contractNumber.value,sourceIds:o.sourceIds})))??[],
     lines:selected.map(s=>({id:s.snapshotId,sourceId:s.sourceId,rows:[...Object.values(s.balance),...Object.values(s.income)].filter(v=>v.rawCode&&v.rawValue!=null).map(v=>({code:v.rawCode!,raw:v.rawValue!,scale:s.confirmedScale}))})),
     portfolioAsOf:asOf??null,
-    obligations:portfolio?.obligations.map(o=>({id:o.obligationId,creditor:o.identity.creditorName.value,contract:o.identity.contractNumber.value,principal:o.currentPosition.principalOutstanding.value,original:o.currentTerms.originalAmount.value,limit:o.currentTerms.creditLimit.value,rate:o.currentTerms.annualRate.value,maturity:o.currentTerms.maturityDate.value,sourceIds:o.sourceIds}))??[],
+    obligations:portfolio?.obligations.map(o=>({id:o.obligationId,creditor:o.identity.creditorName.value,contract:o.identity.contractNumber.value,type:o.type,principalDate:o.currentPosition.principalOutstanding.observedAt,overdue:o.currentPosition.overdueAmount.value,overdueDate:o.currentPosition.overdueAmount.observedAt,nextDate:o.currentPosition.nextPaymentDate.value,nextAmount:o.currentPosition.nextPaymentAmount.value,scheduledAmount:o.currentTerms.scheduledPaymentAmount.value,frequency:o.currentTerms.scheduledPaymentFrequency.value,requiresReview:o.warnings.length>0,principal:o.currentPosition.principalOutstanding.value,original:o.currentTerms.originalAmount.value,limit:o.currentTerms.creditLimit.value,rate:o.currentTerms.annualRate.value,maturity:o.currentTerms.maturityDate.value,sourceIds:o.sourceIds}))??[],
     ledger:rows.flatMap(r=>(r.payload.ledger??[]).map(line=>({...line,kind:r.kind,sourceId:r.id})))
   };
 }
