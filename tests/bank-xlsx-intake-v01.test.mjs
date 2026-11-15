@@ -33,3 +33,13 @@ test('Preserve actual source row numbers for evidence references',()=>{
  const r=inspectSberBusinessXlsxRows(sample(),[1,2,5,6,9,10]);
  assert.deepEqual(r.operations.map(o=>o.row),[9,10]);
 });
+
+test('40817 personal account is never declared a corporate settlement account',()=>{
+ const a=sample();a[1][12]='40817'+'0'.repeat(15);
+ const r=inspectSberBusinessXlsxRows(a);
+ assert.equal(r.format,'SBER_BUSINESS_OPERATIONS_XLSX');
+ assert.equal(r.status,'REVIEW_REQUIRED');
+ assert.equal(r.account,null);
+ assert.ok(r.warnings.includes('BANK_XLSX_PERSONAL_40817_ACCOUNT_REVIEW_REQUIRED'));
+ assert.equal(r.automaticApply,false);assert.equal(r.scoreUpdated,false);
+});
