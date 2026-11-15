@@ -57,6 +57,8 @@ try{
   await page.goto(url(view));await page.waitForLoadState('networkidle');const body=await page.locator('body').innerText();
   assert.ok(body.trim().length>110,view+' empty');evidence.pages.push(view);
   assert.equal(new URL(page.url()).searchParams.get('dossierId'),company.id);
+  if(view==='obligations')assert.equal(await page.getByRole('heading',{name:'Кредитный портфель',exact:true}).count(),1);
+  if(view==='home')assert.equal(await page.getByRole('region',{name:'Паспорт компании',exact:true}).getByText('Проверить источник',{exact:true}).count(),0);
   if(view==='banking'||view==='obligations')await page.screenshot({path:path.join(out,view==='banking'?'desktop-banking.png':'desktop-portfolio.png')});
   if(view==='analysis'){await page.getByText('Демонстрационная оценка бизнеса',{exact:true}).click();await page.getByLabel('Свободный поток для компании (FCFF), год 1',{exact:true}).fill('100000');}
  }

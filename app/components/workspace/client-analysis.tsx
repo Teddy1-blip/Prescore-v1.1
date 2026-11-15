@@ -49,7 +49,7 @@ export function DebtPortfolio({model,embedded=false}:{model:WorkspaceModelV1;emb
  const payments=[['Основной долг, выделенный в выписке',b.loanPrincipalPayments],['Проценты, выделенные в выписке',b.interestPayments],['Лизинг',b.leasingPayments],['Неразделённые платежи',b.unsplitDebtPayments]] as const;
  const schedule=p?.scheduledPayments?.filter(s=>s.value!==null)??[];
  return <>
-  <div className="pc-page-title"><div>{embedded?<h2>Кредитный портфель</h2>:<h1>Кредитный портфель</h1>}<p>Договоры, обслуживание и ближайшие платежи</p></div></div>
+  {!embedded&&<div className="pc-page-title"><div><h1>Кредитный портфель</h1><p>Договоры, обслуживание и ближайшие платежи</p></div></div>}
   <Panel title="Обслуживание долга по выпискам">
    <p className="pc-muted">Разбивка основана на назначениях платежей. Для проверки полного обслуживания сопоставьте выписки с карточкой 51 и графиками договоров.</p>
    <dl className="pc-definition">{payments.filter(([,f])=>f.value!==null&&(f.status==='KNOWN'||f.status==='PARTIAL')).map(([name,f])=><div key={name}><dt>{name}</dt><dd>{money(f.value)}</dd></div>)}</dl>

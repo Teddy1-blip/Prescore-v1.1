@@ -37,28 +37,6 @@ export function CompanyPassport({
       </div>
       <button type="button" className="pc-passport-upload" onClick={onBankUpload}>+ Загрузить выписку</button>
     </div>
-    <div className="pc-passport-metrics">
-      <article>
-        <small>Регистрация</small>
-        <strong>{passport.company.registrationDate??'—'}</strong>
-        <span>Проверенное поле публичного профиля</span>
-      </article>
-      <article>
-        <small>Регион</small>
-        <strong>{passport.company.region??'—'}</strong>
-        <span>Без автоматического банковского вывода</span>
-      </article>
-      <article>
-        <small>Судебные события</small>
-        <strong>{passport.attention.some(item=>item.title.includes('Судебные'))?'Есть сведения':'Проверить источник'}</strong>
-        <span>Только подтверждённые и датированные записи</span>
-      </article>
-      <article>
-        <small>Исполнительные производства</small>
-        <strong>{passport.attention.some(item=>item.title.includes('Исполнительные'))?'Есть сведения':'Проверить источник'}</strong>
-        <span>Нужна оценка актуального состояния</span>
-      </article>
-    </div>
     <div className="pc-passport-grid">
       <div className="pc-passport-section">
         <div className="pc-passport-section-title"><h3>Основные сведения</h3><span>Checko / реестры</span></div>
