@@ -120,6 +120,7 @@ test('FNS blank alternative section III does not erase the populated commercial 
     ...meta.map(page),
     page('Капитал | 1310 | 10 | 10 | 10'),
     page('Капитал и резервы | 1300 | (5388) | (6199) | (7186)'),
+    page('III. ЦЕЛЕВОЕ ФИНАНСИРОВАНИЕ'),
     page('Целевой капитал | 1310 | - | - | -'),
     page('Целевое финансирование | 1300 | — | — | —'),
     page('БАЛАНС | 1600 | 10630 | 396 | 133'),
@@ -206,4 +207,16 @@ test('FNS cover date and contradicatory report date block current-period amount 
  assert.equal(result.metadata.reporting_date.value,null);
  assert.notEqual(validation(input.issues),'PASS');
  assert.ok(input.issues.some(x=>x.code==='REPORTING_DATE_AMBIGUOUS'));
+});
+
+test('No NPO section heading means a dash-only duplicate is still ambiguous',()=>{
+ const page=(text)=>({text,page:2,confidence:'HIGH'});
+ const input={id:'synthetic-no-npo-heading-required',issues:[],lines:[
+  ...meta.map(page),
+  page('Капитал и резервы | 1300 | (5388) | (6199)'),
+  page('Другая форма | 1300 | - | -'),
+ ]};
+ const result=financialStatement(input);
+ assert.equal(validation(input.issues),'INVALID');
+ assert.ok(result.rows.filter(x=>x.line_code.value==='1300').every(x=>x.current_period_value.value===null));
 });
