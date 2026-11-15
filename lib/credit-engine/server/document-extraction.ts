@@ -135,17 +135,40 @@ export function extractCsvText(bytes: Uint8Array) {
   return [...rows, row].join("\n");
 }
 
-function extractLegacyXls(bytes: Uint8Array): Promise<string> {
+function extractLegacyXls(bytes: Uint8Array, mode: 'tsv' | 'sheets' = 'tsv'): Promise<string> {
   if (bytes.length > 25 * 1024 * 1024 || Buffer.from(bytes.subarray(0, 8)).toString('hex') !== 'd0cf11e0a1b11ae1') {
     return Promise.reject(Error('Некорректный файл Excel 97–2003.'));
   }
   return new Promise((accept, reject) => {
-    const child = execFile('python3', ['-I', resolve('lib/release/read-legacy-xls.py')], {
+    const child = execFile('python3', ['-I', resolve('lib/release/read-legacy-xls.py'), ...(mode === 'sheets' ? ['--sheets-json'] : [])], {
       timeout: 12000, killSignal: 'SIGKILL', maxBuffer: 8 * 1024 * 1024,
       encoding: 'utf8', env: {PATH: process.env.PATH, LANG: 'C.UTF-8', NODE_ENV: process.env.NODE_ENV ?? 'production'}
     }, (error, output) => error ? reject(Error('Не удалось прочитать книгу XLS.')) : accept(output));
     child.stdin?.on('error', () => reject(Error('Не удалось передать книгу XLS для чтения.')));
     child.stdin?.end(bytes);
+  });
+}
+
+
+/** Existing Python xlrd reader in opt-in structured mode; do not merge
+ * unrelated Excel sheets or lose actual source row references. */
+export async function extractLegacyXlsSheets(bytes: Uint8Array): Promise<Array<{sheet:string;rows:string[][];rowNumbers:number[]}>> {
+  const body = await extractLegacyXls(bytes, 'sheets');
+  let parsed: unknown;
+  try { parsed = JSON.parse(body); } catch { throw Error('LEGACY_XLS_SHEETS_INVALID'); }
+  if (!Array.isArray(parsed) || parsed.length < 1 || parsed.length > 64) throw Error('LEGACY_XLS_SHEETS_INVALID');
+  return parsed.map((item: unknown) => {
+    if (!item || typeof item !== 'object') throw Error('LEGACY_XLS_SHEETS_INVALID');
+    const s = item as {sheet?:unknown;rows?:unknown;rowNumbers?:unknown};
+    if (typeof s.sheet !== 'string' || !s.sheet || s.sheet.length > 120 ||
+        !Array.isArray(s.rows) || s.rows.length > 100000 || !Array.isArray(s.rowNumbers) ||
+        s.rowNumbers.length !== s.rows.length) throw Error('LEGACY_XLS_SHEETS_INVALID');
+    const rows = s.rows as unknown[], numbers=s.rowNumbers as unknown[];
+    if (rows.some(r => !Array.isArray(r) || r.length > 256 ||
+        r.some((v:unknown)=>typeof v!=='string' || v.length>32767)) ||
+        numbers.some((n,i)=>!Number.isSafeInteger(n) || (n as number)<1 ||
+          (i>0 && (n as number) <= (numbers[i-1] as number)))) throw Error('LEGACY_XLS_SHEETS_INVALID');
+    return {sheet:s.sheet,rows:rows as string[][],rowNumbers:numbers as number[]};
   });
 }
 
