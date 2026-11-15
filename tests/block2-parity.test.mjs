@@ -14,7 +14,8 @@ const expected = {
     inflow: 6900000, outflow: 4125000, avgMonthlyInflow: 1150000, monthlyTrend: 30, volatility: 0.15,
     topOneConcentration: 0.4348, topThreeConcentration: 0.8261, topFiveConcentration: 1, largeIncomingShare: 0.5652,
     taxRegularity: 1, riskyOutflowShare: 0.0073, debtServiceShare: 0.1565, endingBalance: 800000, liquidityDays: 35.4,
-    averageDailyBalance: 3105171.84, minimumDailyBalance: 1535000, cashGapDays: 0, negativeBalanceDays: 0,
+    // 700,000 + 7,970,000 - 4,375,000 differs from the reported closing 800,000.
+    averageDailyBalance: null, minimumDailyBalance: null, cashGapDays: null, negativeBalanceDays: null,
     seasonality: 1.22, supplierPaymentRegularity: 1, dataQuality: 100,
     estimatedLimitMin: 1283000, estimatedLimitMax: 2636000, stressLimitMax: 1283000,
     currentMonthlyDebtPayment: 180000, baseMonthlyPaymentCapacity: 142000, stressMonthlyPaymentCapacity: 69000,
@@ -73,8 +74,9 @@ function projection(result) {
   };
 }
 
-test("Block 2 keeps the complete credit result identical to the Block 1 baseline", () => {
+test("Block 2 preserves the credit baseline and withholds daily balances for an unreconciled statement", () => {
   const result = analyzeBankStatement(block2StatementFixture(), "block2.txt");
+  assert.equal(result.statementBalanceCheck?.state, "MISMATCH");
   assert.deepEqual(projection(result), expected);
   assert.equal(result.normalization?.version, "PRESCORE-TX-NORMALIZER-1");
   assert.equal(result.normalization?.originalCount, 44);
