@@ -17,6 +17,16 @@ test('No Checko data creates an INN-only passport without invented financial fig
  assert.ok(!JSON.stringify(view).includes('одобрен'));
 });
 
+test('Saved company displays its bank-statement name while public legal facts remain unidentified',()=>{
+ const dossier={statementCompanyName:'Учебная компания из выписки'};
+ const view=publicPassport(null,inn,true,true,dossier);
+ assert.equal(view.company.title,dossier.statementCompanyName);
+ assert.equal(view.company.ogrn,null);
+ assert.equal(view.checkoDate,null);
+ assert.match(view.publicExpertise,/загруженным документам/);
+ assert.equal(publicPassport(base,inn,true,true,dossier).company.title,company.name);
+});
+
 test('Unavailable legal coverage cannot be shown as a verified absence of risk',()=>{
  const view=publicPassport({...base,publicRisks:{enforcementDetected:null,legalEventsDetected:null}},inn,true,true);
  assert.equal(view.attention.length,0);
