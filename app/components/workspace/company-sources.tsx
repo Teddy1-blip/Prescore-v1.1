@@ -189,17 +189,23 @@ export function CompanySources({view,id,bankInn,bank,openBank,onCompany,onSource
   </div>;
  }
 
+ const passport=view==='home'&&(company||preview)?<CompanyPassport inn={company?.inn??inn} profile={company&&inn!==company.inn?(profile?.publicProfile??null):(preview??profile?.publicProfile??null)} hasStatements={(profile?.versions.length??0)>0} hasAnnual={!!profile?.financial?.history.some(p=>p.period.kind==='ANNUAL')} full={profile?.entitlement==='FULL'} onBankUpload={openBank}/>:null;
  return <div className="ws pc-company-sources" aria-label="Источники компании">
+ {company&&passport}
  {(!company||view==='home')&&<Panel title={view==='home'?'Выбрать или добавить компанию':'Компания по ИНН'}>
   {companies.length>0&&<label>Компании в моём досье <select value={company?.id??''} onChange={e=>{if(e.target.value)location.assign(dossierHref(e.target.value,view))}}><option value="">Выберите компанию</option>{companies.map(c=><option key={c.id} value={c.id}>{c.inn}</option>)}</select></label>}
   <form onSubmit={e=>{e.preventDefault();void submit('save')}}><label>ИНН новой компании <input required inputMode="numeric" pattern="[0-9]{10}|[0-9]{12}" value={inn} disabled={busy} onChange={e=>{setInn(e.target.value.replace(/\D/g,'').slice(0,12));setPreview(null);setNotice('')}} placeholder="10 или 12 цифр"/></label>
   {view==='home'&&<button type="button" disabled={busy||!inn} onClick={()=>void submit('preview')}>Проверить Checko</button>}
   <button type="submit" disabled={busy||!inn}>+ Добавить компанию</button></form>
+  {view==='home'&&company&&preview&&inn!==company.inn&&<div role="status" aria-label="Предварительная проверка новой компании">
+    <strong>{preview.company.name}</strong><p>ИНН {inn}{preview.company.region?' · '+preview.company.region:''}{preview.company.status?' · '+preview.company.status:''}</p>
+    <p>Чтобы сохранить эту компанию в досье, нажмите «Добавить компанию».</p>
+  </div>}
   </Panel>}
   {view==='counterparties'&&<SettlementRegisters rows={profile?.settlements??[]} full={profile?.entitlement==='FULL'} save={async(entry,key,revision)=>{if(!company)throw Error('Выберите компанию.');await read('/api/dossier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'settlement',id:company.id,entry,key,revision})});setRevision(v=>v+1);}}/>}
   {view==='counterparties'&&company&&profile?.entitlement==='FULL'&&<ReceivablesReview rows={profile.settlements} checks={profile.counterpartyChecks} refresh={async inn=>{await read('/api/dossier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'counterparty-check',id:company.id,inn})});setRevision(n=>n+1);}}/>}
   {view==='banking'&&<Account51Comparison cards={profile?.cards51??[]} bank={bank}/>}
-  {view==='home'&&(company||preview)&&<CompanyPassport inn={company?.inn??inn} profile={profile?.publicProfile??preview} hasStatements={(profile?.versions.length??0)>0} hasAnnual={!!profile?.financial?.history.some(p=>p.period.kind==='ANNUAL')} full={profile?.entitlement==='FULL'} onBankUpload={openBank}/>}
+  {!company&&passport}
   {view==='home'&&preview&&!company&&<p className="pc-muted">Публичная проверка выполнена для предварительного просмотра. Чтобы сохранить сведения в личном досье, нажмите «Добавить компанию».</p>}
   {view==='obligations'&&<nav className="pc-source-actions" aria-label="Источники кредитного портфеля">{portfolioTabs.map(([kind,title])=><button type="button" key={kind} aria-pressed={portfolioSource===kind} onClick={()=>setPortfolioSource(kind)}>{title}</button>)}</nav>}
  {view==='obligations'&&!company&&!bankInn&&<DossierPortfolio profile={null} />}

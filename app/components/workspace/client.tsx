@@ -74,7 +74,7 @@ export default function ClientWorkspace(){
  const showApproved=!(['counterparties','calendar'].includes(view)&&!agentWorkspace&&!locked)&&!loading&&!modulesLoading&&!disabled&&!error&&!unavailable&&(!needsModel||!!model)&&!!selected&&!(view==='applications'&&(!operationsReady||!!operationsError));
  const companyName=model?.basic.analysis.company.name?.trim()||selected?.companyName?.trim()||'Ваш кредитный профиль';
  const sourcesVisible=!loading&&!modulesLoading&&!disabled&&!error&&!locked&&!agentWorkspace&&!unavailable&&(!selectedId||!!selected)&&['home','banking','bfo','counterparties','obligations','documents','analysis','calendar','actions','financing','billing'].includes(view);
- const sourcesWidget=sourcesVisible?<CompanySources key={(dossierId||selectedId)+view} view={view} id={dossierId} bankInn={selected?.companyInn} bank={model?.basic} onCompany={setDossierInn} onSourceChanged={selectedId?refreshSource:undefined} openBank={()=>choose('upload')}/>:null;
+ const sourcesWidget=sourcesVisible?<CompanySources key={'sources:'+(dossierId||selectedId)+':'+view} view={view} id={dossierId} bankInn={selected?.companyInn} bank={model?.basic} onCompany={setDossierInn} onSourceChanged={selectedId?refreshSource:undefined} openBank={()=>choose('upload')}/>:null;
  return <ClientShell key={selectedId} dossier={dossierId?{id:dossierId,inn:dossierInn}:undefined} selected={selected} analyses={unavailable||error?[]:analyses} model={model} locked={locked||loading||modulesLoading} select={chooseAnalysis} add={addDeal} deals={deals??[]}
  renderPage={showApproved} view={view} choose={choose} availableViews={availableViews} context={<div className="pc-company"><b>{companyName}</b><span>{selected?'ИНН '+(model?.basic.analysis.company.inn??selected.companyInn):'Кредитный профиль компании'}{model?' · '+date(model.basic.analysis.period.from)+' — '+date(model.basic.analysis.period.to):''}{locked?' · Режим просмотра':''}</span></div>}>
 
@@ -99,6 +99,6 @@ export default function ClientWorkspace(){
  {view==='analyst'&&model&&(model.full?<AiAnalyst key={selectedId} analysisId={selectedId}/>:<FullAccessNotice model={model} retry={refresh}/>)}
  </>}</LivePage>
  {view!=='home'&&sourcesWidget}
- {showApproved&&model&&(['home','counterparties','obligations'] as string[]).includes(view)&&<ClientAnalyticPipeline key={selectedId+view} model={model} scope={view as 'home'|'bfo'|'counterparties'|'obligations'} choose={choose}/>}
+ {showApproved&&model&&(['home','counterparties','obligations'] as string[]).includes(view)&&<ClientAnalyticPipeline key={'pipeline:'+selectedId+':'+view} model={model} scope={view as 'home'|'bfo'|'counterparties'|'obligations'} choose={choose}/>}
  </ClientShell>;
 }
