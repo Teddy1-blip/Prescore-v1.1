@@ -70,7 +70,7 @@ export function financialStatement(input: Input) {
   // Only FNS's explicitly printed NPO alternative has these optional
   // duplicate equity codes. Do not infer it from two equal-looking rows.
   const npoPages = new Set(input.lines.filter(line =>
-    /III\.\s*ЦЕЛЕВОЕ\s+ФИНАНСИРОВАНИЕ\b/iu.test(line.text)).map(line=>line.page));
+    /III\.\s*ЦЕЛЕВОЕ\s+ФИНАНСИРОВАНИЕ(?:\s|$)/iu.test(line.text)).map(line=>line.page));
   const npoCodes = new Set(['1300','1310','1320','1350','1360','1370']);
   const filteredEntries = entries.filter(entry => {
     if (!npoPages.has(entry.line.page) || !npoCodes.has(entry.code) ||
