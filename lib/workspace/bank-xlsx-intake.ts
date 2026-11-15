@@ -72,7 +72,11 @@ export function inspectSberBusinessXlsxRows(rows:readonly BankXlsxRow[],rowNumbe
     const s=String(c??'');for(const m of s.matchAll(accountPattern))namedAccounts.add(m[1]);
     if(/российский\s+рубль|\bRUB\b|\b643\b/iu.test(s))output.currency='RUB';
   }
-  if(namedAccounts.size===1)output.account=[...namedAccounts][0];
+  // 40817 identifies a personal account, not a proven corporate settlement account.
+  // Do not promote it to the reviewed company's own account, even when unique.
+  const personal40817=[...namedAccounts].some(a=>a.startsWith('40817'));
+  if(personal40817)output.warnings.push('BANK_XLSX_PERSONAL_40817_ACCOUNT_REVIEW_REQUIRED');
+  if(namedAccounts.size===1&&!personal40817)output.account=[...namedAccounts][0];
   else output.warnings.push(namedAccounts.size>1?'BANK_XLSX_MULTIPLE_OWN_ACCOUNTS':'BANK_XLSX_ACCOUNT_NOT_PROVEN');
   if(!output.currency)output.warnings.push('BANK_XLSX_CURRENCY_UNCONFIRMED');
   output.warnings.push('BANK_XLSX_OWNER_INN_UNCONFIRMED');
@@ -124,7 +128,19 @@ export function inspectSberBusinessWorkbook(sheets:readonly {sheet:string;rows:r
  const accepted=previews.filter(s=>s.preview.format==='SBER_BUSINESS_OPERATIONS_XLSX');
  const accounts=new Set(accepted.map(s=>s.preview.account).filter((x):x is string=>!!x));
  const totalOperations=accepted.reduce((sum,s)=>sum+s.preview.operations.length,0);
+ // An overlap of source periods for the same account may count the same
+ // transactions twice. Flag it; never deduplicate or promote to B-Score here.
+ const accountPeriods=new Map<string,Array<{from:string;to:string}>>();
+ let overlappingAccountPeriods=false;
+ for(const {preview} of accepted){
+  if(!preview.account||!preview.periodFrom||!preview.periodTo)continue;
+  const seen=accountPeriods.get(preview.account)??[];
+  if(seen.some(p=>p.from<=preview.periodTo!&&preview.periodFrom!<=p.to))overlappingAccountPeriods=true;
+  seen.push({from:preview.periodFrom,to:preview.periodTo});
+  accountPeriods.set(preview.account,seen);
+ }
  const warnings=[...new Set([...previews.flatMap(s=>s.preview.warnings),
+  ...(overlappingAccountPeriods?['BANK_XLSX_ACCOUNT_PERIOD_OVERLAP_REVIEW_REQUIRED']:[]),
   ...(previews.length!==accepted.length?['BANK_XLSX_UNSUPPORTED_SHEETS']:[]),
   ...(accepted.some(s=>!s.preview.account)?['BANK_XLSX_SHEET_ACCOUNT_UNCONFIRMED']:[]),
   ...(totalOperations===0?['BANK_XLSX_NO_OPERATIONS']:[])])];
