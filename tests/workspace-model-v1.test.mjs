@@ -1,3 +1,6 @@
+import * as nodeCrypto from 'node:crypto';
+import * as documentStorage from '../lib/storage/documents.ts';
+import * as stagingAccess from '../lib/platform/staging-access.ts';
 import * as dossier from '../lib/workspace/dossier.ts';
 import * as dossierSources from '../lib/workspace/dossier-sources.ts';
 import * as dossierBank from '../lib/workspace/dossier-bank.ts';
@@ -60,6 +63,7 @@ for (const ownerFull of [false, true]) test(ownerFull
   let current = { email: "workspace-owner@test.invalid", isAdmin: false };
   const apiAuth = load("app/api/api-auth.ts", { "../chatgpt-auth": { getChatGPTUser: async () => null } });
   const analysisRoute = load("app/api/analysis/route.ts", {
+    'node:crypto':nodeCrypto,'../../../lib/storage/documents':documentStorage,'../../../lib/platform/staging-access':stagingAccess,
     '../../../lib/workspace/dossier':dossier,'../../../lib/workspace/dossier-sources':dossierSources,'../../../lib/workspace/dossier-bank':dossierBank,
 
     "../../../lib/external/checko-cache":checkoCache,
