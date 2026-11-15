@@ -132,3 +132,39 @@ test("genuine 1C account sections without operations do not prove zero company t
   const screened = screenBankStatements([{ text: idle, fileName: "idle.txt" }]);
   assert.equal(screened.accepted.length, 0);
 });
+
+test("multiple account sections preceding payment documents are resolved by real payer/recipient evidence", () => {
+  const owner = "5032333146";
+  const accountA = "40702810111110000001";
+  const accountB = "40702810222220000002";
+  const base = statement({ account: accountA, inn: owner, company: "ООО Тест", bank: "Банк" });
+  // 1C exporters often print all account sections first, then all documents.
+  const inactiveB = [
+    "СекцияРасчСчет", "ДатаНачала=01.07.2026", "ДатаКонца=31.07.2026",
+    `РасчСчет=${accountB}`, "НачальныйОстаток=0.00",
+    "ВсегоПоступило=0.00", "ВсегоСписано=0.00",
+    "КонечныйОстаток=0.00", "КонецРасчСчет",
+  ].join("\n");
+  const text = base.replace("СекцияДокумент=", inactiveB + "\nСекцияДокумент=");
+  const inspection = inspectBankStatement(text, "accounts-before-docs.txt");
+  assert.equal(inspection.companyInn, owner);
+  assert.equal(inspection.ownerEvidenceCount, 1);
+  assert.deepEqual(inspection.accounts.sort(), [accountA, accountB].sort());
+  assert.equal(screenBankStatements([{ text, fileName: "accounts-before-docs.txt" }]).accepted.length, 1);
+});
+test("a genuinely active account without matching INN evidence is rejected, even after a different active section", () => {
+  const owner = "5032333146";
+  const accountA = "40702810111110000001";
+  const accountB = "40702810222220000002";
+  const a = statement({ account: accountA, inn: owner, company: "ООО Тест", bank: "Банк" })
+    .replace(`ПолучательИНН=${owner}`, "ПолучательИНН=");
+  const b = statement({ account: accountB, inn: owner, company: "ООО Тест", bank: "Банк", amount: "200.00" });
+  const sectionB = b.match(/СекцияРасчСчет[\s\S]*?КонецРасчСчет/)?.[0];
+  const paymentB = b.match(/СекцияДокумент=[\s\S]*?КонецДокумента/)?.[0];
+  assert.ok(sectionB && paymentB);
+  const text = a.replace("СекцияДокумент=", sectionB + "\nСекцияДокумент=")
+    .replace("КонецФайла", paymentB + "\nКонецФайла");
+  assert.throws(() => inspectBankStatement(text, "mixed-evidence.txt"), /активных счетов/);
+  const screened = screenBankStatements([{ text, fileName: "mixed-evidence.txt" }]);
+  assert.equal(screened.accepted.length, 0);
+});
