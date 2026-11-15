@@ -14,3 +14,22 @@ test('a partially recognized scanned BFO remains incomplete without both balance
  assert.equal(report.status,'INCOMPLETE');
  assert.ok(report.issues.includes('BFO_BALANCE_TOTALS_UNVERIFIED')||report.issues.includes('BFO_CURRENT_VALUES_UNVERIFIED'));
 });
+
+test('mismatched printed balance totals cannot be presented as a complete BFO review',()=>{
+ const page=ocrPage('Бухгалтерский баланс\nна 31 декабря 2025 г.\nЕдиница измерения: тыс. руб. по ОКЕИ 384\nБАЛАНС | 1600 | 100 | 80\nБАЛАНС | 1700 | 120 | 80');
+ const report=reviewFields('synthetic:balance:conflict',[page],1,'BFO','SINGLE');
+ assert.equal(report.status,'INCOMPLETE');
+ assert.ok(report.issues.includes('BALANCE_RECONCILIATION_MISMATCH'));
+ assert.ok(report.issues.includes('BFO_INTEGRITY_REVIEW_REQUIRED'));
+ const a=report.fields.find(f=>f.key==='1600'),b=report.fields.find(f=>f.key==='1700');
+ assert.deepEqual([a?.value,b?.value],['100','120'],'readable source facts remain visible');
+ assert.deepEqual([a?.status,b?.status],['REVIEW','REVIEW'],'not silently trusted');
+});
+test('reconciled printed balance totals remain visible as individually read source values',()=>{
+ const page=ocrPage('Бухгалтерский баланс\nна 31 декабря 2025 г.\nЕдиница измерения: тыс. руб. по ОКЕИ 384\nБАЛАНС | 1600 | 100 | 80\nБАЛАНС | 1700 | 100 | 80');
+ const report=reviewFields('synthetic:balance:aligned',[page],1,'BFO','SINGLE');
+ assert.equal(report.status,'READY_FOR_REVIEW');
+ assert.equal(report.fields.find(f=>f.key==='1600')?.value,'100');
+ assert.equal(report.fields.find(f=>f.key==='1600')?.status,'READ');
+ assert.equal(report.issues.includes('BFO_INTEGRITY_REVIEW_REQUIRED'),false);
+});
