@@ -1,9 +1,10 @@
 import type {QueryExecutor} from '../db/compatibility.ts';
 import {dossierSources,sourceProjection} from './dossier-sources.ts';
 import {stagingFullAccessEnabled} from '../platform/staging-access.ts';
+import {ownerPreviewFullAccess} from '../platform/owner-preview-access.ts';
 import {profileView} from '../external/checko-profile.ts';
 export async function dossierTier(pool:QueryExecutor,user:{email:string;isAdmin:boolean},company:{inn:string}){
- const full=user.isAdmin||stagingFullAccessEnabled()||(await pool.query(`SELECT 1 FROM billing_subscriptions s JOIN billing_periods p ON p.subscription_id=s.id
+ const full=user.isAdmin||ownerPreviewFullAccess(user.email)||stagingFullAccessEnabled()||(await pool.query(`SELECT 1 FROM billing_subscriptions s JOIN billing_periods p ON p.subscription_id=s.id
     WHERE s.owner_email=$1 AND s.company_inn=$2 AND s.status='ACTIVE' AND p.status='ACTIVE' AND now()>=s.access_from AND now()<s.access_until AND now()>=p.starts_at AND now()<p.ends_at LIMIT 1`,[user.email,company.inn])).rows.length>0;
  return full?'FULL' as const:'BASIC' as const;
 }
