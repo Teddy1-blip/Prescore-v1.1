@@ -487,6 +487,12 @@ function parseExchange(text: string) {
     else header[key] = value;
   }
 
+  // Russian 40817 accounts belong to individuals. A bank TXT for such an
+  // account may be readable, but it is not corporate settlement turnover.
+  // Reject the source rather than risk mixing private cash flow into B-Score.
+  if (accounts.some(({ account }) => /^40817\d{15}$/.test(account))) {
+    throw new Error("Личный счёт 40817 не является подтверждённым расчётным счётом компании.");
+  }
   if (!documents.length) throw new Error("В выписке нет операций. Владение счётом по этой выписке не подтверждено.");
   return { header, accounts, documents };
 }
