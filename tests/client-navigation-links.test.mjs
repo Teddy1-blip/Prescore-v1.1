@@ -35,8 +35,8 @@ test('without a company neither phantom ID is serialized', () => {
 test('the existing Finance page owns one canonical ledger and does not add a second cash chart', () => {
   const client = fs.readFileSync('app/components/workspace/client.tsx', 'utf8');
   const approved = fs.readFileSync('app/components/workspace/approved/pages.tsx', 'utf8');
-  assert.equal((client.match(/<BankingLedger\\b/g) || []).length, 1);
-  assert.equal((client.match(/<CashTrend\\b/g) || []).length, 0);
+  assert.equal((client.match(/<BankingLedger\b/g) || []).length, 1);
+  assert.equal((client.match(/<CashTrend\b/g) || []).length, 0);
   assert.match(approved, /<CashCards data=\{d\} go=\{go\}/);
   assert.match(client, /from '\.\/approved\/live-shell'/);
 });
