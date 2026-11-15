@@ -169,11 +169,12 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
         warnings:recognized.flatMap(s=>s.review.issues)});
     }else if(kind==='CALENDAR_SHEET'){payload.calendarSheet=calendarSheet(text);envelope.status='PROCESSING';}
     else if(kind==='ACCOUNT_51'){
-      const rows=ext==='xlsx'?selectAccountingSheet(extractXlsxSheets(bytes),'ACCOUNT_51').rows:(await extractDocumentText(file.name,bytes,'financial')).trimEnd().split(/\r?\n/).map(r=>r.split('\t'));
+      const accountSheet=ext==='xlsx'?selectAccountingSheet(extractXlsxSheets(bytes),'ACCOUNT_51'):null;
+      const rows=accountSheet?.rows??(await extractDocumentText(file.name,bytes,'financial')).trimEnd().split(/\r?\n/).map(r=>r.split('\t'));
       const header=rows.findIndex(row=>String(row[0]??'').trim()==='Период');
       const identities=new Set(Array.from(rows.slice(0,header>=0?header:12).flat().join(' ').matchAll(/ИНН\s*[:№]?\s*(\d{10,12})\b/gi),m=>m[1]));
       if(identities.size && (identities.size!==1 || !identities.has(inn)))throw new InputError('ИНН карточки счёта 51 не совпадает с досье.');
-      const card=parseAccount51Card(rows);
+      const card=parseAccount51Card(rows,accountSheet?.rowNumbers);
       const sum=(direction:'INFLOW'|'OUTFLOW')=>card.operations.filter(row=>row.direction===direction).reduce((total,row)=>total+Math.round(row.amount*100),0)/100;
       Object.assign(envelope,{periodFrom:card.periodFrom,periodTo:card.periodTo,parserVersion:'1C-ACCOUNT-51-V1',warnings:card.warnings});
       payload.account51={from:card.periodFrom,to:card.periodTo,opening:card.openingBalance,closing:card.closingBalance,inflow:sum('INFLOW'),outflow:sum('OUTFLOW'),entries:card.operations.length,requiresReview:!card.reconciled||card.closingBalance===null||card.openingBalance===null};
