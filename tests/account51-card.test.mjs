@@ -66,3 +66,16 @@ test('Negative 1C debit balance remains visible and cannot pass clean reconcilia
  assert.equal(card.reconciled,false);
  assert.ok(card.warnings.some(code=>code.startsWith('ACCOUNT51_NEGATIVE_DEBIT_BALANCE:')));
 });
+
+test('Account 51 audit row points to original worksheet after empty physical row',()=>{
+ const source=[...head,incoming,outgoing,['Сальдо на конец','','','','','','','','','','Д',1100]];
+ const physical=source.map((_,i)=>i<2?i+1:i+2); // physical Excel row 3 is empty
+ const card=parseAccount51Card(source,physical);
+ assert.deepEqual(card.operations.map(o=>o.row),[physical[7],physical[8]]);
+ assert.equal(card.reconciled,true);
+});
+test('Account 51 refuses invalid physical row evidence map',()=>{
+ const source=[...head,incoming,outgoing];
+ const physical=source.map((_,i)=>i+1);physical[8]=physical[7];
+ assert.throws(()=>parseAccount51Card(source,physical),/ACCOUNT51_SOURCE_ROWS_INVALID/);
+});
