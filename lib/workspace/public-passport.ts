@@ -65,7 +65,7 @@ export function publicPassport(profile: PassportPublicProfile | null, inn: strin
   });
   if (!hasStatements) actions.push({
     title: 'Добавить банковские выписки',
-    detail: 'Обороты, долговые платежи и ликвидность будут рассчитаны только по подтверждённым операциям компании.',
+    detail: 'Банковские обороты, долговые платежи и ликвидность будут рассчитаны только по подтверждённым операциям компании.',
     evidence: 'Ожидается банковская выписка',
   });
   if (!hasAnnual) actions.push({
