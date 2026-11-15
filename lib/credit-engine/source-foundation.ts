@@ -300,12 +300,21 @@ export function parseAuthoritativeQuarterlyText(input: {
 }
 
 export function parseAuthoritativeBfoText(input: { text: string; fileName: string; analysisInn: string }): QuarterlyFinancialReport {
-  const years = [...new Set([...input.text.matchAll(/(?:за\s+|на\s+31[.]12[.])(20\d{2})/gi)].map(match => match[1]))];
-  if (years.length > 1) throw new Error("Файл содержит несколько годовых периодов. Загрузите каждый год отдельным файлом с одним столбцом значений.");
   const report = parseQuarterlyReportText(input.text, input.fileName);
   if (!report.companyInn) throw new Error("В бухгалтерской отчётности не найден ИНН компании.");
   if (normalizedInn(report.companyInn) !== normalizedInn(input.analysisInn)) throw new Error("ИНН бухгалтерской отчётности не совпадает с компанией");
   if (report.financialMetadataV2?.period.kind !== "ANNUAL") throw new Error("Укажите годовой период в файле, например: за 2025 год. Для промежуточных данных используйте квартальную отчётность.");
+  // A single annual RAS report normally has current-year and comparative-year
+  // columns. Do not reject a legitimate report just because both headers say
+  // "За 2024" / "За 2023". Still reject concatenated annual forms and periods
+  // outside the current/two-prior reporting window: the text parser reads one period.
+  const year = report.financialMetadataV2.period.year;
+  const years = [...new Set([...input.text.matchAll(/(?:за\s+|на\s+31[.]12[.])(20\d{2})/gi)].map(match => Number(match[1])))];
+  const formCount = (input.text.match(/^\s*бухгалтерский баланс\s*$/gim) ?? []).length;
+  const incomeCount = (input.text.match(/^\s*отч[её]т о финансовых результатах\s*$/gim) ?? []).length;
+  if (!year || (years.length > 0 && !years.includes(year)) || years.some(y => y > year || y < year - 2)
+      || formCount > 1 || incomeCount > 1)
+    throw new Error("Файл содержит неоднозначные годовые периоды или несколько форм. Проверьте текущий и сравнительный год.");
   return report;
 }
 

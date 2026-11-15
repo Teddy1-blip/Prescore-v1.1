@@ -41,17 +41,66 @@ function groupedLedger(rows:string[][],start:number,end:number,account:string,as
  if(!total||!result.length)throw Error('Проверьте итоговую строку ОСВ.');
  return result;
 }
-export function nativePartyLedger(rows:string[][],selectedInn:string,confirmed:boolean,purpose:'COUNTERPARTIES'|'DEBT_LEDGER'='COUNTERPARTIES'):LedgerBalance[]|null{
+// A native 1C OSV may contain a root account, one or more subaccounts, and
+// counterparty totals, without a contract or INN breakdown. This remains a
+// dated counterparty balance, NEVER a confirmed credit-agreement principal.
+function subaccountLedger(rows:string[][],start:number,end:number,account:string,asOf:string):LedgerBalance[]{
+ const cents=(cell:string|undefined)=>{
+  const text=(cell??'').replace(/[\s\u00a0\u202f]/g,'').replace(',','.');
+  if(!text)return null;
+  if(!/^-?\d+(?:\.\d{1,2})?$/.test(text)||!Number.isSafeInteger(Math.round(Number(text)*100)))throw Error('Проверьте суммы ОСВ.');
+  return Math.round(Number(text)*100);
+ };
+ const signed=(row:string[])=>{const d=cents(row[end]),c=cents(row[end+1]);return (d??0)-(c??0);};
+ const sectionPattern=new RegExp('^'+account+'\\.\\d+(?:\\.\\d+)*$');
+ const out:LedgerBalance[]=[],seen=new Set<string>();
+ let root:number|null=null,section:string|null=null,sectionNet=0,sectionTarget=0,allNet=0,closed=false;
+ const close=()=>{if(section!==null&&sectionNet!==sectionTarget)throw Error('Сальдо контрагентов не сходится с субсчётом ОСВ.');};
+ for(let i=start;i<rows.length;i++){
+  const r=rows[i],label=(r[0]??'').trim();
+  if(!label){if(r.some(c=>String(c).trim()))throw Error('Неожиданная строка без аналитики в ОСВ.');continue;}
+  if(closed)throw Error('После итога ОСВ есть дополнительные строки.');
+  if(label===account){if(root!==null)throw Error('Повторный корневой счёт ОСВ.');root=signed(r);continue;}
+  if(root===null)throw Error('Не найден корневой счёт ОСВ.');
+  if(/^(?:итого|всего)(?:\s|$)/i.test(label)){
+   close();if(signed(r)!==root||allNet!==root)throw Error('Итог ОСВ не совпадает с расшифровкой субсчетов.');
+   closed=true;continue;
+  }
+  if(sectionPattern.test(label)){
+   close();section=label;sectionNet=0;sectionTarget=signed(r);continue;
+  }
+  if(/^\d{2}(?:\.\d+)*$/.test(label)||/^(?:договоры|субсчета|контрагенты\.)/i.test(label))
+   throw Error('Для этой группировки ОСВ требуется отдельная проверка договоров и субсчетов.');
+  if(section===null)throw Error('Контрагент указан без субсчёта ОСВ.');
+  const debit=cents(r[end]),credit=cents(r[end+1]),net=(debit??0)-(credit??0);
+  sectionNet+=net;allNet+=net;
+  const key=section+'\u0000'+label;
+  if(seen.has(key))throw Error('Контрагент повторяется в одном субсчёте без расшифровки договоров.');
+  seen.add(key);
+  // Blank ending debit and credit are NOT an observed debt of zero.
+  if(debit===null&&credit===null)continue;
+  out.push({account:section,party:label,contract:null,asOf,
+   debit:debit===null?null:debit/100,credit:credit===null?null:credit/100,row:i+1,
+   ...(/^(66|67)\.01$/.test(section)?{component:'Основной долг'}:/^(66|67)\.02$/.test(section)?{component:'Проценты'}:{})});
+ }
+ if(!closed)throw Error('Не найден итог ОСВ.');
+ return out;
+}
+
+export function nativePartyLedger(rows:string[][],selectedInn:string,confirmed:boolean,purpose:'COUNTERPARTIES'|'DEBT_LEDGER'='COUNTERPARTIES',fileName=''):LedgerBalance[]|null{
  const title=rows.slice(0,8).flat().find(s=>/оборотно-сальдовая ведомость по сч[её]ту/i.test(s));
  if(!title)return null;
- const account=title.match(/по сч[её]ту\s+(60|62|66|67|76)(?:\s|$)/i)?.[1],period=oneCPeriod(title);
+ const account=title.match(/по сч[её]ту\s+(60|62|66|67|76)(?:\s|$)/i)?.[1],headerPeriod=oneCPeriod(title),period=headerPeriod||oneCPeriod(fileName.replace(/\.(?:xls|xlsx|csv)$/i,''));
  const i=rows.findIndex(r=>r.some(s=>/^Сальдо на конец периода$/i.test(s.trim())));
  if(!account||!(purpose==='COUNTERPARTIES'?['60','62','76']:['66','67','76']).includes(account)||!period||i<0||i>20)throw Error('Проверьте счёт, период и конечное сальдо в ОСВ.');
  const header=rows[i],next=rows[i+1]??[],end=header.findIndex(s=>/^Сальдо на конец периода$/i.test(s.trim()));
  if(next[0]?.trim()!=='Контрагенты'||!/^дебет$/i.test(next[end]?.trim())||!/^кредит$/i.test(next[end+1]?.trim())||rows.slice(i+1,i+4).flat().some(s=>/^договоры|^субсчета/i.test(s.trim())))throw Error('Для этой структуры используйте импорт с колонками по контрагенту и договору.');
  const inns=[...rows.slice(0,i).flat().join(' ').matchAll(/ИНН\s*[:№]?\s*(\d{10,12})(?!\d)/gi)].map(m=>m[1]);
  if(inns.some(v=>v!==selectedInn)||(!inns.length&&!confirmed))throw Error('Подтвердите принадлежность ОСВ выбранному досье.');
+ if(!headerPeriod&&!confirmed)throw Error('Подтвердите период ОСВ, указанный только в имени файла.');
  if(rows[i+2]?.[0]?.trim()==='Контрагенты.ИНН')return groupedLedger(rows,i+3,end,account,period.to);
+ if(rows.slice(i+2).some(r=>new RegExp('^'+account+'\\.\\d+(?:\\.\\d+)*$').test((r[0]??'').trim())))
+  return subaccountLedger(rows,i+2,end,account,period.to);
  const parse=(s:string|undefined)=>{if(!s?.trim())return null;const v=s.replace(/[\s\u00a0]/g,'').replace(',','.');if(!/^-?\d+(?:\.\d{1,2})?$/.test(v)||!Number.isSafeInteger(Math.round(Number(v)*100)))throw Error('Проверьте суммы ОСВ.');return Number(v);};
  const data:LedgerBalance[]=[];const seen=new Set<string>();let base=false,totalSeen=false,expectedDebit:number|null=null,expectedCredit:number|null=null;
  for(let j=i+2;j<rows.length;j++){

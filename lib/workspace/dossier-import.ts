@@ -149,7 +149,7 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
       payload.account51={from:card.periodFrom,to:card.periodTo,opening:card.openingBalance,closing:card.closingBalance,inflow:sum('INFLOW'),outflow:sum('OUTFLOW'),entries:card.operations.length,requiresReview:!card.reconciled||card.closingBalance===null||card.openingBalance===null};
     }else if(ledger){
       const rows=text.split(/\r?\n/).map(r=>r.split('\t'));
-      payload.ledger=nativePartyLedger(rows,inn,identityConfirmed,kind as 'COUNTERPARTIES'|'DEBT_LEDGER')??parseLedger(text,inn,kind as 'COUNTERPARTIES'|'DEBT_LEDGER');
+      payload.ledger=nativePartyLedger(rows,inn,identityConfirmed,kind as 'COUNTERPARTIES'|'DEBT_LEDGER',file.name)??parseLedger(text,inn,kind as 'COUNTERPARTIES'|'DEBT_LEDGER');
     }
     else if(kind==='BKI'){
       const bki=readBureau(text,file.name,inn,relationship);
