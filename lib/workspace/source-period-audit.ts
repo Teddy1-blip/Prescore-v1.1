@@ -101,7 +101,8 @@ export function sourcePeriodAudit(rows:readonly SourceRow[],companyInn:string):S
   const key=[kind,c.scope,c.mode].join('|');
   let g=grouped.get(key);
   if(!g){
-   g={id:key,kind,scope:c.scope.startsWith('BANK:')?safeScope(c.scope.slice(5)):
+   // Public audit group IDs must not expose bank account numbers or BKI subject INNs.
+   g={id:kind+':'+(grouped.size+1),kind,scope:c.scope.startsWith('BANK:')?safeScope(c.scope.slice(5)):
      c.scope==='ACCOUNTING:51'?'Учёт 1С · счёт 51':kind,mode:c.mode,
      spans:[],gaps:[],overlaps:[],note:note(c.mode,c.kind)};
    grouped.set(key,g);

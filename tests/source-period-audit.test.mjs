@@ -182,3 +182,16 @@ test('owner dossier API closes a bank date gap after a later incremental upload'
   assert.equal((await rt.request('/api/dossier?id='+dossierId,{},rt.stranger)).status,404);
  }finally{await rt.close();}
 });
+
+test('period-audit API payload never exposes a full bank account or personal BKI subject INN',()=>{
+ const account='40702810111110000001';
+ const person='998800112233';
+ const audit=sourcePeriodAudit([
+  statement('bank-a',account,'2026-01-01','2026-01-31'),
+  row('personal-bki','BKI',{bki:{subjectInn:person,reportDate:'2026-02-01'}}),
+ ],inn);
+ const body=JSON.stringify(audit);
+ assert.equal(body.includes(account),false);
+ assert.equal(body.includes(person),false);
+ assert.ok(audit.groups.some(g=>g.kind==='BANK_STATEMENT'&&g.scope.includes('0001')));
+});
