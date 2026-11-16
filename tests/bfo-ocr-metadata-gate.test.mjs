@@ -140,3 +140,24 @@ test('heading parts from different physical pages cannot manufacture an F2 docum
  assert.notEqual(report.status,'READY_FOR_REVIEW');
  assert.equal(report.fields.length,0);
 });
+
+
+test('comparative mismatch in the original BFO keeps review incomplete even when current totals match',()=>{
+ const headings=['На 31 декабря 2025 г.','На 31 декабря 2024 г.'];
+ const row=(code,current,previous)=>({
+  line:{page:1,pdf:true,confidence:'MEDIUM',text:'БАЛАНС | '+code+' | '+current+' | '+previous},
+  code,headings,cells:[
+   {raw:String(current),uncertain:false,assembled:false},
+   {raw:String(previous),uncertain:false,assembled:false}]
+ });
+ const report=reviewFields('synthetic:prior-year-inconsistency',[
+  page('Бухгалтерский баланс\nИНН: '+inn+'\nна 31 декабря 2025 г.\nЕдиница измерения: тыс. руб. по ОКЕИ 384')
+ ],1,'BFO','SINGLE',[],[
+  row('1600',1000,900),row('1700',1000,880)
+ ]);
+ assert.equal(report.status,'INCOMPLETE');
+ assert.ok(report.issues.includes('BALANCE_RECONCILIATION_MISMATCH'));
+ assert.ok(report.issues.includes('BFO_INTEGRITY_REVIEW_REQUIRED'));
+ assert.equal(f(report,'1600')?.value,'1000','OCR evidence is preserved');
+ assert.equal(f(report,'1600')?.status,'REVIEW','a mismatched comparative column blocks full acceptance');
+});
