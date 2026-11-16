@@ -1,3 +1,4 @@
+import {statementPrintBands} from '../../../lib/workspace/statement-print.ts';
 import type {Content,TDocumentDefinitions} from 'pdfmake/interfaces';
 import type {ClientReportModelV1} from '../../../lib/credit-engine/contracts/client-report';
 import type {DossierReport} from '../../../lib/workspace/dossier-report';
@@ -51,9 +52,18 @@ export function reportDocument({inn,decision:m,banking,dossier:d}:PdfReport):TDo
       ...table(['Показатель','Значение','Период'],banking.facts.map(({label,fact})=>[
         label,fact.status==='UNKNOWN'?'Не определено':amount(fact.value),printPeriod(fact.periodFrom,fact.periodTo)])));
   }
-  for(const period of (m?m.financialAnalysis:d?.financial)?.history??[]){
+  if(d?.matrix?.inn===inn){
+    for(const band of statementPrintBands(d.matrix)){
+      content.push({text:band.title,style:'heading',pageBreak:'before'},
+        {layout:'lightHorizontalLines',table:{headerRows:1,widths:[160,...band.headers.slice(1).map(()=>'*' as const)],body:[
+          band.headers.map(text=>({text,bold:true,fillColor:'#e7eff2'})),...band.rows.map(([name,...values])=>[name,...values.map(text=>({text,alignment:'right' as const}))])
+        ]}},...band.sources.map(note));
+    }
+  }
+  for(const period of (d?.matrix?d.financial:m?m.financialAnalysis:d?.financial)?.history??[]){
     content.push(heading('Бухгалтерская отчётность'),note(printPeriod(period.period.from,period.period.to)));
     for(const group of period.groups){
+      if(d?.matrix&&group.key==='amounts')continue;
       const metrics=group.metrics.filter(v=>v.value!==null);
       if(metrics.length)content.push(sub(group.title),...table(['Показатель','Значение'],metrics.map(v=>[
         v.label,[typeof v.value==='number'?number.format(v.value):v.value,{RUB:'₽',PERCENT:'%',RATIO:'×',DAYS:'дн.',COUNT:''}[v.unit]].filter(Boolean).join(' ')])));

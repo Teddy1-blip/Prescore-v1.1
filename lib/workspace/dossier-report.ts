@@ -10,7 +10,7 @@ export type DossierDecisionRef={analysisId:string;snapshotId:string};
 type Owner={email:string;isAdmin:boolean};
 type Company={id:string;inn:string};
 export type ReportSettlement=Pick<SettlementState,'party'|'contract'|'account'|'asOf'|'debit'|'credit'|'conflict'|'references'>;
-export type DossierReport=Pick<Awaited<ReturnType<typeof visibleProjection>>,'financial'|'obligations'|'portfolioAsOf'|'claims'|'entitlement'|'sources'>&{name:string|null;decision?:DossierDecisionRef;settlements?:ReportSettlement[]};
+export type DossierReport=Pick<Awaited<ReturnType<typeof visibleProjection>>,'financial'|'obligations'|'portfolioAsOf'|'claims'|'entitlement'|'sources'>&{name:string|null;matrix?:import('./statement-matrix.ts').StatementMatrix;decision?:DossierDecisionRef;settlements?:ReportSettlement[]};
 /** Resolve the pinned edition through both the dossier owner and the current analysis entitlement. */
 export async function ownedReportDecision(db:EntitlementDatabase & DecisionRevisionDatabase,user:Owner,company:Company,ref:DossierDecisionRef){
  if(typeof ref.analysisId!=='string'||!ref.analysisId||ref.analysisId.length>180||!/^sha256:[0-9a-f]{64}$/.test(ref.snapshotId))return null;
@@ -25,7 +25,7 @@ export async function ownedReportDecision(db:EntitlementDatabase & DecisionRevis
 }
 export async function issueDossierReport(db:QueryExecutor,user:Owner,company:Company,decision?:DossierDecisionRef){
  const result=await visibleProjection(db,user,company,!decision);
- const model:DossierReport={...(decision?{decision}:{}),name:result.publicProfile?.company.name??null,financial:result.financial,obligations:result.obligations,portfolioAsOf:result.portfolioAsOf,
+ const model:DossierReport={...(decision?{decision}:{}),name:result.publicProfile?.company.name??null,...(result.matrix.periods.length?{matrix:result.matrix}:{}),financial:result.financial,obligations:result.obligations,portfolioAsOf:result.portfolioAsOf,
    claims:result.claims,entitlement:result.entitlement,sources:result.sources.filter(s=>s.kind!=='CALENDAR')};
  if(stagingOwnerWorkspace(user.email)&&result.settlements.length){
    model.settlements=result.settlements.map(({party,contract,account,asOf,debit,credit,conflict,references})=>
