@@ -1,3 +1,5 @@
+import {adaptCheckoBfo} from '../credit-engine/financial-analysis/checko-bfo-adapter.ts';
+import {checkedBody} from '../external/checko.ts';
 import {paymentFacts,settlementState,type LoggedSettlementEvent,type PaymentFact,type SettlementEvent} from './settlement-events.ts';
 import {settlementPositions} from './settlement-positions.ts';
 import {readBureau} from './bureau-review.ts';
@@ -19,7 +21,7 @@ import {adaptUploadedBki} from '../credit-engine/credit-portfolio/bki-adapter.ts
 
 export type Account51Summary={from:string;to:string;opening:number|null;closing:number|null;inflow:number;outflow:number;entries:number;requiresReview:boolean};
 export type CounterpartyCheck={inn:string;fetchedAt:string;cases:number|null;enforcements:number|null};
-export type PrivateSource={counterpartyCheck?:CounterpartyCheck;manualDebt?:import('./manual-debt.ts').ManualDebt;calendarSheet?:string[][];sheetEntries?:Record<string,import('./calendar-entry.ts').CalendarEntry>;settlementEvent?:SettlementEvent;bankPayments?:PaymentFact[];account51?:Account51Summary;relationship?:import("../credit-history.ts").CreditSubjectRelationship;ocr?:import("./dossier-ocr.ts").OcrProgress;publicProfile?:import("../company-profile.ts").CompanyProfileData;envelope:SourceEnvelope; snapshot?:FinancialStatementSnapshot; bki?:CreditHistoryReport; ledger?:LedgerBalance[]; calendar?:import("./calendar-entry.ts").CalendarEntry; review?:import("../document-poc/review-fields.ts").DocumentReview; verified?:Record<string,{value:string;page:number;fragment:string}>};
+export type PrivateSource={financialHistory?:FinancialStatementSnapshot[];counterpartyCheck?:CounterpartyCheck;manualDebt?:import('./manual-debt.ts').ManualDebt;calendarSheet?:string[][];sheetEntries?:Record<string,import('./calendar-entry.ts').CalendarEntry>;settlementEvent?:SettlementEvent;bankPayments?:PaymentFact[];account51?:Account51Summary;relationship?:import("../credit-history.ts").CreditSubjectRelationship;ocr?:import("./dossier-ocr.ts").OcrProgress;publicProfile?:import("../company-profile.ts").CompanyProfileData;envelope:SourceEnvelope; snapshot?:FinancialStatementSnapshot; bki?:CreditHistoryReport; ledger?:LedgerBalance[]; calendar?:import("./calendar-entry.ts").CalendarEntry; review?:import("../document-poc/review-fields.ts").DocumentReview; verified?:Record<string,{value:string;page:number;fragment:string}>};
 export type SourceRow={id:string;kind:string;documentId:string|null;payload:PrivateSource};
 export async function dossierSources(db:QueryExecutor,owner:string,id:string){
   const result=await db.query(`SELECT s.source_id AS id,s.source_type AS kind,s.document_id AS "documentId",s.payload
@@ -40,8 +42,33 @@ export async function dossierSources(db:QueryExecutor,owner:string,id:string){
       const stored=indexed.get(source.sourceId)!;
       stored.payload={...stored.payload,bankPayments:[...(stored.payload.bankPayments??[]),...paymentFacts(bySource.get(source.sourceId)??[])]};
     }
-    for(const snapshot of analysis.financialStatementsV2??[])add({envelope:snapshot.source,snapshot},snapshot.sourceType);
+    for(const snapshot of analysis.financialStatementsV2??[]){
+      add({envelope:snapshot.source,snapshot},snapshot.sourceType);
+      const stored=indexed.get(snapshot.sourceId)!;
+      if(stored.payload.snapshot?.snapshotId!==snapshot.snapshotId){
+        const history=stored.payload.financialHistory??=[];
+        if(!history.some(s=>s.snapshotId===snapshot.snapshotId))stored.payload.financialHistory=[...history,snapshot];
+      }
+    }
     if(analysis.creditHistory && analysis.sourceManifest?.bki)add({envelope:analysis.sourceManifest.bki,bki:analysis.creditHistory},'BKI');
+  }
+  const profiles=[...indexed.values()].flatMap(row=>row.payload.publicProfile??[]);
+  const capped=profiles.filter(p=>p.financialStatementsV2?.length===6&&p.sourceManifest?.bfo);
+  if(capped.length){
+    const cached=(await db.query('SELECT raw_payload,fetched_at FROM checko_profiles WHERE inn=$1 AND fetched_at=ANY($2::text[])',
+      [capped[0].inn,capped.map(p=>p.fetchedAt)])).rows[0];
+    const profile=capped.find(p=>p.fetchedAt===cached?.fetched_at);
+    if(profile&&cached?.raw_payload){
+      try{
+        const receipt=JSON.parse(cached.raw_payload);
+        if(receipt.retrievedAt===profile.fetchedAt&&receipt.responses?.finances){
+          checkedBody('finances',receipt.responses.finances,profile.inn);
+          const complete=adaptCheckoBfo(receipt.responses.finances,profile.sourceManifest!.bfo!);
+          const known=new Set(profile.financialStatementsV2!.map(s=>s.snapshotId));
+          profile.financialStatementsV2=[...profile.financialStatementsV2!,...complete.filter(s=>!known.has(s.snapshotId))];
+        }
+      }catch{/* An unreadable legacy receipt cannot replace the saved statements. */}
+    }
   }
   return [...indexed.values()];
 }
@@ -49,17 +76,15 @@ export function sourceProjection(rows:SourceRow[],inn:string,includeFull=true,in
   const profiles=rows.flatMap(row=>row.payload.publicProfile??[]).filter(profile=>profile.inn===inn);
   const uploaded=rows.filter(row=>row.payload.snapshot&&row.payload.envelope.companyInn===inn);
   const manifest={financialUploads:uploaded.filter(r=>r.payload.envelope.provider!=='CHECKO').map(r=>r.payload.envelope)};
-  const manifests=[manifest,...profiles.map(profile=>profile.sourceManifest)];
-  const snapshots=[...profiles.flatMap(p=>p.financialStatementsV2??[]),...uploaded.map(r=>r.payload.snapshot!)]
+  const manifests=[manifest,...profiles.map(profile=>profile.sourceManifest),...uploaded.filter(r=>r.payload.envelope.provider==='CHECKO').map(r=>({bfo:r.payload.envelope}))];
+  const snapshots=[...profiles.flatMap(p=>p.financialStatementsV2??[]),...uploaded.flatMap(r=>[r.payload.snapshot!,...(r.payload.financialHistory??[])])]
     .filter(s=>s.companyInn===inn&&s.accountingStandard==='RAS'&&s.currency==='RUB');
-  const candidates=currentFinancialSnapshots(snapshots,manifests).filter(s=>s.source.status==='READY'&&validStatementPeriod(s.period));
-  const comparable=new Set(candidates.filter(s=>s.confirmedScale&&Object.values({...s.balance,...s.income}).some(v=>v.status==='KNOWN'&&['HIGH','MEDIUM'].includes(v.confidence))).map(economicPeriodKey));
-  const selected=activeFinancialSnapshots(candidates.filter(s=>!comparable.has(economicPeriodKey(s))||
-    s.confirmedScale&&Object.values({...s.balance,...s.income}).some(v=>v.status==='KNOWN'&&['HIGH','MEDIUM'].includes(v.confidence))),manifests);
+  const candidates=currentFinancialSnapshots(snapshots,manifests).filter(s=>s.source.status==='READY');
+  const selected=activeFinancialSnapshots(candidates,manifests);
   const documentIds=new Map(uploaded.map(row=>[row.payload.envelope.sourceId,row.documentId]));
   const evidence=(s:FinancialStatementSnapshot)=>projectStatement(s,documentIds.get(s.sourceId)??null);
   const matrix:StatementMatrix={inn,through:new Date().toISOString().slice(0,10),interim:includeFull,
-    periods:selected.filter(s=>includeFull||s.period.kind==='ANNUAL').map(s=>{
+    periods:selected.filter(s=>validStatementPeriod(s.period)&&(includeFull||s.period.kind==='ANNUAL')).map(s=>{
       const chosen=evidence(s), values=chosen.values, assets=values.ASSETS_TOTAL, liabilities=values.BALANCE_TOTAL;
       return {id:s.snapshotId,period:s.period,selected:chosen,
         difference:assets&&liabilities?assets.value-liabilities.value:null,
