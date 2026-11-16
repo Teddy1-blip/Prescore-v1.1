@@ -2,6 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {reviewFields} from '../lib/document-poc/review-fields.ts';
 const ocrPage=(text)=>({page:1,logicalPage:1,segment:'FULL',method:'OCR',text});
+test('a financial OCR variant disagreement blocks READY even if the displayed totals agree',()=>{
+ const page=ocrPage('Бухгалтерский баланс\nна 31 декабря 2025 г.\nЕдиница измерения: тыс. руб. по ОКЕИ 384\nБАЛАНС | 1600 | 100 | 80\nБАЛАНС | 1700 | 100 | 80');
+ const report=reviewFields('synthetic:bfo:conflicting-pass',[page],1,'BFO','SINGLE',
+  ['OCR_FINANCIAL_PASS_CONFLICT:1']);
+ assert.equal(report.status,'INCOMPLETE');
+ assert.ok(report.issues.includes('BFO_OCR_PASS_DISAGREEMENT'));
+ assert.equal(report.fields.find(f=>f.key==='1600')?.value,'100','retain printed evidence for reviewer');
+});
 test('a scanned BFO heading alone never promises extracted balance rows',()=>{
  const report=reviewFields('synthetic:bfo:1',[ocrPage('Бухгалтерский баланс\nна 31 декабря 2025 г.')],1,'BFO','SINGLE');
  assert.equal(report.status,'INCOMPLETE');

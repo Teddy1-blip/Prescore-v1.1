@@ -78,6 +78,12 @@ export function reviewFields(id:string,pages:EvidencePage[],total:number,family:
   add('period_end','Конец периода','',metadata.period_end);
   add('statement_unit','Единица отчётности','',metadata.unit);
   for(const row of bfo.rows){const code=row.line_code.value;if(code)add(code,'Строка '+code,String(row.unit.value??''),row.current_period_value);}
+  // Independent OCR variants disagree on a dated financial cell. Other
+  // source values remain visible, but the document cannot appear fully ready.
+  if(warnings.some(w=>w.startsWith('OCR_FINANCIAL_PASS_CONFLICT:'))){
+    result.status='INCOMPLETE';
+    result.issues.push('BFO_OCR_PASS_DISAGREEMENT');
+  }
   // A recognized document heading or a successful OCR response is not proof
   // that even one current-period financial value was read accurately.
   const readable = bfo.rows.filter(row=>row.current_period_value.value!==null && row.current_period_value.status==='READ');
