@@ -193,6 +193,14 @@ export function bureauOcrToken(word:string,confidence:number):{value:string;requ
 /** Preserve Tesseract physical coordinates, not a flattened whitespace table.
  * Low-confidence numeric tokens are withheld before any financial column is read.
  */
+/** A vertical table border can be joined to a Russian column starter by
+ * Tesseract (|На, |За). Never interpret that border as part of the heading,
+ * and never strip arbitrary left-hand symbols from monetary or identity data.
+ */
+export function financialOcrColumnHeadingToken(word:string):string{
+ const joined=/^[|¦│](на|за)$|^(на|за)[|¦│]$/iu.exec(word);
+ return joined?(joined[1]??joined[2]):word;
+}
 export function financialTokensFromTsv(tsv:string,dpi:number){
  const scale=72/dpi;
  const tokens:Array<{str:string;width:number;transform:number[]}>=[];
@@ -203,7 +211,8 @@ export function financialTokensFromTsv(tsv:string,dpi:number){
   if(box.some(n=>!Number.isFinite(n)))continue;
   const [x,y,w,h,c]=box;
   if(x<0||y<0||w<=0||h<=0||c<0||c>100)continue;
-  tokens.push({str:financialOcrToken(word,c).replace(/^\|(?=\d)|(?<=\d)\|$/g,''),
+  tokens.push({str:financialOcrColumnHeadingToken(financialOcrToken(word,c))
+    .replace(/^\|(?=\d)|(?<=\d)\|$/g,''),
     width:w*scale,transform:[1,0,0,h*scale,x*scale,-(y+h)*scale]});
  }
  return tokens;

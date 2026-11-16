@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {financialTableRows} from '../lib/document-poc/financial-layout.ts';
+import {financialTokensFromTsv,financialOcrColumnHeadingToken} from '../lib/document-poc/local-ocr.ts';
 import {financialMetadata} from '../lib/document-poc/financial-metadata.ts';
 
 // Synthetic coordinates reproduce the alignment properties measured on two
@@ -98,4 +99,63 @@ test('split sparse-OCR reporting unit and separately printed OKEI require same-p
    {text:'в тыс. рублей',page:2,confidence:'MEDIUM'},
  ]});
  assert.equal(acrossPages.unit.value,null,'cross-page continuation must not establish a scale');
+});
+
+// Synthetic table coordinates mirror observed multi-column OCR geometry;
+ // no real company, dates with source-specific values, or monetary amounts.
+const tsvWord=(s,x,top,w=24,h=21,conf=94)=>
+ ['5','1','1','1','1','1',String(x),String(top),String(w),String(h),String(conf),String(s)].join('\t');
+test('Tesseract may join vertical borders to printed На/За without changing heading meaning',()=>{
+ for(const [raw,want] of [['|На','На'],['¦На','На'],['│За','За'],['На|','На'],['За¦','За'],
+  ['|Наименование','|Наименование'],['|ПАО','|ПАО'],['|999','|999'],['Наименование','Наименование']]){
+  assert.equal(financialOcrColumnHeadingToken(raw),want);
+ }
+});
+test('real-scan-shaped three-column F1 restores the middle |На date before financial amounts',()=>{
+ const header=[
+  tsvWord('Код',957,947,46,25),
+  tsvWord('На',1041,931,33),tsvWord('31',1084,931,22),tsvWord('декабря',1123,930,83),
+  tsvWord('|На',1263,931,33),tsvWord('31',1306,931,22),tsvWord('декабря',1344,931,83),
+  tsvWord('На',1485,932,33),tsvWord('31',1529,932,22),tsvWord('декабря',1567,931,83),
+  tsvWord('2025',1095,963,50,20),tsvWord('2024',1317,964,50,20),
+  tsvWord('2023',1540,964,50,20),
+ ];
+ const codes=['1150','1210','1250','1230','1600','1700'];
+ const rows=codes.flatMap((code,i)=>{
+  const y=1064+i*37;
+  return [
+   tsvWord('Строка',240,y,95,20),tsvWord(code,954,y,53,20),
+   tsvWord(String(110+i),1160,y,52,20),tsvWord(String(100+i),1383,y,52,20),
+   tsvWord(String(90+i),1605,y,52,20),
+  ];
+ });
+ const rowsParsed=financialTableRows(financialTokensFromTsv([...header,...rows].join('\n'),220),1,true);
+ assert.deepEqual(rowsParsed.map(r=>r.code),codes);
+ assert.deepEqual(rowsParsed[0].headings.map(x=>(x.match(/20\d{2}/)||[])[0]),['2025','2024','2023']);
+ assert.equal(rowsParsed[0].cells.length,3);
+ assert.deepEqual(rowsParsed[0].cells.map(c=>c.raw),['110','100','90']);
+ assert.ok(rowsParsed[0].cells.every(c=>!c.uncertain));
+});
+test('real-scan-shaped F2 with second |За column binds profit values to two different years',()=>{
+ const header=[
+  tsvWord('Код',1090,721,45,27),
+  tsvWord('За',1169,707,27,19),tsvWord('Январь',1204,707,95,19),
+  tsvWord('-',1297,717,10,14),tsvWord('Декабрь',1312,707,105,19),
+  tsvWord('|За',1434,707,28,20),tsvWord('Январь',1470,708,95,19),
+  tsvWord('-',1564,718,10,14),tsvWord('Декабрь',1579,707,105,19),
+  tsvWord('2025',1253,738,52,19),tsvWord('2024',1521,738,52,19),
+ ];
+ const codes=['2110','2120','2330','2340','2350','2410','2400'];
+ const rows=codes.flatMap((code,i)=>{
+  const y=789+i*37;
+  return [
+   tsvWord('Строка',280,y,95,20),tsvWord(code,1085,y,52,20),
+   tsvWord(String(200+i),1355,y,55,20),tsvWord(String(150+i),1610,y,55,20),
+  ];
+ });
+ const parsed=financialTableRows(financialTokensFromTsv([...header,...rows].join('\n'),220),2,true);
+ assert.deepEqual(parsed.map(r=>r.code),codes);
+ assert.deepEqual(parsed[0].headings.map(x=>(x.match(/20\d{2}/)||[])[0]),['2025','2024']);
+ assert.deepEqual(parsed[0].cells.map(c=>c.raw),['200','150']);
+ assert.ok(parsed[0].cells.every(c=>!c.uncertain));
 });
