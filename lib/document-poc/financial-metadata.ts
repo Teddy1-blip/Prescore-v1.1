@@ -98,17 +98,40 @@ export function financialMetadata(input: Input) {
       value: span?.end ?? null
     });
   }
-  for (const line of input.lines) {
+  for (const [lineIndex, line] of input.lines.entries()) {
     const t = line.text.trim();
     const title = t.match(/^(бухгалтерский баланс|отч[её]т о финансовых результатах|balance sheet|income statement)(?=\s|$)/i);
     const okud = t.match(/форма по ОКУД\s*[:|]?\s*(071000[12])\b/i);
     if (okud) forms.set(okud[1] === '0710001' ? 'Бухгалтерский баланс' : 'Отчёт о финансовых результатах', line);
     if (title) forms.set(/баланс|balance/i.test(title[1]) ? 'Бухгалтерский баланс' : 'Отчёт о финансовых результатах', line);
     const unit = t.match(/^(?:единица измерения|ед\.?\s*изм\.?|unit)\s*[:|]?\s*(.*)$/i);
-    if (unit) units.push({
-      line,
-      value: readUnit(unit[1])
-    });
+    if (unit) {
+      let rawUnit = unit[1].trim();
+      let source = line;
+      if (!rawUnit) {
+        // Sparse OCR can split the printed unit into label, words and OKEI code.
+        // Only contiguous same-page evidence may restore the missing line.
+        const next = input.lines[lineIndex + 1];
+        const candidate = next?.text.trim().replace(/\s+/g, ' ') ?? '';
+        const standalone = /^(?:в\s+)?(?:(?:тыс(?:\.|яч[аи]?)?|млн\.?)\s*)?(?:руб(?:лей|ля|ль)?\.?|₽)$/iu;
+        if (next?.page === line.page && next.confidence !== 'LOW' && standalone.test(candidate)) {
+          rawUnit = candidate;
+          const qualifier = input.lines[lineIndex + 2];
+          const qualifierText = qualifier?.text.trim() ?? '';
+          if (qualifier?.page === line.page && /^по\s+ОКЕИ(?:\s|:|$)/iu.test(qualifierText)) {
+            const inlineCode = /^по\s+ОКЕИ\s*:?\s*3\s*8\s*[345]$/iu.test(qualifierText);
+            const detachedCode = input.lines[lineIndex + 3];
+            const codeSeparate = /^по\s+ОКЕИ\s*:?$/iu.test(qualifierText) &&
+              detachedCode?.page === line.page && detachedCode.confidence !== 'LOW' &&
+              /^3\s*8\s*[345]$/.test(detachedCode.text.trim());
+            if (qualifier.confidence === 'LOW' || !inlineCode && !codeSeparate) rawUnit = '';
+            else rawUnit += ' ' + qualifierText + (codeSeparate ? ' ' + detachedCode!.text.trim() : '');
+          }
+          if (rawUnit) source = {...line, text:line.text.trim() + ' ' + rawUnit};
+        }
+      }
+      units.push({line:source,value:readUnit(rawUnit)});
+    }
     const label = t.match(/^(?:отч[её]тная дата|на дату|reporting date)\s*[:|]\s*(.+)$/i);
     const heading = t.split(/\s+коды\s*$/i)[0].trim();
     const on = heading.match(/^на\s+(.+)$/i);

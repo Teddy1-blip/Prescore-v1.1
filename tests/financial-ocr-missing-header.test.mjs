@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {financialTableRows} from '../lib/document-poc/financial-layout.ts';
+import {financialMetadata} from '../lib/document-poc/financial-metadata.ts';
 
 // Synthetic coordinates reproduce the alignment properties measured on two
 // private scanned BFOs. There are no customer values or originals in fixtures.
@@ -76,4 +77,25 @@ test('realistic sparse OCR thousands groups require coherent spacing even withou
    assert.ok(found,'expected line '+code+' in disconnected scan');
    assert.ok(found.cells.slice(0,3).every(c=>c.uncertain),'never trust detached digit groups');
  }
+});
+
+test('split sparse-OCR reporting unit and separately printed OKEI require same-page evidence',()=>{
+ const inspect=(fragments)=>financialMetadata({id:'synthetic-unit',issues:[],lines:[
+   'Бухгалтерский баланс','на 31 декабря 2025 г.',...fragments
+ ].map(text=>({text,page:1,confidence:'MEDIUM'}))});
+ const valid=inspect(['Единица измерения:','в тыс. рублей','по ОКЕИ','384']);
+ assert.equal(valid.unit.value,'тыс. ₽');
+ assert.equal(valid.raw_unit.value,'в тыс. рублей по ОКЕИ 384');
+ assert.equal(valid.unit.source_page,1);
+ const conflicting=inspect(['Единица измерения:','в тыс. рублей','по ОКЕИ','385']);
+ assert.equal(conflicting.unit.value,null,'word/code mismatch must remain unverified');
+ const unrelated=inspect(['Единица измерения:','Остаток 1000 руб.']);
+ assert.equal(unrelated.unit.value,null,'unrelated monetary sentence must not establish a unit');
+ const acrossPages=financialMetadata({id:'synthetic-cross-page',issues:[],lines:[
+   {text:'Бухгалтерский баланс',page:1,confidence:'MEDIUM'},
+   {text:'на 31 декабря 2025 г.',page:1,confidence:'MEDIUM'},
+   {text:'Единица измерения:',page:1,confidence:'MEDIUM'},
+   {text:'в тыс. рублей',page:2,confidence:'MEDIUM'},
+ ]});
+ assert.equal(acrossPages.unit.value,null,'cross-page continuation must not establish a scale');
 });
