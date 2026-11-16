@@ -54,10 +54,6 @@ export function CompanySources({view,choose,id,bankInn,bank,analysisId,model,ope
    const list=await read<{companies:Company[]}>('/api/dossier',{signal:ctrl.signal});
    if(ctrl.signal.aborted)return;
    setCompanies(list.companies);
-   if(id){
-     const key='pc-ocr-notice:'+id,message=sessionStorage.getItem(key);
-     if(message){setError(message);sessionStorage.removeItem(key);}
-   }
    const matched=id||list.companies.find(c=>c.inn===bankInn)?.id;
    if(matched){const current=await read<Profile>('/api/dossier?'+new URLSearchParams({id:matched,...(analysisId?{analysisId}:{})}),{signal:ctrl.signal});if(!ctrl.signal.aborted){setProfile(current);onMatrix?.({company:current.company,matrix:current.matrix});onCompany(current.company.inn);onBuyerBalances?.({id:current.company.id,balances:buyerBalanceSummary(current.settlements)});}}
  })().catch(e=>{if(!ctrl.signal.aborted)setError(e.message)});return()=>ctrl.abort();},[id,bankInn,analysisId,revision,onCompany,onBuyerBalances,onMatrix]);
@@ -114,7 +110,12 @@ export function CompanySources({view,choose,id,bankInn,bank,analysisId,model,ope
     form.reset();setRevision(n=>n+1);
     if(result.pending){
       try{await recognize(result.dossierId,result.id,result.layout??String(data.get('layout')??'SINGLE'));}
-      catch(e){if(company)throw e;sessionStorage.setItem('pc-ocr-notice:'+result.dossierId,String((e as Error).message));}
+      catch(e){
+        if(!mounted.current)return;
+        if(company)throw e;
+        if(window.location.href===submittedFrom)location.assign(dossierHref(result.dossierId,'documents')+'&source='+encodeURIComponent(result.id)+'#review-'+encodeURIComponent(result.id));
+        return;
+      }
     }
     if(!mounted.current)return;
     if(!targetId){if(window.location.href===submittedFrom)location.assign(dossierHref(result.dossierId,view)+'&source='+encodeURIComponent(result.id));return;}
@@ -128,7 +129,7 @@ export function CompanySources({view,choose,id,bankInn,bank,analysisId,model,ope
  const years=profile?.financial?.history??[],period=years.find(p=>p.id===selectedPeriodId)??years.at(-1);
  const periodSourceId=profile?.lines.find(s=>s.id===period?.id)?.sourceId;
  const periodSource=profile?.sources.find(s=>s.id===periodSourceId)??(period&&profile?.publicProfile&&[...profile.sources].reverse().find(s=>s.kind==='CHECKO'));
- const relevantClaims=profile?.claims.filter(c=>view==='home'||view==='analysis'||view==='actions'||view==='financing'&&c.stage==='product'||c.sources.some(s=>view==='bfo'?['BFO','QUARTERLY'].includes(s.type):view==='obligations'?s.type==='BKI'||profile.sources.some(r=>c.sourceIds.includes(r.id)&&r.kind==='CREDIT_DOCUMENT'):false))??[];
+ const relevantClaims=profile?.claims.filter(c=>(view==='home'||view==='analysis')&&!model?.full||view==='actions'&&!model?.full&&['recommendation','plan'].includes(c.stage)||view==='financing'&&!model?.full&&c.stage==='product'||c.sources.some(s=>view==='bfo'?['BFO','QUARTERLY'].includes(s.type):view==='obligations'?s.type==='BKI'||profile.sources.some(r=>c.sourceIds.includes(r.id)&&r.kind==='CREDIT_DOCUMENT'):false))??[];
  const [documentKind,setDocumentKind]=useState('BFO');
  const [portfolioSource,setPortfolioSource]=useState('BKI');
  useEffect(()=>{
@@ -289,13 +290,13 @@ export function CompanySources({view,choose,id,bankInn,bank,analysisId,model,ope
  {view==='financing'&&!model?.full&&<Panel title="Финансирование">{profile.versions.length?<a href={'/dashboard?'+new URLSearchParams({analysisId:profile.versions[0].id,view:'financing'})}>Открыть подбор и заявки по сохранённому анализу</a>:<p>Предложения появятся при подтверждённом соответствии условиям продукта.</p>}</Panel>}
  {view==='calendar'&&profile.entitlement!=='FULL'&&<Panel title="Платёжный календарь"><p>График обязательств, сроки расчётов и сценарии движения денег доступны в полном кабинете.</p><a href={dossierHref(company.id,'billing')}>Посмотреть условия доступа</a></Panel>}
  {view==='calendar'&&profile.entitlement==='FULL'&&<><LiquidityCalendar profile={profile} bank={bank}/>{profile.sheets.map(sheet=><CalendarSheetReview key={sheet.id} sheet={sheet} confirm={async(mapping,rows)=>{await read('/api/dossier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'confirm-sheet',id:company.id,sourceId:sheet.id,mapping,rows})});setRevision(v=>v+1);}}/>)}</>}
- {view==='analysis'&&ownerTestWorkspace&&!bankInn&&period&&<Panel title="Бухгалтерская отчётность">
+ {view==='analysis'&&!bankInn&&period&&<Panel title="Бухгалтерская отчётность">
    <p>{period.period.from} — {period.period.to}</p><dl className="pc-source-kpis">{period.groups.flatMap(g=>g.metrics)
      .filter(m=>['REVENUE','NET_PROFIT','ASSETS_TOTAL'].includes(m.key)&&m.value!==null)
      .map(m=><div key={m.key}><dt>{m.label}</dt><dd>{numeric(m.value,m.status,m.unit)}</dd></div>)}</dl>
    <a href={dossierHref(company.id,'bfo')}>Показатели и источники БФО</a>
  </Panel>}
- {view==='analysis'&&ownerTestWorkspace&&!bankInn&&profile.obligations.length>0&&<DossierPortfolio profile={profile}/>}
+ {view==='analysis'&&!bankInn&&profile.entitlement==='FULL'&&profile.obligations.length>0&&<DossierPortfolio profile={profile}/>}
  {view==='analysis'&&ownerTestWorkspace&&!bankInn&&profile.settlements.length>0&&<DossierSettlementBalances rows={profile.settlements}/>}
  {view==='analysis'&&profile.entitlement==='FULL'&&<InvestmentProfile/>}
  {view==='calendar'&&profile.entitlement==='FULL'&&<CalendarEntries items={profile.calendar} save={async(entry,key)=>{await read('/api/dossier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'calendar',id:company.id,entry,key})});setRevision(v=>v+1);}}/>}
