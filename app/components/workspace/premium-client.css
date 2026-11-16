@@ -32,3 +32,10 @@
 .approved-client .pc-factor-source{display:block;color:#50656a;margin-block:4px}
 .approved-client .pc-plan-steps{list-style:decimal;margin:8px 0;padding-inline-start:24px}
 .approved-client .pc-plan-steps li{padding:4px 0;border:0}
+
+.approved-client .hero-foot .pc-report-action button{border:1px solid #80969b;border-radius:8px;background:transparent;color:white;padding:8px 12px;cursor:pointer}
+.approved-client .hero-score .score-number{display:flex;align-items:baseline;gap:5px;white-space:nowrap}
+.approved-client .hero-score .score-number small{font-size:clamp(13px,1.2vw,18px);line-height:1}
+.approved-client .pc-factor-list .pc-text-button:focus-visible,.approved-client .pc-tabs button:focus-visible,.approved-client .hero-foot button:focus-visible{outline:3px solid #358a9b;outline-offset:2px}
+
+.approved-client .pc-decision-band:empty{display:none}

@@ -271,7 +271,7 @@ export function CompanySources({view,choose,id,bankInn,bank,analysisId,model,ope
      <button disabled={busy}>Добавить документ</button>
    </form>;})}</section>;
  return <div className="ws pc-company-sources" aria-label="Источники компании">
- {view==='documents'&&company&&profile&&<DocumentRegister companyName={profile.publicProfile?.company.name||bank?.analysis.company.name} profile={profile} inn={company.inn} labels={labels} choose={choose} recentId={recentId} openBank={openBank}/>}
+ {view==='documents'&&company&&profile&&<DocumentRegister companyName={profile.publicProfile?.company.name||bank?.analysis.company.name} profile={profile} inn={company.inn} bankSourceIds={model?.full?.bankingSources?.map(s=>s.sourceId)} labels={labels} choose={choose} recentId={recentId} openBank={openBank}/>}
  {view==='documents'&&intake}
  {company&&view!=='documents'&&passport}
  {(!company||view==='home')&&<Panel title={view==='home'?'Выбрать или добавить компанию':'Компания по ИНН'}>

@@ -149,13 +149,13 @@ export function ApprovedPage(p: ScreenProps) {
             <p className="sub">{d.scoreExplanation || 'Основания и ограничения раскрыты в кредитном профиле.'}</p>
           </div>
         </section>
-        {(d.readiness || d.capacity) && <section className="pc-decision-band" aria-label="Показатели кредитного профиля">
-          {d.readiness && <button onClick={()=>go('analysis','conclusion')}><small>Готовность к финансированию</small><strong>{d.readiness}</strong></button>}
-          {d.capacity && <button onClick={()=>go('analysis','capacity')}><small>Дополнительный платёж в месяц</small><strong>{d.capacity}</strong></button>}
-        </section>}
-        <div className="kpis">
+        <section className="pc-decision-band" aria-label="Финансовые показатели">
+          {d.operating !== null && <button onClick={()=>go('banking')}><small>Операционные поступления</small><strong>{money(d.operating)}</strong><small>{d.period}</small></button>}
+          {d.capacity && <button onClick={()=>go('analysis','capacity')}><small>Дополнительный платёж в месяц</small><strong>{d.capacity}</strong><small>{d.asOf}</small></button>}
+          {d.readiness && <button onClick={()=>go('analysis','conclusion')}><small>Готовность к финансированию</small><strong>{d.readiness}</strong><small>{d.asOf}</small></button>}
+        </section>
+        <details className="pc-credit-recap"><summary>Остатки и задолженность</summary><div className="kpis">
           {metric('Деньги на счетах', money(d.closing), d.closingDate, 'banking')}
-          {metric('Операционные поступления', money(d.operating), d.period, 'banking')}
           {metric(
             'Дебиторская задолженность',
             money(d.buyerBalances?.amount ?? d.ar?.total ?? null),
@@ -163,7 +163,7 @@ export function ApprovedPage(p: ScreenProps) {
             'counterparties',
           )}
           {metric('Остаток основного долга', money(d.debt), d.debtDate, p.availableViews?.includes('obligations') ? 'obligations' : 'analysis')}
-        </div>
+        </div></details>
         <CashCards data={d} go={go} />
         <div className="grid two gap-top">
           {taskCard}
@@ -286,7 +286,7 @@ export function ApprovedPage(p: ScreenProps) {
             </Review>
             {jump('Перейти к плану действий', 'actions')}
           </Card>
-          <Card title={(d.score ?? '—') + ' / 1000'} sub={d.scoreStatus}>
+          <Card title={d.score === null ? 'Prescore Index' : d.score + ' / 1000'} sub={d.scoreStatus}>
             {d.scoreExplanation && <p>{d.scoreExplanation}</p>}
             {d.components.map((c) => (
               <div className="barrow" key={c.label}>
@@ -636,7 +636,7 @@ export function ApprovedPage(p: ScreenProps) {
         <section className="approved-canonical-section" id="approved-source-operations" aria-label={canonicalHeadings[page]}>
           <div className="approved-canonical-heading">
             <h2>{canonicalHeadings[page]}</h2>
-            {d.asOf && <p>Версия анализа на {d.asOf}</p>}
+            {d.asOf && page!=='analysis' && <p>Версия анализа на {d.asOf}</p>}
           </div>
           {p.details}
         </section>

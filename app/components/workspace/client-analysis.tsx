@@ -98,7 +98,7 @@ function CapacityEvidenceGaps({model}:{model:WorkspaceModelV1}){
  return <Panel title="Основания и ограничения долговой ёмкости"><ul>{notes.map((note,i)=><li key={i}>{note}</li>)}</ul><p className="pc-muted">Долговые платежи по выписке и датированный платёж из БКИ — разные основания. Prescore не приравнивает неизвестный график к нулевому долгу.</p></Panel>;
 }
 
-export function FullCreditAnalysis({model,retry,dossierId,statementMatrix,initialSection='conclusion'}:{statementMatrix?:ReactNode;model:WorkspaceModelV1;retry:()=>void;dossierId?:string;initialSection?:string}){
+export function FullCreditAnalysis({model,retry,dossierId,statementMatrix,compactHeader=false,initialSection='conclusion'}:{compactHeader?:boolean;statementMatrix?:ReactNode;model:WorkspaceModelV1;retry:()=>void;dossierId?:string;initialSection?:string}){
  const [tab,setTab]=useState(()=>{
   const value=typeof window==='undefined'?initialSection:new URLSearchParams(window.location.search).get('section')||initialSection;
   return ['conclusion','factors','expertise','capacity','financials','obligations','financing','reconciliation','recommendations','plan','evidence','history'].includes(value)?value:'conclusion';
@@ -111,7 +111,7 @@ export function FullCreditAnalysis({model,retry,dossierId,statementMatrix,initia
  const topConstraint=economic??r.readiness.constraints[0]??r.limitations[0]??r.dataQuality[0];
  function select(next:string){setTab(next);const url=new URL(window.location.href);url.searchParams.set('section',next);window.history.replaceState(null,'',url);}
  return <>
-  <div className="pc-page-title"><div><h1>Кредитный профиль</h1><p>Заключение Prescore на {date(r.meta.asOfDate)}</p>{snapshot && <details><summary>Версия расчёта</summary><code style={{overflowWrap:"anywhere"}}>{snapshot.snapshotId}</code></details>}</div>{dossierId?<CompanyReportButton dossierId={dossierId} model={model} label="Печать / PDF"/>:<a className="pc-secondary" href={'/dashboard/report-v2?analysisId='+encodeURIComponent(model.analysisId)+(snapshot&&model.full?.revisionAvailable?'&snapshotId='+encodeURIComponent(snapshot.snapshotId):'')+'&print=1'} target="_blank" rel="noreferrer">Печать / PDF</a>}</div>
+  <div className="pc-page-title"><div>{!compactHeader&&<h1>Кредитный профиль</h1>}<p>Заключение Prescore на {date(r.meta.asOfDate)}</p>{snapshot && <details><summary>Версия расчёта</summary><code style={{overflowWrap:"anywhere"}}>{snapshot.snapshotId}</code></details>}</div>{dossierId?<CompanyReportButton dossierId={dossierId} model={model} label="Печать / PDF"/>:<a className="pc-secondary" href={'/dashboard/report-v2?analysisId='+encodeURIComponent(model.analysisId)+(snapshot&&model.full?.revisionAvailable?'&snapshotId='+encodeURIComponent(snapshot.snapshotId):'')+'&print=1'} target="_blank" rel="noreferrer">Печать / PDF</a>}</div>
   <nav className="pc-tabs" aria-label="Разделы анализа">{tabs.map(([id,title])=><button key={id} aria-current={tab===id?'page':undefined} onClick={()=>select(id)}>{title}</button>)}</nav>
 
   {tab==='conclusion'&&<>

@@ -124,6 +124,19 @@ function ok(label) {
 const nav = (name) =>
   page.getByRole('navigation', { name: 'Разделы кабинета' }).getByRole('link', { name, exact: true });
 const waitModel = () => page.waitForSelector('.approved-client .client-hero');
+async function assertPublishedScore(value){
+  const score=page.locator('.hero-score .score-number');
+  const meter=page.getByRole('meter',{name:'Prescore Index'});
+  if(value==null){
+    assert.equal(await score.count(),0);
+    assert.equal(await meter.count(),0);
+    assert.ok((await page.locator('.hero-score .chip').innerText()).trim());
+    return;
+  }
+  assert.equal((await score.innerText()).replace(/\s/g,''),String(value)+'/1000');
+  assert.equal(Number(await meter.getAttribute('value')),value);
+}
+
 try {
   await fs.mkdir(out, { recursive: true });
   await signup(ownerRole);
@@ -194,13 +207,10 @@ try {
   assert.deepEqual(full.full.report.reconciliation.bankBfo, []);
   await page.reload();
   await waitModel();
-  assert.equal(
-    (await page.locator('.score-number').innerText()).replace(/\s/g, ''),
-    String(full.full.report.index.value?.value ?? '—') + '/1000',
-  );
+  await assertPublishedScore(full.full.report.index.value?.value);
   await nav('Кредитный профиль').click();
   await page
-    .getByRole('heading', { name: (full.full.report.index.value?.value ?? '—') + ' / 1000', exact: true })
+    .getByRole('heading', { name: full.full.report.index.value?.value!=null ? full.full.report.index.value.value+' / 1000' : 'Prescore Index', exact: true })
     .waitFor();
   // The financial diagnosis must be visible to the client and must not impersonate a lender's decision.
   await page.getByRole('heading', { name: 'Финансово-кредитное заключение Prescore', exact: true }).waitFor();
@@ -274,7 +284,7 @@ try {
   await served;
   await page.unroute(fault, delayedResponse);
   assert.match(await page.locator('.client-hero').innerText(), /FULL/);
-  assert.equal((await page.locator('.score-number').innerText()).replace(/\s/g, ''), '—/1000');
+  await assertPublishedScore(null);
   ok('Задержанный ответ FULL-компании не меняет выбранный BASIC-кабинет');
   const failModel = (route) => route.fulfill({ status: 503, contentType: 'application/json', body: '{}' });
   await page.route(fault, failModel);
@@ -283,10 +293,7 @@ try {
   await page.unroute(fault, failModel);
   await page.getByRole('button', { name: 'Повторить', exact: true }).click();
   await waitModel();
-  assert.equal(
-    (await page.locator('.score-number').innerText()).replace(/\s/g, ''),
-    String(full.full.report.index.value?.value ?? '—') + '/1000',
-  );
+  await assertPublishedScore(full.full.report.index.value?.value);
   ok('Временный отказ модели и повторная загрузка с сервера');
   await nav('Кредитный портфель').click();
   await page.getByRole('heading', {name:'Обслуживание долга по выпискам'}).waitFor();
