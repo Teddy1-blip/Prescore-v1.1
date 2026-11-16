@@ -102,8 +102,11 @@ export function liveView(model: WorkspaceModelV1 | null, name: string, month: st
   const scoreExplanation = index?.status === 'NOT_RATABLE_GLOBAL_STOP'
     ? 'Расчёт остановлен. Основание указано в разделе «Стоп-факторы и риски».'
     : [...new Set(blockers.map(gap => gap.label))].join('. ');
+  const strength = report?.expertise?.items.find(item => item.category === 'STRENGTH');
   return {
     company: name,
+    readiness: model?.full && model.full.canonical.financingReadiness.level !== 'UNKNOWN' ? report?.readiness.level : undefined,
+    strength: strength && {title: publicText(strength.title), detail: publicText(strength.interpretation)},
     scoreExplanation,
     hasFinancialSource: model?.basic.sources.availability.some(s =>
       ['FINANCIAL_STATEMENTS', 'QUARTERLY_REPORT'].includes(s.source) && ['READY', 'PARTIAL', 'STALE'].includes(s.status)),
@@ -126,7 +129,7 @@ export function liveView(model: WorkspaceModelV1 | null, name: string, month: st
         ? [{ label: c.label, score: c.score.value, max: c.maximum.value }]
         : [],
     ),
-    capacity: report?.capacity.headline?.display ?? '',
+    capacity: typeof report?.capacity.headline?.value === 'number' ? report.capacity.headline.display : '',
     capacityText:
       report?.capacity.text ??
       'Для оценки дополнительного платежа нужны подтверждённые данные о долговых выплатах.',

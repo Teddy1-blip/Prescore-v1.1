@@ -55,6 +55,8 @@ export type ViewData = {
   components: { label: string; score: number; max: number }[];
   capacity: string;
   capacityText: string;
+  readiness?: string;
+  strength?: Item;
   opening: Amount;
   closing: Amount;
   closingDate: string;

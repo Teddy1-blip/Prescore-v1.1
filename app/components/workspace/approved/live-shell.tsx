@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import type { WorkspaceModelV1 } from '../../../../lib/workspace/model';
 import type { Deal, StoredAnalysis } from '../client-operations';
 import { ApprovedShell } from './shell';
+import { CompanyReportButton } from '../company-report-button';
 import { ApprovedPage } from './pages';
 import { ApplicationForm, type RequestInput } from './application-form';
 import { liveView } from './adapter';
@@ -11,7 +12,7 @@ import { date } from '../presentation';
 import './client.css';
 type Workspace = {
   view: string;
-  choose: (v: string) => void;
+  choose: (v: string, section?: string) => void;
   availableViews: string[];
   selected?: StoredAnalysis;
   dossier?: {id:string;inn:string};
@@ -33,6 +34,8 @@ type ContentProps = Pick<Workspace, 'view' | 'renderPage' | 'choose' | 'availabl
   focus: string;
   apps: Deal[];
   readOnly: boolean;
+  reportAction?: ReactNode;
+  ownedDossier: boolean;
   open?: (product?: string) => void;
 };
 const ScreenContext = createContext<ContentProps | null>(null);
@@ -128,6 +131,9 @@ export function ClientShell(p: Workspace) {
           focus,
           open,
           readOnly: p.locked,
+          ownedDossier: Boolean(p.dossier && !p.locked),
+          reportAction: p.view === 'home' && p.dossier && !p.locked && p.model?.full?.revisionAvailable
+            ? <CompanyReportButton dossierId={p.dossier.id} model={p.model} label="Открыть отчёт PDF"/> : undefined,
           apps: p.deals.filter((v) => v.analysisId === p.selected?.id),
         }}
       >
@@ -161,6 +167,8 @@ export function LivePage({ children }: { children: ReactNode }) {
       availableViews={c.availableViews}
       data={c.data}
       focus={c.focus}
+      reportAction={c.reportAction}
+      ownedDossier={c.ownedDossier}
       go={c.choose}
       onUpload={() => c.choose('upload')}
       apps={c.apps.map((d) => ({

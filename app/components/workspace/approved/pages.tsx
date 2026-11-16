@@ -9,7 +9,9 @@ export type ScreenProps = {
   data: ViewData;
   focus: string;
   availableViews?: readonly string[];
-  go: (p: Page) => void;
+  go: (p: Page, section?: string) => void;
+  reportAction?: ReactNode;
+  ownedDossier?: boolean;
   onUpload?: () => void;
   apps: Application[];
   details?: ReactNode;
@@ -118,7 +120,7 @@ export function ApprovedPage(p: ScreenProps) {
       <>
         <section className="client-hero">
           <div>
-            <div className="client-eyebrow">КРАТКОЕ ЗАКЛЮЧЕНИЕ</div>
+            <div className="client-eyebrow">{d.company}{d.asOf && ' · на '+d.asOf}</div>
             <h2>
               {d.title.split('\n').map((line, i) => (
                 <span key={i}>
@@ -132,25 +134,25 @@ export function ApprovedPage(p: ScreenProps) {
               <button className="btn" onClick={() => go('analysis')}>
                 Открыть заключение ↗
               </button>
-              {d.tasks.length > 0 && <span className="chip dark">{d.tasks.length} действий в плане</span>}
+              {p.availableViews?.includes('documents') && <button className="btn" onClick={()=>go('documents')}>Добавить документы</button>}
+              {p.reportAction}
               {p.availableViews?.includes('upload') && p.onUpload && <button className="btn" onClick={p.onUpload}>Загрузить банковскую выписку ↗</button>}
             </div>
           </div>
           <div className="hero-score">
             <div className="score-label">Prescore Index</div>
-            <div className="score-number">
-              {d.score ?? '—'}
-              <small>/ 1000</small>
-            </div>
-            <div className="score-scale">
-              {Array.from({ length: 5 }, (_, i) => (
-                <span key={i} />
-              ))}
-            </div>
+            {d.score !== null && <>
+              <div className="score-number">{d.score}<small>/ 1000</small></div>
+              <meter className="pc-index-meter" aria-label="Prescore Index" min={0} max={1000} value={d.score}/>
+            </>}
             <span className="chip dark">{d.scoreStatus}</span>
             <p className="sub">{d.scoreExplanation || 'Основания и ограничения раскрыты в кредитном профиле.'}</p>
           </div>
         </section>
+        {(d.readiness || d.capacity) && <section className="pc-decision-band" aria-label="Показатели кредитного профиля">
+          {d.readiness && <button onClick={()=>go('analysis','conclusion')}><small>Готовность к финансированию</small><strong>{d.readiness}</strong></button>}
+          {d.capacity && <button onClick={()=>go('analysis','capacity')}><small>Дополнительный платёж в месяц</small><strong>{d.capacity}</strong></button>}
+        </section>}
         <div className="kpis">
           {metric('Деньги на счетах', money(d.closing), d.closingDate, 'banking')}
           {metric('Операционные поступления', money(d.operating), d.period, 'banking')}
@@ -178,7 +180,9 @@ export function ApprovedPage(p: ScreenProps) {
             {d.riskSummary?.[0] && <Review title={d.riskSummary[0].title}>{d.riskSummary[0].detail}</Review>}
             <Review title="Дополнительный платёж">{d.capacityText}</Review>
             {jump('Проверить документы', 'documents')}
-            {first && <Review title={first.title}>{first.detail}</Review>}
+            {d.strength && <Review title={d.strength.title}>{d.strength.detail}</Review>}
+            {first && first.title !== d.riskSummary?.[0]?.title && <Review title={first.title}>{first.detail}</Review>}
+            {d.riskSummary?.length ? <button className="text-link" onClick={()=>go('analysis','factors')}>Разобрать факторы →</button> : null}
           </Card>
         </div>
         <div className="grid equal gap-top">

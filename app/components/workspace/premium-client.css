@@ -17,3 +17,12 @@
 .pc-register-receipt {border-inline-start:4px solid #15736a;background:#f0f7f6;padding:12px 16px;margin-block:12px}
 .pc-register :focus-visible {outline:3px solid #236774;outline-offset:2px}
 @media(max-width:650px){.approved-client .pc-register>header,.pc-register-group li{flex-direction:column}.pc-register-group li{gap:6px}}
+.approved-client .client-hero h2{font-size:clamp(24px,2.5vw,34px);line-height:1.18;text-wrap:balance}
+.approved-client .client-hero .client-eyebrow{color:#c1e3d9;letter-spacing:.07em}
+.approved-client .hero-foot{align-items:center;flex-wrap:wrap}
+.approved-client .pc-index-meter{display:block;width:100%;height:12px;margin:12px 0;accent-color:#72d2b4}
+.approved-client .pc-decision-band{display:flex;flex-wrap:wrap;gap:1px;margin-block:16px;background:#d5e1dc;border:1px solid #d5e1dc;border-radius:12px;overflow:hidden}
+.approved-client .pc-decision-band button{flex:1 1 240px;text-align:left;border:0;background:#f2f7f4;color:#193f3b;padding:14px 20px;cursor:pointer}
+.approved-client .pc-decision-band small,.approved-client .pc-decision-band strong{display:block}
+.approved-client .pc-decision-band strong{margin-top:5px;font-size:19px;font-variant-numeric:tabular-nums}
+.approved-client .kpis,.approved-client .hero-score{font-variant-numeric:tabular-nums}
