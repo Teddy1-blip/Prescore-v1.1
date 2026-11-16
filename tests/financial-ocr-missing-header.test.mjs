@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {financialTableRows} from '../lib/document-poc/financial-layout.ts';
-import {financialTokensFromTsv,financialOcrColumnHeadingToken} from '../lib/document-poc/local-ocr.ts';
+import {financialTokensFromTsv,financialOcrColumnHeadingToken,
+ preferDatedSparseFinancialContinuation,financialUnboundRowCodes,preferSparseFinancialOcr} from '../lib/document-poc/local-ocr.ts';
 import {financialMetadata} from '../lib/document-poc/financial-metadata.ts';
 
 // Synthetic coordinates reproduce the alignment properties measured on two
@@ -158,4 +159,67 @@ test('real-scan-shaped F2 with second |За column binds profit values to two di
  assert.deepEqual(parsed[0].headings.map(x=>(x.match(/20\d{2}/)||[])[0]),['2025','2024']);
  assert.deepEqual(parsed[0].cells.map(c=>c.raw),['200','150']);
  assert.ok(parsed[0].cells.every(c=>!c.uncertain));
+});
+
+
+// Synthetic fourth-page F2 continuation. The primary OCR loses the table
+// header; sparse OCR preserves four row codes and two printed dates.
+// The years and amounts are invented; no customer documents are committed.
+const f2Page4Tsv=(withHeader,includeFirst)=>[
+ ...(withHeader?[
+  tsvWord('Код',1046,260,45,25),
+  tsvWord('За',1187,244,27,19),tsvWord('Январь',1224,244,95,19),
+  tsvWord('-',1320,245,10,19),tsvWord('Сентябрь',1335,244,100,19),
+  tsvWord('За',1453,240,28,19),tsvWord('Январь',1488,240,95,19),
+  tsvWord('-',1580,240,10,19),tsvWord('Сентябрь',1594,240,105,19),
+  tsvWord('2025',1280,272,55,19),tsvWord('2024',1548,267,54,20)
+ ]:[]),
+ ...['2510','2520','2530','2500'].filter(c=>includeFirst||c!=='2510').flatMap((code,i)=>{
+  const y=343+i*61;
+  return [tsvWord('Показатель',200,y,95,21),tsvWord(code,1040,y,60,21),
+   tsvWord(code==='2500'?'260':'-',1328,y,55,21),
+   tsvWord(code==='2500'?'220':'-',1600,y,55,21)];
+ })
+].join('\n');
+
+test('short F2 continuation selects only a whole date-bound sparse OCR pass',()=>{
+ const primary=f2Page4Tsv(false,false),sparse=f2Page4Tsv(true,true);
+ assert.equal(preferSparseFinancialOcr(primary,sparse),false,
+  'one extra recognized code must not trigger the old selection heuristic');
+ const first=financialTableRows(financialTokensFromTsv(primary,220),4,true);
+ const second=financialTableRows(financialTokensFromTsv(sparse,220),4,true);
+ assert.equal(first.length,0,'without a header three codes cannot bind columns');
+ assert.ok(second.length>=4,'a printed header and four codes establish the table');
+ const total=second.find(r=>r.code==='2500');
+ assert.ok(total);
+ assert.deepEqual(total.cells.slice(0,2).map(c=>c.raw),['260','220']);
+ assert.deepEqual(total.headings.slice(0,2).map(h=>(h.match(/20\d{2}/)||[])[0]),['2025','2024']);
+ assert.equal(preferDatedSparseFinancialContinuation(first,second),true);
+});
+test('short F2 continuation rejects guessed dates, ambiguous numbers and partial OCR passes',()=>{
+ const labels=['За Январь - Сентябрь 2025 г.','За Январь - Сентябрь 2024 г.'];
+ const row=(code,headings=labels,current='-',prior='-')=>({
+  code,headings,line:{page:4,pdf:true,confidence:'MEDIUM',text:'Строка '+code},
+  cells:[{raw:current,uncertain:false,assembled:false},{raw:prior,uncertain:false,assembled:false}]
+ });
+ const complete=[row('2510'),row('2520'),row('2530'),row('2500',labels,'260','220')];
+ assert.equal(preferDatedSparseFinancialContinuation([],complete),true);
+ assert.equal(preferDatedSparseFinancialContinuation([complete[0]],complete),false);
+ assert.equal(preferDatedSparseFinancialContinuation([],complete.slice(0,3)),false);
+ assert.equal(preferDatedSparseFinancialContinuation([],complete.map(r=>({...r,headings:['За','За']}))),false);
+ assert.equal(preferDatedSparseFinancialContinuation([],complete.map(r=>({...r,headings:['За 2025','За 2025']}))),false);
+ assert.equal(preferDatedSparseFinancialContinuation([],complete.map(r=>({...r,cells:r.cells.map(c=>({...c,uncertain:true}))}))),false);
+ assert.equal(preferDatedSparseFinancialContinuation([],complete.map(r=>({...r,cells:r.cells.map(c=>({...c,raw:'?'}))}))),false);
+ assert.equal(preferDatedSparseFinancialContinuation([],[
+  ...complete.slice(0,3),{...complete[3],headings:[labels[1],labels[0]]}]),false);
+ assert.equal(preferDatedSparseFinancialContinuation([],[
+  complete[0],complete[1],complete[2],complete[3],complete[3]]),false);
+});
+test('three aligned F2 continuation codes including 2500 cannot disappear silently',()=>{
+ const primary=f2Page4Tsv(false,false);
+ assert.deepEqual(financialUnboundRowCodes(primary,[],4).sort(),['2500','2520','2530']);
+ const isolatedAmounts=['2699','6615','9500'].map((s,i)=>
+   tsvWord(s,1300,i*65+350,50,21,94)).join('\n');
+ assert.deepEqual(financialUnboundRowCodes(isolatedAmounts,[],4),[],
+  'amounts without a source code column are not financial evidence');
 });
