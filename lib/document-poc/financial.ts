@@ -89,10 +89,19 @@ export function financialStatement(input: Input) {
   }) => {
     // Per-share supplementary disclosures do not have the form's monetary scale.
     if (['2900', '2910'].includes(code)) return [];
-    if (!codes.has(code)) issue(input, 'INVALID', 'UNKNOWN_LINE_CODE', line.page);
-    if (seen.has(code)) {
-      duplicates.add(code);
-      issue(input, 'INVALID', 'DUPLICATE_LINE', line.page);
+    const mapped=codes.has(code);
+    // Real extended RAS forms can print additional manufacturer/accounting
+    // lines (e.g. 1105 and 1215). They are valid source evidence but NOT
+    // supported canonical BFO facts. Quarantine their amounts instead of
+    // rejecting the whole otherwise reconciled financial statement.
+    const plausibleSupplement=/^(?:1[1-7]\d{2}|2[1-5]\d{2})$/.test(code);
+    if(!mapped)issue(input,plausibleSupplement?'REVIEW':'INVALID',
+      plausibleSupplement?'SUPPLEMENTARY_LINE_NOT_MAPPED':'UNKNOWN_LINE_CODE',line.page);
+    if(seen.has(code)) {
+      if(mapped){
+        duplicates.add(code);
+        issue(input,'INVALID','DUPLICATE_LINE',line.page);
+      }else issue(input,'REVIEW','SUPPLEMENTARY_LINE_REPEATED',line.page);
     }
     seen.add(code);
     const periodFields = headings.slice(0, 2).map(heading => {
