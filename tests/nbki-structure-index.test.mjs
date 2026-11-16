@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {nbkiStructureIndex} from '../lib/workspace/nbki-structure-index.ts';
 import {nbkiLegacyStatusEvidence} from '../lib/workspace/nbki-legacy-status.ts';
+import {nbkiLegacyUidEvidence} from '../lib/workspace/nbki-legacy-uid.ts';
 const uidA='a1b2c3d4-1111-2222-3333-444455556666-1';
 const uidB='b1c2d3e4-aaaa-bbbb-cccc-1234567890ab-2';
 const page=(page,text)=>({page,text});
@@ -218,4 +219,62 @@ test('modern fulfilled versus later legacy ACTIVE needs cross-format conflict re
  assert.equal(r.modern[0].status,'CONFLICT');
  assert.equal(r.legacy[0].status,'CONFLICT');
  assert.ok(r.issues.includes('BUREAU_CROSS_FORMAT_STATUS_REVIEW'));
+});
+
+test('legacy NBKI UID wrapped at the 19+19 break reconstructs only exact 38-character UUID',()=>{
+ const first=uidA.slice(0,19),second=uidA.slice(19);
+ assert.equal(first.length,19);assert.equal(second.length,19);
+ const card='УИД договора(сделки): '+first+'    Финальн.платеж %%: Н/Д   Последн.обновление: 20-07-2023\n'+
+  second+'\n                    Выплата осн.: Н/Д';
+ assert.deepEqual(nbkiLegacyUidEvidence(card),{uid:uidA,wrapped:true,review:'EXACT'});
+});
+test('complete legacy NBKI UID may occupy one line; N/D or missing UID remains absent',()=>{
+ assert.deepEqual(nbkiLegacyUidEvidence('УИД договора(сделки): '+uidA+'    Последн.обновление: Н/Д'),
+  {uid:uidA,wrapped:false,review:'EXACT'});
+ for(const str of ['УИД договора(сделки): Н/Д     Финальн.платеж: Н/Д',
+                    'Последн.обновление: 20-07-2023']){
+  assert.equal(nbkiLegacyUidEvidence(str).review,'ABSENT');
+ }
+});
+test('broken UID must never be patched with date, neighbour account or unrelated numbers',()=>{
+ const half=uidA.slice(0,19),second=uidA.slice(19);
+ for(const next of ['20-07-2023','Счет: BG-OTHER','УИД договора(сделки): '+second,'','0123456789012345678']){
+  const evidence=nbkiLegacyUidEvidence('УИД договора(сделки): '+half+'    Последн.обновление: 20-07-2023\n'+next);
+  assert.equal(evidence.uid,null);
+  assert.equal(evidence.review,'PARTIAL');
+ }
+});
+test('wrapped exact UID links modern and legacy strictly without creating current exposure',()=>{
+ const old=['Счет','Вид: Н/Д             Открыт: Н/Д',
+  'Отношение: Принципал     Статус: Н/Д',
+  'Кредитор: Учебный банк   Последн.обновление: 20-07-2023',
+  'Счет: BG-FICTIVE           Финальн.платеж: Н/Д',
+  'УИД договора(сделки): '+uidA.slice(0,19)+'    Финальн.платеж %%: Н/Д',
+  uidA.slice(19)].join('\n');
+ const r=nbkiStructureIndex([page(5,guarantee()),page(46,old)],'2023-08-24');
+ assert.equal(r.legacy.length,1);assert.equal(r.exactUidLinks,1);
+ assert.equal(r.legacy[0].printedUid,uidA);assert.equal(r.legacy[0].uidWrapped,true);
+ assert.equal(r.legacy[0].linkedModernUid,uidA);
+ assert.equal(r.modern[0].currentPrincipalRub,null);
+});
+test('same bank/account with conflicting complete source UIDs remains in review',()=>{
+ const old=uid=>['Счет','Вид: Н/Д        Открыт: Н/Д',
+ 'Отношение: Принципал     Статус: Н/Д',
+ 'Кредитор: Учебный банк  Последн.обновление: 20-07-2023',
+ 'Счет: BG-FICTIVE','УИД договора(сделки): '+uid].join('\n');
+ const r=nbkiStructureIndex([page(48,old(uidA)),page(50,old(uidB))],'2023-08-24');
+ assert.equal(r.legacy.length,1);assert.equal(r.legacy[0].status,'CONFLICT');
+ assert.ok(r.issues.includes('BUREAU_LEGACY_UID_CONFLICT'));
+});
+test('corporate loan is classified from explicit loan relationship, not the vague purpose label',()=>{
+ const old=['Счет                Договор               Состояние',
+  'Вид: На развитие бизнеса            Размер/лимит: RUB 700000     Открыт: 21-09-2022',
+  'Отношение: Кредит юридическому лицу    ПСК%%: Н/Д         Статус: Активный',
+  'Кредитор: Учебный банк      Последн.обновление: 20-07-2023',
+  'Счет: QA-LOAN-2026','УИД договора(сделки): Н/Д'].join('\n');
+ const r=nbkiStructureIndex([page(73,old)],'2023-08-24');
+ assert.equal(r.legacy.length,1);
+ assert.equal(r.legacy[0].kind,'LOAN');assert.equal(r.legacy[0].role,'BORROWER');
+ assert.equal(r.legacy[0].statusEvidence?.reportedState,'ACTIVE');
+ assert.equal(r.legacy[0].statusEvidence?.lastUpdatedAt,'2023-07-20');
 });

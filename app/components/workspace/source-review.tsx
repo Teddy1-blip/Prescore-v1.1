@@ -24,7 +24,9 @@ export function SourceReview({review,save,recognize,approveBureau}:{review:Revie
  {review.nbkiStructure.modern.map(r=><p key={r.uid}>УИд {r.uid} · {r.kind==='LOAN'?'Кредит/заём':r.kind==='GUARANTEE'?'Независимая гарантия':'Тип требует сверки'} · страница {r.pages.join(', ')}{r.agreementDate&&' · дата '+r.agreementDate}{r.nominalRub!==null&&' · сумма договора '+r.nominalRub.toLocaleString('ru-RU')+' ₽ (стр. '+r.nominalPage+')'}{r.termination&&' · Надлежащее исполнение '+r.termination.date+' (стр. '+r.termination.page+')'}
  {r.historicalDebt&&' · Исторический основной долг '+r.historicalDebt.principalRub.toLocaleString('ru-RU')+' ₽ на '+r.historicalDebt.asOf+' (стр. '+r.historicalDebt.page+'; расчёт по последнему платежу: '+(r.historicalDebt.lastPaymentBasis?'да':'нет')+'; НЕ текущий остаток)'}{r.status==='CONFLICT'&&' · конфликт источников'}</p>)}
  <details><summary>Старые карточки ({review.nbkiStructure.legacy.length})</summary>
- {review.nbkiStructure.legacy.map((r,i)=><p key={r.account+':'+i}>{r.account} · {r.creditor} · страница {r.pages.join(', ')}{r.linkedModernUid&&' · связан по УИд '+r.linkedModernUid}
+ {review.nbkiStructure.legacy.map((r,i)=><p key={r.account+':'+i}>{r.account} · {r.creditor} · страница {r.pages.join(', ')}{r.printedUid&&' · УИд из карточки '+r.printedUid}{r.uidWrapped&&' (перенос строки восстановлен)'}
+ {r.linkedModernUid&&' · совпадает с новым разделом'}
+ {r.uidReview&&' · УИд требует сверки по оригиналу'}
  {r.statusEvidence?.reportedState==='ACTIVE'&&' · Активный по архивному отчёту'}
  {r.statusEvidence?.reportedState==='CLOSED'&&' · Закрыт по архивному отчёту'}
  {r.statusEvidence?.reportedState==='TRANSFERRED'&&' · Передан другому кредитору'}
