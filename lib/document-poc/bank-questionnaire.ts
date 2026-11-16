@@ -16,8 +16,10 @@ const codeMap:Readonly<Record<string,QuestionnaireKey>>={
 };
 const text=(v:unknown)=>String(v??'').replace(/[\u00a0\u202f]/gu,' ').trim();
 const marker=/^1\s*[.]\s*(1[0-4]|[1-7])\s*[.]?\s+/u;
-export function inspectQuestionnaireRows(rows:readonly QuestionnaireRow[]):QuestionnairePreview{
+export function inspectQuestionnaireRows(rows:readonly QuestionnaireRow[],rowNumbers?:readonly number[]):QuestionnairePreview{
  if(!Array.isArray(rows)||rows.length>20_000||rows.some(r=>r.length>150||r.some((c:QuestionnaireRow[number])=>text(c).length>8000)))throw Error('QUESTIONNAIRE_SIZE_LIMIT');
+ if(rowNumbers && (rowNumbers.length!==rows.length || rowNumbers.some((n,i)=>!Number.isSafeInteger(n)||n<1||(i>0&&n<=rowNumbers[i-1]))))
+   throw Error('QUESTIONNAIRE_ROW_MAP_INVALID');
  const supported=rows.slice(0,20).some(r=>r.some((c:QuestionnaireRow[number])=>/анкета\s*[-–]?\s*заявка|анкета\s+клиента|анкетирование\s+клиента/iu.test(text(c))));
  const result:QuestionnairePreview={version:QUESTIONNAIRE_INTAKE_VERSION,kind:supported?'BANK_QUESTIONNAIRE':'UNSUPPORTED',fields:[],issues:[],automaticApply:false,personalFieldsExtracted:false};
  if(!supported){result.issues.push('QUESTIONNAIRE_TEMPLATE_NOT_RECOGNIZED');return result;}
@@ -39,7 +41,7 @@ export function inspectQuestionnaireRows(rows:readonly QuestionnaireRow[]):Quest
      result.issues.push('QUESTIONNAIRE_INN_NEEDS_REVIEW');continue;
    }
    const prior=seen.get(key);
-   const entry:QuestionnaireField={key,raw:value,row:ri+1,labelColumn:ci+1,valueColumn:valueColumn+1,status:prior&&prior.raw!==value?'CONFLICT':'CANDIDATE'};
+   const entry:QuestionnaireField={key,raw:value,row:rowNumbers?.[ri]??ri+1,labelColumn:ci+1,valueColumn:valueColumn+1,status:prior&&prior.raw!==value?'CONFLICT':'CANDIDATE'};
    if(prior&&prior.raw!==value){prior.status='CONFLICT';result.issues.push('QUESTIONNAIRE_DUPLICATE_CONFLICT:'+key);}
    result.fields.push(entry);
    if(!prior)seen.set(key,entry);

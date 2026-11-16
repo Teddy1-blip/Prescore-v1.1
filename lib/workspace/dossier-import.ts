@@ -161,7 +161,7 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
       Object.assign(envelope,{parserVersion:review.version,status:'PROCESSING',warnings:review.warnings});
     }else if(kind==='BANK_QUESTIONNAIRE'){
       if(!identityConfirmed)throw new InputError('Подтвердите право передать и обработать банковскую анкету.');
-      const recognized=extractXlsxSheets(bytes).map(s=>({name:s.sheet,review:inspectQuestionnaireRows(s.rows)}))
+      const recognized=extractXlsxSheets(bytes).map(s=>({name:s.sheet,review:inspectQuestionnaireRows(s.rows,s.rowNumbers)}))
         .filter(s=>s.review.kind==='BANK_QUESTIONNAIRE');
       if(!recognized.length)throw new InputError('Не удалось распознать структуру банковской анкеты XLSX.');
       const declared=new Set(recognized.flatMap(s=>s.review.fields.filter(f=>f.key==='COMPANY_INN').map(f=>f.raw.replace(/\s/g,''))));

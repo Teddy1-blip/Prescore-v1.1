@@ -34,3 +34,14 @@ test('Missing company value never borrows the next labelled field',()=>{
 test('Non-questionnaire document cannot enter questionnaire review',()=>{
  assert.equal(inspectQuestionnaireRows([['Договор поставки'],['1.4. ИНН','','5042149315']]).kind,'UNSUPPORTED');
 });
+
+test('physical XLSX row numbers are retained for candidate evidence across blank worksheet rows',()=>{
+ const s=sample();
+ const originalRows=[1,5,11,23,37,90,105,117];
+ const report=inspectQuestionnaireRows(s,originalRows);
+ assert.equal(report.fields.find(f=>f.key==='COMPANY_NAME')?.row,5);
+ assert.equal(report.fields.find(f=>f.key==='COMPANY_INN')?.row,23);
+ assert.equal(report.fields.find(f=>f.key==='REQUESTED_AMOUNT')?.row,37);
+ assert.throws(()=>inspectQuestionnaireRows(s,[1,2]),/QUESTIONNAIRE_ROW_MAP_INVALID/);
+ assert.throws(()=>inspectQuestionnaireRows(s,[1,5,5,23,37,90,105,117]),/QUESTIONNAIRE_ROW_MAP_INVALID/);
+});
