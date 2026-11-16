@@ -1,16 +1,18 @@
 /** Recover a printed NBKI corporate legacy UID only when all 38 hex/hyphen
- * characters exist in the same account-card label (one or two physical lines).
+ * characters exist in the same account-card label (one or two physical lines),
  * Never stitch unrelated pages, nearby numbers, or a different bank's card.
  */
 export type NbkiLegacyUidResult={
  uid:string|null;wrapped:boolean;review:'ABSENT'|'EXACT'|'PARTIAL';
 };
 const full=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}-[a-f0-9]$/i;
-const prefix=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-$/i;
-const suffix=/^[a-f0-9]{4}-[a-f0-9]{12}-[a-f0-9]$/i;
+const prefix19=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-$/i;
+const suffix19=/^[a-f0-9]{4}-[a-f0-9]{12}-[a-f0-9]$/i;
+const prefix24=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-$/i;
+const suffix14=/^[a-f0-9]{12}-[a-f0-9]$/i;
 // The PDF layout engine renders other columns after two or more spaces.
 function leftToken(s:string){
- const m=s.match(/^[ \t]*([a-f0-9-]{1,50})(?=[ \t]{2,}|[ \t]*$)/i);
+ const m=s.match(/^[ \t]*([a-f0-9-]{1,50})(?=[ \t]+|$)/i);
  return m?.[1]??'';
 }
 export function nbkiLegacyUidEvidence(afterAccount:string):NbkiLegacyUidResult{
@@ -22,10 +24,11 @@ export function nbkiLegacyUidEvidence(afterAccount:string):NbkiLegacyUidResult{
  if(/^[ \t]*(?:Н\/Д|нет данных)(?:[ \t]{2,}|[ \t]*$)/iu.test(first))return base;
  const a=leftToken(first);
  if(full.test(a))return {uid:a.toLowerCase(),wrapped:false,review:'EXACT'};
- if(!prefix.test(a))return {...base,review:a?'PARTIAL':'ABSENT'};
+ if(!prefix19.test(a)&&!prefix24.test(a))return {...base,review:a?'PARTIAL':'ABSENT'};
  const next=lines[index+1]??'';
  const b=leftToken(next);
- if(!suffix.test(b))return {...base,review:'PARTIAL'};
+ if(!((prefix19.test(a)&&suffix19.test(b))||(prefix24.test(a)&&suffix14.test(b))))
+   return {...base,review:'PARTIAL'};
  const uid=(a+b).toLowerCase();
  return full.test(uid)?{uid,wrapped:true,review:'EXACT'}:{...base,review:'PARTIAL'};
 }

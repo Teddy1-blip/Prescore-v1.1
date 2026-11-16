@@ -295,3 +295,27 @@ test('a second account on the same page cannot donate UID to an earlier unlabell
  assert.equal(r.legacy[1].printedUid,uidA);
  assert.equal(r.exactUidLinks,1);
 });
+
+test('legacy UID 24+14 wrapped layout also accepts a single column gap without guessing',()=>{
+ const before=uidA.slice(0,24),after=uidA.slice(24);
+ assert.equal(before.length,24);assert.equal(after.length,14);
+ const text='УИД договора(сделки): '+before+' Финальн.платеж %%: Н/Д    Последн.обновление: 20-07-2023\n'+
+  after+'\n                           Выплата осн.: Н/Д';
+ assert.deepEqual(nbkiLegacyUidEvidence(text),{uid:uidA,wrapped:true,review:'EXACT'});
+ const old=['Счет','Вид: Н/Д        Открыт: Н/Д',
+  'Отношение: Принципал      Статус: Н/Д',
+  'Кредитор: Учебный банк     Последн.обновление: 20-07-2023',
+  'Счет: BG-FICTIVE','УИД договора(сделки): '+before+' Финальн.платеж %%: Н/Д',
+  after].join('\n');
+ const result=nbkiStructureIndex([page(5,guarantee()),page(46,old)],'2023-08-24');
+ assert.equal(result.exactUidLinks,1);
+ assert.equal(result.legacy[0].printedUid,uidA);
+ assert.equal(result.legacy[0].uidWrapped,true);
+});
+test('24-character first fragment does not complete with an unrelated date or neighbour field',()=>{
+ for(const wrong of ['20-07-2023','Счет: BG-SECOND','Последн.обновление: 20-07-2023','33334444555566']){
+  const v=nbkiLegacyUidEvidence('УИД договора(сделки): '+uidA.slice(0,24)+' Финальн.платеж: Н/Д\n'+wrong);
+  assert.equal(v.uid,null);
+  assert.equal(v.review,'PARTIAL');
+ }
+});
