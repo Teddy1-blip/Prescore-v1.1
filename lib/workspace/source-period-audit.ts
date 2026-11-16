@@ -82,7 +82,7 @@ export function sourcePeriodAudit(rows:readonly SourceRow[],companyInn:string):S
      ?[...new Set(row.payload.ledger?.map(v=>v.asOf)??[])]
      :[e.informationDate??null];
    if(!dates.some(d=>validDate(d))){unknown.push({sourceId,kind,reason:'SNAPSHOT_DATE_UNAVAILABLE'});continue;}
-   for(const d of dates)if(validDate(d))add({sourceId,kind,scope:kind+':ASOF',mode:'SNAPSHOT',from:d,to:d,name,preliminary:e.status!=='READY'});
+   for(const d of dates)if(validDate(d))add({sourceId,kind,scope:kind==='BKI'?'BKI:SUBJECT:'+(row.payload.bki?.subjectInn??sourceId):kind+':ASOF',mode:'SNAPSHOT',from:d,to:d,name,preliminary:e.status!=='READY'});
   }else{
    // Contracts/agreements/schedules/questionnaires are events, not daily streams.
    const eventDate=row.payload.verified?.agreement_date?.value;
@@ -116,7 +116,7 @@ export function sourcePeriodAudit(rows:readonly SourceRow[],companyInn:string):S
    }
    continue;
   }
-  let end:string|null=null;let active:AuditSpan[]=[];
+  let end='';let active:AuditSpan[]=[];
   for(const s of g.spans){
    if(end&&s.from>addDays(end,1)&&['CONTINUOUS','STANDALONE','ANNUAL'].includes(g.mode)&&g.gaps.length<32){
     const from=addDays(end,1),to=addDays(s.from,-1),days=(day(to)-day(from))/dayMs+1;
@@ -133,7 +133,7 @@ export function sourcePeriodAudit(rows:readonly SourceRow[],companyInn:string):S
      kind:other.from===s.from&&other.to===s.to?'SAME_PERIOD':'PARTIAL_OVERLAP'});
    }
    active.push(s);
-   end=end===null||s.to>end?s.to:end;
+   end=s.to>end?s.to:end;
   }
   // YTD six and nine months overlap by design: only equal full periods compete.
   if(g.mode==='CUMULATIVE_YTD')g.overlaps=g.overlaps.filter(x=>x.kind==='SAME_PERIOD');

@@ -107,3 +107,19 @@ test('foreign company source never leaks into own coverage matrix',()=>{
  const r=sourcePeriodAudit([foreign,statement('ours','40001','2026-01-01','2026-01-31')],inn);
  assert.equal(r.groups.length,1);assert.equal(r.groups[0].spans.length,1);
 });
+
+test('BKI reports for different subjects on same date never appear as duplicate snapshots',()=>{
+ const a=row('corporate','BKI',{bki:{reportDate:'2026-10-01',subjectInn:'9900000001'}});
+ const b=row('guarantor','BKI',{bki:{reportDate:'2026-10-01',subjectInn:'998800112233'}});
+ const r=sourcePeriodAudit([a,b],inn);
+ assert.equal(r.groups.length,2);
+ assert.ok(r.groups.every(g=>g.overlaps.length===0));
+});
+test('two snapshots for same BKI subject and same date require source review not a sum',()=>{
+ const a=row('one','BKI',{bki:{reportDate:'2026-10-01',subjectInn:'9900000001'}});
+ const b=row('two','BKI',{bki:{reportDate:'2026-10-01',subjectInn:'9900000001'}});
+ const r=sourcePeriodAudit([a,b],inn);
+ assert.equal(r.groups.length,1);
+ assert.equal(r.groups[0].overlaps[0].kind,'SAME_DATE');
+ assert.equal(r.groups[0].gaps.length,0);
+});
