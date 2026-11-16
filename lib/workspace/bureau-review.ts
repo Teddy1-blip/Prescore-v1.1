@@ -42,7 +42,7 @@ export function modernNbkiSummaryReview(pages:OcrPage[],payload:PrivateSource):D
    base.issues.push('BUREAU_SUBJECT_OR_DATE_NOT_CONFIRMED');return base;
  }
  const summaries=pages.filter(p=>/^\s*Сводка\s*$/im.test(p.text)
-   && /^\s*Счета\s*$/im.test(p.text)&&/\bЗадолженность\b/iu.test(p.text));
+   && /^\s*Счета\s*$/im.test(p.text)&&/Задолженность/iu.test(p.text));
  if(summaries.length!==1){
    base.status='INCOMPLETE';base.issues.push('BUREAU_SUMMARY_NOT_UNIQUE');return base;
  }
@@ -50,7 +50,7 @@ export function modernNbkiSummaryReview(pages:OcrPage[],payload:PrivateSource):D
  const remaining=summary.text.slice(start,Math.min(summary.text.length,start+2500));
  const cutoff=remaining.search(/^\s*Запросы\s*$/im);
  const section=cutoff>=0?remaining.slice(0,cutoff):remaining;
- if(!/\bДоговоры\b/iu.test(section)||!/\bЗадолженность\b/iu.test(section)){
+ if(!/(?:^|\s)Договоры(?:\s|$)/iu.test(section)||!/(?:^|\s)Задолженность(?:\s|$)/iu.test(section)){
    base.status='INCOMPLETE';base.issues.push('BUREAU_SUMMARY_COLUMNS_MISSING');return base;
  }
  const specs=[
@@ -59,8 +59,8 @@ export function modernNbkiSummaryReview(pages:OcrPage[],payload:PrivateSource):D
   {key:'nbki_reported_30plus',label:'Счетов с исторической просрочкой 30+',unit:'',pattern:/^\s*С просрочкой 30\+ дней:\s*(\d+)\b/iu},
   {key:'nbki_reported_lifetime',label:'Сумма обязательств за всю историю',unit:'₽',pattern:/Сумма обязательств за всю историю:\s*RUB\s*(\d+(?:[.,]\d{1,2})?)(?!\d)/iu},
   {key:'nbki_reported_next',label:'Следующий платёж по сводке',unit:'₽',pattern:/Следующий плат[её]ж:\s*RUB\s*(\d+(?:[.,]\d{1,2})?)(?!\d)/iu},
-  {key:'nbki_reported_current',label:'Текущая задолженность по сводке',unit:'₽',pattern:/\bТекущая:\s*RUB\s*(\d+(?:[.,]\d{1,2})?)(?!\d)/iu},
-  {key:'nbki_reported_overdue',label:'Просроченная задолженность по сводке',unit:'₽',pattern:/\bПросроченная:\s*RUB\s*(\d+(?:[.,]\d{1,2})?)(?!\d)/iu},
+  {key:'nbki_reported_current',label:'Текущая задолженность по сводке',unit:'₽',pattern:/(?:^|\s)Текущая:\s*RUB\s*(\d+(?:[.,]\d{1,2})?)(?!\d)/iu},
+  {key:'nbki_reported_overdue',label:'Просроченная задолженность по сводке',unit:'₽',pattern:/(?:^|\s)Просроченная:\s*RUB\s*(\d+(?:[.,]\d{1,2})?)(?!\d)/iu},
  ] as const;
  for(const spec of specs){
    const candidates=section.split(/\r?\n/u).flatMap(line=>{
