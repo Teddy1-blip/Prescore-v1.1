@@ -4,6 +4,7 @@ import type {OcrPage} from '../document-poc/local-ocr.ts';
 import type {DocumentReview} from '../document-poc/review-fields.ts';
 import type {PrivateSource} from './dossier-sources.ts';
 import {validInn} from '../external/checko-inn.ts';
+import {nbkiStructureIndex} from './nbki-structure-index.ts';
 
 export const bureauRoles=['Компания-заёмщик','ИП-заёмщик','Собственник','Руководитель','Поручитель'] as const;
 export function readBureau(text:string,name:string,inn:string,role:CreditSubjectRelationship) {
@@ -73,6 +74,14 @@ export function modernNbkiSummaryReview(pages:OcrPage[],payload:PrivateSource):D
    const {value,line}=candidates[0];
    base.fields.push({key:spec.key,label:spec.label,value:String(value),unit:spec.unit,
      page:summary.page,fragment:line.slice(0,300),status:'SOURCE_ONLY'});
+ }
+ const structure=nbkiStructureIndex(pages,date);
+ base.nbkiStructure=structure;
+ base.issues.push(...structure.issues);
+ const declared=base.fields.find(f=>f.key==='nbki_reported_accounts');
+ if(declared?.value){
+   const count=structure.modern.length+structure.legacy.length-structure.exactUidLinks;
+   if(count!==Number(declared.value))base.issues.push('BUREAU_ACCOUNTS_UNRECONCILED');
  }
  base.status='BUREAU_STRUCTURE_REVIEW';
  if(base.fields.length!==specs.length)base.issues.push('BUREAU_SUMMARY_PARTIAL');

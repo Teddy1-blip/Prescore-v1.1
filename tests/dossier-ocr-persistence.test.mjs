@@ -181,6 +181,24 @@ test('native modern corporate NBKI summary is visible without rerunning 199 OCR 
    'Всего: 64   Сумма обязательств за всю историю: RUB 25000000  Текущая: RUB 4000000',
    'С просрочкой 30+ дней: 1    Следующий платеж: RUB 240000  Просроченная: RUB 0',
    'Открытых: 1','Запросы',
+   'УИд договора: a1b2c3d4-1111-2222-3333-444455556666-1',
+   'Вид участия      Дата сделки     Тип      Вид займа',
+   'Заемщик          16-02-2023      Договор займа       Заем (кредит)',
+   '                                 (кредита)',
+   'Сумма                   Валюта                Сумма обеспечения',
+   '700000,00              RUB                   Н/Д',
+   'Прекращение обязательства                   Дата прекращения',
+   'Надлежащее исполнение обязательства          25-05-2023',
+   'Срочная задолженность',
+   'Дата возникн.     Расчет по        Сумма                Сумма по осн.долгу       Сумма по %%    Сумма по иным    Дата расчета       Дата события',
+   '16-02-2023       Да               700000,00            700000,00               0,00           0,00             16-02-2023        16-02-2023',
+   '16-02-2023       Да               51500,00             50000,00                1500,00        0,00             20-05-2023        20-05-2023',
+   'Просроченная задолженность: Н/Д',
+   'Счет', 'Вид: Н/Д              Размер/лимит: Н/Д',
+   'Отношение: Принципал     Статус: Н/Д',
+   'Кредитор: Учебный банк       Просрочено: Н/Д',
+   'Счет: BG-2026           Финальн.платеж: Н/Д',
+   'УИД договора(сделки): Н/Д',
   ];
   const pdf=new File([syntheticPdf(lines)],'synthetic-long-bureau.pdf',{type:'application/pdf'});
   const form=new FormData();
@@ -195,6 +213,18 @@ test('native modern corporate NBKI summary is visible without rerunning 199 OCR 
   assert.equal(review?.status,'BUREAU_STRUCTURE_REVIEW');
   assert.equal(review?.fields.find(f=>f.key==='nbki_reported_accounts')?.value,'64');
   assert.equal(review?.fields.find(f=>f.key==='nbki_reported_current')?.value,'4000000');
+  assert.equal(review?.nbkiStructure?.modern.length,1);
+  assert.equal(review?.nbkiStructure?.modern[0].kind,'LOAN');
+  assert.equal(review?.nbkiStructure?.modern[0].nominalRub,700000);
+  assert.equal(review?.nbkiStructure?.modern[0].currentPrincipalRub,null);
+  assert.deepEqual(review?.nbkiStructure?.modern[0].termination,{date:'2023-05-25',reason:'FULFILLED',page:1});
+  // This synthetic PDF does not preserve tabular column geometry, so the
+  // amounts are not accepted even though all digits are present in the text.
+  assert.equal(review?.nbkiStructure?.modern[0].historicalDebt,null);
+  assert.equal(review?.nbkiStructure?.modern[0].overdueRub,null);
+  assert.equal(review?.nbkiStructure?.legacy.length,1);
+  assert.equal(review?.nbkiStructure?.exactUidLinks,0);
+  assert.ok(review?.issues.includes('BUREAU_ACCOUNTS_UNRECONCILED'));
   assert.equal(dossier.obligations.length,0,'the summary is never an automatically accepted debt');
   assert.equal((await post({action:'confirm-bureau',id:dossierId,sourceId})).status,409);
   assert.equal((await post({action:'verify-field',id:dossierId,sourceId,field:'nbki_reported_current',value:'4000000'})).status,409,'server never confirms standalone BKI summary amounts');

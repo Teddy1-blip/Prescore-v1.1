@@ -1,0 +1,160 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {nbkiStructureIndex} from '../lib/workspace/nbki-structure-index.ts';
+const uidA='a1b2c3d4-1111-2222-3333-444455556666-1';
+const uidB='b1c2d3e4-aaaa-bbbb-cccc-1234567890ab-2';
+const page=(page,text)=>({page,text});
+const cover=(uid,body)=>[
+ 'УИд договора: '+uid+'     Номер сделки: Н/Д',
+ 'Вид участия      Дата сделки     Тип           Вид займа       Цель займа',
+ body,
+].join('\n');
+const guarantee=(id=uidA)=>cover(id,'Принципал по     01-08-2023      Независимая          Н/Д\nгарантии                         гарантия')
+  +'\nСумма                   Валюта                Сумма обеспечения\n8311107,42              RUB                   8311107,42 Н/Д';
+const loan=(id=uidB)=>cover(id,'Заемщик          16-02-2023      Договор займа       Заем (кредит)\n                                 (кредита)')
+  +'\nСумма                   Валюта                Сумма обеспечения\n700000,00              RUB                   Н/Д';
+const legacy=(account,creditor='Учебный банк')=>[
+ 'Счет','Вид: Н/Д                Размер/лимит: Н/Д          Открыт: Н/Д',
+ 'Отношение: Принципал       Статус: Н/Д',
+ 'Кредитор: '+creditor+'        Просрочено: Н/Д',
+ 'Счет: '+account+'            Финальн.платеж: Н/Д',
+ 'УИД договора(сделки): Н/Д',
+ 'Банковские гарантии','Сумма: RUB 500000',
+].join('\n');
+test('modern UUIDs classify loan/guarantee without fabricating outstanding or overdue',()=>{
+ const r=nbkiStructureIndex([page(5,guarantee()),page(21,loan())]);
+ assert.equal(r.modern.length,2);
+ assert.equal(r.modern[0].kind,'GUARANTEE');
+ assert.equal(r.modern[0].role,'GUARANTEE_PRINCIPAL');
+ assert.equal(r.modern[0].nominalRub,8311107.42);
+ assert.equal(r.modern[0].agreementDate,'2023-08-01');
+ assert.equal(r.modern[1].kind,'LOAN');
+ assert.equal(r.modern[1].nominalRub,700000);
+ assert.equal(r.modern[1].agreementDate,'2023-02-16');
+ for(const entry of r.modern){
+  assert.equal(entry.currentPrincipalRub,null);
+  assert.equal(entry.overdueRub,null);
+  assert.equal(entry.status,'SOURCE_ONLY');
+ }
+ assert.equal(r.automaticApply,false);
+});
+test('repeated UUID deduplicates only consistent evidence and flags role conflicts',()=>{
+ const a=nbkiStructureIndex([page(5,guarantee()),page(6,guarantee())]);
+ assert.equal(a.modern.length,1);
+ assert.deepEqual(a.modern[0].pages,[5,6]);
+ assert.equal(a.modern[0].status,'SOURCE_ONLY');
+ const b=nbkiStructureIndex([page(5,guarantee()),page(6,loan(uidA))]);
+ assert.equal(b.modern.length,1);
+ assert.equal(b.modern[0].status,'CONFLICT');
+ assert.ok(b.issues.includes('BUREAU_MODERN_UUID_CONFLICT'));
+});
+test('legacy account deduplicates only with same creditor; unknown kind not a loan',()=>{
+ const r=nbkiStructureIndex([page(46,legacy('QA-GUAR-908/2026')),page(50,legacy('QA-GUAR-908/2026.')),
+  page(52,legacy('QA-GUAR-908/2026','Другой банк'))]);
+ assert.equal(r.legacy.length,2);
+ assert.deepEqual(r.legacy[0].pages,[46,50]);
+ assert.equal(r.legacy[0].kind,'UNKNOWN');
+ assert.equal(r.legacy[0].linkedModernUid,null);
+});
+test('only exact printed UID links formats, equal amount or creditor cannot',()=>{
+ const l=legacy('BG-2026').replace('УИД договора(сделки): Н/Д','УИД договора(сделки): '+uidA);
+ const r=nbkiStructureIndex([page(5,guarantee()),page(46,l),page(48,legacy('BG-2027'))]);
+ assert.equal(r.exactUidLinks,1);
+ assert.equal(r.legacy.find(x=>x.account==='BG-2026').linkedModernUid,uidA);
+ assert.equal(r.legacy.find(x=>x.account==='BG-2027').linkedModernUid,null);
+});
+test('historical NBKI summary and unlabelled UUID cannot create balance or contract amount',()=>{
+ const r=nbkiStructureIndex([page(4,'Сводка\nВсего: 64\nТекущая: RUB 4015000'),
+ page(5,'УИд договора: '+uidA+'\nЗадолженность: 4015000\nНезависимая гарантия')]);
+ assert.equal(r.modern.length,1);
+ assert.equal(r.modern[0].kind,'UNKNOWN');
+ assert.equal(r.modern[0].nominalRub,null);
+ assert.equal(r.modern[0].currentPrincipalRub,null);
+ assert.equal(r.legacy.length,0);
+});
+
+test('ambiguous cross-format UID or conflicting role is not counted as a verified link',()=>{
+ const uid='a1b2c3d4-1111-2222-3333-444455556666-1';
+ const row=(account,role,kind)=>[
+  'Вид: '+kind,'Отношение: '+role,'Кредитор: Учебный банк',
+  'Счет: '+account+'       Дополнение: Н/Д','УИД договора(сделки): '+uid,
+ ].join('\n');
+ const duplicate=nbkiStructureIndex([
+  page(5,guarantee()),page(50,row('BG-1','Принципал','Н/Д')),page(51,row('BG-2','Принципал','Н/Д')),
+ ]);
+ assert.equal(duplicate.exactUidLinks,0);
+ assert.ok(duplicate.issues.includes('BUREAU_CROSS_FORMAT_UID_REVIEW'));
+ assert.equal(duplicate.legacy.filter(r=>r.status==='CONFLICT').length,2);
+ const conflict=nbkiStructureIndex([
+  page(5,guarantee()),page(50,row('BG-1','Заемщик','Срочный кредит')),
+ ]);
+ assert.equal(conflict.exactUidLinks,0);
+ assert.equal(conflict.modern[0].status,'CONFLICT');
+ assert.ok(conflict.issues.includes('BUREAU_CROSS_FORMAT_UID_REVIEW'));
+});
+
+test('fulfilled termination has a source page; no automatic current zero',()=>{
+ const report=loan()+'\nПрекращение обязательства                   Дата прекращения\nНадлежащее исполнение обязательства          25-05-2023';
+ const r=nbkiStructureIndex([page(21,report)],'2023-08-24');
+ assert.deepEqual(r.modern[0].termination,{date:'2023-05-25',reason:'FULFILLED',page:21});
+ assert.equal(r.modern[0].currentPrincipalRub,null);
+ assert.equal(r.modern[0].overdueRub,null);
+});
+test('termination from a continuation page stays with its UID, not the next contract',()=>{
+ const ending='Прекращение обязательства                   Дата прекращения\nНадлежащее исполнение обязательства          21-07-2023';
+ const r=nbkiStructureIndex([page(5,guarantee()),page(6,ending)],'2023-08-24');
+ assert.deepEqual(r.modern[0].termination,{date:'2023-07-21',reason:'FULFILLED',page:6});
+ const mixed=nbkiStructureIndex([page(5,guarantee()),page(6,loan()+'\n'+ending)],'2023-08-24');
+ assert.equal(mixed.modern.find(x=>x.uid===uidA).termination,null);
+ assert.equal(mixed.modern.find(x=>x.uid===uidB).termination?.page,6);
+});
+test('conflicting or future closure cannot be silently confirmed',()=>{
+ const line=date=>loan()+'\nПрекращение обязательства                   Дата прекращения\nНадлежащее исполнение обязательства          '+date;
+ const conflict=nbkiStructureIndex([page(21,line('25-05-2023')),page(24,line('26-05-2023'))],'2023-08-24');
+ assert.equal(conflict.modern[0].status,'CONFLICT');
+ const future=nbkiStructureIndex([page(21,line('21-07-2028'))],'2023-08-24');
+ assert.equal(future.modern[0].termination,null);
+ assert.equal(future.modern[0].status,'CONFLICT');
+});
+test('dated urgent-debt amounts remain historical when later rows have N/D',()=>{
+ const text=loan()+'\nСрочная задолженность\n'
+  +'Дата возникн.     Расчет по        Сумма               Сумма по осн.долгу       Сумма по %%   Сумма по иным      Дата расчета      Дата события\n'
+  +'16-02-2023       Да               700000,00           700000,00               0,00          0,00               16-02-2023       16-02-2023\n'
+  +'16-02-2023       Да               1750,00             0,00                     1750,00       0,00               21-05-2023       21-05-2023\n'
+  +'Н/Д              Н/Д              0,00                Н/Д                     Н/Д           Н/Д               25-05-2023       25-05-2023\n'
+  +'Просроченная задолженность: Н/Д';
+ const r=nbkiStructureIndex([page(21,text)],'2023-08-24').modern[0];
+ assert.deepEqual(r.historicalDebt,{asOf:'2023-05-21',principalRub:0,totalRub:1750,page:21,lastPaymentBasis:true});
+ assert.equal(r.currentPrincipalRub,null);
+ assert.equal(r.overdueRub,null);
+});
+test('guarantees and missing tables never borrow an amount from debt history or summary',()=>{
+ const g=nbkiStructureIndex([page(5,guarantee()+'\nСрочная задолженность: Н/Д\nПросроченная задолженность: 0,00')]).modern[0];
+ assert.equal(g.historicalDebt,null);assert.equal(g.overdueRub,null);
+ const l=nbkiStructureIndex([page(21,loan()+'\nСрочная задолженность: Н/Д\nПросроченная задолженность: Н/Д')]).modern[0];
+ assert.equal(l.historicalDebt,null);assert.equal(l.currentPrincipalRub,null);
+});
+
+test('a dated urgent-debt row marked Нет is historical evidence, never current principal',()=>{
+ const text=loan()+'\nСрочная задолженность\n'
+  +'Дата возникн.    Расчет по     Сумма            Сумма по осн.долгу      Сумма по %%    Сумма по иным      Дата расчета      Дата события\n'
+  +'21-09-2022      Нет           410000,00        410000,00              0,00           0,00               25-11-2022       14-12-2022\n'
+  +'Просроченная задолженность: Н/Д';
+ const entry=nbkiStructureIndex([page(29,text)],'2023-08-24').modern[0];
+ assert.deepEqual(entry.historicalDebt,
+   {asOf:'2022-11-25',principalRub:410000,totalRub:410000,page:29,lastPaymentBasis:false});
+ assert.equal(entry.currentPrincipalRub,null);
+ assert.equal(entry.overdueRub,null);
+});
+
+test('same as-of date with conflicting last-payment-basis indicators requires review',()=>{
+ const state=flag=>loan()+'\nСрочная задолженность\n'
+  +'Дата возникн.    Расчет по     Сумма           Сумма по осн.долгу      Сумма по %%     Сумма по иным    Дата расчета      Дата события\n'
+  +'21-09-2022      '+flag.padEnd(4)+'          410000,00       410000,00              0,00            0,00             25-11-2022       14-12-2022\n'
+  +'Просроченная задолженность: Н/Д';
+ const report=nbkiStructureIndex([page(29,state('Да')),page(31,state('Нет'))],'2023-08-24');
+ assert.equal(report.modern.length,1);
+ assert.equal(report.modern[0].status,'CONFLICT');
+ assert.ok(report.issues.includes('BUREAU_MODERN_UUID_CONFLICT'));
+ assert.equal(report.modern[0].currentPrincipalRub,null);
+});
