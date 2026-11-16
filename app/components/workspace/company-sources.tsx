@@ -211,6 +211,20 @@ export function CompanySources({view,id,bankInn,bank,openBank,onCompany,onSource
   </Panel>}
   {view==='counterparties'&&<SettlementRegisters rows={profile?.settlements??[]} full={profile?.entitlement==='FULL'} save={async(entry,key,revision)=>{if(!company)throw Error('Выберите компанию.');await read('/api/dossier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'settlement',id:company.id,entry,key,revision})});setRevision(v=>v+1);}}/>}
   {view==='counterparties'&&company&&profile?.entitlement==='FULL'&&<ReceivablesReview rows={profile.settlements} checks={profile.counterpartyChecks} refresh={async inn=>{await read('/api/dossier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'counterparty-check',id:company.id,inn})});setRevision(n=>n+1);}}/>}
+  {profile&&['home','banking','bfo','documents','obligations','counterparties'].includes(view)&&
+   <Panel title="Покрытие периодов · дозагрузка и пересечения">
+    <p>Новые документы дополняют досье. Совпадающие даты не означают одинаковые операции или суммы. Эта проверка не изменяет скоринг без сверки источников.</p>
+    {profile.periodAudit.groups.filter(g=>g.gaps.length||g.overlaps.length).map(g=>
+     <details key={g.id} open={g.gaps.length>0}>
+      <summary>{g.kind} · {g.scope} · пробелов: {g.gaps.length}, пересечений: {g.overlaps.length}</summary>
+      <p>{g.note}</p>
+      {g.gaps.map((gap,i)=><p key={'gap'+i}>{gap.action} Не покрыто {gap.days} календарных дней.</p>)}
+      {g.overlaps.map((o,i)=><p key={'overlap'+i}>Пересечение {o.from} — {o.to}: {o.kind==='SAME_DATE'?'совпадает дата снимков':o.kind==='SAME_PERIOD'?'один отчётный период':'частично совпадают периоды'}. Не складывать без проверки первичных данных.</p>)}
+     </details>)}
+    {!profile.periodAudit.requiresRecalculationReview&&<p>Во внутренних интервалах с подтверждёнными датами пробелов или пересечений не найдено. Полнота за пределами загруженного диапазона не подтверждена.</p>}
+    {profile.periodAudit.unknown.length>0&&<p>Для {profile.periodAudit.unknown.length} документов период пока не установлен или непрерывное покрытие к ним неприменимо.</p>}
+    <p>БКИ и ОСВ — снимки по датам. Договоры и анкеты — отдельные документы. Предварительный банковский XLSX пока не участвует в B-Score.</p>
+   </Panel>}
   {view==='banking'&&<Account51Comparison cards={profile?.cards51??[]} bank={bank}/>}
   {view==='banking'&&profile?.bankXlsxReviews.map(p=><Panel key={p.id} title={'XLSX: '+p.name}><p>Предварительно извлечено операций: {p.totalOperations}. Счетов: {p.accounts}. Этот файл пока не участвует в B-Score.</p><p>Требуется проверка ИНН владельца, периодов и банковских остатков.</p></Panel>)}
   {view==='documents'&&profile?.questionnaireReviews.map(p=><Panel key={p.id} title={'Анкета: '+p.name}><p>Предварительные сведения по компании. Поля не заполняют анкеты автоматически; паспортные и персональные данные не извлекаются.</p>{p.sheets.map(s=><details key={s.name}><summary>{s.name} · кандидатов: {s.fields.length}</summary><dl>{s.fields.map((f,i)=><div key={f.key+':'+i}><dt>{f.key} · строка {f.row}</dt><dd>{f.raw}</dd></div>)}</dl></details>)}</Panel>)}

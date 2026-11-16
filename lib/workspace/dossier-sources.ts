@@ -15,6 +15,7 @@ import {activeFinancialSnapshots} from '../credit-engine/financial-analysis/sour
 import {publicFinancialAnalysis} from '../credit-engine/client-report/source-detail.ts';
 import {buildCreditPortfolio} from '../credit-engine/credit-portfolio/resolver.ts';
 import {adaptUploadedBki} from '../credit-engine/credit-portfolio/bki-adapter.ts';
+import {sourcePeriodAudit} from './source-period-audit.ts';
 
 export type Account51Summary={from:string;to:string;opening:number|null;closing:number|null;inflow:number;outflow:number;entries:number;requiresReview:boolean};
 export type CounterpartyCheck={inn:string;fetchedAt:string;cases:number|null;enforcements:number|null};
@@ -69,6 +70,7 @@ export function sourceProjection(rows:SourceRow[],inn:string,includeFull=true){
   }
   const payments=[...bankPayments.values()].filter((p):p is PaymentFact=>p!==null);
   return {
+    periodAudit:sourcePeriodAudit(rows,inn),
     settlements:settlementPositions(rows).map(p=>settlementState(p,history,payments)),
     cards51:rows.flatMap(r=>r.payload.account51?[{...r.payload.account51,id:r.id,name:r.payload.envelope.fileName??"Карточка 51"}]:[]),
     bankXlsxReviews:rows.flatMap(r=>r.payload.bankXlsxReview?[{id:r.id,name:r.payload.envelope.fileName??'Банковская XLSX',...r.payload.bankXlsxReview}]:[]),
