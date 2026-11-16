@@ -49,3 +49,49 @@ export function reconcileFinancialOcrRows(
  });
  return {rows,disagreements};
 }
+
+/** Some real F2 scans produce exactly the same line-code set in PSM6 and PSM11,
+ * while the primary pass drops a profit cell that the sparse pass reads.
+ * A safer selection is possible when at least three OTHER dated row codes
+ * independently agree, no readable cell regresses and the alternate adds
+ * strictly more bounded numeric evidence. Never fill cells across passes.
+ */
+function trustedDatedCells(rows:readonly PdfFinancialRow[]){
+ const byCode=new Map<string,PdfFinancialRow[]>();
+ for(const row of rows){
+   const key=row.line.page+':'+row.code;
+   const entries=byCode.get(key)??[];
+   entries.push(row);byCode.set(key,entries);
+ }
+ const counts=new Map<string,{value:number;code:string;n:number}>();
+ for(const matches of byCode.values()){
+   if(matches.length!==1)continue;
+   const row=matches[0];
+   for(let i=0;i<Math.min(row.cells.length,row.headings.length,3);i++){
+     const heading=headingKey(row.headings[i]??''),cell=row.cells[i];
+     if(!heading||!cell||cell.uncertain)continue;
+     const value=numeric(cell.raw.replace(/−/g,'-'));
+     if(value===null)continue;
+     const key=row.line.page+'|'+row.code+'|'+heading;
+     const previous=counts.get(key);
+     if(previous)previous.n++;
+     else counts.set(key,{code:row.code,value,n:1});
+   }
+ }
+ return new Map([...counts].filter(([,v])=>v.n===1).map(([k,v])=>[k,{code:v.code,value:v.value}]));
+}
+export function preferMoreCompleteFinancialOcr(
+ primary:readonly PdfFinancialRow[],alternative:readonly PdfFinancialRow[]
+):boolean{
+ const first=trustedDatedCells(primary),second=trustedDatedCells(alternative);
+ if(first.size<3||second.size<=first.size)return false;
+ let introduced=0;
+ const matchedCodes=new Set<string>();
+ for(const [key,source] of first){
+   const compared=second.get(key);
+   if(!compared||!Object.is(compared.value,source.value))return false;
+   matchedCodes.add(source.code);
+ }
+ for(const key of second.keys())if(!first.has(key))introduced++;
+ return introduced>0&&matchedCodes.size>=3;
+}

@@ -1,7 +1,7 @@
 /** CPU-only local OCR preview. No AI calls, no remote transfer, no credit writes. */
 import {validInn} from '../external/checko-inn.ts';
 import {financialTableRows,type PdfFinancialRow} from './financial-layout.ts';
-import {reconcileFinancialOcrRows} from './financial-ocr-consensus.ts';
+import {reconcileFinancialOcrRows,preferMoreCompleteFinancialOcr} from './financial-ocr-consensus.ts';
 import {spawn} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {mkdtemp,rm,writeFile} from 'node:fs/promises';
@@ -128,14 +128,25 @@ async function readImage(path:string,page:number,dpi:number,financial:boolean,bu
  const args=[path,'stdout','-l','rus+eng','--psm',bureau||financial?'6':'1'];
  if(!financial&&!bureau)return {text:await exec('tesseract',args),tables:undefined,sparsePass:false,numericReview:false,financialConflict:false};
  let tsv=await exec('tesseract',[...args,'tsv']);
- let sparsePass=false,alternateTsv:string|null=null;
+ let sparsePass=false;
+ let chosenFinancialRows:PdfFinancialRow[]|null=null;
+ let alternativeFinancialRows:PdfFinancialRow[]=[];
  if(financial&&shouldRetryFinancialOcr(tsv)){
-  // Re-read one raster page when PSM6 lost tabular row codes.
-  // Select a whole pass, NEVER concatenate amounts from different variants.
+  // Compare complete passes, never splice amounts from different OCR variants.
   const sparse=await exec('tesseract',[path,'stdout','-l','rus+eng','--psm','11','tsv']);
-  alternateTsv=sparse;
-  if(preferSparseFinancialOcr(tsv,sparse)){
-   alternateTsv=tsv;tsv=sparse;sparsePass=true;
+  const primaryRows=financialTableRows(financialTokensFromTsv(tsv,dpi),page,true);
+  const sparseRows=financialTableRows(financialTokensFromTsv(sparse,dpi),page,true);
+  // Row-code advantage remains useful for damaged balance sheets. An equal
+  // code set can still warrant the sparse pass if the date-bound cell evidence
+  // is strictly richer and at least three other codes agree without regressions.
+  if(preferSparseFinancialOcr(tsv,sparse)||
+     preferMoreCompleteFinancialOcr(primaryRows,sparseRows)){
+    tsv=sparse;sparsePass=true;
+    chosenFinancialRows=sparseRows;
+    alternativeFinancialRows=primaryRows;
+  }else{
+    chosenFinancialRows=primaryRows;
+    alternativeFinancialRows=sparseRows;
   }
  }
  const lines=new Map<string,string[]>();
@@ -185,9 +196,8 @@ async function readImage(path:string,page:number,dpi:number,financial:boolean,bu
    }
    return {text,tables:undefined,sparsePass:false,numericReview:bureauNumericReview,financialConflict:false};
  }
- const chosen=financialTableRows(financialTokensFromTsv(tsv,dpi),page,true);
- const alternative=alternateTsv?financialTableRows(financialTokensFromTsv(alternateTsv,dpi),page,true):[];
- const checked=reconcileFinancialOcrRows(chosen,alternative);
+ const chosen=chosenFinancialRows??financialTableRows(financialTokensFromTsv(tsv,dpi),page,true);
+ const checked=reconcileFinancialOcrRows(chosen,alternativeFinancialRows);
  for(const row of checked.rows)row.line.confidence='MEDIUM';
  return {text:[...lines.values()].map(words=>words.join(' ')).join('\n'),
    tables:checked.rows,sparsePass,numericReview:false,financialConflict:checked.disagreements.length>0};
