@@ -98,17 +98,46 @@ export function financialMetadata(input: Input) {
       value: span?.end ?? null
     });
   }
-  for (const line of input.lines) {
+  for (const [lineIndex, line] of input.lines.entries()) {
     const t = line.text.trim();
-    const title = t.match(/^(бухгалтерский баланс|отч[её]т о финансовых результатах|balance sheet|income statement)(?=\s|$)/i);
+    // Financial form headings frequently wrap on image-only OCR pages.
+    // Restore ONLY adjacent printed words from the SAME physical page,
+    // without joining unrelated rows, different pages or client entities.
+    const following=input.lines.slice(lineIndex+1,lineIndex+3);
+    const samePage=following.filter(l=>l.page===line.page&&l.confidence!=='LOW').map(l=>l.text.trim());
+    const titleCandidates=[t, t+' '+(samePage[0]??''),t+' '+samePage.join(' ')].map(s=>s.replace(/\s+/g,' ').trim());
+    const title=titleCandidates.map(s=>s.match(/^(бухгалтерский баланс|отч[её]т о финансовых результатах|balance sheet|income statement)(?=\s|$)/i)).find(Boolean)??null;
     const okud = t.match(/форма по ОКУД\s*[:|]?\s*(071000[12])\b/i);
     if (okud) forms.set(okud[1] === '0710001' ? 'Бухгалтерский баланс' : 'Отчёт о финансовых результатах', line);
     if (title) forms.set(/баланс|balance/i.test(title[1]) ? 'Бухгалтерский баланс' : 'Отчёт о финансовых результатах', line);
     const unit = t.match(/^(?:единица измерения|ед\.?\s*изм\.?|unit)\s*[:|]?\s*(.*)$/i);
-    if (unit) units.push({
-      line,
-      value: readUnit(unit[1])
-    });
+    if (unit) {
+      let rawUnit = unit[1].trim();
+      let source = line;
+      if (!rawUnit) {
+        // Sparse OCR can split the printed unit into label, words and OKEI code.
+        // Only contiguous same-page evidence may restore the missing line.
+        const next = input.lines[lineIndex + 1];
+        const candidate = next?.text.trim().replace(/\s+/g, ' ') ?? '';
+        const standalone = /^(?:в\s+)?(?:(?:тыс(?:\.|яч[аи]?)?|млн\.?)\s*)?(?:руб(?:лей|ля|ль)?\.?|₽)$/iu;
+        if (next?.page === line.page && next.confidence !== 'LOW' && standalone.test(candidate)) {
+          rawUnit = candidate;
+          const qualifier = input.lines[lineIndex + 2];
+          const qualifierText = qualifier?.text.trim() ?? '';
+          if (qualifier?.page === line.page && /^по\s+ОКЕИ(?:\s|:|$)/iu.test(qualifierText)) {
+            const inlineCode = /^по\s+ОКЕИ\s*:?\s*3\s*8\s*[345]$/iu.test(qualifierText);
+            const detachedCode = input.lines[lineIndex + 3];
+            const codeSeparate = /^по\s+ОКЕИ\s*:?$/iu.test(qualifierText) &&
+              detachedCode?.page === line.page && detachedCode.confidence !== 'LOW' &&
+              /^3\s*8\s*[345]$/.test(detachedCode.text.trim());
+            if (qualifier.confidence === 'LOW' || !inlineCode && !codeSeparate) rawUnit = '';
+            else rawUnit += ' ' + qualifierText + (codeSeparate ? ' ' + detachedCode!.text.trim() : '');
+          }
+          if (rawUnit) source = {...line, text:line.text.trim() + ' ' + rawUnit};
+        }
+      }
+      units.push({line:source,value:readUnit(rawUnit)});
+    }
     const label = t.match(/^(?:отч[её]тная дата|на дату|reporting date)\s*[:|]\s*(.+)$/i);
     const heading = t.split(/\s+коды\s*$/i)[0].trim();
     const on = heading.match(/^на\s+(.+)$/i);
@@ -126,15 +155,26 @@ export function financialMetadata(input: Input) {
       line,
       value: calendarDay(prior[1])
     });
-    // Annual FNS cover sheet: require both the full-year period code and its printed year.
-    const fns = t.match(/отч[её]тный период\s*\(код\)\*?\s+3\s*4\s+отч[её]тный год\s+((?:\d\s*){4})$/i);
+    // Historical FNS/KND 0710099 codes: 21/31/33 (quarter/half-year/
+    // nine months), 34 (year). Later formats also use 91/92/93.
+    // Only an explicit code AND a printed year can establish a period:
+    // https://www.garant.ru/products/ipo/prime/doc/70007791/
+    // https://base.garant.ru/414388745/f7ee959fd36b5699076b35abf4f52c5c/
+    const fns = t.match(/отч[её]тный период\s*\(код\)\*?\s+([239]\s*\d)\s+отч[её]тный год\s+((?:\d\s*){4})$/i);
     if (fns) {
-      const year = fns[1].replace(/\s/g, '');
-      addSpan(line, year);
-      dates.push({
-        line,
-        value: date(year + '-12-31')
-      });
+      const code = fns[1].replace(/\s/g, '');
+      const year = fns[2].replace(/\s/g, '');
+      const monthsByCode: Record<string, number> = {
+        '21': 3, '31': 6, '33': 9, '34': 12,
+        '91': 3, '92': 6, '93': 9,
+      };
+      const month = monthsByCode[code];
+      if (month && /^(?:19|20)\d{2}$/.test(year)) {
+        const end = new Date(Date.UTC(Number(year), month, 0)).toISOString().slice(0, 10);
+        const endMonth = ({3:'Март',6:'Июнь',9:'Сентябрь',12:'Декабрь'} as Record<number,string>)[month];
+        addSpan(line, month === 12 ? year : 'Январь - ' + endMonth + ' ' + year);
+        dates.push({line, value:end});
+      }
     }
   }
   const formLines = [...forms.values()];

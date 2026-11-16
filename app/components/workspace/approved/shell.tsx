@@ -2,12 +2,15 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { pages, clientNavigation, focusLabels, type Page } from './types';
 import { Drawer } from './primitives';
 import { NavIcon } from './icons';
+import { clientNavigationHref } from '../../../../lib/workspace/client-navigation';
 type Choice = { id: string; label: string };
 export type ShellProps = {
   page: string;
   available: string[];
   company: string;
   companyId: string;
+  analysisId?: string;
+  dossierId?: string;
   companies: Choice[];
   period: string;
   periods: Choice[];
@@ -70,10 +73,7 @@ export function ApprovedShell(p: ShellProps) {
     p.choose(v);
   };
   function link(id: string) {
-    const query = new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search);
-    if (p.companyId) query.set('analysisId', p.companyId);
-    query.set('view', id);
-    return '?' + query.toString();
+    return clientNavigationHref(typeof window === 'undefined' ? '' : window.location.search, id, p.analysisId??(p.dossierId?'':p.companyId), p.dossierId);
   }
   return (
     <div className="approved-client">

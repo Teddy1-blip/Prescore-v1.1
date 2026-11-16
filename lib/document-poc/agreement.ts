@@ -132,6 +132,14 @@ export function creditAgreement(input: Input) {
   terms.agreement_date=supplement(terms.agreement_date,/^(?:кредитный договор|договор займа|договор об открытии [^№]{0,55}кредитной линии)\s*№\s*[^\s]+\s+от\s+(\d{2}\.\d{2}\.\d{4})(?:\s|$)/iu,date);
   terms.credit_amount=supplement(terms.credit_amount,/(?:^|\s)сумма кредита составляет\s+([\d][\d \u00a0]*(?:[,.]\d{1,2})?)\s+(?:рублей|рубля|рубль|RUB|USD|EUR)(?!\s*\d+\s*коп)(?=\s|[.,]|$)/iu,numeric);
   terms.interest_rate=supplement(terms.interest_rate,/(?:^|\s)процентная ставка (?:по кредиту )?(?:составляет|установлена в размере)\s+(\d{1,3}(?:[,.]\d+)?)\s*%\s*годовых/iu,numeric);
+  // Typical bank offer: "1.1. Сумма кредита: 5 000 000.00 (прописью) российских рублей".
+  // Read only the explicitly printed amount, never infer acceptance or outstanding debt.
+  terms.credit_amount=supplement(terms.credit_amount,
+    /^\s*(?:\d+\.\d+\.\s*)?сумма кредита\s*:\s*(\d[\d \u00a0\u202f]*(?:[.,]\d{1,2})?)(?=\s*(?:\(|руб|₽|RUB))/iu,numeric);
+  terms.currency=supplement(terms.currency,
+    /^\s*(?:\d+\.\d+\.\s*)?сумма кредита\s*:\s*\d[\d \u00a0\u202f]*(?:[.,]\d{1,2})?\s*\([^)]{1,120}\)\s*(российских рублей)(?:\s|$)/iu,()=> 'RUB');
+  terms.interest_rate=supplement(terms.interest_rate,
+    /^\s*(?:\d+\.\d+\.\s*)?процентная ставка\s*\(процентов годовых\)\s*:\s*(\d{1,3}(?:[.,]\d+)?)(?=\s*(?:\(|;|$))/iu,numeric);
   terms.maturity_date=supplement(terms.maturity_date,/(?:^|\s)(?:дата окончательного (?:возврата|погашения) кредита|окончательный срок возврата кредита)\s*(?:[:—–-]|установлен[а]? на)\s*(\d{2}\.\d{2}\.\d{4})(?=\s|[.,]|$)/iu,date);
   if (!terms.agreement_number.value || !terms.borrower.value || !terms.creditor.value || !terms.agreement_date.value) issue(input, 'REVIEW', 'AGREEMENT_IDENTITY_INCOMPLETE');
   if (terms.credit_amount.value === null && terms.credit_limit.value === null) issue(input, 'REVIEW', 'AMOUNT_OR_LIMIT_MISSING');

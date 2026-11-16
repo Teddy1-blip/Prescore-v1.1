@@ -250,19 +250,7 @@ export function ApprovedPage(p: ScreenProps) {
                 </p>
               </Card>
             )}
-            <Card extra="gap-top" title="Месячные итоги" sub="Единые данные с обзором">
-              <Table
-                label="Месячные итоги"
-                heads={['Месяц', 'Операционные', 'Все поступления', 'Списания', 'Изменение денег']}
-                rows={d.months.map((r) => [
-                  r.label,
-                  money(r.operating),
-                  money(r.incoming),
-                  money(r.outgoing),
-                  money(r.net),
-                ])}
-              />
-            </Card>
+            {p.details && <p className="note">Помесячная детализация доступна в едином банковском реестре ниже. <a className="text-link" href="#banking-monthly-ledger">Перейти к платежам ↓</a></p>}
           </>
         )}
       </>

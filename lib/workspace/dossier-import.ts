@@ -5,33 +5,44 @@ import type {TransactionPool} from '../db/compatibility.ts';
 import type {SourceEnvelope} from '../credit-engine/contracts/sources.ts';
 import type {PrivateSource} from './dossier-sources.ts';
 import {wordParagraphs} from '../document-poc/word-paragraphs.ts';
+import {wordReviewPages} from '../document-poc/word-review.ts';
 import {reviewFields} from '../document-poc/review-fields.ts';
 import {mapPdfPages,extractDocumentText} from '../credit-engine/server/document-extraction.ts';
 import {parseAuthoritativeBfoText,parseAuthoritativeQuarterlyText} from '../credit-engine/source-foundation.ts';
 import {adaptFinancialReport} from '../credit-engine/financial-analysis/quarterly-adapter.ts';
+import {calendarSheet} from './calendar-sheet.ts';
+import {parseAccount51Card} from './account51-card.ts';
+import {extractXlsxRows,extractXlsxSheets,extractLegacyXlsSheets} from '../credit-engine/server/document-extraction.ts';
+import {nativePartyLedger} from './one-c-ledger.ts';
+import {selectAccountingSheet} from './accounting-xlsx-scope.ts';
 import {parseLedger} from './ledger-import.ts';
 import {withDossierSources} from './dossier-bank.ts';
 import type {AnalysisResult} from '../prescore.ts';
 import {parseQuarterlyReportText} from '../quarterly-report.ts';
-import {OCR_MAX_BYTES,ocrFormat,nativeLayoutText} from '../document-poc/local-ocr.ts';
+import {OCR_MAX_BYTES,BUREAU_MAX_PDF_PAGES,ocrFormat,nativeLayoutText} from '../document-poc/local-ocr.ts';
 import {isOkbReport} from '../credit-history-okb.ts';
-import {bureauRoles,readBureau,bureauEnvelope,bureauReview} from './bureau-review.ts';
+import {bureauRoles,readBureau,bureauEnvelope,bureauReview,modernNbkiSummaryReview} from './bureau-review.ts';
 import {parseCreditHistoryText} from '../credit-history.ts';
 import {financialTableRows} from '../document-poc/financial-layout.ts';
 import {validInn} from '../external/checko-inn.ts';
+import {inspectSberBusinessWorkbook} from './bank-xlsx-intake.ts';
+import {inspectQuestionnaireRows} from '../document-poc/bank-questionnaire.ts';
+import {dossierTier} from './dossier-view.ts';
 import {ownedDossier,saveDossier} from './dossier.ts';
-export const uploadKinds=['BFO','QUARTERLY','BKI','COUNTERPARTIES','DEBT_LEDGER','CREDIT_DOCUMENT','COMMERCIAL_DOCUMENT','BFO_REVIEW','AUTO_BFO'] as const;
+export const uploadKinds=['BFO','QUARTERLY','BKI','COUNTERPARTIES','DEBT_LEDGER','CREDIT_DOCUMENT','COMMERCIAL_DOCUMENT','BFO_REVIEW','AUTO_BFO','ACCOUNT_51','CALENDAR_SHEET','BANK_XLSX','BANK_QUESTIONNAIRE'] as const;
 type Kind=typeof uploadKinds[number];
 export class InputError extends Error {}
-export async function importSource(db:TransactionPool,owner:string,id:string,kind:Kind,file:File,selectedInn='',relationship:typeof bureauRoles[number]='Компания-заёмщик') {
+export class FullRequired extends Error {}
+export async function importSource(db:TransactionPool,owner:string,id:string,kind:Kind,file:File,selectedInn='',relationship:typeof bureauRoles[number]='Компания-заёмщик',isAdmin=false,identityConfirmed=false) {
   const dossier=id?await ownedDossier(db,owner,id):undefined;
   if(id&&!dossier)return null;
+  if(kind==='CALENDAR_SHEET'&&(!dossier||await dossierTier(db,{email:owner,isAdmin},dossier)!=='FULL'))throw new FullRequired('Для импорта графика выберите компанию с полным доступом.');
   const ext=file.name.split('.').pop()?.toLowerCase()??'';
   const ledger=kind==='COUNTERPARTIES'||kind==='DEBT_LEDGER';
   const autoFinancial=kind==='AUTO_BFO';
   let reviewKind=kind==='CREDIT_DOCUMENT'||kind==='COMMERCIAL_DOCUMENT'||kind==='BFO_REVIEW';
   const image=['jpg','jpeg','png'].includes(ext);
-  const allowed=reviewKind||kind==='BKI'?['pdf','png','jpg','jpeg']:ledger?['xls','xlsx','csv']:['pdf','xls','xlsx','csv',...(autoFinancial?['png','jpg','jpeg']:[])];
+  const allowed=kind==='BANK_XLSX'||kind==='BANK_QUESTIONNAIRE'?['xlsx']:kind==='CALENDAR_SHEET'?['xls','xlsx','csv']:kind==='ACCOUNT_51'?['xls','xlsx']:reviewKind||kind==='BKI'?['pdf','png','jpg','jpeg']:ledger?['xls','xlsx','csv']:['pdf','xls','xlsx','csv',...(autoFinancial?['png','jpg','jpeg']:[])];
   if(kind==='CREDIT_DOCUMENT'||kind==='COMMERCIAL_DOCUMENT')allowed.push('docx');
   if(!allowed.includes(ext)||file.name.length>180||!file.size||file.size>(kind==='BKI'?35:25)*1024*1024)throw new InputError('Проверьте размер и формат файла.');
   const bytes=new Uint8Array(await file.arrayBuffer());
@@ -44,11 +55,20 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
   if(ext==='xlsx')try{validateZipBudget(bytes);}catch{throw new InputError('Проверьте размер и структуру архива XLSX.');}
   if(autoFinancial&&image){kind='BFO_REVIEW';reviewKind=true;}
   let text='';
+  // Keep selected worksheet's source row map alongside its cell matrix.
+  // Re-splitting a TSV transcript loses XLSX physical row identity and can
+  // corrupt cell boundaries if 1C descriptions contain embedded newlines.
+  let accountingSheet:ReturnType<typeof selectAccountingSheet>|null=null;
   let bureauScan=kind==='BKI'&&image;
   let bureauReport;
-  if(!reviewKind&&!bureauScan)try{
+  let nativeNbkiPages:import('../document-poc/local-ocr.ts').OcrPage[]|null=null;
+  if(!reviewKind&&!bureauScan&&!['ACCOUNT_51','BANK_XLSX','BANK_QUESTIONNAIRE'].includes(kind))try{
     if(kind==='BKI'){
-      const pages=await mapPdfPages(bytes.slice(),180,true,async content=>content);
+      const pages=await mapPdfPages(bytes.slice(),BUREAU_MAX_PDF_PAGES,true,async content=>content);
+      // Keep native text available for a read-only NBKI summary at upload time.
+      // This does not mark any contractual debt as confirmed.
+      if(/^\s*Субъект кредитной истории\s*$/im.test(pages[0]??'')&&/Кредитный отчет для субъекта/iu.test(pages[0]??''))
+        nativeNbkiPages=pages.map((text,index)=>({text,page:index+1,logicalPage:index+1,segment:'FULL',method:'TEXT'}));
       bureauScan=pages.some(content=>content.replace(/\s/g,'').length<25);
       text=pages.join('\n\f\n');
       if(!bureauScan){
@@ -58,10 +78,15 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
           bureauScan=!bureauReport.obligations.length||!bureauReport.subjectInn||!bureauReport.reportDate;
         }catch{bureauScan=true;}
       }
+    }else if(ledger&&(ext==='xlsx'||ext==='xls')){
+      accountingSheet=selectAccountingSheet(ext==='xlsx'?extractXlsxSheets(bytes):await extractLegacyXlsSheets(bytes),'OSV');
+      text=accountingSheet.rows.map(r=>r.join('\t')).join('\n');
     }else text=await extractDocumentText(file.name,ext==='pdf'?bytes.slice():bytes,'financial');
-  }catch{
+  }catch(error){
+    if(ledger&&(ext==='xlsx'||ext==='xls')&&error instanceof Error&&error.message.startsWith('ACCOUNTING_XLSX_'))
+      throw new InputError('В книге Excel должен быть ровно один лист ОСВ с однозначным счётом. Выберите отдельную ведомость.');
     if(autoFinancial&&ext==='pdf'){kind='BFO_REVIEW';reviewKind=true;}
-    else throw new InputError('Не удалось прочитать документ. Для БКИ нужен отчёт НБКИ, ОКБ или СБ БКИ до 180 страниц.');
+    else throw new InputError('Не удалось прочитать документ. Для БКИ нужен отчёт НБКИ, ОКБ или СБ БКИ до 256 страниц.');
   }
   let financialReport;
   let detectedInn;
@@ -96,23 +121,25 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
     }
     if(!inn||!validInn(inn))throw new InputError('Для этого документа выберите досье по ИНН или загрузите файл с идентифицируемой организацией.');
   }
+  if(kind==='QUARTERLY'&&await dossierTier(db,{email:owner,isAdmin},{inn})!=='FULL')throw new FullRequired('Для промежуточной отчётности нужен полный доступ.');
   if((reviewKind||bureauScan)&&ext!=='docx'&&file.size>OCR_MAX_BYTES)throw new InputError('Для распознавания нужен файл размером до 16 МБ.');
   const sourceId=kind.toLowerCase()+':'+hash, now=new Date().toISOString();
-  const envelope:SourceEnvelope={sourceId,sourceType:ledger||reviewKind?'OTHER':kind as 'BFO'|'QUARTERLY'|'BKI',fileName:file.name,
+  const envelope:SourceEnvelope={sourceId,sourceType:ledger||reviewKind||['ACCOUNT_51','CALENDAR_SHEET','BANK_XLSX','BANK_QUESTIONNAIRE'].includes(kind)?'OTHER':kind as 'BFO'|'QUARTERLY'|'BKI',fileName:file.name,
     status:'READY',companyInn:inn,warnings:[],confidence:null,receivedAt:now,contentHash:hash,rawReference:'sha256:'+hash};
   const payload:PrivateSource={envelope};
   try{
     if(bureauScan){
       payload.relationship=relationship;
-      payload.review={version:'PRESCORE-BKI-PARSER-2',status:'INCOMPLETE',fields:[],issues:[]};
+      payload.review=(nativeNbkiPages&&modernNbkiSummaryReview(nativeNbkiPages,payload))
+        ||{version:'PRESCORE-BKI-PARSER-2',status:'INCOMPLETE',fields:[],issues:[]};
       envelope.status='PROCESSING';
     }else if(reviewKind){
       const family=kind==='CREDIT_DOCUMENT'?'CREDIT':kind==='BFO_REVIEW'?'BFO':'COMMERCIAL';
       if(ext==='docx'){
         const paragraphs=wordParagraphs(bytes);
         // Route the document as one text, then bind each extracted fragment to its paragraph.
-        const page={page:1,logicalPage:1,method:'TEXT' as const,text:paragraphs.map(p=>p.text).join('\n')};
-        const review=reviewFields(sourceId,[page],1,family,'SINGLE',[]);
+        const pages=wordReviewPages(paragraphs);
+        const review=reviewFields(sourceId,pages,pages.length,family,'SINGLE',[]);
         for(const field of review.fields){
           const matches=field.fragment?paragraphs.filter(p=>p.text.includes(field.fragment!)):[];
           field.page=matches.length===1?matches[0].page:null;
@@ -129,7 +156,43 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
       }
       envelope.status='PROCESSING';
     }else{
-    if(ledger)payload.ledger=parseLedger(text,inn,kind as 'COUNTERPARTIES'|'DEBT_LEDGER');
+    if(kind==='BANK_XLSX'){
+      const review=inspectSberBusinessWorkbook(extractXlsxSheets(bytes));
+      if(review.format!=='SBER_BUSINESS_XLSX_WORKBOOK'||review.totalOperations<1)
+        throw new InputError('Формат банковской XLSX не распознан или не содержит операций. Пока поддерживается предварительный разбор СберБизнес.');
+      payload.bankXlsxReview={version:review.version,totalOperations:review.totalOperations,accounts:review.accountCount,warnings:review.warnings,
+        sheets:review.sheets.filter(s=>s.preview.format!=='UNSUPPORTED').map(s=>({
+          name:s.name,account:s.preview.account,periodFrom:s.preview.periodFrom,periodTo:s.preview.periodTo,
+          operations:s.preview.operations.length,inMinor:s.preview.totalInMinor,outMinor:s.preview.totalOutMinor}))};
+      Object.assign(envelope,{parserVersion:review.version,status:'PROCESSING',warnings:review.warnings});
+    }else if(kind==='BANK_QUESTIONNAIRE'){
+      if(!identityConfirmed)throw new InputError('Подтвердите право передать и обработать банковскую анкету.');
+      const recognized=extractXlsxSheets(bytes).map(s=>({name:s.sheet,review:inspectQuestionnaireRows(s.rows,s.rowNumbers)}))
+        .filter(s=>s.review.kind==='BANK_QUESTIONNAIRE');
+      if(!recognized.length)throw new InputError('Не удалось распознать структуру банковской анкеты XLSX.');
+      const declared=new Set(recognized.flatMap(s=>s.review.fields.filter(f=>f.key==='COMPANY_INN').map(f=>f.raw.replace(/\s/g,''))));
+      if(declared.size&&(declared.size!==1||!declared.has(inn)))
+        throw new InputError('ИНН анкеты не совпадает с выбранным досье. Уточните источник.');
+      payload.questionnaireReview={version:'PRESCORE-QUESTIONNAIRE-CELLS-0.1',
+        sheets:recognized.map(s=>({name:s.name,fields:s.review.fields,issues:s.review.issues}))};
+      Object.assign(envelope,{parserVersion:'PRESCORE-QUESTIONNAIRE-CELLS-0.1',status:'PROCESSING',
+        warnings:recognized.flatMap(s=>s.review.issues)});
+    }else if(kind==='CALENDAR_SHEET'){payload.calendarSheet=calendarSheet(text);envelope.status='PROCESSING';}
+    else if(kind==='ACCOUNT_51'){
+      const accountSheet=ext==='xlsx'?selectAccountingSheet(extractXlsxSheets(bytes),'ACCOUNT_51'):
+        ext==='xls'?selectAccountingSheet(await extractLegacyXlsSheets(bytes),'ACCOUNT_51'):null;
+      const rows=accountSheet?.rows??(await extractDocumentText(file.name,bytes,'financial')).trimEnd().split(/\r?\n/).map(r=>r.split('\t'));
+      const header=rows.findIndex(row=>String(row[0]??'').trim()==='Период');
+      const identities=new Set(Array.from(rows.slice(0,header>=0?header:12).flat().join(' ').matchAll(/ИНН\s*[:№]?\s*(\d{10,12})\b/gi),m=>m[1]));
+      if(identities.size && (identities.size!==1 || !identities.has(inn)))throw new InputError('ИНН карточки счёта 51 не совпадает с досье.');
+      const card=parseAccount51Card(rows,accountSheet?.rowNumbers);
+      const sum=(direction:'INFLOW'|'OUTFLOW')=>card.operations.filter(row=>row.direction===direction).reduce((total,row)=>total+Math.round(row.amount*100),0)/100;
+      Object.assign(envelope,{periodFrom:card.periodFrom,periodTo:card.periodTo,parserVersion:'1C-ACCOUNT-51-V1',warnings:card.warnings});
+      payload.account51={from:card.periodFrom,to:card.periodTo,opening:card.openingBalance,closing:card.closingBalance,inflow:sum('INFLOW'),outflow:sum('OUTFLOW'),entries:card.operations.length,requiresReview:!card.reconciled||card.closingBalance===null||card.openingBalance===null};
+    }else if(ledger){
+      const rows=accountingSheet?.rows??text.split(/\r?\n/).map(r=>r.split('\t'));
+      payload.ledger=nativePartyLedger(rows,inn,identityConfirmed,kind as 'COUNTERPARTIES'|'DEBT_LEDGER',file.name,accountingSheet?.rowNumbers)??parseLedger(text,inn,kind as 'COUNTERPARTIES'|'DEBT_LEDGER');
+    }
     else if(kind==='BKI'){
       const bki=readBureau(text,file.name,inn,relationship);
       payload.relationship=relationship;
@@ -163,6 +226,9 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
       if(kind==='BKI'&&!existing.payload.bki&&existing.payload.relationship!==relationship){
         const payload={...existing.payload,relationship};
         if(payload.ocr&&payload.ocr.through===payload.ocr.total)payload.review=bureauReview(payload.ocr.pages,payload,payload.ocr.warnings);
+        else if(payload.review?.version==='PRESCORE-NBKI-STRUCTURE-0.1')
+          payload.review=(nativeNbkiPages&&modernNbkiSummaryReview(nativeNbkiPages,payload))
+            ||{version:'PRESCORE-BKI-PARSER-2',status:'INCOMPLETE',fields:[],issues:[]};
         await tx.query('UPDATE dossier_sources SET payload=$1 WHERE dossier_id=$2 AND source_id=$3',[JSON.stringify(payload),id,existing.source_id]);
       }
       await tx.query('COMMIT');
@@ -175,7 +241,7 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
       VALUES($1,$2,$3,$4,$5,$6,'',$7,$7,$8)`,[doc,inn,kind,file.name,mime,bytes.length,owner,storageKey]);
     await tx.query('INSERT INTO dossier_sources(dossier_id,source_id,source_type,payload,document_id) VALUES($1,$2,$3,$4,$5)',[id,sourceId,kind,JSON.stringify(payload),doc]);
     // Update only the owner's latest working version. Previously issued report snapshots stay immutable.
-    if(payload.snapshot || payload.bki?.affectsCompanyDebt || kind==='DEBT_LEDGER'){
+    if(payload.snapshot || payload.bki?.affectsCompanyDebt || kind==='DEBT_LEDGER'||kind==='COUNTERPARTIES'&&payload.ledger?.some(r=>r.account.startsWith('76')&&r.contract&&r.component?.toLocaleLowerCase('ru')==='основной долг')){
       const current=(await tx.query("SELECT id,payload FROM analyses WHERE owner_email=$1 AND company_inn=$2 AND archive_state='ACTIVE' ORDER BY created_at DESC,id DESC LIMIT 1 FOR UPDATE",[owner,inn])).rows[0];
       if(current){
         const bank=JSON.parse(String(current.payload)) as AnalysisResult;

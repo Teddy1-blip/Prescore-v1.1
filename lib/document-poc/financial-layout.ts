@@ -144,6 +144,45 @@ function accountingTokens(tokens: Token[], cols: Column[]): Token[] {
   }
   return result;
 }
+// Scanned RAS balance sheets often lose the printed "Код строки" header
+// while retaining 15–20 aligned line codes and all period headings. Restore
+// the missing header ONLY from geometric agreement, never from a filename,
+// an AI guess or the numbers alone. A short or ambiguous table stays for review.
+function inferRasterCodeHeader(items:Token[]):Token[]{
+  const codeTokens=items.filter(t=>/^[12]\d{2}0$/.test(t.s));
+  if(codeTokens.length<5||codeTokens.length>160)return [];
+  const median=(values:number[])=>{
+    const sorted=[...values].sort((a,b)=>a-b);
+    return sorted[Math.floor(sorted.length/2)];
+  };
+  const center=(t:Token)=>t.x+t.w/2;
+  const candidates:Array<{header:Token;score:number}>=[];
+  for(const pivot of codeTokens){
+    const aligned=codeTokens.filter(t=>Math.abs(center(t)-center(pivot))<=Math.max(10,pivot.h*1.6));
+    const distinct=new Set(aligned.map(t=>t.s));
+    if(distinct.size<5)continue;
+    const labels=aligned.filter(code=>items.some(t=>t.x+t.w<code.x-2 &&
+      Math.abs(t.y-code.y)<=Math.max(5,code.h*.8) && /[А-Яа-яA-Za-z]/u.test(t.s)));
+    if(labels.length<3)continue;
+    const xCenter=median(aligned.map(center));
+    const markers=items.filter(t=>/^(?:на|за|current|previous)$/i.test(t.s) &&
+      center(t)>xCenter+Math.max(8,pivot.w*.5));
+    for(const seed of markers){
+      const band=markers.filter(t=>Math.abs(t.y-seed.y)<=Math.max(6,seed.h*1.8)).sort((a,b)=>a.x-b.x);
+      if(band.length<2||band.length>3)continue;
+      if(band.some((t,i)=>i>0&&center(t)-center(band[i-1])<Math.max(10,t.h*2)))continue;
+      const y=median(band.map(t=>t.y)),h=median(band.map(t=>t.h));
+      const below=aligned.filter(t=>t.y<y-Math.max(4,t.h*.7));
+      const uniqueBelow=new Set(below.map(t=>t.s));
+      if(uniqueBelow.size<5)continue;
+      const w=median(aligned.map(t=>t.w));
+      candidates.push({header:{s:'Код',x:xCenter-w/2,y,w,h},score:uniqueBelow.size*10+labels.length});
+    }
+  }
+  if(!candidates.length)return [];
+  candidates.sort((a,b)=>b.score-a.score);
+  return [candidates[0].header];
+}
 export function financialTableRows(source: PdfTextItem[], page: number,raster=false): PdfFinancialRow[] {
   const items: Token[] = source.flatMap(i => i.str?.trim() && i.transform ? [{
     s: i.str.trim(),
@@ -152,13 +191,14 @@ export function financialTableRows(source: PdfTextItem[], page: number,raster=fa
     h: Math.max(1, Math.abs(i.transform[3])),
     w: i.width ?? 0
   }] : []);
-  const headers = items.filter(t => /^(код(?: строки)?|line code)$/i.test(t.s)).sort((a, b) => b.y - a.y);
+  const explicitHeaders = items.filter(t => /^(код(?: строки)?|line code)$/i.test(t.s)).sort((a, b) => b.y - a.y);
+  const headers = raster && !explicitHeaders.length ? inferRasterCodeHeader(items) : explicitHeaders;
   const output: PdfFinancialRow[] = [];
   for (const [h, header] of headers.entries()) {
     const cols = columnsAt(items, header,raster);
     if (!cols.length) continue;
     const codeCenter = header.x + header.w / 2;
-    const codes = items.filter(t => t.y < header.y - header.h * .6 && (!headers[h + 1] || t.y > headers[h + 1].y) && /^[12]\d{3}$/.test(t.s) && Math.abs(t.x + t.w / 2 - codeCenter) < header.h * .95);
+    const codes = items.filter(t => t.y < header.y - header.h * .6 && (!headers[h + 1] || t.y > headers[h + 1].y) && /^[12]\d{3}$/.test(t.s) && Math.abs(t.x + t.w / 2 - codeCenter) < (raster ? Math.max(10,header.h * 1.7) : header.h * .95));
     for (const code of codes) {
       const rowBand = items.filter(t => Math.abs(t.y - code.y) <= Math.max(4, code.h * .55));
       // A nearby line number or a note outside the code column cannot anchor a row.

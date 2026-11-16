@@ -77,7 +77,7 @@ export async function POST(request: Request) {
   const user = await requireApiUser();
   if (!user) return unauthorized();
   try {
-    const body = await request.json() as { companyInn?: string; analysisId?: string; applicationId?: string; category?: string; fileName?: string; mimeType?: string; sizeBytes?: number; contentBase64?: string; uploadedBy?: string };
+    const body = await request.json() as { dossierId?: string; companyInn?: string; analysisId?: string; applicationId?: string; category?: string; fileName?: string; mimeType?: string; sizeBytes?: number; contentBase64?: string; uploadedBy?: string };
     const companyInn = String(body.companyInn || "").replace(/\D/g, "");
     const fileName = String(body.fileName || "").trim().slice(0, 240);
     const sizeBytes = Number(body.sizeBytes) || 0;
@@ -91,7 +91,12 @@ export async function POST(request: Request) {
     await ensureSchema(db);
     const analysisId = String(body.analysisId || "");
     const applicationId = String(body.applicationId || "");
-    if (!analysisId && !applicationId && !user.isAdmin) return Response.json({error:"Укажите анализ или заявку"},{status:400});
+    const dossierId=typeof body.dossierId==='string'?body.dossierId:'';
+    if(dossierId){
+      const proof=db.prepare('SELECT id FROM company_dossiers WHERE id=? AND company_inn=? AND owner_email=?').bind(dossierId,companyInn,user.email);
+      if(!(await db.batch([proof]))[0]?.results.length)return Response.json({error:'Досье недоступно.'},{status:404});
+    }
+    if (!analysisId && !applicationId && !dossierId && !user.isAdmin) return Response.json({error:"Укажите досье, анализ или заявку"},{status:400});
     // Every supplied relationship must belong to the same company and be accessible.
     if (analysisId) {
       const query = user.isAdmin

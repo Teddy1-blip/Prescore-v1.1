@@ -5,7 +5,8 @@ import {extractContractReview} from './contract-facts.ts';
 import {capture,plain,EXTRACTOR_VERSION,type Field,type Input} from './fields.ts';
 import {routeDocument,type EvidencePage,type UploadFamily} from './document-routing.ts';
 export type ReviewField={key:string;label:string;value:string|null;unit:string;page:number|null;fragment:string|null;status:string};
-export type DocumentReview={anchor?:'paragraph';version:string;status:string;fields:ReviewField[];issues:string[]};
+export type DocumentReview={anchor?:'paragraph';version:string;status:string;fields:ReviewField[];issues:string[];
+ nbkiStructure?:import('../workspace/nbki-structure-index.ts').NbkiStructureIndex};
 const terms:Record<string,[string,string]>={
  creditor:['Кредитор',''],borrower:['Заёмщик',''],agreement_number:['Номер договора',''],agreement_date:['Дата договора',''],
  currency:['Валюта',''],credit_amount:['Сумма кредита',''],credit_limit:['Лимит по договору',''],interest_rate:['Процентная ставка','%'],
@@ -14,6 +15,7 @@ const contractLabels:Record<string,string>={INTERIM_PAYMENT:'Промежуто�
 export function reviewFields(id:string,pages:EvidencePage[],total:number,family:UploadFamily,layout:'SINGLE'|'TWO_UP_ROTATED',warnings:string[]=[],tables?:Input['financialTables']):DocumentReview{
  const routing=routeDocument({pages,totalPhysicalPages:total,expectedFamily:family,layout,extractionWarnings:warnings});
  const result:DocumentReview={version:EXTRACTOR_VERSION,status:routing.status,fields:[],issues:[...routing.warnings]};
+ if(routing.subtypes.includes('CREDIT_OFFER'))result.issues.push('CREDIT_OFFER_ACCEPTANCE_UNVERIFIED');
  if(routing.status!=='READY_FOR_REVIEW'||!routing.parser)return result;
  const input:Input={id,issues:[],financialTables:tables,lines:pages.flatMap(p=>p.text.split(/\r?\n/).map(text=>({text,confidence:p.method==='TEXT'?'HIGH':'MEDIUM',page:p.page,pdf:true})))};
  function add(key:string,label:string,unit:string,f:Field<unknown>){result.fields.push({key,label,unit,value:f.value==null?null:String(f.value),page:f.source_page,fragment:f.source_text,status:f.status});}
@@ -30,20 +32,44 @@ export function reviewFields(id:string,pages:EvidencePage[],total:number,family:
     add('schedule_date_'+i,'Дата платежа','',r.date);
     add('schedule_principal_'+i,'Погашение основного долга',agreement.terms.currency.value??'',r.principal);
     add('schedule_interest_'+i,'Проценты по графику',agreement.terms.currency.value??'',r.interest);
+    add('schedule_total_'+i,'Итого платёж по графику',agreement.terms.currency.value??'',r.total);
   }
  }else if(routing.parser==='FINANCIAL_STATEMENT'){
   // Appendices in a single annual filing can carry prior-year headings and the
   // same row codes. Only F1/F2 and their continuation pages feed their review.
   const eligible=new Set<number>();
-  let inStatements=false;
+  const supportingPages=new Set<number>();
+  let inStatements=false,seenBfo=false,serviceBoundary=false,mixedPhysicalPage=false;
   for(const page of pages){
-    const lead=page.text.split('\n').slice(0,12).join('\n');
-    if(/(?:^|\n)\s*(?:упрощ[её]нный )?(?:бухгалтерский баланс|отч[её]т о финансовых результатах)(?:\s|$)/im.test(lead))inStatements=true;
+    // The original package is preserved in full; only the F1/F2 review scope
+    // is restricted. Tax service receipts can contain other companies' INNs
+    // and quotes of balance-sheet figures.
+    const lead=page.text.split(/\r?\n/).slice(0,18).join('\n');
+    const financialStart=/(?:^|\n)\s*(?:упрощ[её]нный\s+)?(?:бухгалтерский\s+баланс|отч[её]т\s+о\s+финансовых\s+результатах)(?:\s|$)/im.test(lead);
+    const fnsService=/(?:^|\n)\s*(?:(?:(?:код|форма)\s+по\s+)?кнд\s+116(?:600[27]|700[245])(?:\s|$)|информационное сообщение о представительстве|подтверждение даты отправки|квитанция о при[её]ме|извещение о (?:вводе сведений|получении электронного документа))(?:\s|$)/im.test(lead);
+    if(seenBfo&&fnsService)serviceBoundary=true;
+    if(serviceBoundary){
+      supportingPages.add(page.page);
+      if(financialStart||eligible.has(page.page))mixedPhysicalPage=true;
+      continue; // Never re-enter F1/F2 on an annex that quotes its contents.
+    }
+    if(financialStart){inStatements=true;seenBfo=true;}
     else if(/(?:^|\n)\s*(?:отч[её]т (?:об изменениях капитала|о движении денежных средств|о целевом использовании)|пояснения к |аудиторское заключение)/im.test(lead))inStatements=false;
     if(inStatements)eligible.add(page.page);
   }
-  const lines=eligible.size?input.lines.filter(l=>eligible.has(l.page)):input.lines;
-  const financialTables=eligible.size?tables?.filter(t=>eligible.has(t.line.page)):tables;
+  if(mixedPhysicalPage){
+    result.status='INCOMPLETE';
+    result.issues.push('BFO_MIXED_FINANCIAL_AND_SUPPORTING_PAGE_REVIEW');
+    return result;
+  }
+  if(supportingPages.size)result.issues.push('BFO_FNS_SUPPORTING_DOCUMENTS_SEPARATE_REVIEW');
+  if(!eligible.size){
+    result.status='INCOMPLETE';
+    result.issues.push('BFO_FINANCIAL_PAGE_BOUNDARY_UNVERIFIED');
+    return result;
+  }
+  const lines=input.lines.filter(l=>eligible.has(l.page));
+  const financialTables=tables?.filter(t=>eligible.has(t.line.page));
   const bfo=financialStatement({...input,lines,financialTables});
   const metadata=bfo.metadata;
   add('company_inn','ИНН организации','',metadata.inn);
@@ -52,6 +78,65 @@ export function reviewFields(id:string,pages:EvidencePage[],total:number,family:
   add('period_end','Конец периода','',metadata.period_end);
   add('statement_unit','Единица отчётности','',metadata.unit);
   for(const row of bfo.rows){const code=row.line_code.value;if(code)add(code,'Строка '+code,String(row.unit.value??''),row.current_period_value);}
+  // Three independent anchors are required before any monetary value can be
+  // called ready in a scanned F1/F2 review: subject identity, as-of date and
+  // reporting scale. "1000" might be 1000 rubles or 1000 thousand rubles.
+  // Retain readable source fragments, but do NOT certify them without anchors.
+  const missingAnchors=[
+    ...(!metadata.inn.value||!validInn(metadata.inn.value)||metadata.inn.status!=='READ'
+      ?['BFO_SUBJECT_INN_UNVERIFIED']:[]),
+    ...(!metadata.reporting_date.value||metadata.reporting_date.status!=='READ'
+      ?['BFO_REPORT_DATE_UNVERIFIED']:[]),
+    ...(!metadata.unit.value||metadata.unit.status!=='READ'
+      ?['BFO_REPORTING_SCALE_UNVERIFIED']:[]),
+  ];
+  if(missingAnchors.length){
+    result.status='INCOMPLETE';
+    result.issues.push(...missingAnchors);
+    for(const item of result.fields){
+      if((/^\d{4}$/.test(item.key)||item.key==='company_inn')&&item.status==='READ')item.status='REVIEW';
+    }
+  }
+  // Independent OCR variants disagree on a dated financial cell. Other
+  // source values remain visible, but the document cannot appear fully ready.
+  if(warnings.some(w=>w.startsWith('OCR_FINANCIAL_PASS_CONFLICT:'))){
+    result.status='INCOMPLETE';
+    result.issues.push('BFO_OCR_PASS_DISAGREEMENT');
+  }
+  // Tables on scanned F1/F2 continuation pages may omit printed column
+  // headings. Do not silently claim that those financial rows were covered.
+  const unboundPages=warnings.flatMap(w=>{
+    const match=/^OCR_FINANCIAL_ROWS_UNBOUND:(\d+)(?::|$)/.exec(w);
+    return match?[Number(match[1])]:[];
+  });
+  if(unboundPages.some(p=>eligible.has(p))){
+    result.status='INCOMPLETE';
+    result.issues.push('BFO_CONTINUATION_ROWS_UNBOUND');
+  }
+  // A recognized document heading or a successful OCR response is not proof
+  // that even one current-period financial value was read accurately.
+  const readable = bfo.rows.filter(row=>row.current_period_value.value!==null && row.current_period_value.status==='READ');
+  if(!readable.length){
+    result.status='INCOMPLETE';
+    result.issues.push('BFO_CURRENT_VALUES_UNVERIFIED');
+  }
+  // Balance 1600 alone is insufficient: the asset and liability totals must
+  // both be present as independent readable source rows before readiness.
+  if(metadata.forms.some(form=>form.value==='Бухгалтерский баланс') &&
+      !['1600','1700'].every(code=>readable.some(row=>row.line_code.value===code))){
+    result.status='INCOMPLETE';
+    result.issues.push('BFO_BALANCE_TOTALS_UNVERIFIED');
+  }
+  // A column may be read perfectly and still be arithmetically incompatible
+  // with the other fields. The review must never look complete in that case.
+  // Preserve source values and page fragments for manual verification.
+  if(input.issues.some(issue=>issue.status==='INVALID')){
+    result.status='INCOMPLETE';
+    result.issues.push('BFO_INTEGRITY_REVIEW_REQUIRED');
+    for(const item of result.fields){
+      if(/^\d{4}$/.test(item.key)&&item.status==='READ')item.status='REVIEW';
+    }
+  }
  }else{
   for(const [key,label,regex] of [
     ['contract_number','Номер договора',/^(?:(?:государственный |муниципальный )?контракт|договор)[^№\n]{0,90}№\s*([\p{L}\d._/-]+)(?=\s|$)/iu],

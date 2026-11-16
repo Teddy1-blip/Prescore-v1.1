@@ -15,7 +15,11 @@ export type OneCAdapterContext = Omit<RawBankTransactionInput,
   "recipientName" | "recipientInn" | "recipientAccount" | "purpose" | "statementAccount">;
 
 export function adaptOneCDocument(document: OneCRecord, context: OneCAdapterContext): RawBankTransactionInput {
-  const statementAccount = document.__account || context.companyAccounts[0] || null;
+  // An explicit blank from the source parser means the document did not match
+  // any declared account. Do not invent ownership from the first account.
+  // Only legacy callers that omit __account altogether use the old fallback.
+  const statementAccount = document.__account === undefined
+    ? context.companyAccounts[0] || null : document.__account || null;
   const companyAccounts = new Set([...context.companyAccounts, statementAccount]
     .map(value => normalizeAccountValue(value).value).filter((value): value is string => Boolean(value)));
   // Use the same side-selection rules as normalization. The counterparty's

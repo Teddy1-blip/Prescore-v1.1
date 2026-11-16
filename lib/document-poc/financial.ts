@@ -52,9 +52,36 @@ export function financialStatement(input: Input) {
       }))
     });
   }
+  // Printed FNS forms may carry two alternative section III templates:
+  // commercial equity (with amounts) and NPO targeted funding (all dashes).
+  // An explicitly dash-only alternative is not a conflicting financial fact.
+  // Never suppress missing/uncertain cells or a second row containing numbers.
+  const entriesByCode = new Map<string, typeof entries>();
+  for (const entry of entries) {
+    const group = entriesByCode.get(entry.code) ?? [];
+    group.push(entry);
+    entriesByCode.set(entry.code, group);
+  }
+  const explicitDashes = (entry: typeof entries[number]) =>
+    entry.cells.length >= 2 &&
+    entry.cells.every(c => !c.uncertain && /^[-–—]$/.test(c.raw.trim()));
+  const hasNumericCell = (entry: typeof entries[number]) =>
+    entry.cells.some(c => !c.uncertain && numeric(c.raw.replace(/−/g, '-')) !== null);
+  // Only FNS's explicitly printed NPO alternative has these optional
+  // duplicate equity codes. Do not infer it from two equal-looking rows.
+  const npoPages = new Set(input.lines.filter(line =>
+    /III\.\s*ЦЕЛЕВОЕ\s+ФИНАНСИРОВАНИЕ(?:\s|$)/iu.test(line.text)).map(line=>line.page));
+  const npoCodes = new Set(['1300','1310','1320','1350','1360','1370']);
+  const filteredEntries = entries.filter(entry => {
+    if (!npoPages.has(entry.line.page) || !npoCodes.has(entry.code) ||
+        !explicitDashes(entry)) return true;
+    const alternatives = entriesByCode.get(entry.code) ?? [];
+    // Exactly one independently numeric alternative; conflicts remain invalid.
+    return alternatives.filter(hasNumericCell).length !== 1;
+  });
   const seen = new Set<string>();
   const duplicates = new Set<string>();
-  const rows = entries.flatMap(({
+  const rows = filteredEntries.flatMap(({
     line,
     code,
     cells,
@@ -62,10 +89,19 @@ export function financialStatement(input: Input) {
   }) => {
     // Per-share supplementary disclosures do not have the form's monetary scale.
     if (['2900', '2910'].includes(code)) return [];
-    if (!codes.has(code)) issue(input, 'INVALID', 'UNKNOWN_LINE_CODE', line.page);
-    if (seen.has(code)) {
-      duplicates.add(code);
-      issue(input, 'INVALID', 'DUPLICATE_LINE', line.page);
+    const mapped=codes.has(code);
+    // Real extended RAS forms can print additional manufacturer/accounting
+    // lines (e.g. 1105 and 1215). They are valid source evidence but NOT
+    // supported canonical BFO facts. Quarantine their amounts instead of
+    // rejecting the whole otherwise reconciled financial statement.
+    const plausibleSupplement=/^(?:1[1-7]\d{2}|2[1-5]\d{2})$/.test(code);
+    if(!mapped)issue(input,plausibleSupplement?'REVIEW':'INVALID',
+      plausibleSupplement?'SUPPLEMENTARY_LINE_NOT_MAPPED':'UNKNOWN_LINE_CODE',line.page);
+    if(seen.has(code)) {
+      if(mapped){
+        duplicates.add(code);
+        issue(input,'INVALID','DUPLICATE_LINE',line.page);
+      }else issue(input,'REVIEW','SUPPLEMENTARY_LINE_REPEATED',line.page);
     }
     seen.add(code);
     const periodFields = headings.slice(0, 2).map(heading => {

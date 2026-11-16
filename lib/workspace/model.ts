@@ -60,12 +60,15 @@ export type WorkspaceBasicV1 = {
     fullMonthOperatingAverage: WorkspaceFactV1;
     seasonality?: {status:string;trend:WorkspaceFactV1;volatility:WorkspaceFactV1;peakToAverage:WorkspaceFactV1};
     debtService:WorkspaceFactV1;
+    debtServiceToOperatingReceipts: WorkspaceFactV1;
     loanPrincipalPayments: WorkspaceFactV1;
     interestPayments: WorkspaceFactV1;
     unsplitDebtPayments: WorkspaceFactV1;
     leasingPayments: WorkspaceFactV1;
     taxPayments: WorkspaceFactV1;
     socialContributions: WorkspaceFactV1;
+    taxAndSocialPayments: WorkspaceFactV1;
+    taxToOperatingCashReceipts: WorkspaceFactV1;
     transfersToIndividuals: WorkspaceFactV1;
     endingBalance: WorkspaceFactV1;
     averageDailyBalance: WorkspaceFactV1;
@@ -216,12 +219,15 @@ export function projectWorkspaceBasic(
       fullMonthOperatingAverage: fact(metrics?.operating.fullMonthOperatingAverage),
       seasonality: {status:metrics?.operating.seasonalityStatus??'INSUFFICIENT_HISTORY',trend:fact(metrics?.operating.operatingReceiptsTrend,'RATIO'),volatility:fact(metrics?.operating.operatingReceiptsVolatility,'RATIO'),peakToAverage:fact(metrics?.operating.peakToAverageRatio,'RATIO')},
       debtService:fact(metrics?.debtService.debtServiceCashOutflow),
+      debtServiceToOperatingReceipts:fact(metrics?.debtService.debtServiceToOperatingReceipts,'RATIO'),
       loanPrincipalPayments: fact(metrics?.debtService.loanPrincipalPaid),
       interestPayments: fact(metrics?.debtService.interestPaid),
       unsplitDebtPayments: fact(metrics?.debtService.unsplitDebtService),
       leasingPayments: fact(metrics?.debtService.leasingPaid),
       taxPayments: fact(metrics?.tax.taxPaymentsAmount),
       socialContributions: fact(metrics?.tax.socialContributionsAmount),
+      taxAndSocialPayments: fact(metrics?.tax.taxAndSocialAmount),
+      taxToOperatingCashReceipts: fact(metrics?.tax.taxToOperatingCashReceipts,'RATIO'),
       transfersToIndividuals: fact(metrics?.individualAndCash.individualBusinessAmount),
       endingBalance: fact(metrics?.liquidity.endingBalance),
       averageDailyBalance: fact(metrics?.liquidity.averageDailyBalance),

@@ -65,33 +65,53 @@ function decodeXml(value: string) {
   return value.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").replace(/&quot;/g, "\"").replace(/&#39;/g, "'");
 }
 
-export function extractXlsxText(bytes: Uint8Array) {
+/** Retain worksheet and physical row identity for source-evidence review.
+ * Legacy extractXlsxRows stays flattening for backward compatibility.
+ */
+export function extractXlsxSheets(bytes: Uint8Array): Array<{sheet: string; rows: string[][]; rowNumbers: number[]}> {
   const archive = unzipSync(bytes);
   const sharedXml = archive["xl/sharedStrings.xml"] ? strFromU8(archive["xl/sharedStrings.xml"]) : "";
-  const shared = [...sharedXml.matchAll(/<si[^>]*>([\s\S]*?)<\/si>/g)]
-    .map((match) => decodeXml([...match[1].matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map((item) => item[1]).join("")));
-  const sheets = Object.keys(archive).filter((name) => /^xl\/worksheets\/sheet\d+\.xml$/.test(name)).sort();
+  const shared = [...sharedXml.matchAll(/<(?:[\w.-]+:)?si\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?si>/g)]
+    .map((match) => decodeXml([...match[1].matchAll(/<(?:[\w.-]+:)?t\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?t>/g)].map((item) => item[1]).join("")));
+  const sheets = Object.keys(archive).filter((name) => /^xl\/worksheets\/sheet\d+\.xml$/.test(name))
+    .sort((a,b) => Number(a.match(/sheet(\d+)/)?.[1]) - Number(b.match(/sheet(\d+)/)?.[1]));
   if (!sheets.length) throw new Error("В Excel не найдены листы с данными.");
-  const lines: string[] = [];
+  if (sheets.length > 32) throw Error('XLSX_SHEET_LIMIT');
+  const result: Array<{sheet:string;rows:string[][];rowNumbers:number[]}> = [];
   for (const sheet of sheets) {
     const xml = strFromU8(archive[sheet]);
-    for (const row of xml.matchAll(/<row[^>]*>([\s\S]*?)<\/row>/g)) {
+    const rows: string[][] = [],rowNumbers:number[]=[];
+    for (const row of xml.matchAll(/<(?:[\w.-]+:)?row\b([^>]*)>([\s\S]*?)<\/(?:[\w.-]+:)?row>/g)) {
+      if (rows.length > 100_000) throw Error('XLSX_ROW_LIMIT');
       const cells: string[] = [];
-      for (const cell of row[1].matchAll(/<c\b([^>]*?)(?:\/\s*>|>([\s\S]*?)<\/c>)/g)) {
+      for (const cell of row[2].matchAll(/<(?:[\w.-]+:)?c\b([^>]*?)(?:\/\s*>|>([\s\S]*?)<\/(?:[\w.-]+:)?c>)/g)) {
         const attrs = cell[1];
         const body = cell[2] ?? "";
-        const raw = body.match(/<v[^>]*>([\s\S]*?)<\/v>/)?.[1] ?? body.match(/<t[^>]*>([\s\S]*?)<\/t>/)?.[1] ?? "";
+        const raw = body.match(/<(?:[\w.-]+:)?v\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?v>/)?.[1]
+          ?? body.match(/<(?:[\w.-]+:)?t\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?t>/)?.[1] ?? "";
         const value = raw && /\bt=["']s["']/.test(attrs) ? shared[Number(raw)] ?? "" : decodeXml(raw);
-        // Excel omits blank cells. Preserve their positions so the comparative
-        // year cannot be read as the current one.
         const column = attrs.match(/\br=["']([A-Z]+)\d+["']/i)?.[1]?.toUpperCase();
         const index = column ? Array.from(column).reduce((n,c) => n*26+c.charCodeAt(0)-64,0)-1 : cells.length;
         if (index >= 0 && index < 16384) cells[index] = value.trim();
       }
-      if (cells.length) lines.push(cells.join("\t"));
+      if (cells.length) {
+        rows.push(cells);
+        const sourceRow=Number(row[1].match(/\br=["'](\d+)["']/)?.[1]);
+        rowNumbers.push(Number.isSafeInteger(sourceRow)&&sourceRow>0?sourceRow:(rowNumbers.at(-1)??0)+1);
+      }
     }
+    result.push({sheet:sheet.slice('xl/worksheets/'.length),rows,rowNumbers});
   }
-  return lines.join("\n");
+  return result;
+}
+export function extractXlsxRows(bytes:Uint8Array): string[][] {
+  return extractXlsxSheets(bytes).flatMap(s=>s.rows);
+}
+
+// Preserve cell boundaries for structured 1C adapters: descriptions may contain
+// embedded newlines and cannot be safely split back from a text-only export.
+export function extractXlsxText(bytes: Uint8Array) {
+  return extractXlsxRows(bytes).map(cells => cells.join("\t")).join("\n");
 }
 
 export function extractCsvText(bytes: Uint8Array) {
@@ -115,17 +135,40 @@ export function extractCsvText(bytes: Uint8Array) {
   return [...rows, row].join("\n");
 }
 
-function extractLegacyXls(bytes: Uint8Array): Promise<string> {
+function extractLegacyXls(bytes: Uint8Array, mode: 'tsv' | 'sheets' = 'tsv'): Promise<string> {
   if (bytes.length > 25 * 1024 * 1024 || Buffer.from(bytes.subarray(0, 8)).toString('hex') !== 'd0cf11e0a1b11ae1') {
     return Promise.reject(Error('Некорректный файл Excel 97–2003.'));
   }
   return new Promise((accept, reject) => {
-    const child = execFile('python3', ['-I', resolve('lib/release/read-legacy-xls.py')], {
+    const child = execFile('python3', ['-I', resolve('lib/release/read-legacy-xls.py'), ...(mode === 'sheets' ? ['--sheets-json'] : [])], {
       timeout: 12000, killSignal: 'SIGKILL', maxBuffer: 8 * 1024 * 1024,
       encoding: 'utf8', env: {PATH: process.env.PATH, LANG: 'C.UTF-8', NODE_ENV: process.env.NODE_ENV ?? 'production'}
     }, (error, output) => error ? reject(Error('Не удалось прочитать книгу XLS.')) : accept(output));
     child.stdin?.on('error', () => reject(Error('Не удалось передать книгу XLS для чтения.')));
     child.stdin?.end(bytes);
+  });
+}
+
+
+/** Existing Python xlrd reader in opt-in structured mode; do not merge
+ * unrelated Excel sheets or lose actual source row references. */
+export async function extractLegacyXlsSheets(bytes: Uint8Array): Promise<Array<{sheet:string;rows:string[][];rowNumbers:number[]}>> {
+  const body = await extractLegacyXls(bytes, 'sheets');
+  let parsed: unknown;
+  try { parsed = JSON.parse(body); } catch { throw Error('LEGACY_XLS_SHEETS_INVALID'); }
+  if (!Array.isArray(parsed) || parsed.length < 1 || parsed.length > 64) throw Error('LEGACY_XLS_SHEETS_INVALID');
+  return parsed.map((item: unknown) => {
+    if (!item || typeof item !== 'object') throw Error('LEGACY_XLS_SHEETS_INVALID');
+    const s = item as {sheet?:unknown;rows?:unknown;rowNumbers?:unknown};
+    if (typeof s.sheet !== 'string' || !s.sheet || s.sheet.length > 120 ||
+        !Array.isArray(s.rows) || s.rows.length > 100000 || !Array.isArray(s.rowNumbers) ||
+        s.rowNumbers.length !== s.rows.length) throw Error('LEGACY_XLS_SHEETS_INVALID');
+    const rows = s.rows as unknown[], numbers=s.rowNumbers as unknown[];
+    if (rows.some(r => !Array.isArray(r) || r.length > 256 ||
+        r.some((v:unknown)=>typeof v!=='string' || v.length>32767)) ||
+        numbers.some((n,i)=>!Number.isSafeInteger(n) || (n as number)<1 ||
+          (i>0 && (n as number) <= (numbers[i-1] as number)))) throw Error('LEGACY_XLS_SHEETS_INVALID');
+    return {sheet:s.sheet,rows:rows as string[][],rowNumbers:numbers as number[]};
   });
 }
 
