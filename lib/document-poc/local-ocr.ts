@@ -80,14 +80,51 @@ async function renderAndRead(source:string,dir:string,page:number,segment:'FULL'
  await exec('pdftoppm',[...args,source,prefix],15_000);
  return readImage(prefix+'.png',page,dpi,financial,bureau);
 }
-// Accept only distinct high-confidence financial line-code tokens as OCR evidence.
+// Account-form OCR may read an amount in a far-right data column as a
+// four-digit line code. Select only the dominant *physical code column*.
+// Valid RAS detail rows can end in 5 (e.g. 1105, 1215); neither a date
+// nor a stray amount is evidence of row identity without alignment.
 export function financialOcrCodes(tsv:string):Set<string>{
- const codes=new Set<string>();
+ const hits:Array<{code:string;x:number}>=[];
  for(const row of tsv.split('\n')){
   const cols=row.split('\t'),word=cols[11]?.trim()??'';
-  if(cols[0]==='5'&&Number(cols[10])>=45&&/^(?:1[1-7]\d0|2[1-5]\d0)$/.test(word))codes.add(word);
+  const confidence=Number(cols[10]),x=Number(cols[6]),w=Number(cols[8]);
+  if(cols[0]!=='5'||!Number.isFinite(confidence)||confidence<45||
+    !Number.isFinite(x)||!Number.isFinite(w)||x<0||w<=0||
+    !/^(?:1[1-7]\d{2}|2[1-5]\d{2})$/.test(word))continue;
+  hits.push({code:word,x});
  }
- return codes;
+ const groups:Array<{x:number;codes:Set<string>;n:number}>=[];
+ for(const hit of hits.sort((a,b)=>a.x-b.x)){
+  const group=groups.at(-1);
+  if(group&&Math.abs(hit.x-group.x)<=22){
+   group.x=(group.x*group.n+hit.x)/(group.n+1);
+   group.n++;group.codes.add(hit.code);
+  }else groups.push({x:hit.x,n:1,codes:new Set([hit.code])});
+ }
+ const ranked=groups.sort((a,b)=>b.codes.size-a.codes.size);
+ if((ranked[0]?.codes.size??0)>=3){
+  // Two competing columns of similar size are not one reliable bank/form table.
+  if((ranked[1]?.codes.size??0)>=Math.max(3,ranked[0].codes.size-1))return new Set();
+  return ranked[0].codes;
+ }
+ // At most two candidate codes: insufficient geometry, preserve weak evidence
+ // for the retry decision; the table parser still needs its own column proof.
+ return new Set(hits.map(h=>h.code));
+}
+/** Rows clearly present in the code column but not bound to a dated table.
+ * Often a F1/F2 continuation page without repeated headers. Surface a review
+ * warning; NEVER transfer prior-page headings into financial amounts.
+ */
+export function financialUnboundRowCodes(tsv:string,rows:readonly PdfFinancialRow[],page:number):string[]{
+ const found=financialOcrCodes(tsv);
+ if(found.size<4)return [];
+ const bound=new Set(rows.filter(r=>r.line.page===page).map(r=>r.code));
+ const missing=[...found].filter(code=>!bound.has(code));
+ return missing.length>=3?missing:[];
+}
+export function financialOcrToken(word:string,confidence:number):string{
+ return /\d/u.test(word)&&(!Number.isFinite(confidence)||confidence<45)?'?':word;
 }
 // Four real scanned F1 pages showed that a page with 11 apparently valid
 // codes may still be missing seven more. Retry weak financial tables, but
@@ -119,14 +156,14 @@ export function financialTokensFromTsv(tsv:string,dpi:number){
   if(box.some(n=>!Number.isFinite(n)))continue;
   const [x,y,w,h,c]=box;
   if(x<0||y<0||w<=0||h<=0||c<0||c>100)continue;
-  tokens.push({str:c<45&&/\d/.test(word)?'?':word.replace(/^\|(?=\d)|(?<=\d)\|$/g,''),
+  tokens.push({str:financialOcrToken(word,c).replace(/^\|(?=\d)|(?<=\d)\|$/g,''),
     width:w*scale,transform:[1,0,0,h*scale,x*scale,-(y+h)*scale]});
  }
  return tokens;
 }
 async function readImage(path:string,page:number,dpi:number,financial:boolean,bureau:boolean) {
  const args=[path,'stdout','-l','rus+eng','--psm',bureau||financial?'6':'1'];
- if(!financial&&!bureau)return {text:await exec('tesseract',args),tables:undefined,sparsePass:false,numericReview:false,financialConflict:false};
+ if(!financial&&!bureau)return {text:await exec('tesseract',args),tables:undefined,sparsePass:false,numericReview:false,financialConflict:false,unboundFinancialRows:false};
  let tsv=await exec('tesseract',[...args,'tsv']);
  let sparsePass=false;
  let chosenFinancialRows:PdfFinancialRow[]|null=null;
@@ -156,7 +193,9 @@ async function readImage(path:string,page:number,dpi:number,financial:boolean,bu
    const [level,,block,paragraph,line,,left,top,width,height,confidence,word]=row.split('\t');
    if(level!=='5'||!word?.trim())continue;
    const key=[block,paragraph,line].join(':');
-   const words=lines.get(key)??[];words.push(word);lines.set(key,words);
+   const words=lines.get(key)??[];
+   words.push(financial?financialOcrToken(word,Number(confidence)):word);
+   lines.set(key,words);
    if(bureau){
      const row=bureauLines.get(key)??[];
      const sanitized=bureauOcrToken(word,Number(confidence));
@@ -194,13 +233,14 @@ async function readImage(path:string,page:number,dpi:number,financial:boolean,bu
      }
      if(candidates.size===1)text+='\nИНН: '+[...candidates][0];
    }
-   return {text,tables:undefined,sparsePass:false,numericReview:bureauNumericReview,financialConflict:false};
+   return {text,tables:undefined,sparsePass:false,numericReview:bureauNumericReview,financialConflict:false,unboundFinancialRows:false};
  }
  const chosen=chosenFinancialRows??financialTableRows(financialTokensFromTsv(tsv,dpi),page,true);
  const checked=reconcileFinancialOcrRows(chosen,alternativeFinancialRows);
  for(const row of checked.rows)row.line.confidence='MEDIUM';
  return {text:[...lines.values()].map(words=>words.join(' ')).join('\n'),
-   tables:checked.rows,sparsePass,numericReview:false,financialConflict:checked.disagreements.length>0};
+   tables:checked.rows,sparsePass,numericReview:false,financialConflict:checked.disagreements.length>0,
+   unboundFinancialRows:financialUnboundRowCodes(tsv,checked.rows,page).length>0};
 }
 // Preserve tabular columns and physical-page breaks in native bureau PDFs.
 export async function nativeLayoutText(bytes:Uint8Array){
@@ -244,6 +284,7 @@ export async function recognizeLocalDocument(bytes:Uint8Array,options:OcrOptions
     const result=await readImage(source,1,dpi,!!options.financial,!!options.bureau);
     if(result.sparsePass)warnings.push('OCR_FINANCIAL_SPARSE_PASS:1');
     if(result.financialConflict)warnings.push('OCR_FINANCIAL_PASS_CONFLICT:1');
+    if(result.unboundFinancialRows)warnings.push('OCR_FINANCIAL_ROWS_UNBOUND:1');
     if(result.numericReview)warnings.push('OCR_BKI_NUMERIC_REVIEW:1');
     append(result.text,'FULL',1,'OCR',result.tables);continue;
    }
@@ -260,6 +301,7 @@ export async function recognizeLocalDocument(bytes:Uint8Array,options:OcrOptions
      const recognized=await renderAndRead(source,dir,page,s.segment,dpi,!!options.financial,!!options.bureau,{x:0,y:s.y,width:w,height:s.height});
      if(recognized.sparsePass)warnings.push('OCR_FINANCIAL_SPARSE_PASS:'+page+':'+s.segment);
      if(recognized.financialConflict)warnings.push('OCR_FINANCIAL_PASS_CONFLICT:'+page+':'+s.segment);
+     if(recognized.unboundFinancialRows)warnings.push('OCR_FINANCIAL_ROWS_UNBOUND:'+page+':'+s.segment);
      if(recognized.numericReview)warnings.push('OCR_BKI_NUMERIC_REVIEW:'+page+':'+s.segment);
      append(recognized.text,s.segment,s.logicalPage,'OCR',recognized.tables);
     }
@@ -267,6 +309,7 @@ export async function recognizeLocalDocument(bytes:Uint8Array,options:OcrOptions
     const recognized=await renderAndRead(source,dir,page,'FULL',dpi,!!options.financial,!!options.bureau);
     if(recognized.sparsePass)warnings.push('OCR_FINANCIAL_SPARSE_PASS:'+page);
     if(recognized.financialConflict)warnings.push('OCR_FINANCIAL_PASS_CONFLICT:'+page);
+    if(recognized.unboundFinancialRows)warnings.push('OCR_FINANCIAL_ROWS_UNBOUND:'+page);
     if(recognized.numericReview)warnings.push('OCR_BKI_NUMERIC_REVIEW:'+page);
     append(recognized.text,'FULL',page,'OCR',recognized.tables);
    }

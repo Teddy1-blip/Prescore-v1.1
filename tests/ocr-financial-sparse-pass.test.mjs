@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {financialOcrCodes,preferSparseFinancialOcr,shouldRetryFinancialOcr} from '../lib/document-poc/local-ocr.ts';
+import {financialOcrCodes,financialUnboundRowCodes,financialOcrToken,preferSparseFinancialOcr,shouldRetryFinancialOcr} from '../lib/document-poc/local-ocr.ts';
 const word=(s,confidence=96)=>['5','1','1','1','1','1','100','100','15','10',String(confidence),s].join('\t');
 const seq=(...a)=>a.join('\n');
 test('second OCR pass restores high-confidence financial row codes absent from primary pass',()=>{
@@ -30,4 +30,34 @@ test('line codes without balance totals require a second OCR pass even when nume
  const noTotal=['1100','1110','1120','1130','1140','1150','1160','1170',
  '1200','1210','1220','1230','1240','1250','1260','1300','1400'].map(x=>word(x)).join('\n');
  assert.equal(shouldRetryFinancialOcr(noTotal),true);
+});
+
+test('real-scan-shaped OCR: stray comparative amount in another x column cannot become a row code',()=>{
+ const at=(s,x,top=100,confidence=96)=>
+  ['5','1','1','1','1','1',String(x),String(top),'25','12',String(confidence),s].join('\t');
+ const codes=['1105','1110','1130','1140','1150','1160'].map((x,i)=>at(x,915+i,100+i*27));
+ const other=[at('1108',1620,115,99),at('2546',1625,200,99)];
+ assert.deepEqual([...financialOcrCodes([...codes,...other].join('\n'))],
+  ['1105','1110','1130','1140','1150','1160']);
+});
+test('multiple competing aligned code columns must not pretend to be one table',()=>{
+ const at=(s,x)=>['5','1','1','1','1','1',String(x),'100','25','12','96',s].join('\t');
+ const left=['1100','1200','1600'].map(s=>at(s,915));
+ const right=['1210','1300','1700'].map(s=>at(s,1500));
+ assert.deepEqual([...financialOcrCodes([...left,...right].join('\n'))],[]);
+});
+test('continuation page with five aligned code tokens and no dated header needs review',()=>{
+ const at=(s,i)=>['5','1','1','1','1','1',String(920+i),'100','25','12','96',s].join('\t');
+ const raw=['1170','1180','1190','1210','1230'].map(at).join('\n');
+ assert.equal(financialUnboundRowCodes(raw,[],2).length,5);
+ const parsed=[{code:'1170',line:{page:2}},{code:'1180',line:{page:2}},
+  {code:'1190',line:{page:2}}];
+ assert.deepEqual(financialUnboundRowCodes(raw,parsed,2),[],
+  'only two absent codes do not establish wholesale missing table');
+});
+test('low-confidence numeric OCR cannot supply BFO text metadata or monetary columns',()=>{
+ assert.equal(financialOcrToken('2025',20),'?');
+ assert.equal(financialOcrToken('384',Number.NaN),'?');
+ assert.equal(financialOcrToken('2025',80),'2025');
+ assert.equal(financialOcrToken('Бухгалтерский',21),'Бухгалтерский');
 });

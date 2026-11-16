@@ -84,6 +84,16 @@ export function reviewFields(id:string,pages:EvidencePage[],total:number,family:
     result.status='INCOMPLETE';
     result.issues.push('BFO_OCR_PASS_DISAGREEMENT');
   }
+  // Tables on scanned F1/F2 continuation pages may omit printed column
+  // headings. Do not silently claim that those financial rows were covered.
+  const unboundPages=warnings.flatMap(w=>{
+    const match=/^OCR_FINANCIAL_ROWS_UNBOUND:(\d+)(?::|$)/.exec(w);
+    return match?[Number(match[1])]:[];
+  });
+  if(unboundPages.some(p=>eligible.has(p))){
+    result.status='INCOMPLETE';
+    result.issues.push('BFO_CONTINUATION_ROWS_UNBOUND');
+  }
   // A recognized document heading or a successful OCR response is not proof
   // that even one current-period financial value was read accurately.
   const readable = bfo.rows.filter(row=>row.current_period_value.value!==null && row.current_period_value.status==='READ');

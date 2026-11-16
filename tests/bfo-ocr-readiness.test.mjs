@@ -41,3 +41,12 @@ test('reconciled printed balance totals remain visible as individually read sour
  assert.equal(report.fields.find(f=>f.key==='1600')?.status,'READ');
  assert.equal(report.issues.includes('BFO_INTEGRITY_REVIEW_REQUIRED'),false);
 });
+
+test('unbound continuation table on a scanned financial page blocks complete BFO review',()=>{
+ const first=ocrPage('Бухгалтерский баланс\nна 31 декабря 2025 г.\nЕдиница измерения: тыс. руб. по ОКЕИ 384\nБАЛАНС | 1600 | 100 | 80\nБАЛАНС | 1700 | 100 | 80');
+ const result=reviewFields('synthetic:unbound-continuation',[first],1,'BFO','SINGLE',
+  ['OCR_FINANCIAL_ROWS_UNBOUND:1']);
+ assert.equal(result.status,'INCOMPLETE');
+ assert.ok(result.issues.includes('BFO_CONTINUATION_ROWS_UNBOUND'));
+ assert.equal(result.fields.find(f=>f.key==='1600')?.value,'100');
+});
