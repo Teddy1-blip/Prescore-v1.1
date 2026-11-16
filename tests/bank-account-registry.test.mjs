@@ -2,6 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {sourcePeriodAudit} from '../lib/workspace/source-period-audit.ts';
 import {bankAccountRegister,lastCompletedMoscowDay} from '../lib/workspace/bank-account-registry.ts';
+import React from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
+import {createWorkspaceRuntime} from './fixtures/workspace-runtime.mjs';
 const inn='9900000001';
 const mk=(id,account,from,to,bank='АО Учебный банк',extra={})=>({
  id,kind:'BANK_STATEMENT',documentId:null,
@@ -97,4 +100,29 @@ test('same account with non-overlapping periods is still not a claim of complete
  assert.equal(r.accounts[0].state,'UP_TO_REFERENCE');
  assert.equal(r.accounts[0].periods.length,1);
  assert.equal(r.automaticApply,false);
+});
+
+test('account register renders a compact owner-facing card with source date and no full account',async()=>{
+ const rt=await createWorkspaceRuntime();
+ try{
+  const {BankAccountRegistry}=rt.load('app/components/workspace/bank-account-registry.tsx');
+  const account='40702810111110000001';
+  const sources=[
+   mk('first',account,'2026-11-01','2026-11-06'),
+   mk('second',account,'2026-11-08','2026-11-10'),
+  ];
+  const data=run(sources);
+  const html=renderToStaticMarkup(React.createElement(BankAccountRegistry,{
+   data,busy:false,onUpload:()=>{},
+  }));
+  assert.match(html,/Реестр загруженных расчётных счетов/);
+  assert.match(html,/АО Учебный банк/);
+  assert.match(html,/Счёт/);
+  assert.match(html,/0001/);
+  assert.match(html,/07\.11\.2026/);
+  assert.match(html,/11\.11\.2026/);
+  assert.match(html,/15\.11\.2026/);
+  assert.match(html,/Дозагрузить выписку/);
+  assert.doesNotMatch(html,new RegExp(account));
+ }finally{await rt.close();}
 });
