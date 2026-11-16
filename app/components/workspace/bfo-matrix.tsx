@@ -1,9 +1,10 @@
 'use client';
-import {Fragment,useState} from 'react';
+import {createContext,Fragment,useState} from 'react';
 import {financialLabel} from '../../../lib/credit-engine/client-report/source-detail.ts';
 import {statementGroups,statementColumns,statementCodes,statementNumber,displayUnits,type StatementMatrix,type StatementField,type StatementColumn} from '../../../lib/workspace/statement-matrix.ts';
 import './bfo-matrix.css';
 
+export const DossierMatrixContext=createContext<StatementMatrix|null>(null);
 const totals=new Set(['1100','1200','1300','1400','1500','1600','1700','2100','2200','2300','2400']);
 export function BfoMatrix({matrix,onPeriod}:{matrix:StatementMatrix;onPeriod?:(id:string)=>void}){
   const [unit,setUnit]=useState(1000),[range,setRange]=useState('recent'),[compact,setCompact]=useState(false);

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import {BfoMatrix,DossierMatrixContext} from '../bfo-matrix';
+import { useContext,useEffect, useRef, useState, type ReactNode } from 'react';
 import { Card, Drawer, Kpi, Review, Table } from './primitives';
 import { CashCards } from './charts';
 import { money, rub, type Application, type Page, type ViewData } from './types';
@@ -20,6 +21,7 @@ export type ScreenProps = {
 };
 export function ApprovedPage(p: ScreenProps) {
   const { page, data: d, go } = p;
+  const matrix=useContext(DossierMatrixContext);
   const [statement, setStatement] = useState(false),
     [drawer, setDrawer] = useState(''),
     [promiseDate, setPromiseDate] = useState('');
@@ -203,7 +205,7 @@ export function ApprovedPage(p: ScreenProps) {
           </button>
           {d.hasBankBfo && <a className="text-link" href="#bank-bfo-comparison">Сверка выписок и БФО ↓</a>}
         </div>
-        {statement ? (
+        {statement && matrix?.periods.length ? <BfoMatrix matrix={matrix}/> : statement ? (
           <Card title="БФО: показатели и основания" sub={d.fiscalDate || 'Отдельный отчётный период'}>
             {d.bfo.length ? (
               <Table

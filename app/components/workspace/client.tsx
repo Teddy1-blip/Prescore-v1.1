@@ -1,5 +1,7 @@
 "use client";
 import type {buyerBalanceSummary} from '../../../lib/workspace/settlement-events';
+import {DossierMatrixContext} from './bfo-matrix';
+import type {StatementMatrix} from '../../../lib/workspace/statement-matrix';
 import {CompanySources} from './company-sources';
 import {latestCompanyVersion,resolveClientSelection} from '../../../lib/workspace/client-navigation';
 import {BankBfoReconciliation} from './bank-bfo-reconciliation';
@@ -47,6 +49,7 @@ export default function ClientWorkspace(){
  const [analyses,setAnalyses]=useState<StoredAnalysis[]>([]),[deals,setDeals]=useState<Deal[]|null>(null),[selectedId,setSelectedId]=useState(''),[view,setView]=useState('home'),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState(''),[readOnly,setReadOnly]=useState(false),[revision,setRevision]=useState(0),[modules,setModules]=useState<Record<string,boolean>>({}),[modulesLoading,setModulesLoading]=useState(true);
  const [operationsError,setOperationsError]=useState(''),[operationsLoading,setOperationsLoading]=useState(false),[uploadReceipt,setUploadReceipt]=useState<{id:string;receipt:UploadReceipt}|null>(null);
  const [dossierId,setDossierId]=useState(''),[dossierInn,setDossierInn]=useState(''),[agentWorkspace,setAgentWorkspace]=useState(false);
+ const [financialDossier,setFinancialDossier]=useState<{company:{id:string;inn:string};matrix:StatementMatrix}|null>(null);
  const [companies,setCompanies]=useState<{id:string;inn:string}[]>([]);
  const [ownerTestWorkspace,setOwnerTestWorkspace]=useState(false);
  const [buyerData,setBuyerData]=useState<{id:string;balances:ReturnType<typeof buyerBalanceSummary>}|null>(null);
@@ -128,10 +131,13 @@ export default function ClientWorkspace(){
  const showApproved=!(['counterparties','calendar'].includes(view)&&!agentWorkspace&&!locked)&&!loading&&!modulesLoading&&!disabled&&!error&&!unavailable&&(!needsModel||!!model)&&!!selected&&!(view==='applications'&&(!operationsReady||!!operationsError));
  const companyName=model?.basic.analysis.company.name?.trim()||selected?.companyName?.trim()||'Ваш кредитный профиль';
  const sourcesVisible=!loading&&!modulesLoading&&!disabled&&!error&&!locked&&!agentWorkspace&&!unavailable&&(!selectedId||!!selected)&&['home','banking','bfo','counterparties','obligations','documents','analysis','calendar','actions','financing','billing'].includes(view);
- const sourcesWidget=sourcesVisible?<CompanySources key={'sources:'+dossierId+':'+selectedId+':'+view} view={view} choose={choose} id={dossierId} analysisId={selected?.id} model={model} ownerTestWorkspace={ownerTestWorkspace} onBuyerBalances={ownerTestWorkspace&&view==='home'?setBuyerData:undefined} companyEntry={view==='home'?companyEntry:0} bankInn={selected?.companyInn} bank={model?.basic} onCompany={setDossierInn} onSourceChanged={selectedId?refreshSource:undefined} openBank={()=>choose('upload')}/>:null;
+ const sourcesWidget=sourcesVisible?<CompanySources key={'sources:'+dossierId+':'+selectedId+':'+view} view={view} choose={choose} id={dossierId} analysisId={selected?.id} model={model} onMatrix={setFinancialDossier} ownerTestWorkspace={ownerTestWorkspace} onBuyerBalances={ownerTestWorkspace&&view==='home'?setBuyerData:undefined} companyEntry={view==='home'?companyEntry:0} bankInn={selected?.companyInn} bank={model?.basic} onCompany={setDossierInn} onSourceChanged={selectedId?refreshSource:undefined} openBank={()=>choose('upload')}/>:null;
  const openCompanyEntry=ownerTestWorkspace&&!locked&&availableViews.includes('home')&&!agentWorkspace&&!error
   ?()=>{choose('home');setCompanyEntry(n=>n+1);} : undefined;
- return <ClientShell buyerBalances={ownerTestWorkspace&&buyerData?.id===dossierId?buyerData.balances:null} onAddCompany={openCompanyEntry} key={dossierId||selectedId} companies={companies} dossier={dossierId?{id:dossierId,inn:dossierInn}:undefined} selected={selected} analyses={unavailable||error?[]:analyses} model={model} locked={locked||loading||modulesLoading} select={chooseAnalysis} add={addDeal} deals={deals??[]}
+ const currentMatrix=sourcesVisible&&financialDossier?.matrix&&
+   (!dossierId||financialDossier.company.id===dossierId)&&(!selected||financialDossier.company.inn===selected.companyInn)&&
+   (dossierId||selected)?financialDossier.matrix:null;
+ return <DossierMatrixContext.Provider value={currentMatrix}><ClientShell buyerBalances={ownerTestWorkspace&&buyerData?.id===dossierId?buyerData.balances:null} onAddCompany={openCompanyEntry} key={dossierId||selectedId} companies={companies} dossier={dossierId?{id:dossierId,inn:dossierInn}:undefined} selected={selected} analyses={unavailable||error?[]:analyses} model={model} locked={locked||loading||modulesLoading} select={chooseAnalysis} add={addDeal} deals={deals??[]}
  renderPage={showApproved} view={view} choose={choose} availableViews={availableViews} context={<div className="pc-company"><b>{companyName}</b><span>{selected?'ИНН '+(model?.basic.analysis.company.inn??selected.companyInn):'Кредитный профиль компании'}{model?' · '+date(model.basic.analysis.period.from)+' — '+date(model.basic.analysis.period.to):''}{locked?' · Режим просмотра':''}</span></div>}>
 
  {(error.startsWith('Сессия завершена')||state.error.startsWith('Сессия завершена')||operationsError.startsWith('Сессия завершена'))&&<p role="alert">Сессия завершена. <a href={'/login?returnTo='+encodeURIComponent(window.location.pathname+window.location.search+window.location.hash)}>Войти снова</a></p>}
@@ -156,5 +162,5 @@ export default function ClientWorkspace(){
  </>}</LivePage>
  {(view!=='home'||(model&&companyEntry===0))&&sourcesWidget}
  {showApproved&&model&&(['home','counterparties','obligations'] as string[]).includes(view)&&<ClientAnalyticPipeline key={'pipeline:'+selectedId+':'+view} model={model} scope={view as 'home'|'bfo'|'counterparties'|'obligations'} choose={choose}/>}
- </ClientShell>;
+ </ClientShell></DossierMatrixContext.Provider>;
 }
