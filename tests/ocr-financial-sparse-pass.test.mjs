@@ -61,3 +61,16 @@ test('low-confidence numeric OCR cannot supply BFO text metadata or monetary col
  assert.equal(financialOcrToken('2025',80),'2025');
  assert.equal(financialOcrToken('Бухгалтерский',21),'Бухгалтерский');
 });
+
+test('three aligned codes with balance total on a continuation page require manual column binding',()=>{
+ const at=(code,x)=>['5','1','1','1','1','1',String(x),'120','25','12','95',code].join('\t');
+ const rows=[at('1260',915),at('1200',916),at('1600',916)].join('\n');
+ assert.deepEqual(financialUnboundRowCodes(rows,[],3),['1260','1200','1600']);
+ assert.deepEqual(financialUnboundRowCodes(rows,[{code:'1600',line:{page:3}}],3),[],
+  'a single missing pair does not establish a whole unbound table');
+});
+test('three unrelated amounts or undated three-code fragment cannot certify a continuation',()=>{
+ const at=(code,x)=>['5','1','1','1','1','1',String(x),'120','25','12','95',code].join('\t');
+ assert.deepEqual(financialUnboundRowCodes([at('1260',200),at('1200',600),at('1600',900)].join('\n'),[],3),[]);
+ assert.deepEqual(financialUnboundRowCodes([at('1260',915),at('1200',916),at('1250',916)].join('\n'),[],3),[]);
+});

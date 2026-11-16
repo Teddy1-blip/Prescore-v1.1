@@ -118,7 +118,20 @@ export function financialOcrCodes(tsv:string):Set<string>{
  */
 export function financialUnboundRowCodes(tsv:string,rows:readonly PdfFinancialRow[],page:number):string[]{
  const found=financialOcrCodes(tsv);
- if(found.size<4)return [];
+ if(found.size<3)return [];
+ // Require three distinct codes in ONE physical column, including on a
+ // short balance continuation with only 1200/1260/1600. Do not treat three
+ // unrelated four-digit amounts elsewhere on the page as omitted BFO rows.
+ const positions:Array<{code:string;x:number}>=[];
+ for(const line of tsv.split('\n')){
+  const fields=line.split('\t'),code=fields[11]?.trim()??'';
+  const x=Number(fields[6]),confidence=Number(fields[10]);
+  if(fields[0]==='5'&&found.has(code)&&Number.isFinite(x)&&x>=0&&
+     Number.isFinite(confidence)&&confidence>=45)positions.push({code,x});
+ }
+ const aligned=positions.some(p=>new Set(positions.filter(other=>Math.abs(other.x-p.x)<=22).map(other=>other.code)).size>=3);
+ if(!aligned)return [];
+ if(found.size===3&&!['1600','1700','2400'].some(code=>found.has(code)))return [];
  const bound=new Set(rows.filter(r=>r.line.page===page).map(r=>r.code));
  const missing=[...found].filter(code=>!bound.has(code));
  return missing.length>=3?missing:[];
