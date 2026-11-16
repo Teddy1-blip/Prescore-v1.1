@@ -54,7 +54,7 @@ test('a bogus four-digit code is still invalid; do not turn arbitrary numbers in
   {text:'Бухгалтерский баланс',page:1,confidence:'HIGH'},
   {text:'на 31 декабря 2025 г.',page:1,confidence:'HIGH'},
   {text:'Единица измерения: тыс. руб. по ОКЕИ 384',page:1,confidence:'HIGH'},
-  {text:'Сторонний код | 9999 | 100 | 90',page:1,confidence:'HIGH'},
+  {text:'Сторонний код | 2999 | 100 | 90',page:1,confidence:'HIGH'},
   {text:'БАЛАНС | 1600 | 1000 | 900',page:1,confidence:'HIGH'},
   {text:'БАЛАНС | 1700 | 1000 | 900',page:1,confidence:'HIGH'}
  ],issues:[]};
