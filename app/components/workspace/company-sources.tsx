@@ -1,4 +1,6 @@
 'use client';
+import {DocumentRegister} from './document-register';
+import './premium-client.css';
 import {BfoMatrix} from './bfo-matrix';
 import {CompanyReportButton} from './company-report-button';
 import {ClientAnalyticPipeline} from './client-analytic-pipeline';
@@ -45,6 +47,8 @@ function ScanLayout(){
 export function CompanySources({view,choose,id,bankInn,bank,analysisId,model,openBank,onCompany,onMatrix,onSourceChanged,ownerTestWorkspace=false,companyEntry=0,onBuyerBalances}:{onBuyerBalances?:(item:{id:string;balances:ReturnType<typeof buyerBalanceSummary>})=>void;ownerTestWorkspace?:boolean;companyEntry?:number;view:string;choose:(view:string,section?:string)=>void;id:string;analysisId?:string;model?:WorkspaceModelV1|null;bankInn?:string;bank?:WorkspaceBasicV1;openBank:()=>void;onCompany:(inn:string)=>void;onMatrix?:(profile:Pick<Profile,'company'|'matrix'>)=>void;onSourceChanged?:()=>Promise<unknown>}){
 
  const [inn,setInn]=useState(bankInn??''),[companies,setCompanies]=useState<Company[]>([]),[profile,setProfile]=useState<Profile|null>(null),[preview,setPreview]=useState<PublicProfile|null>(null);
+ const [recentId,setRecentId]=useState('');
+ useEffect(()=>{setRecentId(new URLSearchParams(window.location.search).get('source')??'');},[id]);
  const [error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[revision,setRevision]=useState(0),[selectedYear,setYear]=useState('');
  useEffect(()=>{const ctrl=new AbortController();(async()=>{
    const list=await read<{companies:Company[]}>('/api/dossier',{signal:ctrl.signal});
@@ -106,15 +110,16 @@ export function CompanySources({view,choose,id,bankInn,bank,analysisId,model,ope
     if(targetId&&result.dossierId!==targetId)throw Error('Документ вернул ссылку на другое досье. Обновите страницу для проверки.');
     if(!mounted.current)return;
     if(view==='bfo'&&!result.pending)setYear(result.id);
+    setRecentId(result.id);
     form.reset();setRevision(n=>n+1);
     if(result.pending){
       try{await recognize(result.dossierId,result.id,result.layout??String(data.get('layout')??'SINGLE'));}
       catch(e){if(company)throw e;sessionStorage.setItem('pc-ocr-notice:'+result.dossierId,String((e as Error).message));}
     }
     if(!mounted.current)return;
-    if(!targetId){if(window.location.href===submittedFrom)location.assign(dossierHref(result.dossierId,view));return;}
+    if(!targetId){if(window.location.href===submittedFrom)location.assign(dossierHref(result.dossierId,view)+'&source='+encodeURIComponent(result.id));return;}
     if(!result.pending)await onSourceChanged?.();
-    setNotice(result.duplicate?'Этот документ уже учтён.':result.pending?'Документ сохранён. Проверьте распознанные поля.':'Документ сохранён.');
+    setNotice(result.duplicate?'Оригинал уже есть в досье.':result.pending?'Документ сохранён. Проверьте распознанные поля.':'Документ сохранён.');
   }
   catch(e){setError((e as Error).message);}finally{setBusy(false);}
  }
@@ -238,12 +243,13 @@ export function CompanySources({view,choose,id,bankInn,bank,analysisId,model,ope
    {model?.full&&<ClientAnalyticPipeline model={model} scope="bfo" choose={choose}/>}
    {profile&&!analysisId&&<section className="pc-bfo-insights" aria-label="Экспертные выводы по БФО"><header><h2>Экспертность и следующие действия</h2><p>Все выводы видны сразу. Содержание зависит от подтверждённых данных компании.</p></header><div className="pc-bfo-insight-grid">{stages.map((stage,i)=>{const items=bfoClaims.filter(c=>c.stage===stage.key);const balanceText=stage.key==='expert'&&period?(period.quality.balanceReconciled===true?'БФО: баланс сходится':period.quality.balanceReconciled===false?'БФО: баланс требует сверки':'БФО: сверка баланса не подтверждена'):null;return <article className="pc-bfo-insight" key={stage.key}><span>{i+1} / 5</span><h3>{stage.title}</h3>{balanceText&&<p className="pc-bfo-main-fact">{balanceText}</p>}{items.length>0?<ul>{items.map(c=><li key={c.id}><strong>{c.horizon?({'DAY_7':'7 дней','DAY_30':'30 дней','DAY_60':'60 дней'}[c.horizon])+' · ':''}{c.title}</strong><p>{c.text}</p>{c.sources.length>0&&<small>Основание: {c.sources.map(s=>s.type+' · '+s.date).join('; ')}</small>}</li>)}</ul>:!balanceText&&<p>{stage.empty}</p>}</article>})}</div></section>}
    {reviewPanels}
-   {error&&<p role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
+   {busy&&<p role="status">Обрабатываем источник…</p>}{error&&<p role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
   </div>;
  }
 
  const passport=view==='home'&&(company||preview)?<CompanyPassport dossier={company?{statementCompanyName:profile?.versions[0]?.name}:undefined} inn={company?.inn??inn} profile={company&&inn!==company.inn?(profile?.publicProfile??null):(preview??profile?.publicProfile??null)} hasStatements={(profile?.versions.length??0)>0} hasAnnual={!!profile?.financial?.history.some(p=>p.period.kind==='ANNUAL')} full={profile?.entitlement==='FULL'} onBankUpload={openBank}/>:null;
  return <div className="ws pc-company-sources" aria-label="Источники компании">
+ {view==='documents'&&company&&profile&&<DocumentRegister profile={profile} inn={company.inn} labels={labels} choose={choose} recentId={recentId} openBank={openBank}/>}
  {company&&passport}
  {(!company||view==='home')&&<Panel title={view==='home'?'Выбрать или добавить компанию':'Компания по ИНН'}>
   {companies.length>0&&<label>Компании в моём досье <select value={company?.id??''} onChange={e=>{if(e.target.value)location.assign(dossierHref(e.target.value,view))}}><option value="">Выберите компанию</option>{companies.map(c=><option key={c.id} value={c.id}>{c.inn}</option>)}</select></label>}
@@ -302,7 +308,7 @@ export function CompanySources({view,choose,id,bankInn,bank,analysisId,model,ope
  {view==='obligations'&&profile.entitlement==='FULL'&&<ManualDebtForm save={async entry=>{await read('/api/dossier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'manual-debt',id:company.id,entry,confirmed:true})});setRevision(n=>n+1);await onSourceChanged?.();}}/>}
  {(view==='counterparties'||view==='obligations'&&portfolioSource==='DEBT_LEDGER')&&<details><summary>Формат импорта ОСВ</summary><p>Одна строка на счёт, контрагента, договор и дату. Заголовки колонок: ИНН организации, Дата остатка, Счёт, Контрагент, Договор, Дебет, руб., Кредит, руб. Дата в формате ГГГГ-ММ-ДД. CSV с разделителем «точка с запятой» либо книга XLS/XLSX. Дополнительно: ИНН контрагента, Вид задолженности, Дата платежа по договору. Для основного долга укажите «Основной долг» и номер договора.</p></details>}
  {view==='obligations'&&portfolioSource==='DEBT_LEDGER'&&currentLedger.length>0&&<Panel title="Остатки по документам ОСВ"><div className="pc-table-scroll"><table><thead><tr>{['Счёт','Контрагент','Договор','Дата','Дебет, ₽','Кредит, ₽','Источник'].map(s=><th key={s}>{s}</th>)}</tr></thead><tbody>{currentLedger.map(l=><tr key={l.sourceId+':'+l.row}><td>{l.account}</td><td>{l.party}{l.partyInn&&<small>ИНН {l.partyInn}</small>}</td><td>{l.contract??'—'}{l.due&&<small>Платёж по договору · {l.due}</small>}</td><td>{l.asOf}</td><td>{l.debit??'—'}</td><td>{l.credit??'—'}</td><td>{profile.sources.find(s=>s.id===l.sourceId)?.name}, строка {l.row}</td></tr>)}</tbody></table></div></Panel>}
- {(view==='documents'||view==='home')&&profile.sources.length>0&&<Panel title="Источники досье">
+ {view==='home'&&profile.sources.length>0&&<Panel title="Источники досье">
    <ul className="pc-dossier-files">{profile.sources.map(s=>{
      const review=profile.reviews.find(item=>item.id===s.id);
      const state=review&&review.status!=='BUREAU_CONFIRMED'?(Object.keys(review.verified).length?'Есть подтверждённые поля':'Требуется проверка'):
@@ -327,6 +333,6 @@ export function CompanySources({view,choose,id,bankInn,bank,analysisId,model,ope
      {bureau&&<label><input required type="checkbox"/> Подтверждаю право передать отчёт и согласие на обработку.</label>}
      <button disabled={busy}>Добавить документ</button>
    </form>;})}</section>}
- {error&&<p role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
+ {busy&&<p role="status">Обрабатываем источник…</p>}{error&&<p role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
  </div>;
 }
