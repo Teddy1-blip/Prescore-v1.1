@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {parseCreditHistoryText} from '../lib/credit-history.ts';
 import {bureauReview,readBureau} from '../lib/workspace/bureau-review.ts';
 import {reviewFields} from '../lib/document-poc/review-fields.ts';
+import {bureauOcrToken} from '../lib/document-poc/local-ocr.ts';
 
 const inn='7707083893';
 const cover='Кредитный отчет\nот 16 июня 2026 года\nСубъект: юридическое лицо\nИНН организации: '+inn;
@@ -59,4 +60,14 @@ test('credit agreement prose binds the contract heading, maturity and interest t
  }
  const conflict=review(text+'\nПроцентная ставка: 19%').find(f=>f.key==='interest_rate');
  assert.equal(conflict?.value,null);
+});
+
+test('low-confidence BKI numbers are withheld, not silently presented as debt or overdue',()=>{
+ for(const word of ['120 000','120000','01.10.2026','7707083893','К-1']){
+   assert.deepEqual(bureauOcrToken(word,40),{value:'?',requiresReview:true},word);
+   assert.deepEqual(bureauOcrToken(word,55),{value:word,requiresReview:false},word);
+ }
+ assert.deepEqual(bureauOcrToken('Кредитор',3),{value:'Кредитор',requiresReview:false});
+ assert.deepEqual(bureauOcrToken('123456',NaN),{value:'?',requiresReview:true});
+ assert.equal(bureauReview(pages,payload,['OCR_BKI_NUMERIC_REVIEW:2']).status,'INCOMPLETE');
 });
