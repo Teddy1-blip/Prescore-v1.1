@@ -227,6 +227,7 @@ test('same exact PDF hash across BFO and quarterly is flagged without merging fi
  const audit=sourcePeriodAudit([a,b],inn);
  assert.equal(audit.duplicates.length,1);
  assert.deepEqual(audit.duplicates[0].kinds,['BFO','QUARTERLY']);
+ assert.equal(audit.groups.length,2,'different document classification must remain visible for review');
  assert.ok(!JSON.stringify(audit).includes(hash));
 });
 test('duplicate contracts with no period get exact-byte notice, not an invented date gap',()=>{

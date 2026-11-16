@@ -53,9 +53,14 @@ export function sourcePeriodAudit(rows:readonly SourceRow[],companyInn:string):S
   if(distinct.length<2)continue;
   duplicates.push({sourceIds:distinct.map(x=>x.id),kinds:[...new Set(distinct.map(x=>x.kind))],
     reason:'IDENTICAL_FILE_CONTENT'});
-  // Preserve every stored file and version, but let one representative establish
-  // continuous coverage so an exact duplicate doesn't masquerade as an overlap.
-  for(const row of distinct.slice(1))redundant.add(row.id);
+  // Preserve every file and every source classification. Suppress only
+  // redundant candidates of the SAME kind: identical bytes can be routed as
+  // BFO versus QUARTERLY, which requires a separate classification review.
+  const seenKinds=new Set<string>();
+  for(const row of distinct){
+    if(seenKinds.has(row.kind))redundant.add(row.id);
+    else seenKinds.add(row.kind);
+  }
  }
  function add(c:Candidate){
   const key=[c.sourceId,c.kind,c.scope,c.mode,c.from,c.to].join('|');
