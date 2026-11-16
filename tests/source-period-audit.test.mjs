@@ -172,12 +172,19 @@ test('owner dossier API closes a bank date gap after a later incremental upload'
   assert.ok(source);
   assert.deepEqual(source.gaps.map(x=>[x.from,x.to]),[['2026-01-11','2026-01-12']]);
   assert.equal(before.versions.length,2);
+  const bankBefore=before.bankAccountRegister.accounts.find(a=>a.kind==='BANK_STATEMENT');
+  assert.deepEqual(bankBefore.internalGaps.map(g=>[g.from,g.to]),[['2026-01-11','2026-01-12']]);
+  assert.equal(bankBefore.accountMask,'Счёт ••••0001');
+  assert.equal(bankBefore.bankName,'АО Учебный банк');
   await add('jan-missing.txt','11.01.2026','12.01.2026','11.01.2026','3');
   const after=await read();
   assert.equal(after.versions.length,3,'old analysis versions are preserved');
   const filled=after.periodAudit.groups.find(g=>g.kind==='BANK_STATEMENT');
   assert.equal(filled.gaps.length,0);
   assert.equal(filled.spans.length,3);
+  const bankAfter=after.bankAccountRegister.accounts.find(a=>a.kind==='BANK_STATEMENT');
+  assert.equal(bankAfter.internalGaps.length,0);
+  assert.deepEqual(bankAfter.coverage,[{from:'2026-01-01',to:'2026-01-31'}]);
   assert.equal(after.periodAudit.automaticApply,false);
   assert.equal((await rt.request('/api/dossier?id='+dossierId,{},rt.stranger)).status,404);
  }finally{await rt.close();}

@@ -16,6 +16,7 @@ import {publicFinancialAnalysis} from '../credit-engine/client-report/source-det
 import {buildCreditPortfolio} from '../credit-engine/credit-portfolio/resolver.ts';
 import {adaptUploadedBki} from '../credit-engine/credit-portfolio/bki-adapter.ts';
 import {sourcePeriodAudit} from './source-period-audit.ts';
+import {bankAccountRegister} from './bank-account-registry.ts';
 
 export type Account51Summary={from:string;to:string;opening:number|null;closing:number|null;inflow:number;outflow:number;entries:number;requiresReview:boolean};
 export type CounterpartyCheck={inn:string;fetchedAt:string;cases:number|null;enforcements:number|null};
@@ -69,8 +70,10 @@ export function sourceProjection(rows:SourceRow[],inn:string,includeFull=true){
     else if(prior&&(prior.amount!==p.amount||prior.inn!==p.inn||prior.date!==p.date||prior.direction!==p.direction))bankPayments.set(p.id,null);
   }
   const payments=[...bankPayments.values()].filter((p):p is PaymentFact=>p!==null);
+  const periodAudit=sourcePeriodAudit(rows,inn);
   return {
-    periodAudit:sourcePeriodAudit(rows,inn),
+    periodAudit,
+    bankAccountRegister:bankAccountRegister(rows,inn,periodAudit),
     settlements:settlementPositions(rows).map(p=>settlementState(p,history,payments)),
     cards51:rows.flatMap(r=>r.payload.account51?[{...r.payload.account51,id:r.id,name:r.payload.envelope.fileName??"Карточка 51"}]:[]),
     bankXlsxReviews:rows.flatMap(r=>r.payload.bankXlsxReview?[{id:r.id,name:r.payload.envelope.fileName??'Банковская XLSX',...r.payload.bankXlsxReview}]:[]),

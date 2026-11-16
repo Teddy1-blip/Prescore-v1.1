@@ -20,6 +20,7 @@ import './client-registers.css';
 import {ReceivablesReview} from './receivables-review';
 import {SettlementRegisters} from './settlement-registers';
 import {Account51Comparison} from './account51-comparison';
+import {BankAccountRegistry} from './bank-account-registry';
 import type {WorkspaceBasicV1} from '../../../lib/workspace/model';
 import {CompanyPassport} from './client-passport';
 import type {PassportPublicProfile} from '../../../lib/workspace/public-passport';
@@ -213,12 +214,13 @@ export function CompanySources({view,id,bankInn,bank,openBank,onCompany,onSource
   {view==='counterparties'&&company&&profile?.entitlement==='FULL'&&<ReceivablesReview rows={profile.settlements} checks={profile.counterpartyChecks} refresh={async inn=>{await read('/api/dossier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'counterparty-check',id:company.id,inn})});setRevision(n=>n+1);}}/>}
   {profile&&company&&['home','banking','bfo','documents','obligations','counterparties'].includes(view)&&
    <Panel title="Покрытие периодов · дозагрузка и пересечения">
+    <BankAccountRegistry data={profile.bankAccountRegister} busy={busy} onUpload={openBank}/>
     <p>Новые документы дополняют досье. Совпадающие даты не означают одинаковые операции или суммы. Эта проверка не изменяет скоринг без сверки источников.</p>
     {profile.periodAudit.duplicates.length>0&&<details open><summary>Одинаковые файлы: {profile.periodAudit.duplicates.length} групп</summary>
      <p>Побайтово одинаковые документы обнаружены повторно. Они сохранены в истории досье, но не считаются двумя независимыми периодами. Само совпадение периода без совпадения файла проверяется отдельно.</p>
      {profile.periodAudit.duplicates.map((d,i)=><p key={i}>Повторный файл: {d.kinds.join(' / ')} · экземпляров: {d.sourceIds.length}. Не суммировать; сохранены исходные версии.</p>)}
     </details>}
-    {profile.periodAudit.groups.filter(g=>g.gaps.length||g.overlaps.length).map(g=>
+    {profile.periodAudit.groups.filter(g=>g.kind!=='BANK_STATEMENT'&&g.kind!=='BANK_XLSX_PREVIEW'&&(g.gaps.length||g.overlaps.length)).map(g=>
      <details key={g.id} open={g.gaps.length>0}>
       <summary>{g.kind} · {g.scope} · пробелов: {g.gaps.length}, пересечений: {g.overlaps.length}</summary>
       <p>{g.note}</p>
