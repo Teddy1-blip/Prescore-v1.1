@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {reviewFields} from '../lib/document-poc/review-fields.ts';
 import {financialTableRows} from '../lib/document-poc/financial-layout.ts';
+import {financialOcrInnFromTsv} from '../lib/document-poc/local-ocr.ts';
 const inn='5042149315'; // test-only non-customer identifier
 const page=(text)=>({page:1,logicalPage:1,segment:'FULL',method:'OCR',text});
 const sample=(extras={})=>{
@@ -89,4 +90,19 @@ test('geometric scanned table amounts still flow through the same metadata gate'
  assert.equal(missing.status,'INCOMPLETE');
  assert.equal(f(missing,'1600')?.value,'1000');
  assert.equal(f(missing,'1600')?.status,'REVIEW');
+});
+
+test('OCR coordinate-bound identity allows previously incomplete scanned financial review',()=>{
+ const row=(s,x)=>['5','1','1','1','1','1',String(x),'300','48','18','94',s].join('\t');
+ const recovered=financialOcrInnFromTsv([row('ИНН',850),row('5042149315',1080)].join('\n'));
+ assert.equal(recovered,inn);
+ const lines=['Бухгалтерский баланс','на 31 декабря 2025 г.','Единица измерения: тыс. руб. по ОКЕИ 384'];
+ const text=lines.concat('ИНН: '+recovered+' (координатная сверка OCR)').join('\n');
+ const result=sample({text});
+ assert.equal(result.status,'READY_FOR_REVIEW');
+ assert.equal(f(result,'company_inn')?.value,inn);
+ assert.equal(f(result,'1600')?.value,'1000');
+ const absent=sample({text:lines.join('\n')});
+ assert.equal(absent.status,'INCOMPLETE');
+ assert.ok(absent.issues.includes('BFO_SUBJECT_INN_UNVERIFIED'));
 });

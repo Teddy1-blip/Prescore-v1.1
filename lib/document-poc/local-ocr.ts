@@ -139,6 +139,40 @@ export function financialUnboundRowCodes(tsv:string,rows:readonly PdfFinancialRo
 export function financialOcrToken(word:string,confidence:number):string{
  return /\d/u.test(word)&&(!Number.isFinite(confidence)||confidence<45)?'?':word;
 }
+
+/** A scanned F1/F2 can print the taxpayer INN in a right-hand metadata
+ * column while PSM11 returns the "ИНН" label and its 10/12-digit value
+ * as separate text lines. Restore ONLY one unique, high-confidence, valid
+ * INN from the same printed y-row to the right of the explicit label.
+ * Never use other account/contract numbers or carry an INN across pages.
+ */
+export function financialOcrInnFromTsv(tsv:string):string|null{
+ type Word={value:string;x:number;y:number;w:number;h:number;confidence:number};
+ const words:Word[]=[];
+ for(const line of tsv.split('\n')){
+  const [level,,,,,,left,top,width,height,conf,value]=line.split('\t');
+  if(level!=='5'||!value?.trim())continue;
+  const nums=[left,top,width,height,conf].map(Number);
+  if(nums.some(n=>!Number.isFinite(n)))continue;
+  const [x,y,w,h,confidence]=nums;
+  if(x<0||y<0||w<=0||h<=0||confidence<0||confidence>100)continue;
+  words.push({value:value.trim(),x,y,w,h,confidence});
+ }
+ const labels=words.filter(w=>/^ИНН:?$/iu.test(w.value)&&w.confidence>=55);
+ const numbers=words.filter(w=>/^\d{10}(?:\d{2})?$/u.test(w.value)&&w.confidence>=75);
+ const candidates:Word[]=[];
+ for(const label of labels)for(const word of numbers){
+  const dx=word.x-label.x;
+  const vertical=Math.abs((word.y+word.h/2)-(label.y+label.h/2));
+  if(word.x>=label.x+label.w-2&&dx>0&&dx<=20*Math.max(label.h,word.h)
+     &&vertical<=Math.max(label.h,word.h)){
+   candidates.push(word);
+  }
+ }
+ const values=[...new Set(candidates.map(w=>w.value))];
+ return values.length===1&&validInn(values[0])?values[0]:null;
+}
+
 // Four real scanned F1 pages showed that a page with 11 apparently valid
 // codes may still be missing seven more. Retry weak financial tables, but
 // select the full sparse pass only when its evidence is strictly stronger.
@@ -251,7 +285,15 @@ async function readImage(path:string,page:number,dpi:number,financial:boolean,bu
  const chosen=chosenFinancialRows??financialTableRows(financialTokensFromTsv(tsv,dpi),page,true);
  const checked=reconcileFinancialOcrRows(chosen,alternativeFinancialRows);
  for(const row of checked.rows)row.line.confidence='MEDIUM';
- return {text:[...lines.values()].map(words=>words.join(' ')).join('\n'),
+ let text=[...lines.values()].map(words=>words.join(' ')).join('\n');
+ // Keep one guarded metadata addition in the existing local OCR result.
+ // Do not infer metadata on non-financial pages or when already text-bound.
+ if(financial&&/(?:бухгалтерский баланс|отч[её]т о финансовых результатах)/iu.test(text)
+    && !/(?:^|\n)\s*ИНН\s*[:|]?\s*\d{10}(?:\d{2})?\b/mu.test(text)){
+   const verifiedInn=financialOcrInnFromTsv(tsv);
+   if(verifiedInn)text+='\nИНН: '+verifiedInn+' (координатная сверка OCR)';
+ }
+ return {text,
    tables:checked.rows,sparsePass,numericReview:false,financialConflict:checked.disagreements.length>0,
    unboundFinancialRows:financialUnboundRowCodes(tsv,checked.rows,page).length>0};
 }

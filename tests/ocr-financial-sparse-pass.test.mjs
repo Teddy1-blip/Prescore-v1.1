@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {financialOcrCodes,financialUnboundRowCodes,financialOcrToken,preferSparseFinancialOcr,shouldRetryFinancialOcr} from '../lib/document-poc/local-ocr.ts';
+import {financialOcrCodes,financialUnboundRowCodes,financialOcrToken,financialOcrInnFromTsv,preferSparseFinancialOcr,shouldRetryFinancialOcr} from '../lib/document-poc/local-ocr.ts';
 const word=(s,confidence=96)=>['5','1','1','1','1','1','100','100','15','10',String(confidence),s].join('\t');
 const seq=(...a)=>a.join('\n');
 test('second OCR pass restores high-confidence financial row codes absent from primary pass',()=>{
@@ -73,4 +73,32 @@ test('three unrelated amounts or undated three-code fragment cannot certify a co
  const at=(code,x)=>['5','1','1','1','1','1',String(x),'120','25','12','95',code].join('\t');
  assert.deepEqual(financialUnboundRowCodes([at('1260',200),at('1200',600),at('1600',900)].join('\n'),[],3),[]);
  assert.deepEqual(financialUnboundRowCodes([at('1260',915),at('1200',916),at('1250',916)].join('\n'),[],3),[]);
+});
+
+test('geometry restores only one checksum-valid corporate INN aligned to a printed right-side label',()=>{
+ const token=(word,x,y=300,confidence=96)=>['5','1','1','1','1','1',String(x),String(y),'46','18',String(confidence),word].join('\t');
+ const document=[
+  token('ИНН',850,300,91),token('5042149315',1080,300,96),
+  token('ОКЕИ',800,335,98),token('384',1100,335,96),
+ ];
+ assert.equal(financialOcrInnFromTsv(document.join('\n')),'5042149315');
+});
+test('another 10-digit code or a valid INN from a different row cannot supply identity',()=>{
+ const word=(s,x,y=300,c=96)=>['5','1','1','1','1','1',String(x),String(y),'48','18',String(c),s].join('\t');
+ for(const rows of [
+  [word('ИНН',850),word('5042149315',1080,370)],
+  [word('ИНН',850),word('5042149315',1600,300)],
+  [word('ИНН',850),word('1234567890',1080,300)],
+  [word('ИНН',850),word('5042149315',1080,300,25)],
+  [word('ИНН',850,300,20),word('5042149315',1080,300)],
+  [word('Счет',850),word('5042149315',1080,300)],
+ ]){
+  assert.equal(financialOcrInnFromTsv(rows.join('\n')),null);
+ }
+});
+test('competing printed tax IDs at the same label remain ambiguous, never pick one',()=>{
+ const token=(s,x)=>['5','1','1','1','1','1',String(x),'300','48','18','96',s].join('\t');
+ assert.equal(financialOcrInnFromTsv([
+  token('ИНН',850),token('5042149315',1050),token('5032333146',1150)
+ ].join('\n')),null);
 });
