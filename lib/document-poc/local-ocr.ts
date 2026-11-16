@@ -1,5 +1,6 @@
 /** CPU-only local OCR preview. No AI calls, no remote transfer, no credit writes. */
 import {validInn} from '../external/checko-inn.ts';
+import {numeric} from './fields.ts';
 import {financialTableRows,type PdfFinancialRow} from './financial-layout.ts';
 import {reconcileFinancialOcrRows,preferMoreCompleteFinancialOcr} from './financial-ocr-consensus.ts';
 import {spawn} from 'node:child_process';
@@ -131,7 +132,7 @@ export function financialUnboundRowCodes(tsv:string,rows:readonly PdfFinancialRo
  }
  const aligned=positions.some(p=>new Set(positions.filter(other=>Math.abs(other.x-p.x)<=22).map(other=>other.code)).size>=3);
  if(!aligned)return [];
- if(found.size===3&&!['1600','1700','2400'].some(code=>found.has(code)))return [];
+ if(found.size===3&&!['1600','1700','2400','2500'].some(code=>found.has(code)))return [];
  const bound=new Set(rows.filter(r=>r.line.page===page).map(r=>r.code));
  const missing=[...found].filter(code=>!bound.has(code));
  return missing.length>=3?missing:[];
@@ -184,6 +185,29 @@ export function preferSparseFinancialOcr(primary:string,sparse:string):boolean{
  const first=financialOcrCodes(primary),second=financialOcrCodes(sparse);
  return second.size>first.size+1 || (second.has('1600')&&!first.has('1600')&&second.size>first.size);
 }
+/**
+ * A short F1/F2 continuation may have a sparse but correctly dated table.
+ * Select ONE complete OCR pass only if the first pass has no bound rows and
+ * the second has >=4 unique row codes, two consistent dated columns and a
+ * readable printed financial total. Never borrow dates from another page.
+ */
+export function preferDatedSparseFinancialContinuation(
+ primary:readonly PdfFinancialRow[],alternative:readonly PdfFinancialRow[]
+):boolean{
+ if(primary.length||alternative.length<4)return false;
+ const codes=new Set(alternative.map(row=>row.code));
+ const totals=new Set(['1600','1700','2400','2500']);
+ if(codes.size!==alternative.length||![...codes].some(code=>totals.has(code)))return false;
+ const normalize=(s:string)=>s.normalize('NFKC').toLocaleLowerCase('ru')
+   .replace(/ё/g,'е').replace(/[.,]/g,'').replace(/\s+/g,' ').trim();
+ const headings=alternative[0].headings.slice(0,2).map(normalize);
+ if(headings.length!==2||headings[0]===headings[1]||
+   !headings.every(s=>/^(?:на|за)\s/u.test(s)&&/(?:19|20)\d{2}/u.test(s)))return false;
+ if(!alternative.every(row=>row.headings.length>=2&&row.cells.length>=2&&
+    row.headings.slice(0,2).map(normalize).every((h,i)=>h===headings[i])))return false;
+ return alternative.some(row=>totals.has(row.code)&&row.cells.slice(0,2).every(cell=>
+   !cell.uncertain&&numeric(cell.raw.replace(/−/g,'-'))!==null));
+}
 // BKI numeric OCR must never convert low-confidence digits into
 // current debt, a report date, an identifier or an overdue balance.
 export function bureauOcrToken(word:string,confidence:number):{value:string;requiresReview:boolean}{
@@ -233,7 +257,8 @@ async function readImage(path:string,page:number,dpi:number,financial:boolean,bu
   // code set can still warrant the sparse pass if the date-bound cell evidence
   // is strictly richer and at least three other codes agree without regressions.
   if(preferSparseFinancialOcr(tsv,sparse)||
-     preferMoreCompleteFinancialOcr(primaryRows,sparseRows)){
+     preferMoreCompleteFinancialOcr(primaryRows,sparseRows)||
+     preferDatedSparseFinancialContinuation(primaryRows,sparseRows)){
     tsv=sparse;sparsePass=true;
     chosenFinancialRows=sparseRows;
     alternativeFinancialRows=primaryRows;
