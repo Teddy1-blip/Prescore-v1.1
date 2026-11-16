@@ -1,136 +1,67 @@
-# Prescore — standalone staging
+# Prescore
 
-The deployment branch is **staging** in `Teddy1-blip/Prescore-v1.1`.
-Deploy the repository source directly. No `source.tar.gz` upload is required.
+**Prescore** — независимая SaaS-платформа финансово-кредитной диагностики малого и среднего бизнеса и подготовки компании к привлечению финансирования. Продукт не является банком, не выдаёт кредиты и не прогнозирует решение конкретного кредитора.
 
-- Node >=22.13; Docker pins the Node 22 major release.
-- Install: `npm ci`; build: `npm run build`.
-- Docker runtime: `node server.js`, port 3000, writable persistent `/data`.
-- Configure runtime secrets and SMTP in Amvera, never in Git or Docker build arguments.
-- Push application changes only to `staging`; leave `main` and production unchanged.
+**Продуктовая цель:** документы и финансовые источники → структурированное досье → финансовый и кредитный анализ → объяснимые ограничения → рекомендации → подготовка финансирования и сопровождение заявки.
 
-One-time Amvera setup is required: connect only **prescore-staging** to this GitHub
-repository and select **staging** as the deployment branch. Verify that the integration
-filters pushes to this branch and uses the root `Dockerfile` and `amvera.yml`.
-Once connected, ordinary updates are `git push origin staging`; Amvera builds the
-checked-out source. Creating the branch alone does not configure the integration.
+## Текущий проект
 
-See [staging deployment](docs/platform-migration/GITHUB-STAGING.md) for exact build,
-runtime, validation and deployment boundaries. SMTP/live auth acceptance remains a
-separate operational gate.
+- **Репозиторий:** Teddy1-blip/Prescore-v1.1.
+- **Основной актуальный контур демонстрации и поставки:** ветка staging, приложение prescore-staging в Amvera. **Ветка main не является целью автоматического обновления**; изменения в неё отдельно согласуются.
+- **Технологии:** Node.js 22 (минимум 22.13), Next.js 16, React 19, TypeScript, PostgreSQL; Docker со standalone Next.js runtime.
+- **Роли:** клиент, агент, администратор (доступ ограничивается серверными полномочиями).
+- **Клиентский вход:** /dashboard. Кабинеты агента и администратора — отдельные защищённые маршруты.
+- **Источники:** загрузка банковских выписок в форматах, поддерживаемых текущим импортом, финансовой отчётности, БКИ, бухгалтерских выгрузок и документов. Фактический состав работающих форматов подтверждается тестами и приёмкой конкретного потока.
+- **Реализованное аналитическое ядро:** обработка/классификация банковских операций, банковские метрики, финансовый анализ, сопоставление источников, кредитный портфель, риск-контур, Prescore Index 0–1000, готовность к финансированию, кредитное заключение, долговая ёмкость, подбор классов финансовых продуктов, рекомендации, план 7/30/60 и объяснение выводов.
+- **Важно:** Prescore Index не является вероятностью выдачи кредита; расчёт долговой ёмкости не является одобренным лимитом банка.
+- **Документы/отчёты:** клиентское досье, документы и печатные представления по соответствующим правам.
+- **Не заявлять как завершённые без отдельного live-acceptance:** прямое подключение к произвольной 1С/банку, полностью автоматизированное извлечение всех банковских документов, любой конкретный live-провайдер OCR/AI, банковские одобрения или актуальные индивидуальные лимиты.
 
----
+## Навигация по актуальной документации
 
-## Historical Sites starter documentation
+- [Клиентский кабинет: покрытие V2](docs/product/PRESCORE-CLIENT-CABINET-V2-COVERAGE.md)
+- [Карта 19 аналитических блоков](docs/qa/client-frontend-19-blocks.md)
+- [Семантика расчётов и источников](docs/qa/product-semantic-baseline.md)
+- [Методологический манифест](docs/product/PRESCORE-METHODOLOGICAL-MANIFESTO-v0.1.md)
+- [Матрица связей источников](docs/product/PRESCORE-SOURCE-RELATIONS-MATRIX-v0.1.md)
+- [Проверка клиентского кабинета в изолированном браузере](docs/qa/client-v2-codespaces/README.md)
+- [Текущая процедура поставки на staging](.github/workflows/amvera-staging-rc3.yml)
+- [Историческая инструкция миграции на Amvera](docs/platform-migration/GITHUB-STAGING.md)
+- [Юридические вопросы к коммерческому запуску в РФ](docs/launch/LEGAL-COMPLIANCE-RU-2026.md)
 
-The material below is retained for legacy reference. Its Sites lifecycle, auth-header
-and build guidance does not describe the current standalone runtime above.
+Документы с историческими SHA, результатами лабораторных QA или словом SHADOW описывают конкретный срез реализации. Они не доказывают работу функции в публичном runtime.
 
-# vinext-starter
+## Разработка и проверки
 
-A clean full-stack starter running on
-[vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
-Drizzle support.
+Предварительные требования: Node.js >=22.13.0 и доступ к нужному окружению. Не публикуйте секреты, клиентские документы или реальные персональные данные в issue, коммитах и тестовых fixture.
 
-## Prerequisites
+1. Установить зависимости: **npm ci**.
+2. Запустить локальное приложение: **npm run dev**.
+3. Проверить типы: **npm run typecheck**.
+4. Собрать: **npm run build**.
+5. Запустить тесты: **npm test** (полный регрессионный прогон, ресурсоёмкая операция).
+6. Проверить артефакт: **npm run validate:artifact**.
 
-- Node.js `>=22.13.0`
-- Linux with `flock`, `curl`, and GNU `timeout`
+Конфигурация БД, авторизации, SMTP, внешних провайдеров и платежей задаётся переменными среды (секреты — только в секретном хранилище). Не подменять реальные интеграционные проверки синтетическими fixture.
 
-## Sites Lifecycle
+## Staging и Amvera
 
-The Sites lifecycle CLI runs the locked dependency install before returning this checkout. Edit the source under `app/`, then checkpoint when a coherent milestone is ready to inspect or share. The remote Sites builder runs `npm run build` against the pushed commit. Do not repeat install or build as a normal pre-checkpoint step.
+- Текущий официальный маршрут поставки — GitHub workflow **Deliver Prescore RC3 staging to Amvera** при изменениях в ветке staging.
+- Workflow проверяет доступ к Amvera, тесты скрипта поставки, зависимости, типы, сборку, артефакт, резервную копию истории поставки, отправляет точное дерево и проверяет /api/health и /api/ready на совпадение runtime с отправленной ревизией.
+- Runtime: Docker/Node 22, команда node server.js, порт 3000, постоянный том /data; PostgreSQL и документы требуют отдельных резервных копий.
+- Готовность /api/ready и успешный CI **не заменяют** проверку авторизации, корректности расчётов, сохранности документов, OCR и фактических пользовательских сценариев в браузере.
+- Не менять production, DNS, клиентские базы или ветку main при задачах документации.
+- Пока идёт параллельная разработка Work, изменения объединять через review/PR, не принудительно перемещать staging и не перепубликовывать уже проверенный код без причины.
 
-This starter does not use `wrangler.jsonc`.
+## Коммерческий запуск и безопасность
 
-`install:ci` is intentionally a single, non-retrying `npm ci`. It refuses a concurrent install for the same project, consumes a matching image-seeded npm cache with `--prefer-offline` while retaining registry fallback for a missing cache object, otherwise downloads and verifies the complete vinext tarball recorded in `package-lock.json`, limits npm to one socket, and terminates a stalled install. `build` applies a short timeout and then validates the Sites artifact. These helpers target Linux and use GNU `timeout`; they are not native macOS scripts.
+На дату обновления наличие страниц /offer, /privacy и /consent не означает юридическую готовность: нужны согласованные и проверенные документы, основания обработки данных, договоры с обработчиками и провайдерами, проверка платежей/ККТ и налогов, а также тесты разграничения доступа между клиентами. Полный контрольный список: [LEGAL-COMPLIANCE-RU-2026.md](docs/launch/LEGAL-COMPLIANCE-RU-2026.md).
 
-Scripts that need writable project-scoped home, npm, XDG, and temporary paths use `scripts/sites-env.sh`. The `dev` and `start` scripts honor the caller's runtime environment and keep Wrangler logs inside the checkout. The generated `.sites-runtime/` directory is disposable and ignored by Git.
+**Принцип:** финансовые цифры определяются проверяемыми расчётами, а AI-интерпретация не изменяет канонический кредитный движок автоматически.
 
-## Included Shape
 
-- edit site code under `app/`
-- `app/chatgpt-auth.ts` provides optional dispatch-owned ChatGPT sign-in helpers
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/index.ts` reads the D1 binding from the Cloudflare Worker environment
-- `db/schema.ts` starts intentionally empty
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
+**Коммерческое расхождение на 16.11.2026:** действующая страница /offer описывает разовую услугу 6 500 ₽ за один анализ, а lib/billing/domain.ts задаёт доступ FULL к одной компании на 30 дней за 6 500 ₽. Это **не согласовано**, и текст оферты не соответствует бизнес-контракту второго варианта. Не считать коммерческий запуск готовым до выбора одной модели и сверки UI/API/акцепта/платежей. На staging может быть включён режим FULL без оплаты, который не проверяет реальный checkout.
 
-## Workspace Auth Headers
+## Состояние README
 
-OpenAI workspace sites can read the current user's email from
-`oai-authenticated-user-email`.
-
-SIWC-authenticated workspace sites may also receive
-`oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty
-`name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by
-`oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
-
-Treat the full name as optional and fall back to email when it is absent:
-
-```tsx
-import { headers } from "next/headers";
-
-export default async function Home() {
-  const requestHeaders = await headers();
-  const email = requestHeaders.get("oai-authenticated-user-email");
-  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
-      "percent-encoded-utf-8"
-      ? decodeURIComponent(encodedFullName)
-      : null;
-
-  const displayName = fullName ?? email;
-  // ...
-}
-```
-
-## Optional Dispatch-Owned ChatGPT Sign-In
-
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs
-optional or required ChatGPT sign-in:
-
-- Use `getChatGPTUser()` for optional signed-in UI.
-- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send
-  anonymous visitors through Sign in with ChatGPT.
-- Use `chatGPTSignInPath(returnTo)` and `chatGPTSignOutPath(returnTo)` for
-  browser links or actions.
-- Pass a same-origin relative `returnTo` path for the destination after sign-in
-  or sign-out. The helper validates and safely encodes it.
-- Mark protected pages with `export const dynamic = "force-dynamic"` because
-  they depend on per-request identity headers.
-
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the
-OAuth cookies, and identity header injection. Do not implement app routes for
-those reserved paths. Routes that do not import and call the helper remain
-anonymous-compatible.
-
-SIWC establishes identity only; it does not prove workspace membership. Use the
-Sites hosting platform's access policy controls for workspace-wide restrictions,
-or enforce explicit server-side membership or allowlist checks.
-
-Use SIWC for account pages, user-specific dashboards, saved records, and write
-actions tied to the current ChatGPT user. Leave public content anonymous.
-
-## Diagnostic Commands
-
-- `npm run install:ci`: perform the one bounded lockfile install
-- `npm run dev`: start the Vite/Vinext development server
-- `npm run build`: build and validate the deployable Sites artifact
-- `npm run start`: start the built Vinext application
-- `npm test`: build, validate, and verify the rendered development-preview metadata
-- `npm run validate:artifact`: recheck an existing artifact's manifest and ESM `default.fetch` export
-- `npm run db:generate`: generate Drizzle migrations after schema changes
-
-Use build and validation commands for targeted diagnosis after a remote failure, not as part of the normal checkpoint path.
-
-The timeout defaults can be overridden for a controlled canary with `SITES_INSTALL_TIMEOUT`, `SITES_INSTALL_KILL_AFTER`, `SITES_BUILD_TIMEOUT`, and `SITES_BUILD_KILL_AFTER`. A timeout fails the command; the helpers never retry an unchanged install or build.
-
-## Learn More
-
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+Этот README заменяет устаревшее описание шаблона vinext-starter и старого Sites runtime. История первоначального шаблона остаётся в Git, но не является инструкцией для текущего приложения.
