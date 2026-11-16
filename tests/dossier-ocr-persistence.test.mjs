@@ -88,7 +88,7 @@ test('one owner dossier: scanned BKI resume, explicit confirmation, credit revie
    assert.equal((await post(request,other)).status,404);
    const first=await post(request);
    assert.equal(first.status,200,await first.clone().text());
-   assert.deepEqual([...(await first.json()).through?[3]:[]],[3]);
+   assert.equal((await first.json()).through,3);
    const halfway=(await read()).json();
    const draft=await halfway;
    assert.equal(draft.reviews.find(r=>r.id===bkiSource)?.ocr?.through,3);
