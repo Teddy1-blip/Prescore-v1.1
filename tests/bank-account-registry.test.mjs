@@ -11,7 +11,7 @@ const mk=(id,account,from,to,bank='АО Учебный банк',extra={})=>({
 });
 const run=(sources,cutoff='2026-11-15')=>bankAccountRegister(sources,inn,sourcePeriodAudit(sources,inn),cutoff);
 test('last complete Moscow calendar day is independent of browser/server local date',()=>{
- assert.equal(lastCompletedMoscowDay(new Date('2026-11-16T20:55:00Z')),'2026-11-16');
+ assert.equal(lastCompletedMoscowDay(new Date('2026-11-16T21:05:00Z')),'2026-11-16');
  assert.equal(lastCompletedMoscowDay(new Date('2026-11-16T19:59:00Z')),'2026-11-15');
 });
 test('one account union of adjacent intervals and exact internal gap; latest update request',()=>{
