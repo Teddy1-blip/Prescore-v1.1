@@ -50,6 +50,10 @@ export function sourcePeriodAudit(rows:readonly SourceRow[],companyInn:string):S
   if(e.companyInn!==companyInn)continue;
   const sourceId=row.id,name=e.fileName??e.sourceName??kind;
   if(kind==='BANK_STATEMENT'){
+   // A transaction-first/last window is not proof of daily bank coverage.
+   if(e.periodBasis==='OBSERVED_ONLY'){
+    unknown.push({sourceId,kind,reason:'BANK_DECLARED_COVERAGE_NOT_CONFIRMED'});continue;
+   }
    // Never invent a single union interval across multiple settlement accounts.
    const accounts=e.accountCoverage?.filter(c=>c.account&&str(c.periodFrom)&&str(c.periodTo))??[];
    if(!accounts.length){unknown.push({sourceId,kind,reason:'BANK_ACCOUNT_OR_DECLARED_PERIOD_MISSING'});continue;}

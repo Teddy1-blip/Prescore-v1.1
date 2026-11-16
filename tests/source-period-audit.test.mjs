@@ -123,3 +123,21 @@ test('two snapshots for same BKI subject and same date require source review not
  assert.equal(r.groups[0].overlaps[0].kind,'SAME_DATE');
  assert.equal(r.groups[0].gaps.length,0);
 });
+
+test('a source with observed-only transaction extrema is not certified as a full statement interval',()=>{
+ const input=statement('s','40001','2026-02-01','2026-02-28');
+ input.payload.envelope.periodBasis='OBSERVED_ONLY';
+ const r=sourcePeriodAudit([input],inn);
+ assert.equal(r.groups.length,0);
+ assert.equal(r.unknown[0].reason,'BANK_DECLARED_COVERAGE_NOT_CONFIRMED');
+});
+test('gap disappears after a missing interval is uploaded, without changing other evidence',()=>{
+ const old=[statement('a','40001','2026-01-01','2026-01-10'),
+  statement('b','40001','2026-01-13','2026-01-31')];
+ assert.deepEqual(sourcePeriodAudit(old,inn).groups[0].gaps.map(x=>[x.from,x.to]),
+  [['2026-01-11','2026-01-12']]);
+ const next=sourcePeriodAudit([...old,statement('c','40001','2026-01-11','2026-01-12')],inn);
+ assert.equal(next.groups[0].gaps.length,0);
+ assert.equal(next.groups[0].overlaps.length,0);
+ assert.equal(next.automaticApply,false);
+});

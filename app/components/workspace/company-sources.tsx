@@ -220,6 +220,9 @@ export function CompanySources({view,id,bankInn,bank,openBank,onCompany,onSource
       <p>{g.note}</p>
       {g.gaps.map((gap,i)=><p key={'gap'+i}>{gap.action} Не покрыто {gap.days} календарных дней.</p>)}
       {g.overlaps.map((o,i)=><p key={'overlap'+i}>Пересечение {o.from} — {o.to}: {o.kind==='SAME_DATE'?'совпадает дата снимков':o.kind==='SAME_PERIOD'?'один отчётный период':'частично совпадают периоды'}. Не складывать без проверки первичных данных.</p>)}
+      {g.gaps.length>0&&(g.kind==='BANK_STATEMENT'
+        ?<button type="button" disabled={busy} onClick={openBank}>Дозагрузить выписку для этого периода</button>
+        :<a href={dossierHref(company.id,g.kind==='BFO'||g.kind==='QUARTERLY'?'bfo':g.kind==='ACCOUNT_51'||g.kind==='BANK_XLSX_PREVIEW'?'banking':'documents')}>Открыть загрузку недостающего документа</a>)}
      </details>)}
     {!profile.periodAudit.requiresRecalculationReview&&<p>Во внутренних интервалах с подтверждёнными датами пробелов или пересечений не найдено. Полнота за пределами загруженного диапазона не подтверждена.</p>}
     {profile.periodAudit.unknown.length>0&&<p>Для {profile.periodAudit.unknown.length} документов период пока не установлен или непрерывное покрытие к ним неприменимо.</p>}
