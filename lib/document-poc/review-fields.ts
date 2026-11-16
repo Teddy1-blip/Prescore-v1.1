@@ -78,6 +78,25 @@ export function reviewFields(id:string,pages:EvidencePage[],total:number,family:
   add('period_end','Конец периода','',metadata.period_end);
   add('statement_unit','Единица отчётности','',metadata.unit);
   for(const row of bfo.rows){const code=row.line_code.value;if(code)add(code,'Строка '+code,String(row.unit.value??''),row.current_period_value);}
+  // Three independent anchors are required before any monetary value can be
+  // called ready in a scanned F1/F2 review: subject identity, as-of date and
+  // reporting scale. "1000" might be 1000 rubles or 1000 thousand rubles.
+  // Retain readable source fragments, but do NOT certify them without anchors.
+  const missingAnchors=[
+    ...(!metadata.inn.value||!validInn(metadata.inn.value)||metadata.inn.status!=='READ'
+      ?['BFO_SUBJECT_INN_UNVERIFIED']:[]),
+    ...(!metadata.reporting_date.value||metadata.reporting_date.status!=='READ'
+      ?['BFO_REPORT_DATE_UNVERIFIED']:[]),
+    ...(!metadata.unit.value||metadata.unit.status!=='READ'
+      ?['BFO_REPORTING_SCALE_UNVERIFIED']:[]),
+  ];
+  if(missingAnchors.length){
+    result.status='INCOMPLETE';
+    result.issues.push(...missingAnchors);
+    for(const item of result.fields){
+      if((/^\d{4}$/.test(item.key)||item.key==='company_inn')&&item.status==='READ')item.status='REVIEW';
+    }
+  }
   // Independent OCR variants disagree on a dated financial cell. Other
   // source values remain visible, but the document cannot appear fully ready.
   if(warnings.some(w=>w.startsWith('OCR_FINANCIAL_PASS_CONFLICT:'))){
