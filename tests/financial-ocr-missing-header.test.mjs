@@ -52,3 +52,28 @@ test('two isolated row codes plus an apparent date header never imply a balance'
   item('БАЛАНС',20,-135,80),item('1700',315,-135,24),item('1000',375,-135,30)];
  assert.deepEqual(financialTableRows(arbitrary,2,true),[]);
 });
+
+test('realistic sparse OCR thousands groups require coherent spacing even without a code header',()=>{
+ const totals=new Set([-160,-235]);
+ const split=(gap)=>rows().flatMap(t=>{
+   const y=t.transform[5];
+   if(!totals.has(y)||!['1000','900','800'].includes(t.str))return [t];
+   // Synthetic digit spacing follows private real-case geometry; amounts are fabricated.
+   const pair={'1000':['193','005'],'900':['94','447'],'800':['35','583']}[t.str];
+   const x=t.transform[4];
+   return [item(pair[0],x,y,12,8),item(pair[1],x+12+gap,y,12,8)];
+ });
+ const aligned=financialTableRows([...headings(),...split(4)],1,true);
+ for(const code of ['1600','1700']){
+   const found=aligned.find(r=>r.code===code);
+   assert.ok(found,'expected line '+code);
+   assert.deepEqual(found.cells.slice(0,3).map(c=>c.raw),['193 005','94 447','35 583']);
+   assert.ok(found.cells.slice(0,3).every(c=>!c.uncertain));
+ }
+ const disconnected=financialTableRows([...headings(),...split(24)],1,true);
+ for(const code of ['1600','1700']){
+   const found=disconnected.find(r=>r.code===code);
+   assert.ok(found,'expected line '+code+' in disconnected scan');
+   assert.ok(found.cells.slice(0,3).every(c=>c.uncertain),'never trust detached digit groups');
+ }
+});
