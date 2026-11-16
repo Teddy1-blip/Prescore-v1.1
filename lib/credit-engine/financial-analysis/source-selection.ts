@@ -50,6 +50,12 @@ function preferCandidate(
   current: FinancialStatementSnapshot,
   manifests: Array<Partial<AnalysisSourceManifest> | undefined>,
 ) {
+  const usable=(s:FinancialStatementSnapshot)=>s.confirmedScale!==null&&[...Object.values(s.balance),...Object.values(s.income)].some(v=>v.status==='KNOWN'&&(v.confidence==='HIGH'||v.confidence==='MEDIUM'));
+  const candidateUsable=usable(candidate),currentUsable=usable(current);
+  if(candidateUsable!==currentUsable)return candidateUsable;
+  // Legacy manifests may list Checko in financialUploads alongside client documents.
+  if(candidate.source.provider==='CHECKO'&&current.source.fileName)return false;
+  if(current.source.provider==='CHECKO'&&candidate.source.fileName)return true;
   const candidateAuthority = sourceAuthority(candidate.sourceId, manifests);
   const currentAuthority = sourceAuthority(current.sourceId, manifests);
   if (candidateAuthority !== currentAuthority) return candidateAuthority > currentAuthority;

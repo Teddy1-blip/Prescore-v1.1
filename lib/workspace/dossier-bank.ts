@@ -15,7 +15,12 @@ export function withDossierSources(bank:AnalysisResult, rows:SourceRow[]):Analys
   if(rows.some(r=>r.payload.envelope.companyInn!==bank.companyInn))throw Error('SOURCE_COMPANY_MISMATCH');
   const manifest={...bank.sourceManifest,bankStatements:bank.sourceManifest?.bankStatements??[]};
   const ledger=ledgerObservations(rows,bank.companyInn);
-  const financial=rows.flatMap(r=>r.payload.snapshot?[r.payload.snapshot]:[]);
+  const financial=rows.flatMap(row=>[
+    ...(row.payload.snapshot?[row.payload.snapshot]:[]),
+    ...(row.payload.financialHistory??[]),
+    ...(row.payload.publicProfile?.financialStatementsV2??[]),
+  ]);
+  if(financial.some(s=>s.companyInn!==bank.companyInn||s.source.companyInn!==bank.companyInn))throw Error('SOURCE_COMPANY_MISMATCH');
   const bki=rows.flatMap(r=>r.payload.bki?.affectsCompanyDebt?[{report:r.payload.bki,source:r.payload.envelope}]:[]);
   const documents=rows.flatMap(row=>verifiedCreditDocument(row,bank.companyInn)??[]);
   if(!financial.length&&!bki.length&&!documents.length&&!ledger.length)return bank;
@@ -36,8 +41,8 @@ export function withDossierSources(bank:AnalysisResult, rows:SourceRow[]):Analys
   const result={...bank,sourceManifest:manifest};
   if(financial.length){
     manifest.financialUploads=[...new Map([...financialSources(manifest),...financial.map(s=>s.source)].map(s=>[s.sourceId,s])).values()];
-    const replacements=new Set(financial.map(s=>s.sourceId));
-    const active=activeFinancialSnapshots([...(bank.financialStatementsV2??[]).filter(s=>!replacements.has(s.sourceId)),...financial],[manifest]);
+    const replacements=new Set(financial.map(s=>s.snapshotId));
+    const active=activeFinancialSnapshots([...(bank.financialStatementsV2??[]).filter(s=>!replacements.has(s.snapshotId)),...financial],[manifest]);
     for(const s of active)manifest[s.sourceType==='BFO'?'bfo':'quarterly']=s.source;
     result.financialStatementsV2=active;
     result.financialAnalysisV2=buildFinancialAnalysis(active);
