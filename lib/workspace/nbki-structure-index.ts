@@ -133,6 +133,8 @@ export function nbkiStructureIndex(pages:readonly Page[],reportDate?:string):Nbk
      const lookback=page.text.slice(Math.max(0,(match.index??0)-1800),match.index);
      const headings=[...lookback.matchAll(/(?:^|\n)[ \t]*Счет(?=[ \t]{2,}Договор[ \t]{2,}Состояние|[ \t]*(?=\r?\n|$))/gim)];
      const lead=headings.length?lookback.slice(headings[headings.length-1].index):lookback.slice(-650);
+     // A previous card's identity cannot supply the missing creditor/role.
+     if(/(?:^|\n)[ \t]*Счет[ \t]*:/im.test(lead))continue;
      const creditor=lastLabel(lead,'Кредитор'),roleText=lastLabel(lead,'Отношение');
      if(!creditor||!roleText||creditor==='Н/Д')continue;
      const role:NbkiLegacyEntry['role']=/принципал/iu.test(roleText)?'PRINCIPAL':
@@ -141,7 +143,9 @@ export function nbkiStructureIndex(pages:readonly Page[],reportDate?:string):Nbk
      const evidence=nbkiLegacyStatusEvidence(lead,page.page,reportDate);
      result.issues.push(...evidence.issues);
      const tail=page.text.slice((match.index??0)+match[0].length,(match.index??0)+match[0].length+700);
-     const uidResult=nbkiLegacyUidEvidence(tail);
+     const nextCard=tail.search(/(?:^|\n)[ \t]*Счет(?:[ \t]*:|[ \t]{2,}Договор(?:[ \t]|$)|[ \t]*(?=\r?\n|$))/im);
+     // A UID from the next account on the same physical page is not this one.
+     const uidResult=nbkiLegacyUidEvidence(nextCard<0?tail:tail.slice(0,nextCard));
      const explicit=uidResult.uid;
      if(uidResult.review==='PARTIAL')result.issues.push('BUREAU_LEGACY_UID_PARTIAL');
      const linkedModernUid=explicit&&modern.has(explicit)?explicit:null;

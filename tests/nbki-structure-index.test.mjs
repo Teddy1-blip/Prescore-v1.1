@@ -278,3 +278,20 @@ test('corporate loan is classified from explicit loan relationship, not the vagu
  assert.equal(r.legacy[0].statusEvidence?.reportedState,'ACTIVE');
  assert.equal(r.legacy[0].statusEvidence?.lastUpdatedAt,'2023-07-20');
 });
+
+test('a second account on the same page cannot donate UID to an earlier unlabelled card',()=>{
+ const text=[
+  'Счет','Вид: Н/Д    Открыт: Н/Д','Отношение: Принципал   Статус: Н/Д',
+  'Кредитор: Учебный банк', 'Счет: BG-FIRST',
+  'Счет','Вид: Н/Д    Открыт: Н/Д','Отношение: Принципал   Статус: Н/Д',
+  'Кредитор: Учебный банк', 'Счет: BG-SECOND',
+  'УИД договора(сделки): '+uidA.slice(0,19)+'     Финальн.платеж %%: Н/Д',
+  uidA.slice(19),
+ ].join('\n');
+ const r=nbkiStructureIndex([page(5,guarantee()),page(46,text)],'2023-08-24');
+ assert.equal(r.legacy.length,2);
+ assert.equal(r.legacy[0].printedUid,null);
+ assert.equal(r.legacy[0].linkedModernUid,null);
+ assert.equal(r.legacy[1].printedUid,uidA);
+ assert.equal(r.exactUidLinks,1);
+});
