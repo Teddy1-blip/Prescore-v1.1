@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {parseCreditHistoryText} from '../lib/credit-history.ts';
 import {bureauReview,readBureau} from '../lib/workspace/bureau-review.ts';
 import {reviewFields} from '../lib/document-poc/review-fields.ts';
+import {BUREAU_MAX_PDF_PAGES} from '../lib/document-poc/local-ocr.ts';
 import {bureauOcrToken} from '../lib/document-poc/local-ocr.ts';
 
 const inn='7707083893';
@@ -70,4 +71,9 @@ test('low-confidence BKI numbers are withheld, not silently presented as debt or
  assert.deepEqual(bureauOcrToken('Кредитор',3),{value:'Кредитор',requiresReview:false});
  assert.deepEqual(bureauOcrToken('123456',NaN),{value:'?',requiresReview:true});
  assert.equal(bureauReview(pages,payload,['OCR_BKI_NUMERIC_REVIEW:2']).status,'INCOMPLETE');
+});
+
+test('company bureau intake covers a 199-page report with an explicit page bound',()=>{
+ assert.equal(BUREAU_MAX_PDF_PAGES,256);
+ assert.ok(BUREAU_MAX_PDF_PAGES>=199);
 });

@@ -19,7 +19,7 @@ import {parseLedger} from './ledger-import.ts';
 import {withDossierSources} from './dossier-bank.ts';
 import type {AnalysisResult} from '../prescore.ts';
 import {parseQuarterlyReportText} from '../quarterly-report.ts';
-import {OCR_MAX_BYTES,ocrFormat,nativeLayoutText} from '../document-poc/local-ocr.ts';
+import {OCR_MAX_BYTES,BUREAU_MAX_PDF_PAGES,ocrFormat,nativeLayoutText} from '../document-poc/local-ocr.ts';
 import {isOkbReport} from '../credit-history-okb.ts';
 import {bureauRoles,readBureau,bureauEnvelope,bureauReview} from './bureau-review.ts';
 import {parseCreditHistoryText} from '../credit-history.ts';
@@ -63,7 +63,7 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
   let bureauReport;
   if(!reviewKind&&!bureauScan&&!['ACCOUNT_51','BANK_XLSX','BANK_QUESTIONNAIRE'].includes(kind))try{
     if(kind==='BKI'){
-      const pages=await mapPdfPages(bytes.slice(),180,true,async content=>content);
+      const pages=await mapPdfPages(bytes.slice(),BUREAU_MAX_PDF_PAGES,true,async content=>content);
       bureauScan=pages.some(content=>content.replace(/\s/g,'').length<25);
       text=pages.join('\n\f\n');
       if(!bureauScan){
@@ -81,7 +81,7 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
     if(ledger&&(ext==='xlsx'||ext==='xls')&&error instanceof Error&&error.message.startsWith('ACCOUNTING_XLSX_'))
       throw new InputError('В книге Excel должен быть ровно один лист ОСВ с однозначным счётом. Выберите отдельную ведомость.');
     if(autoFinancial&&ext==='pdf'){kind='BFO_REVIEW';reviewKind=true;}
-    else throw new InputError('Не удалось прочитать документ. Для БКИ нужен отчёт НБКИ, ОКБ или СБ БКИ до 180 страниц.');
+    else throw new InputError('Не удалось прочитать документ. Для БКИ нужен отчёт НБКИ, ОКБ или СБ БКИ до 256 страниц.');
   }
   let financialReport;
   let detectedInn;

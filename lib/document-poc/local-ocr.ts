@@ -9,6 +9,7 @@ import {join} from 'node:path';
 
 export const OCR_MAX_BYTES=16*1024*1024;
 export const OCR_MAX_PDF_PAGES=64;
+export const BUREAU_MAX_PDF_PAGES=256; // long corporate reports, read in bounded batches
 export const OCR_BATCH_PAGES=3; // synchronous HTTP work is bounded
 const MAX_PAGE_CHARS=26_000,MAX_CHUNK_CHARS=175_000,MAX_PROCESS_BYTES=3_000_000;
 const MAX_PROCESS_MS=45_000;
@@ -175,7 +176,7 @@ export async function nativeLayoutText(bytes:Uint8Array){
  try{
    const source=join(dir,'original.pdf');
    await writeFile(source,bytes,{mode:0o600,flag:'wx'});
-   return await exec('pdftotext',['-f','1','-l','180','-layout',source,'-'],8*1024*1024);
+   return await exec('pdftotext',['-f','1','-l',String(BUREAU_MAX_PDF_PAGES),'-layout',source,'-'],8*1024*1024);
  }finally{await rm(dir,{recursive:true,force:true});}
 }
 export async function recognizeLocalDocument(bytes:Uint8Array,options:OcrOptions={}):Promise<OcrResult>{
@@ -191,7 +192,7 @@ export async function recognizeLocalDocument(bytes:Uint8Array,options:OcrOptions
   dir=await mkdtemp(join(tmpdir(),'prescore-ocr-'));
   const source=join(dir,kind==='PDF'?'source.pdf':kind==='PNG'?'source.png':'source.jpg');
   await writeFile(source,bytes,{mode:0o600,flag:'wx'});
-  const pageLimit=options.bureau?180:OCR_MAX_PDF_PAGES;
+  const pageLimit=options.bureau?BUREAU_MAX_PDF_PAGES:OCR_MAX_PDF_PAGES;
   const info=kind==='PDF'?await exec('pdfinfo',['-f','1','-l',String(pageLimit),source],65536):'';
   const count=kind==='PDF'?Number(info.match(/^Pages:\s*(\d+)\s*$/m)?.[1]):1;
   if(!Number.isSafeInteger(count)||count<1||count>pageLimit)throw Error('OCR_PAGE_LIMIT');
