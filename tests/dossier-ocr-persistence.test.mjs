@@ -197,6 +197,7 @@ test('native modern corporate NBKI summary is visible without rerunning 199 OCR 
   assert.equal(review?.fields.find(f=>f.key==='nbki_reported_current')?.value,'4000000');
   assert.equal(dossier.obligations.length,0,'the summary is never an automatically accepted debt');
   assert.equal((await post({action:'confirm-bureau',id:dossierId,sourceId})).status,409);
+  assert.equal((await post({action:'verify-field',id:dossierId,sourceId,field:'nbki_reported_current',value:'4000000'})).status,409,'server never confirms standalone BKI summary amounts');
   assert.equal((await rt.request('/api/dossier?id='+dossierId,{},stranger)).status,404);
   assert.equal((await rt.request('/api/dossier',{method:'POST',body:form},owner)).status,200);
  }finally{

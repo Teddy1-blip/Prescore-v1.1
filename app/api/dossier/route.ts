@@ -90,6 +90,8 @@ export async function POST(request:Request){
       const company=await ownedDossier(pool,user.email,String(body.id??''));
       if(!company)return reply({error:'Досье недоступно.'},404);
       const source=(await dossierSources(pool,user.email,company.id)).find(r=>r.id===body.sourceId);
+      // BKI is confirmed as a whole, never by writing isolated preview numbers.
+      if(source?.kind==='BKI')return reply({error:'Сводка БКИ предназначена только для сверки. Подтверждение отдельных чисел недоступно.'},409);
       if(source?.payload.ocr&&source.payload.ocr.through!==source.payload.ocr.total)return reply({error:'Дождитесь распознавания всех страниц.'},409);
       const matches=source?.payload.review?.fields.filter(f=>f.key===body.field)??[];
       const field=matches.length===1?matches[0]:null;
