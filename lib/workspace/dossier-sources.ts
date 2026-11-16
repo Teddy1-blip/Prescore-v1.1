@@ -58,7 +58,7 @@ export async function dossierSources(db:QueryExecutor,owner:string,id:string){
     const cached=(await db.query('SELECT raw_payload,fetched_at FROM checko_profiles WHERE inn=$1 AND fetched_at=ANY($2::text[])',
       [capped[0].inn,capped.map(p=>p.fetchedAt)])).rows[0];
     const profile=capped.find(p=>p.fetchedAt===cached?.fetched_at);
-    if(profile&&cached?.raw_payload){
+    if(profile&&typeof cached?.raw_payload==='string'){
       try{
         const receipt=JSON.parse(cached.raw_payload);
         if(receipt.retrievedAt===profile.fetchedAt&&receipt.responses?.finances){
