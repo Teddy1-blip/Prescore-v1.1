@@ -14,7 +14,7 @@ export type StatementField = keyof typeof statementCodes;
 export type StatementCell = {value:number; original:number; confidence:string};
 export type StatementEvidence = {id:string; name:string; received:string; documentId:string|null; scale:number|null;
   values:Partial<Record<StatementField,StatementCell>>};
-export type StatementPeriod = {id:string; period:FinancialStatementSnapshot['period']; selected:StatementEvidence; alternatives:StatementEvidence[]; difference:number|null};
+export type StatementPeriod = {id:string; period:FinancialStatementSnapshot['period']; selected:StatementEvidence; alternatives:StatementEvidence[]; difference:number|null; changes?:Partial<Record<StatementField,{value:number;previousDate:string}>>};
 export type StatementMatrix = {inn:string; through:string; interim:boolean; periods:StatementPeriod[]};
 export function projectStatement(source:FinancialStatementSnapshot, documentId:string|null):StatementEvidence {
   const values:StatementEvidence['values']={};
@@ -43,7 +43,7 @@ export function validStatementPeriod(p:FinancialStatementSnapshot['period']){
 }
 export type StatementColumn={id:string;year:number;annual:boolean;title:string;basis:string;period?:StatementPeriod};
 export function statementColumns(matrix:StatementMatrix,history=false):StatementColumn[]{
-  const periods=matrix.periods;
+  const periods=matrix.periods.filter(p=>p.period.asOf&&p.period.asOf<=matrix.through);
   const years=periods.filter(p=>p.period.kind==='ANNUAL').map(p=>p.period.year!);
   const lastAnnual=years.length?Math.max(...years):0;
   const columns:StatementColumn[]=[];

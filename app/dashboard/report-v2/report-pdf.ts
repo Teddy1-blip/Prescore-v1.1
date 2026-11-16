@@ -54,7 +54,7 @@ export function reportDocument({inn,decision:m,banking,dossier:d}:PdfReport):TDo
   }
   if(d?.matrix?.inn===inn){
     for(const band of statementPrintBands(d.matrix)){
-      content.push({text:band.title,style:'heading',pageBreak:'before'},
+      content.push({text:band.title,style:'heading',...(content.length>3?{pageBreak:'before' as const}:{})},
         {layout:'lightHorizontalLines',table:{headerRows:1,widths:[160,...band.headers.slice(1).map(()=>'*' as const)],body:[
           band.headers.map(text=>({text,bold:true,fillColor:'#e7eff2'})),...band.rows.map(([name,...values])=>[name,...values.map(text=>({text,alignment:'right' as const}))])
         ]}},...band.sources.map(note));

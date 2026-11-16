@@ -1,6 +1,6 @@
 "use client";
 import type {buyerBalanceSummary} from '../../../lib/workspace/settlement-events';
-import {DossierMatrixContext} from './bfo-matrix';
+import {BfoMatrix,DossierMatrixContext} from './bfo-matrix';
 import type {StatementMatrix} from '../../../lib/workspace/statement-matrix';
 import {CompanySources} from './company-sources';
 import {latestCompanyVersion,resolveClientSelection} from '../../../lib/workspace/client-navigation';
@@ -151,7 +151,7 @@ export default function ClientWorkspace(){
  {view==='home'&&model&&!showApproved&&<ClientOverview key={selectedId} model={model} choose={choose} retry={refresh}/>} 
  {view==='calendar'&&model&&(agentWorkspace||locked)&&<ClientPaymentCalendar model={model}/>}
  {view==='banking'&&model&&<><div className="pc-page-title"><div><h1>Финансы</h1><p>Денежный поток, ликвидность и финансовая отчётность</p></div></div><BankingLedger model={model}/><FinancialStatements model={model}/><BankBfoReconciliation rows={model.full?.report.reconciliation?.bankBfo}/>{model.full&&!model.full.report.financialAnalysis?.history.length&&<button className="pc-text-button" onClick={()=>choose('documents')}>Добавить отчётность в документах →</button>}<Panel title="Крупнейшие контрагенты">{model.basic.bankingFacts.topCounterparties?.length?<div className="pc-table-scroll"><table><thead><tr><th>Контрагент</th><th>Поступления, ₽</th><th>Доля</th></tr></thead><tbody>{model.basic.bankingFacts.topCounterparties.map((c,i)=><tr key={c.name+i}><th>{c.name}</th><td>{new Intl.NumberFormat('ru-RU').format(c.amount)}</td><td>{new Intl.NumberFormat('ru-RU',{maximumFractionDigits:1}).format(c.share*100)}%</td></tr>)}</tbody></table></div>:<p>Контрагенты не определены в доступной выписке.</p>}</Panel></>}
- {view==='analysis'&&model&&<FullCreditAnalysis key={selectedId} model={model} dossierId={locked||agentWorkspace?undefined:dossierId} retry={refresh}/>}
+ {view==='analysis'&&model&&<FullCreditAnalysis key={selectedId} statementMatrix={currentMatrix?<BfoMatrix matrix={currentMatrix}/>:null} model={model} dossierId={locked||agentWorkspace?undefined:dossierId} retry={refresh}/>}
   {view==='actions'&&model&&(model.full?<ActionPlan key={selectedId} model={model}/>:<FullAccessNotice model={model} retry={refresh}/>)}
  {view==='financing'&&model&&<><div className="pc-page-title"><div><h1>Финансирование</h1><p>Цель, параметры и подходящие механизмы финансирования</p></div></div><FinancingRequest key={selectedId+'-request'} model={model} saved={refresh}/><FinancingProducts model={model} showHeading={false}/>{operationsReady&&!operationsError&&<Crm key={selectedId+'-financing-deals'} readOnly={locked} deals={deals.filter(d=>d.analysisId===selectedId)} analyses={[selected]} selected={selected} addDeal={addDeal} updateDeal={updateDeal}/>} {!operationsReady&&!operationsError&&<p role="status">Загружаем заявки и переписку…</p>}</>}
  {view==='obligations'&&<>{model?<DebtPortfolio key={selectedId} model={model} embedded={showApproved}/>:<div className="pc-page-title"><div><h1>Обязательства</h1><p>Добавьте отчёт БКИ или кредитный договор в досье компании.</p></div></div>}{!locked&&agentWorkspace&&<SourceUpload key={selectedId+'-bki'} analysisId={selectedId} kind="BKI" saved={refreshSource}/>}</>}

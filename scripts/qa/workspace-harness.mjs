@@ -15,7 +15,9 @@ const root=process.cwd(),out=path.resolve(process.argv[2]??'build/workspace-qa')
 process.env.PRESCORE_BASE_URL??='http://127.0.0.1:'+port;
 fs.mkdirSync(out,{recursive:true});
 process.env.PRESCORE_STORAGE_ROOT??=path.join(out,'private-originals');
-const externalDouble=process.env.PRESCORE_QA_EXTERNAL==='1'?(await import('../../tests/fixtures/stage4-external.mjs')).checkoDouble():undefined;
+const matrixReceipts=process.env.PRESCORE_QA_MATRIX==='1'?{change:{finances:body=>({...body,data:Object.fromEntries(
+  [2017,2018,2019,2021,2022,2023,2024,2025].map((year,i)=>[year,{...body.data[2025],2110:700000+i*10000}]))})}}:{};
+const externalDouble=process.env.PRESCORE_QA_EXTERNAL==='1'?(await import('../../tests/fixtures/stage4-external.mjs')).checkoDouble(matrixReceipts):undefined;
 const req=createRequire(root+'/package.json'),rt=await createWorkspaceRuntime({checkoFetch:externalDouble?.fetcher});
 function fixtureEntry(sourceRoot){
 const routes=fs.existsSync(path.join(sourceRoot,'app/agent/_components/shell.tsx'))?agentFixtureRoutes(sourceRoot):"import Broker from './app/agent/page.tsx';async function agentFixture(){return <Broker/>;}";

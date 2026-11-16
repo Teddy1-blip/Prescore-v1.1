@@ -5,8 +5,7 @@ import type {WorkspaceModelV1} from '../../../lib/workspace/model';
 import {CompanyReportButton} from './company-report-button';
 import {Financing} from '../../dashboard/report-v2/analysis-v3';
 import {Panel,FactorRows,ActionItem,Why,CreditSummary,SourceSummary,AssessmentLimits} from './client-insights';
-import {useContext} from 'react';
-import {BfoMatrix,DossierMatrixContext} from './bfo-matrix';
+import type {ReactNode} from 'react';
 import {ReconciliationDetails,FinancialStatements} from './client-financials';
 import {FullAccessNotice,money,date} from './presentation';
 import {productPurpose,productReason} from './product-copy';
@@ -99,8 +98,7 @@ function CapacityEvidenceGaps({model}:{model:WorkspaceModelV1}){
  return <Panel title="Основания и ограничения долговой ёмкости"><ul>{notes.map((note,i)=><li key={i}>{note}</li>)}</ul><p className="pc-muted">Долговые платежи по выписке и датированный платёж из БКИ — разные основания. Prescore не приравнивает неизвестный график к нулевому долгу.</p></Panel>;
 }
 
-export function FullCreditAnalysis({model,retry,dossierId,initialSection='conclusion'}:{model:WorkspaceModelV1;retry:()=>void;dossierId?:string;initialSection?:string}){
- const matrix=useContext(DossierMatrixContext);
+export function FullCreditAnalysis({model,retry,dossierId,statementMatrix,initialSection='conclusion'}:{statementMatrix?:ReactNode;model:WorkspaceModelV1;retry:()=>void;dossierId?:string;initialSection?:string}){
  const [tab,setTab]=useState(()=>{
   const value=typeof window==='undefined'?initialSection:new URLSearchParams(window.location.search).get('section')||initialSection;
   return ['conclusion','factors','expertise','capacity','financials','obligations','financing','reconciliation','recommendations','plan','evidence','history'].includes(value)?value:'conclusion';
@@ -133,7 +131,7 @@ export function FullCreditAnalysis({model,retry,dossierId,initialSection='conclu
    {r.analysisV3?.financing.views.some(v=>v.headroom!==null||v.upperHeadroom!==null)&&<Panel title="Запас в двух режимах обслуживания"><div className="pc-capacity-views">{r.analysisV3.financing.views.map(v=><section key={v.kind}><h3>{v.kind==='RECURRING'?'Регулярная нагрузка':'Ближайшие 30 дней'}</h3><dl className="pc-definition">{([['Текущее обслуживание',v.current.value],['Осторожный запас',v.headroom],['Верхняя граница запаса',v.upperHeadroom]] as const).filter(([,amount])=>typeof amount==='number').map(([name,amount])=><div key={name}><dt>{name}</dt><dd>{money(Number(amount))} / мес.</dd></div>)}</dl></section>)}</div></Panel>}
    <p className="pc-analysis-section-note">Это способность обслуживать дополнительный долг, а не одобренная сумма кредита.</p><CapacityEvidenceGaps model={model}/></>}
 
-  {tab==='financials'&&<>{matrix&&<BfoMatrix matrix={matrix}/>}<FinancialStatements model={model}/></>}
+  {tab==='financials'&&<>{statementMatrix}<FinancialStatements model={model}/></>}
   {tab==='obligations'&&<DebtPortfolio model={model} embedded/>}
   {tab==='financing'&&<FinancingProducts model={model} embedded/>}
   {tab==='reconciliation'&&<ReconciliationDetails model={model}/>}

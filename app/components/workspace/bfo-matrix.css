@@ -11,3 +11,18 @@
 .bfo-evidence{background:#f0f7f4;border-left:3px solid #177a68;padding:12px 16px;margin-top:14px}.bfo-evidence h3{margin:0}.bfo-evidence p{margin:5px 0}.bfo-close{float:right}.bfo-evidence a{color:#075d52;text-decoration:underline}
 @media(max-width:600px){.bfo-scroll tbody th,.bfo-scroll thead th[rowspan]{min-width:140px;width:140px;max-width:140px}.bfo-scroll td,.bfo-scroll th{padding:6px 8px}.bfo-matrix{padding:10px}.bfo-controls{justify-content:flex-start}}
 @media print{.bfo-controls,.bfo-close{display:none}.bfo-scroll{overflow:visible;max-height:none}.bfo-scroll thead,.bfo-scroll th{position:static}}
+/* The cabinet stacks ordinary tables on phones. Financial periods use native table layout at every width. */
+.approved-client .bfo-matrix .bfo-scroll table{width:max-content;min-width:100%;table-layout:auto;border-collapse:separate;font-size:14px;display:table}
+.approved-client .bfo-matrix .bfo-scroll thead{display:table-header-group}
+.approved-client .bfo-matrix .bfo-scroll tbody{display:table-row-group;width:auto}
+.approved-client .bfo-matrix .bfo-scroll tr{display:table-row;width:auto;border:0;padding:0}
+.approved-client .bfo-matrix .bfo-scroll td,.approved-client .bfo-matrix .bfo-scroll th{display:table-cell;width:auto;padding:6px 12px;font-size:14px;text-transform:none;letter-spacing:normal;overflow-wrap:normal}
+.approved-client .bfo-matrix .bfo-scroll td{min-width:108px;text-align:right;border-bottom:1px solid #dfe8e7}
+.approved-client .bfo-matrix .bfo-scroll td::before{content:none}
+.approved-client .bfo-matrix .bfo-scroll tbody th,.approved-client .bfo-matrix .bfo-scroll th[rowspan]{min-width:185px;width:205px;font-size:13px;line-height:1.35}
+.approved-client .bfo-matrix .bfo-scroll button{min-height:27px;width:auto;color:inherit;background:transparent;border:0;padding:3px 4px;font-size:inherit;font-weight:inherit}
+.approved-client .bfo-matrix .bfo-scroll button:hover,.approved-client .bfo-matrix .bfo-scroll button[aria-pressed=true]{background:#d6eee6;color:#075e4e}
+.approved-client .bfo-matrix .bfo-controls label{display:inline-flex;align-items:center;gap:6px}.approved-client .bfo-matrix .bfo-controls select{width:auto;min-height:34px;padding:5px;font-size:13px}
+.approved-client .bfo-matrix .bfo-controls input[type=checkbox]{width:16px;min-height:16px;height:16px}
+.approved-client .bfo-matrix>section>h3{margin:16px 0 8px;font-size:18px}
+@media(max-width:600px){.approved-client .bfo-matrix .bfo-scroll tbody th,.approved-client .bfo-matrix .bfo-scroll th[rowspan]{min-width:130px;width:130px;max-width:130px}.approved-client .bfo-matrix .bfo-scroll td,.approved-client .bfo-matrix .bfo-scroll th{padding:5px 8px}}

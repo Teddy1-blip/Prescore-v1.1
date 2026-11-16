@@ -13,7 +13,7 @@ import type {AnalysisResult} from '../prescore.ts';
 import type {QueryExecutor} from '../db/compatibility.ts';
 import type {LedgerBalance} from './ledger-import.ts';
 import {buildFinancialAnalysis} from '../credit-engine/financial-analysis/engine.ts';
-import {projectStatement,validStatementPeriod,type StatementMatrix} from './statement-matrix.ts';
+import {projectStatement,validStatementPeriod,statementCodes,type StatementField,type StatementMatrix} from './statement-matrix.ts';
 import {activeFinancialSnapshots,currentFinancialSnapshots,economicPeriodKey} from '../credit-engine/financial-analysis/source-selection.ts';
 import {publicFinancialAnalysis} from '../credit-engine/client-report/source-detail.ts';
 import {buildCreditPortfolio} from '../credit-engine/credit-portfolio/resolver.ts';
@@ -92,6 +92,15 @@ export function sourceProjection(rows:SourceRow[],inn:string,includeFull=true,in
     })};
   const financialAnalysis=selected.length?buildFinancialAnalysis(selected):undefined;
   const financial=publicFinancialAnalysis({financialAnalysis});
+  const visiblePeriods=new Map(matrix.periods.map(p=>[p.id,p]));
+  for(const trend of financial?.trends??[]){
+    const period=visiblePeriods.get(trend.currentId),prior=visiblePeriods.get(trend.previousId??'');
+    const field=trend.absolute.key as StatementField;
+    if(!period||!prior?.period.asOf||!Object.hasOwn(statementCodes,field)||!period.selected.values[field]||!prior.selected.values[field])continue;
+    if(typeof trend.absolute.value==='number'&&['COMPARABLE_ANNUAL_YOY','COMPARABLE_INTERIM_YOY'].includes(trend.comparability)){
+      (period.changes??={})[field]={value:trend.absolute.value,previousDate:prior.period.asOf};
+    }
+  }
   const bki=rows.flatMap(r=>r.payload.bki?.affectsCompanyDebt?[adaptUploadedBki(r.payload.bki,{companyInn:inn,source:r.payload.envelope})]:[]);
   const documents=rows.flatMap(row=>verifiedCreditDocument(row,inn)??[]);
   const ledger=ledgerObservations(rows,inn);
