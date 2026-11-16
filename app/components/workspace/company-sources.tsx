@@ -211,7 +211,7 @@ export function CompanySources({view,id,bankInn,bank,openBank,onCompany,onSource
   </Panel>}
   {view==='counterparties'&&<SettlementRegisters rows={profile?.settlements??[]} full={profile?.entitlement==='FULL'} save={async(entry,key,revision)=>{if(!company)throw Error('Выберите компанию.');await read('/api/dossier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'settlement',id:company.id,entry,key,revision})});setRevision(v=>v+1);}}/>}
   {view==='counterparties'&&company&&profile?.entitlement==='FULL'&&<ReceivablesReview rows={profile.settlements} checks={profile.counterpartyChecks} refresh={async inn=>{await read('/api/dossier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'counterparty-check',id:company.id,inn})});setRevision(n=>n+1);}}/>}
-  {profile&&['home','banking','bfo','documents','obligations','counterparties'].includes(view)&&
+  {profile&&company&&['home','banking','bfo','documents','obligations','counterparties'].includes(view)&&
    <Panel title="Покрытие периодов · дозагрузка и пересечения">
     <p>Новые документы дополняют досье. Совпадающие даты не означают одинаковые операции или суммы. Эта проверка не изменяет скоринг без сверки источников.</p>
     {profile.periodAudit.groups.filter(g=>g.gaps.length||g.overlaps.length).map(g=>
