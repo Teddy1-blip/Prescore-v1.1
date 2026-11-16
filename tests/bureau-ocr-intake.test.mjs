@@ -77,3 +77,26 @@ test('company bureau intake covers a 199-page report with an explicit page bound
  assert.equal(BUREAU_MAX_PDF_PAGES,256);
  assert.ok(BUREAU_MAX_PDF_PAGES>=199);
 });
+
+test('creditor directory lines must not manufacture NBKI obligations from an isolated Вид label',()=>{
+ const text=[
+  'Субъект: Кредитная история юридического лица',
+  'ИНН','Номер','7707083893',
+  'Сведения об источниках формирования кредитной истории',
+  'Вид: Заимодавец (кредитор) – кредитная организация',
+  'Регистрационный номер: 12345',
+  'Полное наименование: Учебная организация',
+  'Счет','Вид: Срочный кредит','Отношение: Заёмщик',
+  'Кредитор: Учебный банк','Счет: QA-1',
+  'Размер/лимит: RUB 200000',
+  'Открыт: 01-01-2025','Статус: Действующий',
+  'Задолж-сть: RUB 120000','Просрочено: RUB 0',
+  'При наличии вопросов обратитесь в НБКИ',
+  'Предоставлен 16-06-2026',
+ ].join('\n');
+ const report=parseCreditHistoryText(text,'synthetic-long-nbki.pdf');
+ assert.equal(report.source,'НБКИ');
+ assert.equal(report.obligations.length,1);
+ assert.equal(report.obligations[0].accountNumber,'QA-1');
+ assert.equal(report.obligations[0].creditor,'Учебный банк');
+});
