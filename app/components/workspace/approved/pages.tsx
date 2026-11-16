@@ -629,7 +629,9 @@ export function ApprovedPage(p: ScreenProps) {
     );
   return (
     <>
-      {!(page === 'analysis' && hasDetails) && content}
+      {page === 'documents' && p.ownedDossier
+        ? <details className="pc-credit-recap"><summary>Источники сохранённого банковского анализа</summary>{content}</details>
+        : !(page === 'analysis' && hasDetails) && content}
       {p.details && (inlineCanonical ? (
         <section className="approved-canonical-section" id="approved-source-operations" aria-label={canonicalHeadings[page]}>
           <div className="approved-canonical-heading">

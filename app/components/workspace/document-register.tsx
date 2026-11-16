@@ -49,14 +49,14 @@ function resultFor(source:Source, profile:Projection) {
   return {status,details,review,view,hasResult:used||!!card||!!bureau||ledger.length>0||!!schedule};
 }
 
-export function DocumentRegister({profile,inn,labels,choose,recentId,openBank}:{
-  profile:Projection;inn:string;labels:Record<string,string>;choose:(view:string)=>void;recentId:string;openBank:()=>void;
+export function DocumentRegister({profile,inn,companyName,labels,choose,recentId,openBank}:{
+  profile:Projection;inn:string;companyName?:string;labels:Record<string,string>;choose:(view:string)=>void;recentId:string;openBank:()=>void;
 }){
   const recent=profile.sources.find(s=>s.id===recentId);
   const report=recent&&resultFor(recent,profile);
   const byGroup=new Map(groups.map(g=>[g,profile.sources.filter(s=>sourceGroup(s.kind)===g)]));
   return <section className="pc-register" aria-label="Документы компании">
-    <header><div><h2>Документы компании</h2><p>Финансовые и кредитные источники для анализа бизнеса · ИНН {inn}</p></div>
+    <header><div><h2>Документы компании</h2><p>{companyName && <>{companyName} · </>}ИНН {inn}</p></div>
       <a className="pc-primary" href="#dossier-intake">Добавить документ</a></header>
     {recent&&report&&<section className="pc-register-receipt" role="status"><strong>{recent.name}</strong><p>{report.status}</p>
       {report.details.length>0&&<p>{report.details.join(' · ')}</p>}

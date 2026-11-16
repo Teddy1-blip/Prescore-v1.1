@@ -143,6 +143,7 @@ export default function ClientWorkspace(){
  {(error.startsWith('Сессия завершена')||state.error.startsWith('Сессия завершена')||operationsError.startsWith('Сессия завершена'))&&<p role="alert">Сессия завершена. <a href={'/login?returnTo='+encodeURIComponent(window.location.pathname+window.location.search+window.location.hash)}>Войти снова</a></p>}
  {operationsError&&<p role="alert">{operationsError}. Показанные операции могут быть неактуальны. <button disabled={operationsLoading} onClick={()=>void refresh()}>Обновить операции</button></p>}
  {state.refreshing&&<p role="status" className="pc-muted">Обновляем данные. Текущая версия остаётся на экране.</p>}{state.refreshError&&<p role="alert">{state.refreshError} Показана последняя полученная версия. <button onClick={refresh}>Повторить</button></p>}{notice&&<p role="status" className="ws-notice">{notice}</p>}{error&&<p role="alert">{error} <button onClick={()=>window.location.reload()}>Повторить</button></p>}
+ {view==='documents'&&sourcesWidget}
  {view==='home'&&(!model||companyEntry>0)&&sourcesWidget}
  {view==='home'&&uploadReceipt?.id===model?.analysisId&&model&&uploadReceipt&&<section className="pc-register-receipt" aria-label="Результат загрузки выписки">
    <h2>Обновлён анализ денежных потоков</h2><p>{date(model.basic.analysis.period.from)} — {date(model.basic.analysis.period.to)}</p>
@@ -165,7 +166,7 @@ export default function ClientWorkspace(){
  {view==='applications'&&operationsReady&&!operationsError&&<><div className="pc-page-title"><div><h1>Заявки</h1><p>Сохранённые заявки, статусы и переписка</p></div><button disabled={operationsLoading} onClick={()=>void refresh()}>{operationsLoading?'Обновляем…':'Обновить'}</button></div><Crm key={selectedId} readOnly={locked} deals={deals.filter(d=>d.analysisId===selectedId)} analyses={[selected]} selected={selected} addDeal={addDeal} updateDeal={updateDeal}/>{!locked&&<RecipientApplications key={selectedId} analysis={selected} saved={refresh}/>}</>}
  {view==='analyst'&&model&&(model.full?<AiAnalyst key={selectedId} analysisId={selectedId}/>:<FullAccessNotice model={model} retry={refresh}/>)}
  </>}</LivePage>
- {(view!=='home'||(model&&companyEntry===0))&&sourcesWidget}
+ {view!=='documents'&&(view!=='home'||(model&&companyEntry===0))&&sourcesWidget}
  {showApproved&&model&&(['home','counterparties','obligations'] as string[]).includes(view)&&<ClientAnalyticPipeline key={'pipeline:'+selectedId+':'+view} model={model} scope={view as 'home'|'bfo'|'counterparties'|'obligations'} choose={choose}/>}
  </ClientShell></DossierMatrixContext.Provider>;
 }
