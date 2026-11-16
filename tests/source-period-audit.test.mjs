@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {sourcePeriodAudit} from '../lib/workspace/source-period-audit.ts';
+import {createWorkspaceRuntime} from './fixtures/workspace-runtime.mjs';
+import {statementFixture} from './fixtures/block1-statements.mjs';
+import {corporation,checkoDouble} from './fixtures/stage4-external.mjs';
 const inn='9900000001';
 const envelope=(id,kind,extra={})=>({sourceId:id,sourceType:kind,status:'READY',companyInn:inn,
  receivedAt:'2026-11-16T09:00:00.000Z',confidence:100,warnings:[],...extra});
@@ -140,4 +143,42 @@ test('gap disappears after a missing interval is uploaded, without changing othe
  assert.equal(next.groups[0].gaps.length,0);
  assert.equal(next.groups[0].overlaps.length,0);
  assert.equal(next.automaticApply,false);
+});
+
+test('owner dossier API closes a bank date gap after a later incremental upload',async()=>{
+ const provider=checkoDouble(),rt=await createWorkspaceRuntime({checkoFetch:provider.fetcher});
+ try{
+  const user=rt.owner;
+  const send=(url,payload)=>rt.request(url,{method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify(payload)},user);
+  const saved=await send('/api/dossier',{action:'save',inn:corporation});
+  assert.equal(saved.status,200,await saved.clone().text());
+  const dossierId=(await saved.json()).company.id;
+  const add=async(name,from,to,date,number)=>{
+   const statement=statementFixture({inn:corporation,company:'ООО Учебный поставщик',bank:'АО Учебный банк',
+    account:'40702810111110000001',periodFrom:from,periodTo:to,transactionDate:date,number});
+   const response=await send('/api/analysis',{dossierId,statements:[{fileName:name,text:statement}]});
+   assert.equal(response.status,200,await response.clone().text());
+  };
+  await add('jan-first.txt','01.01.2026','10.01.2026','05.01.2026','1');
+  await add('jan-last.txt','13.01.2026','31.01.2026','19.01.2026','2');
+  const read=async()=>{
+   const result=await rt.request('/api/dossier?id='+encodeURIComponent(dossierId),{},user);
+   assert.equal(result.status,200,await result.clone().text());
+   return result.json();
+  };
+  const before=await read();
+  const source=before.periodAudit.groups.find(g=>g.kind==='BANK_STATEMENT');
+  assert.ok(source);
+  assert.deepEqual(source.gaps.map(x=>[x.from,x.to]),[['2026-01-11','2026-01-12']]);
+  assert.equal(before.versions.length,2);
+  await add('jan-missing.txt','11.01.2026','12.01.2026','11.01.2026','3');
+  const after=await read();
+  assert.equal(after.versions.length,3,'old analysis versions are preserved');
+  const filled=after.periodAudit.groups.find(g=>g.kind==='BANK_STATEMENT');
+  assert.equal(filled.gaps.length,0);
+  assert.equal(filled.spans.length,3);
+  assert.equal(after.periodAudit.automaticApply,false);
+  assert.equal((await rt.request('/api/dossier?id='+dossierId,{},rt.stranger)).status,404);
+ }finally{await rt.close();}
 });
