@@ -1,4 +1,5 @@
 import {datedNbkiEvidence,type NbkiTermination,type NbkiHistoricalDebt} from './nbki-dated-evidence.ts';
+import {nbkiLegacyStatusEvidence,type NbkiLegacyStatusEvidence} from './nbki-legacy-status.ts';
 
 /** Read-only index of corporate NBKI modern IDs and old account cards.
  * Never treats historical nominal amount as current principal or overdue.
@@ -15,7 +16,8 @@ export type NbkiModernEntry={
 };
 export type NbkiLegacyEntry={
  account:string;creditor:string;pages:number[];kind:NbkiEvidenceKind;
- role:'BORROWER'|'PRINCIPAL'|'GUARANTOR'|'UNKNOWN';linkedModernUid:string|null;status:'SOURCE_ONLY'|'CONFLICT';
+ role:'BORROWER'|'PRINCIPAL'|'GUARANTOR'|'UNKNOWN';linkedModernUid:string|null;
+ statusEvidence:NbkiLegacyStatusEvidence|null;status:'SOURCE_ONLY'|'CONFLICT';
 };
 export type NbkiStructureIndex={
  version:typeof NBKI_STRUCTURE_VERSION;modern:NbkiModernEntry[];legacy:NbkiLegacyEntry[];
@@ -126,12 +128,16 @@ export function nbkiStructureIndex(pages:readonly Page[],reportDate?:string):Nbk
    for(const match of page.text.matchAll(/(?:^|\n)\s*Счет:\s*([^\n]+)/gim)){
      const account=match[1].split(/[ \t]{2,}/)[0].trim().replace(/[.]+$/,'');
      if(!account||account.length>100||!/^[-\p{L}\d№]/u.test(account))continue;
-     const lead=page.text.slice(Math.max(0,(match.index??0)-650),match.index);
+     const lookback=page.text.slice(Math.max(0,(match.index??0)-1800),match.index);
+     const headings=[...lookback.matchAll(/(?:^|\n)[ \t]*Счет(?=[ \t]{2,}Договор[ \t]{2,}Состояние|[ \t]*(?=\r?\n|$))/gim)];
+     const lead=headings.length?lookback.slice(headings[headings.length-1].index):lookback.slice(-650);
      const creditor=lastLabel(lead,'Кредитор'),roleText=lastLabel(lead,'Отношение');
      if(!creditor||!roleText||creditor==='Н/Д')continue;
      const role:NbkiLegacyEntry['role']=/принципал/iu.test(roleText)?'PRINCIPAL':
        /поручител/iu.test(roleText)?'GUARANTOR':/за[её]мщик|личный|совместный/iu.test(roleText)?'BORROWER':'UNKNOWN';
      const kind=legacyKind(lead);
+     const evidence=nbkiLegacyStatusEvidence(lead,page.page,reportDate);
+     result.issues.push(...evidence.issues);
      const tail=page.text.slice((match.index??0)+match[0].length,(match.index??0)+match[0].length+700);
      const explicit=tail.match(/УИД договора\s*\(сделки\):\s*([^\n]+)/iu)?.[1]?.trim().match(uidPattern)?.[0]?.toLowerCase()??null;
      const linkedModernUid=explicit&&modern.has(explicit)?explicit:null;
@@ -139,6 +145,12 @@ export function nbkiStructureIndex(pages:readonly Page[],reportDate?:string):Nbk
      const prior=legacy.get(key);
      if(prior){
        if(!prior.pages.includes(page.page))prior.pages.push(page.page);
+       if(evidence.issues.length)prior.status='CONFLICT';
+       if(prior.statusEvidence&&evidence.evidence&&
+          prior.statusEvidence.reportedState!=='UNKNOWN'&&evidence.evidence.reportedState!=='UNKNOWN'&&
+          prior.statusEvidence.reportedState!==evidence.evidence.reportedState){
+         prior.status='CONFLICT';result.issues.push('BUREAU_LEGACY_ACCOUNT_STATUS_CONFLICT');
+       }
        if((prior.kind!=='UNKNOWN'&&kind!=='UNKNOWN'&&prior.kind!==kind)||
          (prior.role!=='UNKNOWN'&&role!=='UNKNOWN'&&prior.role!==role)||
          (prior.linkedModernUid&&linkedModernUid&&prior.linkedModernUid!==linkedModernUid)){
@@ -146,9 +158,12 @@ export function nbkiStructureIndex(pages:readonly Page[],reportDate?:string):Nbk
        }
        if(prior.kind==='UNKNOWN')prior.kind=kind;
        if(!prior.linkedModernUid)prior.linkedModernUid=linkedModernUid;
+       if((!prior.statusEvidence||prior.statusEvidence.reportedState==='UNKNOWN')&&evidence.evidence)
+         prior.statusEvidence=evidence.evidence;
        continue;
      }
-     legacy.set(key,{account,creditor,pages:[page.page],kind,role,linkedModernUid,status:'SOURCE_ONLY'});
+     legacy.set(key,{account,creditor,pages:[page.page],kind,role,linkedModernUid,
+       statusEvidence:evidence.evidence,status:evidence.issues.length?'CONFLICT':'SOURCE_ONLY'});
    }
  }
  result.legacy=[...legacy.values()];
@@ -161,7 +176,12 @@ export function nbkiStructureIndex(pages:readonly Page[],reportDate?:string):Nbk
  }
  for(const [uid,items] of links){
    const newer=modern.get(uid);
-   const consistent=items.length===1&&newer?.status==='SOURCE_ONLY'&&
+   const older=items[0]?.statusEvidence;
+   const temporalMismatch=!!newer?.termination&&!!older&&(
+     (!!older.fulfillmentDate&&older.fulfillmentDate!==newer.termination.date)||
+     (older.reportedState==='ACTIVE'&&!!(older.statusDate||older.lastUpdatedAt)&&
+       (older.statusDate||older.lastUpdatedAt)!>=newer.termination.date));
+   const consistent=items.length===1&&!temporalMismatch&&newer?.status==='SOURCE_ONLY'&&
      items[0].status==='SOURCE_ONLY'&&
      !(newer.kind!=='UNKNOWN'&&items[0].kind!=='UNKNOWN'&&newer.kind!==items[0].kind)&&
      !(newer.role==='BORROWER'&&items[0].role==='PRINCIPAL')&&
@@ -169,7 +189,7 @@ export function nbkiStructureIndex(pages:readonly Page[],reportDate?:string):Nbk
    if(consistent){result.exactUidLinks++;continue;}
    for(const entry of items)entry.status='CONFLICT';
    if(newer)newer.status='CONFLICT';
-   result.issues.push('BUREAU_CROSS_FORMAT_UID_REVIEW');
+   result.issues.push(temporalMismatch?'BUREAU_CROSS_FORMAT_STATUS_REVIEW':'BUREAU_CROSS_FORMAT_UID_REVIEW');
  }
  if(result.modern.length>256||result.legacy.length>512)result.issues.push('BUREAU_STRUCTURE_RECORD_LIMIT');
  if(result.modern.some(r=>r.kind==='UNKNOWN'))result.issues.push('BUREAU_MODERN_TYPE_REVIEW');

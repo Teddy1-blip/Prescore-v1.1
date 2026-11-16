@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {nbkiStructureIndex} from '../lib/workspace/nbki-structure-index.ts';
+import {nbkiLegacyStatusEvidence} from '../lib/workspace/nbki-legacy-status.ts';
 const uidA='a1b2c3d4-1111-2222-3333-444455556666-1';
 const uidB='b1c2d3e4-aaaa-bbbb-cccc-1234567890ab-2';
 const page=(page,text)=>({page,text});
@@ -157,4 +158,64 @@ test('same as-of date with conflicting last-payment-basis indicators requires re
  assert.equal(report.modern[0].status,'CONFLICT');
  assert.ok(report.issues.includes('BUREAU_MODERN_UUID_CONFLICT'));
  assert.equal(report.modern[0].currentPrincipalRub,null);
+});
+
+test('printed three-column legacy card reads ACTIVE and evidence date, never live debt',()=>{
+ const block=['Счет                   Договор                       Состояние',
+  'Вид: Н/Д               Размер/лимит: Н/Д             Открыт: 21-12-2021',
+  'Отношение: Принципал   ПСК%%: Н/Д                    Статус: Активный',
+  'Кредитор: Учебный банк  Финальн.платеж: Н/Д        Дата статуса: 19-07-2023',
+  'УИД договора(сделки): Н/Д Финальн.платеж %%: Н/Д   Последн.обновление: 20-07-2023'].join('\n');
+ const r=nbkiLegacyStatusEvidence(block,73,'2023-08-24');
+ assert.deepEqual(r.issues,[]);
+ assert.equal(r.evidence?.reportedState,'ACTIVE');
+ assert.equal(r.evidence?.statusDate,'2023-07-19');
+ assert.equal(r.evidence?.lastUpdatedAt,'2023-07-20');
+ assert.equal(r.evidence?.openedAt,'2021-12-21');
+ assert.equal(r.evidence?.page,73);
+});
+test('CLOSED, TRANSFERRED and unknown statuses never collapse into each other',()=>{
+ const block=raw=>['Счет','Вид: Н/Д       Открыт: Н/Д','Отношение: Принципал     Статус: '+raw,
+  'Кредитор: Учебный банк       Последн.обновление: 20-07-2023'].join('\n');
+ assert.equal(nbkiLegacyStatusEvidence(block('Счет закрыт'),86,'2023-08-24').evidence?.reportedState,'CLOSED');
+ assert.equal(nbkiLegacyStatusEvidence(block('Счет закрыт - переведен на обслуживание в другую организацию'),86,'2023-08-24').evidence?.reportedState,'TRANSFERRED');
+ assert.equal(nbkiLegacyStatusEvidence(block('Н/Д'),86,'2023-08-24').evidence?.reportedState,'UNKNOWN');
+ assert.equal(nbkiLegacyStatusEvidence('Кредитор: Учебный банк\nСтатус: Активный',86,'2023-08-24').evidence,null);
+});
+test('duplicate legacy account with contradictory reported statuses remains in review',()=>{
+ const src=status=>['Счет','Вид: Н/Д          Открыт: Н/Д',
+  'Отношение: Принципал          Статус: '+status,
+  'Кредитор: Учебный банк       Последн.обновление: 20-07-2023',
+  'Счет: BG-DEMO-2026             Финальн.платеж: Н/Д','УИД договора(сделки): Н/Д'].join('\n');
+ const r=nbkiStructureIndex([page(46,src('Активный')),page(47,src('Счет закрыт'))],'2023-08-24');
+ assert.equal(r.legacy.length,1);
+ assert.equal(r.legacy[0].status,'CONFLICT');
+ assert.ok(r.issues.includes('BUREAU_LEGACY_ACCOUNT_STATUS_CONFLICT'));
+ assert.equal(r.legacy[0].statusEvidence?.reportedState,'ACTIVE');
+});
+test('invalid, impossible and future legacy status dates downgrade to unknown',()=>{
+ const src=date=>['Счет','Вид: Н/Д          Открыт: Н/Д',
+  'Отношение: Принципал          Статус: Активный',
+  'Кредитор: Учебный банк       Последн.обновление: '+date].join('\n');
+ for(const date of ['30-11-2028','31-02-2023','02-01-1900']){
+  const r=nbkiLegacyStatusEvidence(src(date),71,'2023-08-24');
+  assert.ok(r.issues.length>0);
+  assert.equal(r.evidence?.reportedState,'UNKNOWN');
+ }
+});
+test('modern fulfilled versus later legacy ACTIVE needs cross-format conflict review',()=>{
+ const modern=guarantee()+
+  '\nПрекращение обязательства                   Дата прекращения'+
+  '\nНадлежащее исполнение обязательства          20-06-2023';
+ const legacySource=['Счет','Вид: Н/Д      Открыт: Н/Д',
+  'Отношение: Принципал       Статус: Активный',
+  'Кредитор: Учебный банк     Дата статуса: 19-07-2023',
+  'Последн.обновление: 20-07-2023',
+  'Счет: BG-DEMO-2026','УИД договора(сделки): '+uidA].join('\n');
+ const r=nbkiStructureIndex([page(5,modern),page(73,legacySource)],'2023-08-24');
+ assert.equal(r.modern[0].termination?.date,'2023-06-20');
+ assert.equal(r.exactUidLinks,0);
+ assert.equal(r.modern[0].status,'CONFLICT');
+ assert.equal(r.legacy[0].status,'CONFLICT');
+ assert.ok(r.issues.includes('BUREAU_CROSS_FORMAT_STATUS_REVIEW'));
 });

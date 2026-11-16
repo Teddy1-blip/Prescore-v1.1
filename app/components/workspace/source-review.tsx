@@ -24,7 +24,14 @@ export function SourceReview({review,save,recognize,approveBureau}:{review:Revie
  {review.nbkiStructure.modern.map(r=><p key={r.uid}>УИд {r.uid} · {r.kind==='LOAN'?'Кредит/заём':r.kind==='GUARANTEE'?'Независимая гарантия':'Тип требует сверки'} · страница {r.pages.join(', ')}{r.agreementDate&&' · дата '+r.agreementDate}{r.nominalRub!==null&&' · сумма договора '+r.nominalRub.toLocaleString('ru-RU')+' ₽ (стр. '+r.nominalPage+')'}{r.termination&&' · Надлежащее исполнение '+r.termination.date+' (стр. '+r.termination.page+')'}
  {r.historicalDebt&&' · Исторический основной долг '+r.historicalDebt.principalRub.toLocaleString('ru-RU')+' ₽ на '+r.historicalDebt.asOf+' (стр. '+r.historicalDebt.page+'; расчёт по последнему платежу: '+(r.historicalDebt.lastPaymentBasis?'да':'нет')+'; НЕ текущий остаток)'}{r.status==='CONFLICT'&&' · конфликт источников'}</p>)}
  <details><summary>Старые карточки ({review.nbkiStructure.legacy.length})</summary>
- {review.nbkiStructure.legacy.map((r,i)=><p key={r.account+':'+i}>{r.account} · {r.creditor} · страница {r.pages.join(', ')}{r.linkedModernUid&&' · связан по УИд '+r.linkedModernUid}{r.status==='CONFLICT'&&' · конфликт источников'}</p>)}</details></details>}
+ {review.nbkiStructure.legacy.map((r,i)=><p key={r.account+':'+i}>{r.account} · {r.creditor} · страница {r.pages.join(', ')}{r.linkedModernUid&&' · связан по УИд '+r.linkedModernUid}
+ {r.statusEvidence?.reportedState==='ACTIVE'&&' · Активный по архивному отчёту'}
+ {r.statusEvidence?.reportedState==='CLOSED'&&' · Закрыт по архивному отчёту'}
+ {r.statusEvidence?.reportedState==='TRANSFERRED'&&' · Передан другому кредитору'}
+ {r.statusEvidence?.statusDate&&' · дата статуса '+r.statusEvidence.statusDate}
+ {r.statusEvidence?.fulfillmentDate&&' · дата исполнения '+r.statusEvidence.fulfillmentDate}
+ {r.statusEvidence?.lastUpdatedAt&&' · обновление '+r.statusEvidence.lastUpdatedAt}
+ {r.status==='CONFLICT'&&' · требуется сверка'}</p>)}</details></details>}
  {review.bureauPreview&&<section><h4>Обязательства для сверки</h4>{review.bureauPreview.map((o,i)=><p key={i}>{o.creditor} · {o.contract} {o.total!==null&&' · Общая задолженность '+o.total.toLocaleString('ru-RU')+' ₽'} {o.principal!==null&&' · Основной долг '+o.principal.toLocaleString('ru-RU')+' ₽'} · {o.reference}</p>)}
  <button disabled={!approveBureau||busy} onClick={async()=>{setBusy(true);setError('');try{await approveBureau?.();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}}>Сверил с оригиналом · подтвердить отчёт</button></section>}
  {review.issues.includes('CREDIT_OFFER_ACCEPTANCE_UNVERIFIED')&&<p>Это заявление-оферта: условия можно проверить, но выдача кредита и акцепт пока не подтверждены. В кредитный портфель документ автоматически не попадёт.</p>}
