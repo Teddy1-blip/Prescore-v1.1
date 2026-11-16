@@ -19,6 +19,7 @@ export function SourceReview({review,save,recognize,approveBureau}:{review:Revie
  {review.bureauPages&&<details><summary>Текст по страницам</summary>{review.bureauPages.map((p,i)=><details key={i}><summary>Страница {p.page}</summary><pre style={{whiteSpace:'pre-wrap'}}>{p.text}</pre></details>)}</details>}
  {review.bureauPreview&&<section><h4>Обязательства для сверки</h4>{review.bureauPreview.map((o,i)=><p key={i}>{o.creditor} · {o.contract} {o.total!==null&&' · Общая задолженность '+o.total.toLocaleString('ru-RU')+' ₽'} {o.principal!==null&&' · Основной долг '+o.principal.toLocaleString('ru-RU')+' ₽'} · {o.reference}</p>)}
  <button disabled={!approveBureau||busy} onClick={async()=>{setBusy(true);setError('');try{await approveBureau?.();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}}>Сверил с оригиналом · подтвердить отчёт</button></section>}
+ {review.issues.includes('CREDIT_OFFER_ACCEPTANCE_UNVERIFIED')&&<p>Это заявление-оферта: условия можно проверить, но выдача кредита и акцепт пока не подтверждены. В кредитный портфель документ автоматически не попадёт.</p>}
  {review.status==='BUREAU_NO_ROWS'&&<p>В отчёте не удалось прочитать строки обязательств. Проверьте оригинал.</p>}
  {review.status==='BUREAU_IDENTITY_REVIEW'&&<p>Не удалось подтвердить формат, дату или принадлежность отчёта. Сверьте ИНН с оригиналом. Если ошиблись в роли, выберите правильную и загрузите тот же файл повторно.</p>}
  {review.status==='BUREAU_CONFIRMED'&&<p>Отчёт подтверждён и сохранён.</p>}

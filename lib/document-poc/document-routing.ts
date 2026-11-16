@@ -9,7 +9,7 @@ export type DocumentFamily = UploadFamily | 'OTHER' | 'UNKNOWN' | 'MIXED';
 export type DocumentSubtype =
   | 'BALANCE_SHEET' | 'INCOME_STATEMENT' | 'CASH_FLOW_STATEMENT'
   | 'EQUITY_STATEMENT' | 'AUDIT_REPORT' | 'FINANCIAL_NOTES'
-  | 'CREDIT_AGREEMENT' | 'LOAN_AGREEMENT' | 'CREDIT_LINE' | 'OVERDRAFT'
+  | 'CREDIT_AGREEMENT' | 'CREDIT_OFFER' | 'LOAN_AGREEMENT' | 'CREDIT_LINE' | 'OVERDRAFT'
   | 'CREDIT_PAYMENT_SCHEDULE' | 'GUARANTEE' | 'SURETY' | 'PLEDGE'
   | 'LEASING' | 'FACTORING'
   | 'SUPPLY' | 'PURCHASE_SALE' | 'WORKS' | 'SUBCONTRACT' | 'SERVICES'
@@ -119,6 +119,8 @@ const rules: readonly Rule[] = [
   {family:'BFO',subtype:'EQUITY_STATEMENT',pattern:/^отчет\s+об\s+изменениях\s+капитала(?:\s|$)/iu},
   {family:'BFO',subtype:'AUDIT_REPORT',pattern:/^аудиторское\s+заключение(?:\s|$)/iu},
   {family:'BFO',subtype:'FINANCIAL_NOTES',pattern:/^пояснения\s+к\s+(?:бухгалтерскому\s+балансу|бухгалтерской\s+отчетности)(?:\s|$)/iu},
+  // Credit offer / application does not prove disbursement or acceptance.
+  {family:'CREDIT',subtype:'CREDIT_OFFER',pattern:/^заявление\s*[-–—]\s*оферта\s+на\s+заключение\s+договора\s+о\s+предоставлении\s+кредита(?:\s|$)/iu},
   {family:'CREDIT',subtype:'CREDIT_LINE',pattern:/^(?:договор\s+(?:об?\s+)?(?:открытии\s+|о\s+предоставлении\s+)?(?:возобновляемой\s+|невозобновляемой\s+)?кредитной\s+линии|кредитный\s+договор\s+.*кредитной\s+линии)(?:\s|$)/iu},
   {family:'CREDIT',subtype:'OVERDRAFT',pattern:/^(?:договор\s+(?:кредитования\s+(?:в\s+форме\s+)?|о\s+предоставлении\s+)?овердрафта|овердрафт)(?:\s|$)/iu},
   {family:'CREDIT',subtype:'CREDIT_AGREEMENT',pattern:/^кредитный\s+договор(?:\s|$|№|N)/iu},
@@ -143,7 +145,7 @@ const normal = (s: string) => s.replace(/ё/giu,'е').replace(/[\u00a0\u202f]/gu
   .replace(/[\t ]+/gu,' ').replace(/^["«]+|["»]+$/gu,'').trim();
 const compact = (s: string) => s.replace(/\s+/gu,' ').trim();
 const supported = new Set<DocumentSubtype>([
-  'BALANCE_SHEET','INCOME_STATEMENT','CREDIT_AGREEMENT','LOAN_AGREEMENT','CREDIT_LINE','OVERDRAFT',
+  'BALANCE_SHEET','INCOME_STATEMENT','CREDIT_AGREEMENT','CREDIT_OFFER','LOAN_AGREEMENT','CREDIT_LINE','OVERDRAFT',
   'SUPPLY','PURCHASE_SALE','WORKS','SUBCONTRACT','SERVICES','FRAMEWORK',
 ]);
 const dependent = new Set<DocumentSubtype>(['AMENDMENT','SPECIFICATION','UNLINKED_PAYMENT_SCHEDULE','ACCEPTANCE_DOCUMENT']);
