@@ -112,8 +112,8 @@ test("unsupported scale is not guessed", () => assert.equal(snap({}, 2025, { sca
 test("missing scale is not guessed", () => assert.equal(snap({}, 2025, { scale: null }).balance.ASSETS_TOTAL.value, null));
 test("SourceEnvelope provenance retained", () => assert.deepEqual(snap().source, source()));
 test("BFO full-year period", () => assert.deepEqual(adaptCheckoBfo({ data: { 2025: rows }, meta: { scale: 1, currency: "RUB" } }, source())[0].period, annualPeriod(2025)));
-test("BFO history includes six years, no synthetic gaps", () => {
-  const years = [2019, 2020, 2022, 2023, 2024, 2025];
+test("BFO history includes every returned year, no synthetic gaps", () => {
+  const years = [2016, 2017, 2018, 2019, 2020, 2022, 2023, 2024, 2025];
   assert.deepEqual(adaptCheckoBfo({ data: Object.fromEntries(years.map(y => [y, rows])) }, source(), { scale: 1, currency: "RUB" }).map(s => s.period.year), years);
 });
 test("Checko missing raw 1510 is not zero", () => assert.equal(adaptCheckoBfo({ data: { 2025: { "1600": 100 } } }, source(), { scale: 1, currency: "RUB" })[0].balance.SHORT_TERM_BORROWINGS.value, null));

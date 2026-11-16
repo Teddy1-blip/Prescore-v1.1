@@ -32,7 +32,7 @@ function sourceAuthority(sourceId: string, manifests: Array<Partial<AnalysisSour
   return authority;
 }
 
-function economicPeriodKey(snapshot: FinancialStatementSnapshot) {
+export function economicPeriodKey(snapshot: FinancialStatementSnapshot) {
   return [
     snapshot.companyInn,
     snapshot.accountingStandard,

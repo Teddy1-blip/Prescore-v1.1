@@ -11,7 +11,8 @@ import type {AnalysisResult} from '../prescore.ts';
 import type {QueryExecutor} from '../db/compatibility.ts';
 import type {LedgerBalance} from './ledger-import.ts';
 import {buildFinancialAnalysis} from '../credit-engine/financial-analysis/engine.ts';
-import {activeFinancialSnapshots} from '../credit-engine/financial-analysis/source-selection.ts';
+import {projectStatement,validStatementPeriod,type StatementMatrix} from './statement-matrix.ts';
+import {activeFinancialSnapshots,currentFinancialSnapshots,economicPeriodKey} from '../credit-engine/financial-analysis/source-selection.ts';
 import {publicFinancialAnalysis} from '../credit-engine/client-report/source-detail.ts';
 import {buildCreditPortfolio} from '../credit-engine/credit-portfolio/resolver.ts';
 import {adaptUploadedBki} from '../credit-engine/credit-portfolio/bki-adapter.ts';
@@ -45,11 +46,25 @@ export async function dossierSources(db:QueryExecutor,owner:string,id:string){
   return [...indexed.values()];
 }
 export function sourceProjection(rows:SourceRow[],inn:string,includeFull=true,includeDecisions=true){
-  const publicProfile=rows.flatMap(r=>r.payload.publicProfile??[]).at(-1);
-  const supplied=publicProfile?.financialStatementsV2??[];
-  const snapshots=[...supplied,...rows.flatMap(r=>r.payload.snapshot?[r.payload.snapshot]:[])];
-  const manifest={financialUploads:rows.filter(r=>r.payload.snapshot).map(r=>r.payload.envelope)};
-  const selected=activeFinancialSnapshots(snapshots,[publicProfile?.sourceManifest,manifest]);
+  const profiles=rows.flatMap(row=>row.payload.publicProfile??[]).filter(profile=>profile.inn===inn);
+  const uploaded=rows.filter(row=>row.payload.snapshot&&row.payload.envelope.companyInn===inn);
+  const manifest={financialUploads:uploaded.filter(r=>r.payload.envelope.provider!=='CHECKO').map(r=>r.payload.envelope)};
+  const manifests=[manifest,...profiles.map(profile=>profile.sourceManifest)];
+  const snapshots=[...profiles.flatMap(p=>p.financialStatementsV2??[]),...uploaded.map(r=>r.payload.snapshot!)]
+    .filter(s=>s.companyInn===inn&&s.accountingStandard==='RAS'&&s.currency==='RUB');
+  const candidates=currentFinancialSnapshots(snapshots,manifests).filter(s=>s.source.status==='READY'&&validStatementPeriod(s.period));
+  const comparable=new Set(candidates.filter(s=>s.confirmedScale&&Object.values({...s.balance,...s.income}).some(v=>v.status==='KNOWN'&&['HIGH','MEDIUM'].includes(v.confidence))).map(economicPeriodKey));
+  const selected=activeFinancialSnapshots(candidates.filter(s=>!comparable.has(economicPeriodKey(s))||
+    s.confirmedScale&&Object.values({...s.balance,...s.income}).some(v=>v.status==='KNOWN'&&['HIGH','MEDIUM'].includes(v.confidence))),manifests);
+  const documentIds=new Map(uploaded.map(row=>[row.payload.envelope.sourceId,row.documentId]));
+  const evidence=(s:FinancialStatementSnapshot)=>projectStatement(s,documentIds.get(s.sourceId)??null);
+  const matrix:StatementMatrix={inn,through:new Date().toISOString().slice(0,10),interim:includeFull,
+    periods:selected.filter(s=>includeFull||s.period.kind==='ANNUAL').map(s=>{
+      const chosen=evidence(s), values=chosen.values, assets=values.ASSETS_TOTAL, liabilities=values.BALANCE_TOTAL;
+      return {id:s.snapshotId,period:s.period,selected:chosen,
+        difference:assets&&liabilities?assets.value-liabilities.value:null,
+        alternatives:candidates.filter(other=>other.snapshotId!==s.snapshotId&&economicPeriodKey(other)===economicPeriodKey(s)).map(evidence)};
+    })};
   const financialAnalysis=selected.length?buildFinancialAnalysis(selected):undefined;
   const financial=publicFinancialAnalysis({financialAnalysis});
   const bki=rows.flatMap(r=>r.payload.bki?.affectsCompanyDebt?[adaptUploadedBki(r.payload.bki,{companyInn:inn,source:r.payload.envelope})]:[]);
@@ -81,7 +96,7 @@ export function sourceProjection(rows:SourceRow[],inn:string,includeFull=true,in
     counterpartyChecks:includeFull?rows.flatMap(r=>r.payload.counterpartyCheck?[r.payload.counterpartyCheck]:[]).sort((a,b)=>b.fetchedAt.localeCompare(a.fetchedAt)):[],
     sheets:includeFull?rows.flatMap(r=>r.payload.calendarSheet?[{id:r.id,name:r.payload.envelope.fileName??'График',rows:r.payload.calendarSheet,confirmed:Object.keys(r.payload.sheetEntries??{}).map(Number)}]:[]):[],
     calendar:rows.flatMap(r=>r.payload.calendar?[r.payload.calendar]:Object.values(r.payload.sheetEntries??{})).sort((a,b)=>a.date.localeCompare(b.date)),
-    financial,claims:informationDate&&decisionPortfolio?dossierDecisions(relevant,inn,financialAnalysis,decisionPortfolio,informationDate):[],
+    matrix,financial,claims:informationDate&&decisionPortfolio?dossierDecisions(relevant,inn,financialAnalysis,decisionPortfolio,informationDate):[],
     schedule:portfolio?.obligations.flatMap(o=>o.schedule.filter(e=>e.dueDate).map(e=>({id:e.scheduledEventId,obligationId:o.obligationId,exposure:o.exposureClass,status:e.status,date:e.dueDate!,type:e.type,amount:e.amount.value,creditor:o.identity.creditorName.value,contract:o.identity.contractNumber.value,sourceIds:o.sourceIds})))??[],
     lines:selected.map(s=>({id:s.snapshotId,sourceId:s.sourceId,rows:[...Object.values(s.balance),...Object.values(s.income)].filter(v=>v.rawCode&&v.rawValue!=null).map(v=>({code:v.rawCode!,raw:v.rawValue!,scale:s.confirmedScale}))})),
     portfolioAsOf:asOf??null,

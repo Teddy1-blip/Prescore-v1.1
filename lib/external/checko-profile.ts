@@ -72,7 +72,7 @@ export function latestFinances(response?: CheckoResponse) {
   );
   return {
     latestYear,
-    years: years.slice(0, 6),
+    years,
     revenue,
     revenueGrowth: previousRevenue ? Math.round((revenue / previousRevenue - 1) * 1000) / 10 : null,
     profit,
