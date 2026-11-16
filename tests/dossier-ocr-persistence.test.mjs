@@ -159,3 +159,49 @@ test('one owner dossier: scanned BKI resume, explicit confirmation, credit revie
   await rm(root,{recursive:true,force:true});
  }
 });
+
+test('native modern corporate NBKI summary is visible without rerunning 199 OCR pages',async()=>{
+ const old=process.env.PRESCORE_STORAGE_ROOT,root=await mkdtemp(join(tmpdir(),'prescore-nbki-native-'));
+ process.env.PRESCORE_STORAGE_ROOT=root;
+ let rt;
+ try{
+  rt=await createWorkspaceRuntime();
+  const owner={email:'nbki-native-owner@workspace.test',roles:['CLIENT','ADMIN']};
+  const stranger={email:'nbki-native-foreign@workspace.test',roles:['CLIENT']};
+  const post=(body,user=owner)=>rt.request('/api/dossier',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)},user);
+  const saved=await post({action:'save',inn});
+  assert.equal(saved.status,200,await saved.clone().text());
+  const dossierId=(await saved.json()).company.id;
+  const lines=[
+   'Кредитный отчет для субъекта','ID запроса Пользователь Предоставлен',
+   'QA-QA QA-QA 24-08-2023 11:16',
+   'Субъект кредитной истории','Номер налогоплательщика: '+inn,
+   'При наличии вопросов обращайтесь в НБКИ','Сводка','Счета',
+   'Счета       Договоры                 Задолженность',
+   'Всего: 64   Сумма обязательств за всю историю: RUB 25000000  Текущая: RUB 4000000',
+   'С просрочкой 30+ дней: 1    Следующий платеж: RUB 240000  Просроченная: RUB 0',
+   'Открытых: 1','Запросы',
+  ];
+  const pdf=new File([syntheticPdf(lines)],'synthetic-long-bureau.pdf',{type:'application/pdf'});
+  const form=new FormData();
+  form.set('id',dossierId);form.set('kind','BKI');form.set('file',pdf);
+  const uploaded=await rt.request('/api/dossier',{method:'POST',body:form},owner);
+  assert.equal(uploaded.status,201,await uploaded.clone().text());
+  const sourceId=(await uploaded.json()).id;
+  const reopened=await rt.request('/api/dossier?id='+dossierId,{},owner);
+  assert.equal(reopened.status,200);
+  const dossier=await reopened.json();
+  const review=dossier.reviews.find(r=>r.id===sourceId);
+  assert.equal(review?.status,'BUREAU_STRUCTURE_REVIEW');
+  assert.equal(review?.fields.find(f=>f.key==='nbki_reported_accounts')?.value,'64');
+  assert.equal(review?.fields.find(f=>f.key==='nbki_reported_current')?.value,'4000000');
+  assert.equal(dossier.obligations.length,0,'the summary is never an automatically accepted debt');
+  assert.equal((await post({action:'confirm-bureau',id:dossierId,sourceId})).status,409);
+  assert.equal((await rt.request('/api/dossier?id='+dossierId,{},stranger)).status,404);
+  assert.equal((await rt.request('/api/dossier',{method:'POST',body:form},owner)).status,200);
+ }finally{
+  if(rt)await rt.close();
+  if(old===undefined)delete process.env.PRESCORE_STORAGE_ROOT;else process.env.PRESCORE_STORAGE_ROOT=old;
+  await rm(root,{recursive:true,force:true});
+ }
+});

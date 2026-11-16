@@ -21,7 +21,7 @@ import type {AnalysisResult} from '../prescore.ts';
 import {parseQuarterlyReportText} from '../quarterly-report.ts';
 import {OCR_MAX_BYTES,BUREAU_MAX_PDF_PAGES,ocrFormat,nativeLayoutText} from '../document-poc/local-ocr.ts';
 import {isOkbReport} from '../credit-history-okb.ts';
-import {bureauRoles,readBureau,bureauEnvelope,bureauReview} from './bureau-review.ts';
+import {bureauRoles,readBureau,bureauEnvelope,bureauReview,modernNbkiSummaryReview} from './bureau-review.ts';
 import {parseCreditHistoryText} from '../credit-history.ts';
 import {financialTableRows} from '../document-poc/financial-layout.ts';
 import {validInn} from '../external/checko-inn.ts';
@@ -61,9 +61,14 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
   let accountingSheet:ReturnType<typeof selectAccountingSheet>|null=null;
   let bureauScan=kind==='BKI'&&image;
   let bureauReport;
+  let nativeNbkiPages:import('../document-poc/local-ocr.ts').OcrPage[]|null=null;
   if(!reviewKind&&!bureauScan&&!['ACCOUNT_51','BANK_XLSX','BANK_QUESTIONNAIRE'].includes(kind))try{
     if(kind==='BKI'){
       const pages=await mapPdfPages(bytes.slice(),BUREAU_MAX_PDF_PAGES,true,async content=>content);
+      // Keep native text available for a read-only NBKI summary at upload time.
+      // This does not mark any contractual debt as confirmed.
+      if(/^\s*Субъект кредитной истории\s*$/im.test(pages[0]??'')&&/Кредитный отчет для субъекта/iu.test(pages[0]??''))
+        nativeNbkiPages=pages.map((text,index)=>({text,page:index+1,logicalPage:index+1,segment:'FULL',method:'TEXT'}));
       bureauScan=pages.some(content=>content.replace(/\s/g,'').length<25);
       text=pages.join('\n\f\n');
       if(!bureauScan){
@@ -125,7 +130,8 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
   try{
     if(bureauScan){
       payload.relationship=relationship;
-      payload.review={version:'PRESCORE-BKI-PARSER-2',status:'INCOMPLETE',fields:[],issues:[]};
+      payload.review=(nativeNbkiPages&&modernNbkiSummaryReview(nativeNbkiPages,payload))
+        ||{version:'PRESCORE-BKI-PARSER-2',status:'INCOMPLETE',fields:[],issues:[]};
       envelope.status='PROCESSING';
     }else if(reviewKind){
       const family=kind==='CREDIT_DOCUMENT'?'CREDIT':kind==='BFO_REVIEW'?'BFO':'COMMERCIAL';
@@ -220,6 +226,9 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
       if(kind==='BKI'&&!existing.payload.bki&&existing.payload.relationship!==relationship){
         const payload={...existing.payload,relationship};
         if(payload.ocr&&payload.ocr.through===payload.ocr.total)payload.review=bureauReview(payload.ocr.pages,payload,payload.ocr.warnings);
+        else if(payload.review?.version==='PRESCORE-NBKI-STRUCTURE-0.1')
+          payload.review=(nativeNbkiPages&&modernNbkiSummaryReview(nativeNbkiPages,payload))
+            ||{version:'PRESCORE-BKI-PARSER-2',status:'INCOMPLETE',fields:[],issues:[]};
         await tx.query('UPDATE dossier_sources SET payload=$1 WHERE dossier_id=$2 AND source_id=$3',[JSON.stringify(payload),id,existing.source_id]);
       }
       await tx.query('COMMIT');
