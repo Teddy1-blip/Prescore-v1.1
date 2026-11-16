@@ -242,7 +242,13 @@ export function routeDocument(input: RoutingInput): RoutingDecision {
         || /^(?:\d+[.)]\s+|приложени[ея]\s+\d|перечень\s+документов|например|см\.|согласно|включая)/iu.test(text))continue;
       if(i>firstUseful+14 && (i===0||lines[i-1]!==''))continue;
       const joined=lines[i+1]&&lines[i+1].length<=130?text+' '+lines[i+1]:text;
-      const match=rules.find(r=>r.pattern.test(text))??rules.find(r=>r.pattern.test(joined));
+      // Scanned F2 can print "Отчёт / о финансовых / результатах"
+      // on three consecutive lines. Join only a BFO heading in the same
+      // page preamble, not arbitrary body clauses or adjoining pages.
+      const joinedThree=lines[i+1]&&lines[i+2]&&lines[i+1].length<=80&&lines[i+2].length<=80
+        ?text+' '+lines[i+1]+' '+lines[i+2]:text;
+      const match=rules.find(r=>r.pattern.test(text))??rules.find(r=>r.pattern.test(joined))
+        ??(i<=firstUseful+14?rules.find(r=>r.family==='BFO'&&r.pattern.test(joinedThree)):undefined);
       if(!match)continue;
       const evidence:TypeEvidence={family:match.family,subtype:match.subtype,
         physicalPage:page.page,logicalPage:page.logicalPage,line:i+1,text:originalLines[i].slice(0,210)};

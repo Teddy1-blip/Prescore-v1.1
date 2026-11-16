@@ -106,3 +106,37 @@ test('OCR coordinate-bound identity allows previously incomplete scanned financi
  assert.equal(absent.status,'INCOMPLETE');
  assert.ok(absent.issues.includes('BFO_SUBJECT_INN_UNVERIFIED'));
 });
+
+test('scanned F2 split over three printed lines is routed, dated and scaled as an income statement',()=>{
+ const text=[
+  'Отчёт','о финансовых','результатах',
+  'за 2025 год','ИНН: '+inn,'Единица измерения: тыс. руб. по ОКЕИ 384',
+  'Выручка | 2110 | 120 | 100','Чистая прибыль | 2400 | 20 | 15'
+ ].join('\n');
+ const report=reviewFields('synthetic:wrapped-f2',[page(text)],1,'BFO','SINGLE');
+ assert.equal(report.status,'READY_FOR_REVIEW');
+ assert.equal(f(report,'statement_date')?.value,'2025-12-31');
+ assert.equal(f(report,'period_start')?.value,'2025-01-01');
+ assert.equal(f(report,'statement_unit')?.value,'тыс. ₽');
+ assert.equal(f(report,'2110')?.value,'120');
+ assert.equal(f(report,'2110')?.status,'READ');
+ assert.equal(report.issues.includes('BFO_FINANCIAL_PAGE_BOUNDARY_UNVERIFIED'),false);
+});
+test('two-line F2 heading is accepted without falsely inventing a balance sheet',()=>{
+ const text=[
+   'Отчёт о финансовых','результатах',
+   'за 2025 год','ИНН: '+inn,'Единица измерения: тыс. руб. по ОКЕИ 384',
+   'Выручка | 2110 | 120 | 100'
+ ].join('\n');
+ const report=reviewFields('synthetic:f2-two-line',[page(text)],1,'BFO','SINGLE');
+ assert.equal(report.status,'READY_FOR_REVIEW');
+ assert.equal(f(report,'2110')?.value,'120');
+ assert.equal(report.issues.includes('BFO_BALANCE_TOTALS_UNVERIFIED'),false);
+});
+test('heading parts from different physical pages cannot manufacture an F2 document',()=>{
+ const a={...page('Отчёт\no финансовых'),page:1,logicalPage:1};
+ const b={...page('результатах\nза 2025 год\nИНН: '+inn),page:2,logicalPage:2};
+ const report=reviewFields('synthetic:cross-page-title',[a,b],2,'BFO','SINGLE');
+ assert.notEqual(report.status,'READY_FOR_REVIEW');
+ assert.equal(report.fields.length,0);
+});

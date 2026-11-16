@@ -100,7 +100,13 @@ export function financialMetadata(input: Input) {
   }
   for (const [lineIndex, line] of input.lines.entries()) {
     const t = line.text.trim();
-    const title = t.match(/^(бухгалтерский баланс|отч[её]т о финансовых результатах|balance sheet|income statement)(?=\s|$)/i);
+    // Financial form headings frequently wrap on image-only OCR pages.
+    // Restore ONLY adjacent printed words from the SAME physical page,
+    // without joining unrelated rows, different pages or client entities.
+    const following=input.lines.slice(lineIndex+1,lineIndex+3);
+    const samePage=following.filter(l=>l.page===line.page&&l.confidence!=='LOW').map(l=>l.text.trim());
+    const titleCandidates=[t, t+' '+(samePage[0]??''),t+' '+samePage.join(' ')].map(s=>s.replace(/\s+/g,' ').trim());
+    const title=titleCandidates.map(s=>s.match(/^(бухгалтерский баланс|отч[её]т о финансовых результатах|balance sheet|income statement)(?=\s|$)/i)).find(Boolean)??null;
     const okud = t.match(/форма по ОКУД\s*[:|]?\s*(071000[12])\b/i);
     if (okud) forms.set(okud[1] === '0710001' ? 'Бухгалтерский баланс' : 'Отчёт о финансовых результатах', line);
     if (title) forms.set(/баланс|balance/i.test(title[1]) ? 'Бухгалтерский баланс' : 'Отчёт о финансовых результатах', line);

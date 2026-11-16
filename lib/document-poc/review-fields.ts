@@ -45,7 +45,7 @@ export function reviewFields(id:string,pages:EvidencePage[],total:number,family:
     // is restricted. Tax service receipts can contain other companies' INNs
     // and quotes of balance-sheet figures.
     const lead=page.text.split(/\r?\n/).slice(0,18).join('\n');
-    const financialStart=/(?:^|\n)\s*(?:упрощ[её]нный )?(?:бухгалтерский баланс|отч[её]т о финансовых результатах)(?:\s|$)/im.test(lead);
+    const financialStart=/(?:^|\n)\s*(?:упрощ[её]нный\s+)?(?:бухгалтерский\s+баланс|отч[её]т\s+о\s+финансовых\s+результатах)(?:\s|$)/im.test(lead);
     const fnsService=/(?:^|\n)\s*(?:(?:(?:код|форма)\s+по\s+)?кнд\s+116(?:600[27]|700[245])(?:\s|$)|информационное сообщение о представительстве|подтверждение даты отправки|квитанция о при[её]ме|извещение о (?:вводе сведений|получении электронного документа))(?:\s|$)/im.test(lead);
     if(seenBfo&&fnsService)serviceBoundary=true;
     if(serviceBoundary){
