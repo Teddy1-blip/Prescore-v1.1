@@ -195,3 +195,58 @@ test('period-audit API payload never exposes a full bank account or personal BKI
  assert.equal(body.includes(person),false);
  assert.ok(audit.groups.some(g=>g.kind==='BANK_STATEMENT'&&g.scope.includes('0001')));
 });
+
+test('identical bank bytes across separate uploads do not create a false period overlap',()=>{
+ const hash='a'.repeat(64);
+ const first=statement('old','40001','2026-01-01','2026-01-31');
+ const second=statement('new','40001','2026-01-01','2026-01-31');
+ first.payload.envelope.contentHash=hash;second.payload.envelope.contentHash=hash;
+ const audit=sourcePeriodAudit([first,second],inn);
+ assert.deepEqual(audit.duplicates,[{sourceIds:['old','new'],kinds:['BANK_STATEMENT'],reason:'IDENTICAL_FILE_CONTENT'}]);
+ assert.equal(audit.groups.length,1);
+ assert.equal(audit.groups[0].spans.length,1);
+ assert.equal(audit.groups[0].overlaps.length,0);
+ assert.equal(audit.automaticApply,false);
+ assert.equal(JSON.stringify(audit).includes(hash),false);
+});
+test('same period with different bytes is a real review overlap, not a proven duplicate',()=>{
+ const a=statement('a','40001','2026-03-01','2026-03-31');
+ const b=statement('b','40001','2026-03-01','2026-03-31');
+ a.payload.envelope.contentHash='a'.repeat(64);
+ b.payload.envelope.contentHash='b'.repeat(64);
+ const audit=sourcePeriodAudit([a,b],inn);
+ assert.equal(audit.duplicates.length,0);
+ assert.equal(audit.groups[0].overlaps[0].kind,'SAME_PERIOD');
+ assert.equal(audit.automaticApply,false);
+});
+test('same exact PDF hash across BFO and quarterly is flagged without merging financial periods',()=>{
+ const hash='c'.repeat(64);
+ const a=financial('annual','BFO',{kind:'ANNUAL',flowPeriodType:'FULL_YEAR',from:'2025-01-01',to:'2025-12-31',asOf:'2025-12-31'});
+ const b=financial('quarterly','QUARTERLY',{kind:'INTERIM',flowPeriodType:'CUMULATIVE_YTD',from:'2025-01-01',to:'2025-12-31',asOf:'2025-12-31'});
+ a.payload.envelope.contentHash=hash;b.payload.envelope.contentHash=hash;
+ const audit=sourcePeriodAudit([a,b],inn);
+ assert.equal(audit.duplicates.length,1);
+ assert.deepEqual(audit.duplicates[0].kinds,['BFO','QUARTERLY']);
+ assert.ok(!JSON.stringify(audit).includes(hash));
+});
+test('duplicate contracts with no period get exact-byte notice, not an invented date gap',()=>{
+ const hash='d'.repeat(64);
+ const a=row('contract-1','CREDIT_DOCUMENT',{env:{contentHash:hash}});
+ const b=row('contract-2','CREDIT_DOCUMENT',{env:{contentHash:hash}});
+ const result=sourcePeriodAudit([a,b],inn);
+ assert.equal(result.duplicates.length,1);
+ assert.equal(result.groups.length,0);
+ assert.equal(result.automaticApply,false);
+});
+test('duplicate detection cannot compare a second company or missing/invalid file hashes',()=>{
+ const a=statement('a','40001','2026-01-01','2026-01-31');
+ const foreign=statement('foreign','40001','2026-01-01','2026-01-31');
+ a.payload.envelope.contentHash='a'.repeat(64);foreign.payload.envelope.contentHash='a'.repeat(64);
+ foreign.payload.envelope.companyInn='7701000001';
+ const without=statement('missing','40001','2026-02-01','2026-02-28');
+ const invalid=statement('invalid','40001','2026-03-01','2026-03-31');
+ invalid.payload.envelope.contentHash='not-a-hash';
+ const result=sourcePeriodAudit([a,foreign,without,invalid],inn);
+ assert.equal(result.duplicates.length,0);
+ assert.equal(result.groups[0].spans.length,3);
+});

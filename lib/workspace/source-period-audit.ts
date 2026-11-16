@@ -12,8 +12,9 @@ export type AuditOverlap={from:string;to:string;sourceIds:string[];kind:'SAME_PE
 export type AuditGroup={id:string;kind:string;scope:string;mode:AuditMode;spans:AuditSpan[];
  gaps:AuditGap[];overlaps:AuditOverlap[];note:string};
 export type AuditUnknown={sourceId:string;kind:string;reason:string};
+export type AuditDuplicate={sourceIds:string[];kinds:string[];reason:'IDENTICAL_FILE_CONTENT'};
 export type SourcePeriodAudit={version:typeof SOURCE_PERIOD_AUDIT_VERSION;groups:AuditGroup[];
- unknown:AuditUnknown[];requiresRecalculationReview:boolean;automaticApply:false};
+ unknown:AuditUnknown[];duplicates:AuditDuplicate[];requiresRecalculationReview:boolean;automaticApply:false};
 const dayMs=86400000;
 const day=(date:string)=>Date.parse(date);
 const iso=(time:number)=>new Date(time).toISOString().slice(0,10);
@@ -35,8 +36,27 @@ function note(mode:AuditMode,kind:string){
  return 'Договоры, анкеты и другие документы фиксируют события, не непрерывные дни наблюдения.';
 }
 export function sourcePeriodAudit(rows:readonly SourceRow[],companyInn:string):SourcePeriodAudit{
- const candidates:Candidate[]=[],unknown:AuditUnknown[]=[];
+ const candidates:Candidate[]=[],unknown:AuditUnknown[]=[],duplicates:AuditDuplicate[]=[];
  const used=new Set<string>();
+ // Exact byte identity, not a period match or proof of repeated transactions.
+ // Restrict to this company; no private hash or account identifier leaves the API.
+ const byHash=new Map<string,SourceRow[]>();
+ for(const r of rows){
+  if(r.payload.envelope.companyInn!==companyInn)continue;
+  const hash=r.payload.envelope.contentHash?.trim().toLowerCase();
+  if(!hash||!/^[a-f0-9]{64}$/.test(hash))continue;
+  const group=byHash.get(hash)??[];group.push(r);byHash.set(hash,group);
+ }
+ const redundant=new Set<string>();
+ for(const group of byHash.values()){
+  const distinct=[...new Map(group.map(row=>[row.id,row])).values()];
+  if(distinct.length<2)continue;
+  duplicates.push({sourceIds:distinct.map(x=>x.id),kinds:[...new Set(distinct.map(x=>x.kind))],
+    reason:'IDENTICAL_FILE_CONTENT'});
+  // Preserve every stored file and version, but let one representative establish
+  // continuous coverage so an exact duplicate doesn't masquerade as an overlap.
+  for(const row of distinct.slice(1))redundant.add(row.id);
+ }
  function add(c:Candidate){
   const key=[c.sourceId,c.kind,c.scope,c.mode,c.from,c.to].join('|');
   if(used.has(key))return;used.add(key);
@@ -46,6 +66,7 @@ export function sourcePeriodAudit(rows:readonly SourceRow[],companyInn:string):S
   candidates.push(c);
  }
  for(const row of rows){
+  if(redundant.has(row.id))continue;
   const e=row.payload.envelope,kind=row.kind;
   if(e.companyInn!==companyInn)continue;
   const sourceId=row.id,name=e.fileName??e.sourceName??kind;
@@ -144,6 +165,7 @@ export function sourcePeriodAudit(rows:readonly SourceRow[],companyInn:string):S
   if(g.mode==='CUMULATIVE_YTD')g.overlaps=g.overlaps.filter(x=>x.kind==='SAME_PERIOD');
  }
  groups.sort((a,b)=>a.kind.localeCompare(b.kind)||a.id.localeCompare(b.id));
- return {version:SOURCE_PERIOD_AUDIT_VERSION,groups,unknown,
-  requiresRecalculationReview:groups.some(g=>g.gaps.length>0||g.overlaps.length>0),automaticApply:false};
+ return {version:SOURCE_PERIOD_AUDIT_VERSION,groups,unknown,duplicates,
+  requiresRecalculationReview:duplicates.length>0||groups.some(g=>g.gaps.length>0||g.overlaps.length>0),
+  automaticApply:false};
 }

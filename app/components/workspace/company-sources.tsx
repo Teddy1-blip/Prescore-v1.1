@@ -214,6 +214,10 @@ export function CompanySources({view,id,bankInn,bank,openBank,onCompany,onSource
   {profile&&company&&['home','banking','bfo','documents','obligations','counterparties'].includes(view)&&
    <Panel title="Покрытие периодов · дозагрузка и пересечения">
     <p>Новые документы дополняют досье. Совпадающие даты не означают одинаковые операции или суммы. Эта проверка не изменяет скоринг без сверки источников.</p>
+    {profile.periodAudit.duplicates.length>0&&<details open><summary>Одинаковые файлы: {profile.periodAudit.duplicates.length} групп</summary>
+     <p>Побайтово одинаковые документы обнаружены повторно. Они сохранены в истории досье, но не считаются двумя независимыми периодами. Само совпадение периода без совпадения файла проверяется отдельно.</p>
+     {profile.periodAudit.duplicates.map((d,i)=><p key={i}>Повторный файл: {d.kinds.join(' / ')} · экземпляров: {d.sourceIds.length}. Не суммировать; сохранены исходные версии.</p>)}
+    </details>}
     {profile.periodAudit.groups.filter(g=>g.gaps.length||g.overlaps.length).map(g=>
      <details key={g.id} open={g.gaps.length>0}>
       <summary>{g.kind} · {g.scope} · пробелов: {g.gaps.length}, пересечений: {g.overlaps.length}</summary>
