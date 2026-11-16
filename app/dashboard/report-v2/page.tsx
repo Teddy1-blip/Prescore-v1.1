@@ -1,3 +1,4 @@
+import {portfolioReceiptReader} from '../../../lib/workspace/portfolio-receipts';
 import {cachedProfile} from "../../../lib/external/checko-profile";
 import {projectPrintBanking} from '../../../lib/workspace/print-banking.ts';
 import {notFound, redirect} from 'next/navigation';
@@ -53,6 +54,7 @@ export default async function ReportPage({searchParams}: {searchParams: Promise<
   if (query.print !== '1') redirect('/dashboard?analysisId=' + encodeURIComponent(query.analysisId) + '&view=analysis');
   const result = await loadWorkspaceModelV1(query.analysisId, {
    readAccess: id => readableAnalysis(db, id, user),
+   readPortfolioReceipts: portfolioReceiptReader(getRuntime().DB.pool),
    readTier: (id, access) => resolveAnalysisTier(db, {analysisId:id,userEmail:access.row.ownerEmail ?? '',companyInn:access.row.companyInn,privileged:user.isAdmin || access.access === 'agent',readOnly: true}),
    readOperations: (id, access) => readWorkspaceOperations(db,id,access.row.companyInn,user),
    recordDecision: ({canonical,report,access,banking}) => persistDecisionRevision(db as unknown as DecisionRevisionDatabase,{canonical,report,access,banking}).then(()=>undefined),

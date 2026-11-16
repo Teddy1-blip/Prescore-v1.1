@@ -38,9 +38,20 @@ export function receiptIds(x:ExplainabilityInputV1, path:string[], node:Node, di
   for(const r of refs) if(r.obligationId) x.creditPortfolio?.obligations.find(o=>o.obligationId===r.obligationId)?.sourceIds.forEach(id=>ids.add(id));
   return [...ids].sort();
 }
+// Importers persist these source ID namespaces with the observation, including in older analyses.
+export function dossierPortfolioLabel(sourceId:string){
+  const kind=sourceId.split(':',1)[0];
+  switch(kind){
+    case 'debt_ledger': return 'ОСВ по обязательствам';
+    case 'counterparties': return 'ОСВ по расчётам с контрагентами';
+    case 'credit_document': return 'Подтверждённые поля кредитного договора';
+    case 'manual-debt': return 'Подтверждение остатка по договору';
+    default: return '';
+  }
+}
 export function receiptLabel(s:DecisionReceipt) {
   const providers={CHECKO:'Checko', EIS_DIRECT:'ЕИС', FNS_DIRECT:'ФНС'};
   const authorities={FNS:'ФНС',FSSP:'ФССП',KAD:'КАД',INSPECTIONS:'реестр проверок',FEDRESURS:'Федресурс',EIS:'ЕИС',FAS:'ФАС',UNKNOWN:''};
-  if(!s.provider) return '';
+  if(!s.provider) return s.sourceType==='OTHER'?dossierPortfolioLabel(s.sourceId):'';
   return [providers[s.provider],s.direct?'прямой источник':s.upstream?authorities[s.upstream]:''].filter(Boolean).join(' · ');
 }

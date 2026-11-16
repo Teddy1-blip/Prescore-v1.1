@@ -89,7 +89,11 @@ export default function ClientWorkspace(){
  }
  void initialize().catch(e=>{if(!c.signal.aborted)setError(e.message);}).finally(()=>{if(!c.signal.aborted)setLoading(false);});
  fetch('/api/modules',{signal:c.signal}).then(r=>r.json()).then(d=>setModules(d.modules??{})).catch(()=>{}).finally(()=>{if(!c.signal.aborted)setModulesLoading(false);});return()=>c.abort();},[]);
- function choose(v:string){if(v!=='home')setCompanyEntry(0);setView(v);const url=new URL(window.location.href);if(v==='upload'){selection.current='';setSelectedId('');setUploadReceipt(null);setNotice('');url.searchParams.delete('analysisId');}if(v!=='upload'&&!selection.current&&dossierId){
+ function choose(v:string,section?:string){if(v!=='home')setCompanyEntry(0);setView(v);const url=new URL(window.location.href);
+  if(v==='analysis'&&section)url.searchParams.set('section',section);
+  else if(v!==view)url.searchParams.delete('section');
+  if(v!==view)url.hash='';
+  if(v==='upload'){selection.current='';setSelectedId('');setUploadReceipt(null);setNotice('');url.searchParams.delete('analysisId');}if(v!=='upload'&&!selection.current&&dossierId){
    const latest=latestCompanyVersion(analyses,dossierInn);
    if(latest){selection.current=latest.id;setSelectedId(latest.id);}
   }
@@ -124,13 +128,13 @@ export default function ClientWorkspace(){
  const showApproved=!(['counterparties','calendar'].includes(view)&&!agentWorkspace&&!locked)&&!loading&&!modulesLoading&&!disabled&&!error&&!unavailable&&(!needsModel||!!model)&&!!selected&&!(view==='applications'&&(!operationsReady||!!operationsError));
  const companyName=model?.basic.analysis.company.name?.trim()||selected?.companyName?.trim()||'Ваш кредитный профиль';
  const sourcesVisible=!loading&&!modulesLoading&&!disabled&&!error&&!locked&&!agentWorkspace&&!unavailable&&(!selectedId||!!selected)&&['home','banking','bfo','counterparties','obligations','documents','analysis','calendar','actions','financing','billing'].includes(view);
- const sourcesWidget=sourcesVisible?<CompanySources key={'sources:'+dossierId+':'+selectedId+':'+view} view={view} id={dossierId} analysisId={selected?.id} model={model} ownerTestWorkspace={ownerTestWorkspace} onBuyerBalances={ownerTestWorkspace&&view==='home'?setBuyerData:undefined} companyEntry={view==='home'?companyEntry:0} bankInn={selected?.companyInn} bank={model?.basic} onCompany={setDossierInn} onSourceChanged={selectedId?refreshSource:undefined} openBank={()=>choose('upload')}/>:null;
+ const sourcesWidget=sourcesVisible?<CompanySources key={'sources:'+dossierId+':'+selectedId+':'+view} view={view} choose={choose} id={dossierId} analysisId={selected?.id} model={model} ownerTestWorkspace={ownerTestWorkspace} onBuyerBalances={ownerTestWorkspace&&view==='home'?setBuyerData:undefined} companyEntry={view==='home'?companyEntry:0} bankInn={selected?.companyInn} bank={model?.basic} onCompany={setDossierInn} onSourceChanged={selectedId?refreshSource:undefined} openBank={()=>choose('upload')}/>:null;
  const openCompanyEntry=ownerTestWorkspace&&!locked&&availableViews.includes('home')&&!agentWorkspace&&!error
   ?()=>{choose('home');setCompanyEntry(n=>n+1);} : undefined;
  return <ClientShell buyerBalances={ownerTestWorkspace&&buyerData?.id===dossierId?buyerData.balances:null} onAddCompany={openCompanyEntry} key={dossierId||selectedId} companies={companies} dossier={dossierId?{id:dossierId,inn:dossierInn}:undefined} selected={selected} analyses={unavailable||error?[]:analyses} model={model} locked={locked||loading||modulesLoading} select={chooseAnalysis} add={addDeal} deals={deals??[]}
  renderPage={showApproved} view={view} choose={choose} availableViews={availableViews} context={<div className="pc-company"><b>{companyName}</b><span>{selected?'ИНН '+(model?.basic.analysis.company.inn??selected.companyInn):'Кредитный профиль компании'}{model?' · '+date(model.basic.analysis.period.from)+' — '+date(model.basic.analysis.period.to):''}{locked?' · Режим просмотра':''}</span></div>}>
 
- {(error.startsWith('Сессия завершена')||state.error.startsWith('Сессия завершена')||operationsError.startsWith('Сессия завершена'))&&<p role="alert">Сессия завершена. <a href={'/login?returnTo='+encodeURIComponent('/dashboard?'+new URLSearchParams({view,...(selectedId?{analysisId:selectedId}:{})}))}>Войти снова</a></p>}
+ {(error.startsWith('Сессия завершена')||state.error.startsWith('Сессия завершена')||operationsError.startsWith('Сессия завершена'))&&<p role="alert">Сессия завершена. <a href={'/login?returnTo='+encodeURIComponent(window.location.pathname+window.location.search+window.location.hash)}>Войти снова</a></p>}
  {operationsError&&<p role="alert">{operationsError}. Показанные операции могут быть неактуальны. <button disabled={operationsLoading} onClick={()=>void refresh()}>Обновить операции</button></p>}
  {state.refreshing&&<p role="status" className="pc-muted">Обновляем данные. Текущая версия остаётся на экране.</p>}{state.refreshError&&<p role="alert">{state.refreshError} Показана последняя полученная версия. <button onClick={refresh}>Повторить</button></p>}{notice&&<p role="status" className="ws-notice">{notice}</p>}{error&&<p role="alert">{error} <button onClick={()=>window.location.reload()}>Повторить</button></p>}
  {view==='home'&&(!model||companyEntry>0)&&sourcesWidget}

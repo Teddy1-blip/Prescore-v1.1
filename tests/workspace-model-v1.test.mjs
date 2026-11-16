@@ -21,6 +21,7 @@ import * as controls from "../lib/admin-controls.ts";
 import * as entitlements from "../lib/entitlements.ts";
 import * as cashEvidence from '../lib/workspace/cash-evidence.ts';
 import * as cashSeries from '../lib/workspace/cash-series.ts';
+import * as portfolioReceipts from "../lib/workspace/portfolio-receipts.ts";
 import * as workspaceService from "../lib/workspace/service.ts";
 import * as decisionHistory from "../lib/credit-engine/production/decision-history.ts";
 import { buildCanonicalCreditAnalysis } from "../lib/credit-engine/production/orchestrator.ts";
@@ -82,6 +83,7 @@ for (const ownerFull of [false, true]) test(ownerFull
     "../../../lib/entitlements": entitlements,
     "../../../lib/release/security": releaseSecurity,
     "../../../lib/workspace/service.ts": workspaceService,
+    "../../../lib/workspace/portfolio-receipts": portfolioReceipts,
     "../../../lib/workspace/cash-evidence.ts": cashEvidence,
     "../../../lib/workspace/cash-series.ts": cashSeries,
     "../../../lib/credit-engine/production/decision-history.ts": decisionHistory,

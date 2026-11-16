@@ -69,7 +69,7 @@ export function liveView(model: WorkspaceModelV1 | null, name: string, month: st
         ? [s.periodFrom, s.periodTo].filter(Boolean).map(date).join(' — ')
         : 'Дата уточняется',
     status: sourceState(s.status),
-    route: (s.source === 'CREDIT_HISTORY'
+    route: (s.source === 'CREDIT_HISTORY' || s.source === 'PORTFOLIO_INPUT'
       ? 'obligations'
       : s.source.includes('BANK') || s.source.includes('FINANCIAL') || s.source === 'QUARTERLY_REPORT'
         ? 'banking'

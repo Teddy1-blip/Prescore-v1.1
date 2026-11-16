@@ -1,3 +1,4 @@
+import {portfolioReceiptReader} from '../../../lib/workspace/portfolio-receipts';
 import {cachedProfile} from "../../../lib/external/checko-profile";
 import {configuredProvider, generateWithFallback} from "../../../lib/ai/providers";
 import {getRuntime} from "../../../lib/platform/runtime";
@@ -51,6 +52,7 @@ async function ensureSchema(db: Database) {
 async function ownedContext(db: Database, analysisId: string, user: { email: string; isAdmin: boolean }) {
   return loadWorkspaceModelV1(analysisId, {
     readAccess: id => readableAnalysis(db, id, user),
+    readPortfolioReceipts: portfolioReceiptReader(getRuntime().DB.pool),
     readTier: (id, access) => resolveAnalysisTier(db, { analysisId:id, userEmail:access.row.ownerEmail ?? user.email, companyInn:access.row.companyInn, privileged:user.isAdmin || access.access === "agent", readOnly:true }),
     readProfile: async inn => {
       const row = await db.prepare("SELECT payload FROM checko_profiles WHERE inn = ? LIMIT 1").bind(inn).first<{payload:string}>();

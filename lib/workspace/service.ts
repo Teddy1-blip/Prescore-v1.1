@@ -1,3 +1,5 @@
+import {dossierPortfolioLabel} from '../credit-engine/explainability/receipts.ts';
+import {restorePortfolioReceipts,type ReadPortfolioReceipts} from './portfolio-receipts.ts';
 import {projectPrintBanking, type PrintBankingV1} from "./print-banking.ts";
 import {documentAccessSQL} from '../auth/broker-authorizations.ts';
 import {diagnostic, safeReason, type CanonicalDiagnosticV1} from "../credit-engine/production/diagnostics.ts";
@@ -14,6 +16,7 @@ import { projectWorkspaceBasic, WORKSPACE_MODEL_V1, type WorkspaceAccessRoleV1, 
 
 export type WorkspaceServiceDependencies = {
   readAccess: (analysisId: string) => Promise<ReportAccess | null>;
+  readPortfolioReceipts?: ReadPortfolioReceipts;
   readTier: (analysisId: string, access: ReportAccess) => Promise<AnalysisTier>;
   readProfile: (companyInn: string) => Promise<CompanyProfileData | {profile?:CompanyProfileData; state:import("../external/checko-cache.ts").CheckoState} | undefined>;
   readOperations: (analysisId: string, access: ReportAccess) => Promise<WorkspaceOperationalInput>;
@@ -115,6 +118,9 @@ export async function loadWorkspaceModelV1(analysisId: string, dependencies: Wor
     }
     catch {basic.checko={status:'FAILED',fetchedAt:null};analysis.checkoAttempt=basic.checko;}
     stage = "SOURCES";
+    if(dependencies.readPortfolioReceipts && access.row.ownerEmail){
+      analysis=await restorePortfolioReceipts(analysis,access.row.ownerEmail,dependencies.readPortfolioReceipts);
+    }
     const canonical = buildCanonicalCreditAnalysis(savedCanonicalInput(analysis,companyProfile));
     stage = "PUBLIC_MODEL";
     const report: ClientReportModelV1 = publicCanonicalModel(canonical.model, canonical);
@@ -124,7 +130,7 @@ export async function loadWorkspaceModelV1(analysisId: string, dependencies: Wor
       // including cached company BFO. The saved bank-only manifest is not enough.
       basic: { ...basic, ...(companyProfile?{checko:{status:Date.now()-Date.parse(companyProfile.fetchedAt)>86400000?'STALE' as const:companyProfile.failedMethods?.length?'PARTIAL' as const:'READY' as const,fetchedAt:companyProfile.fetchedAt}}:{}), sources: { ...basic.sources, availability:
         [...new Map(canonical.sourceObservations.map(source => [source.sourceId, source])).values()].map(source => ({
-          source: source.sourceId.startsWith("client-request-") ? "CLIENT_DECLARATION" :
+          source: source.sourceType==="OTHER" && dossierPortfolioLabel(source.sourceId) ? "PORTFOLIO_INPUT" : source.sourceId.startsWith("client-request-") ? "CLIENT_DECLARATION" :
             ({ BANK_STATEMENT: "BANK_STATEMENTS", BFO: "FINANCIAL_STATEMENTS", QUARTERLY: "QUARTERLY_REPORT", BKI: "CREDIT_HISTORY" } as Record<string,string>)[source.sourceType] ?? "EXTERNAL_SOURCE",
           status: source.status, periodFrom: source.periodFrom, periodTo: source.periodTo,
           // FULL rebuilds this list; retain validated metadata only for the same saved BKI source.

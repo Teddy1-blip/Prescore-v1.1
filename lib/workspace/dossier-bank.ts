@@ -19,6 +19,20 @@ export function withDossierSources(bank:AnalysisResult, rows:SourceRow[]):Analys
   const bki=rows.flatMap(r=>r.payload.bki?.affectsCompanyDebt?[{report:r.payload.bki,source:r.payload.envelope}]:[]);
   const documents=rows.flatMap(row=>verifiedCreditDocument(row,bank.companyInn)??[]);
   if(!financial.length&&!bki.length&&!documents.length&&!ledger.length)return bank;
+  const contributingIds=new Set([
+    ...documents.map(doc=>doc.sourceId),
+    ...ledger.flatMap(observation=>observation.evidence.map(e=>e.sourceId))
+  ]);
+  if(contributingIds.size){
+    const receipts=new Map((manifest.external??[]).map(source=>[source.sourceId,source]));
+    for(const row of rows){
+      if(contributingIds.has(row.id)){
+        // This receipt describes the accepted observations, not the unreviewed remainder of the file.
+        receipts.set(row.id,{...row.payload.envelope,status:'READY'});
+      }
+    }
+    manifest.external=[...receipts.values()].sort((a,b)=>a.sourceId.localeCompare(b.sourceId));
+  }
   const result={...bank,sourceManifest:manifest};
   if(financial.length){
     manifest.financialUploads=[...new Map([...financialSources(manifest),...financial.map(s=>s.source)].map(s=>[s.sourceId,s])).values()];
@@ -28,7 +42,7 @@ export function withDossierSources(bank:AnalysisResult, rows:SourceRow[]):Analys
     result.financialStatementsV2=active;
     result.financialAnalysisV2=buildFinancialAnalysis(active);
   }
-  const asOf=[bank.periodTo,...ledger.map(o=>o.observedAt??''),...(result.financialStatementsV2??[]).map(s=>s.period.asOf??''),...bki.map(b=>b.report.reportDate),...documents.map(d=>d.observedAt)].sort().at(-1)!;
+  const asOf=[bank.periodTo,bank.creditPortfolioV1?.asOfDate??'',bank.creditHistory?.reportDate??'',...ledger.map(o=>o.observedAt??''),...(result.financialStatementsV2??[]).map(s=>s.period.asOf??''),...bki.map(b=>b.report.reportDate),...documents.map(d=>d.observedAt)].sort().at(-1)!;
   if(bki.length||documents.length||ledger.length){
     const revisedIds=new Set(documents.map(d=>d.sourceId));
     const prior=bank.creditPortfolioV1;

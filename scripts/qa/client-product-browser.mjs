@@ -7,7 +7,7 @@ import {chromium} from 'playwright';
 const out=path.resolve(process.argv[2]??'/tmp/client-product-qa');fs.mkdirSync(out,{recursive:true});
 let server;
 async function startServer(){
- server=spawn(process.execPath,['--experimental-strip-types','scripts/qa/workspace-harness.mjs',out+'/harness','4189'],{stdio:['ignore','pipe','inherit']});
+ server=spawn(process.execPath,['--experimental-strip-types','scripts/qa/workspace-harness.mjs',out+'/harness','4189'],{stdio:['ignore','pipe','inherit'],env:{...process.env,PRESCORE_QA_PASSPORT:'1'}});
  server.on('exit',(code,signal)=>console.log('QA harness exit',JSON.stringify({code,signal})));
  await new Promise((resolve,reject)=>{server.stdout.on('data',b=>{if(String(b).includes('listening'))resolve();});server.on('error',reject);server.on('exit',(code,signal)=>reject(Error('Harness exited '+code+' '+signal)));});
 }
@@ -47,6 +47,32 @@ async function verifyApprovedClient(seed){
       checks.push('approved '+view+' '+width);
     }
   }
+  for(const [view,action,section,tab] of [
+    ['home','Стоп-факторы','factors','Стоп-факторы и риски'],
+    ['bfo','Рекомендации','recommendations','Рекомендации'],
+    ['obligations','Экспертность','obligations','Кредитный портфель'],
+  ]){
+    await page.goto(origin+'/dashboard?analysisId='+seed.id+'&view='+view);
+    const button=page.getByRole('button',{name:'Открыть: '+action,exact:true});
+    await button.waitFor();
+    const dossierId=new URL(page.url()).searchParams.get('dossierId');
+    assert.ok(dossierId);
+    await button.click();
+    const active=page.getByRole('navigation',{name:'Разделы анализа',exact:true}).getByRole('button',{name:tab,exact:true});
+    await active.waitFor();
+    assert.equal(await active.getAttribute('aria-current'),'page');
+    const selected=new URL(page.url()).searchParams;
+    assert.deepEqual([selected.get('dossierId'),selected.get('analysisId'),selected.get('section')],[dossierId,seed.id,section]);
+    checks.push('аналитический переход '+view+' → '+section);
+  }
+  await page.goto(origin+'/dashboard?analysisId='+seed.id+'&view=documents#source-quarterly');
+  await page.locator('#source-quarterly input[type=file]').waitFor();
+  await page.getByLabel('Вид документа').selectOption('BKI');
+  assert.equal(new URL(page.url()).hash,'#source-bki');
+  await page.locator('#source-bki input[type=file]').waitFor();
+  await page.reload();
+  await page.locator('#source-bki input[type=file]').waitFor();
+  checks.push('форма источника досье и повторное открытие ссылки');
   await page.setViewportSize({width:1440,height:750});
   await page.goto(origin+'/dashboard?analysisId='+seed.id+'&view=home');
   await page.locator('#approved-side').waitFor();

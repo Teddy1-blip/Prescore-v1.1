@@ -1,3 +1,4 @@
+import {portfolioReceiptReader} from '../../../lib/workspace/portfolio-receipts';
 import {checkoKey,checkoState,loadChecko,validInn} from "../../../lib/external/checko-cache";
 import {cachedProfile} from "../../../lib/external/checko-profile";
 import { getRuntime } from "../../../lib/platform/runtime";
@@ -42,6 +43,7 @@ export async function GET(request: Request) {
     let ownerRead=false;
     const dependencies: WorkspaceServiceDependencies = {
       readAccess: async (id) => {const access=await readableAnalysis(db, id, user, user.isAdmin && new URL(request.url).pathname === '/api/admin' && new URL(request.url).searchParams.get('archive') === 'archived');ownerRead=access?.access==='owner';return access;},
+      readPortfolioReceipts: portfolioReceiptReader(getRuntime().DB.pool),
       readTier: (id, access) => resolveAnalysisTier(db, {
         analysisId: id,
         userEmail: access.row.ownerEmail ?? user.email,

@@ -1,3 +1,4 @@
+import {dossierPortfolioLabel} from '../credit-engine/explainability/receipts.ts';
 import {bankCoverageGaps} from '../credit-engine/credit-assessment/coverage.ts';
 import {observedNetTitle} from '../credit-engine/credit-assessment/bank-profile.ts';
 import {legalRegistryView} from "../legal-registry.ts";
@@ -153,7 +154,7 @@ function sourceAvailability(analysis: AnalysisResult): WorkspaceBasicV1["sources
     ...(Array.isArray(manifest?.bankStatements) ? manifest.bankStatements.map((item) => ({ source: "BANK_STATEMENTS", item })) : []),
     ...financialSources(manifest).map(item => ({source: item.sourceType === "BFO" ? "FINANCIAL_STATEMENTS" : "QUARTERLY_REPORT", item})),
     ...(manifest?.bki ? [{ source: "CREDIT_HISTORY", item: manifest.bki }] : []),
-    ...(Array.isArray(manifest?.external) ? manifest.external.map((item) => ({ source: item.sourceId.startsWith("client-request-") ? "CLIENT_DECLARATION" : "EXTERNAL_SOURCE", item })) : []),
+    ...(Array.isArray(manifest?.external) ? manifest.external.map((item) => ({ source: item.sourceType==="OTHER" && dossierPortfolioLabel(item.sourceId) ? "PORTFOLIO_INPUT" : item.sourceId.startsWith("client-request-") ? "CLIENT_DECLARATION" : "EXTERNAL_SOURCE", item })) : []),
   ];
   // Report date is source evidence, never the upload timestamp or a contractual due date.
   const reported = analysis.creditHistory?.reportDate;

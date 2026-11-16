@@ -41,7 +41,7 @@ export function CashTrend({model, compact=false}:{model:WorkspaceModelV1;compact
   return <CashMovement model={model} overview={compact}/>;
 }
 export function SourceSummary({model,choose,onlyConnected=false}:{model:WorkspaceModelV1;choose?:(v:string)=>void;onlyConnected?:boolean}){
- const groups=['BANK_STATEMENTS','FINANCIAL_STATEMENTS','QUARTERLY_REPORT','CREDIT_HISTORY','EXTERNAL_SOURCE'];
+ const groups=['BANK_STATEMENTS','FINANCIAL_STATEMENTS','QUARTERLY_REPORT','CREDIT_HISTORY','PORTFOLIO_INPUT','EXTERNAL_SOURCE'];
  const visible=groups.flatMap(key=>{const rows=model.basic.sources.availability.filter(s=>s.source===key);if(onlyConnected&&!rows.some(s=>['READY','PARTIAL','STALE'].includes(s.status)))return[];return[{key,rows}];});
  return <div className="pc-source-list">{visible.map(({key,rows})=><div key={key}><span>{sourceLabel(key)}</span><b>{rows.length?[...new Set(rows.map(s=>sourceState(s.status)))].join(', '):'Можно добавить'}</b></div>)}{choose&&<button className="pc-text-button" onClick={()=>choose('documents')}>Управлять источниками →</button>}</div>;
 }

@@ -41,7 +41,7 @@ async function read<T>(url:string,options?:RequestInit):Promise<T>{
 function ScanLayout(){
  return <details><summary>Раскладка скана</summary><label>Страницы PDF <select name="layout" defaultValue="SINGLE"><option value="SINGLE">Одна страница на листе</option><option value="TWO_UP_ROTATED">Две страницы на повёрнутом листе</option></select></label></details>;
 }
-export function CompanySources({view,id,bankInn,bank,analysisId,model,openBank,onCompany,onSourceChanged,ownerTestWorkspace=false,companyEntry=0,onBuyerBalances}:{onBuyerBalances?:(item:{id:string;balances:ReturnType<typeof buyerBalanceSummary>})=>void;ownerTestWorkspace?:boolean;companyEntry?:number;view:string;id:string;analysisId?:string;model?:WorkspaceModelV1|null;bankInn?:string;bank?:WorkspaceBasicV1;openBank:()=>void;onCompany:(inn:string)=>void;onSourceChanged?:()=>Promise<unknown>}){
+export function CompanySources({view,choose,id,bankInn,bank,analysisId,model,openBank,onCompany,onSourceChanged,ownerTestWorkspace=false,companyEntry=0,onBuyerBalances}:{onBuyerBalances?:(item:{id:string;balances:ReturnType<typeof buyerBalanceSummary>})=>void;ownerTestWorkspace?:boolean;companyEntry?:number;view:string;choose:(view:string,section?:string)=>void;id:string;analysisId?:string;model?:WorkspaceModelV1|null;bankInn?:string;bank?:WorkspaceBasicV1;openBank:()=>void;onCompany:(inn:string)=>void;onSourceChanged?:()=>Promise<unknown>}){
 
  const [inn,setInn]=useState(bankInn??''),[companies,setCompanies]=useState<Company[]>([]),[profile,setProfile]=useState<Profile|null>(null),[preview,setPreview]=useState<PublicProfile|null>(null);
  const [error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[revision,setRevision]=useState(0),[selectedYear,setYear]=useState('');
@@ -125,6 +125,31 @@ export function CompanySources({view,id,bankInn,bank,analysisId,model,openBank,o
  const relevantClaims=profile?.claims.filter(c=>view==='home'||view==='analysis'||view==='actions'||view==='financing'&&c.stage==='product'||c.sources.some(s=>view==='bfo'?['BFO','QUARTERLY'].includes(s.type):view==='obligations'?s.type==='BKI'||profile.sources.some(r=>c.sourceIds.includes(r.id)&&r.kind==='CREDIT_DOCUMENT'):false))??[];
  const [documentKind,setDocumentKind]=useState('BFO');
  const [portfolioSource,setPortfolioSource]=useState('BKI');
+ useEffect(()=>{
+   if(!id||!['documents','obligations'].includes(view))return;
+   function syncSource(){
+     const kind=kinds[view]?.find(value=>'#source-'+value.toLowerCase()===window.location.hash);
+     if(!kind)return;
+     if(view==='documents')setDocumentKind(kind);
+     else setPortfolioSource(kind);
+   }
+   syncSource();
+   window.addEventListener('hashchange',syncSource);
+   return ()=>window.removeEventListener('hashchange',syncSource);
+ },[view,id]);
+ useEffect(()=>{
+   const kind=view==='documents'?documentKind:view==='obligations'?portfolioSource:'';
+   if(id&&kind&&window.location.hash==='#source-'+kind.toLowerCase()){
+     document.getElementById('source-'+kind.toLowerCase())?.scrollIntoView({block:'start'});
+   }
+ },[id,view,documentKind,portfolioSource]);
+ function selectUploadKind(kind:string){
+   if(view==='documents')setDocumentKind(kind);else setPortfolioSource(kind);
+   if(window.location.hash.startsWith('#source-')){
+     const url=new URL(window.location.href);url.hash='source-'+kind.toLowerCase();
+     window.history.replaceState(null,'',url);
+   }
+ }
  const portfolioTabs=[['BKI','БКИ'],['CREDIT_DOCUMENT','Кредитные договоры'],['DEBT_LEDGER','ОСВ 66, 67 и 76']];
  const visibleKinds=view==='documents'?[documentKind]:view==='calendar'&&profile?.entitlement!=='FULL'?[]:view==='obligations'?[portfolioSource]:kinds[view]??[];
  const currentLedger=profile?.ledger.filter(l=>l.kind===(view==='obligations'?'DEBT_LEDGER':'COUNTERPARTIES'))??[];
@@ -208,7 +233,7 @@ export function CompanySources({view,id,bankInn,bank,analysisId,model,openBank,o
      <details className="pc-bfo-detail"><summary>Все финансовые коэффициенты и строки Ф1 / Ф2</summary>{period.groups.map(g=><section key={g.key}><h3>{g.title}</h3><dl>{g.metrics.filter(m=>m.value!==null).map(m=><div key={m.key}><dt>{m.label}</dt><dd>{numeric(m.value,m.status,m.unit)}</dd></div>)}</dl></section>)}</details>
     </>:<div className="pc-bfo-no-finances"><h3>Компания добавлена в финансовый профиль</h3><p>{profile.publicProfile?'Данные Checko доступны в пределах текущего тарифа. Загрузите БФО, чтобы получить показатели и динамику в этом разделе.':'Загрузите БФО либо получите доступные сведения Checko по ИНН. Финансовые цифры без источников не создаются.'}</p></div>}
    </section>}
-   {model?.full&&<ClientAnalyticPipeline model={model} scope="bfo" choose={next=>{location.assign('/dashboard?'+new URLSearchParams({dossierId:id,analysisId:model.analysisId,view:next}));}}/>}
+   {model?.full&&<ClientAnalyticPipeline model={model} scope="bfo" choose={choose}/>}
    {profile&&!analysisId&&<section className="pc-bfo-insights" aria-label="Экспертные выводы по БФО"><header><h2>Экспертность и следующие действия</h2><p>Все выводы видны сразу. Содержание зависит от подтверждённых данных компании.</p></header><div className="pc-bfo-insight-grid">{stages.map((stage,i)=>{const items=bfoClaims.filter(c=>c.stage===stage.key);const balanceText=stage.key==='expert'&&period?(period.quality.balanceReconciled===true?'БФО: баланс сходится':period.quality.balanceReconciled===false?'БФО: баланс требует сверки':'БФО: сверка баланса не подтверждена'):null;return <article className="pc-bfo-insight" key={stage.key}><span>{i+1} / 5</span><h3>{stage.title}</h3>{balanceText&&<p className="pc-bfo-main-fact">{balanceText}</p>}{items.length>0?<ul>{items.map(c=><li key={c.id}><strong>{c.horizon?({'DAY_7':'7 дней','DAY_30':'30 дней','DAY_60':'60 дней'}[c.horizon])+' · ':''}{c.title}</strong><p>{c.text}</p>{c.sources.length>0&&<small>Основание: {c.sources.map(s=>s.type+' · '+s.date).join('; ')}</small>}</li>)}</ul>:!balanceText&&<p>{stage.empty}</p>}</article>})}</div></section>}
    {reviewPanels}
    {error&&<p role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
@@ -233,7 +258,7 @@ export function CompanySources({view,id,bankInn,bank,analysisId,model,openBank,o
   {view==='banking'&&<Account51Comparison cards={profile?.cards51??[]} bank={bank}/>}
   {!company&&passport}
   {view==='home'&&preview&&!company&&<p className="pc-muted">Публичная проверка выполнена для предварительного просмотра. Чтобы сохранить сведения в личном досье, нажмите «{ownerTestWorkspace?'Сохранить компанию':'Добавить компанию'}».</p>}
-  {view==='obligations'&&<nav className="pc-source-actions" aria-label="Источники кредитного портфеля">{portfolioTabs.map(([kind,title])=><button type="button" key={kind} aria-pressed={portfolioSource===kind} onClick={()=>setPortfolioSource(kind)}>{title}</button>)}</nav>}
+  {view==='obligations'&&<nav className="pc-source-actions" aria-label="Источники кредитного портфеля">{portfolioTabs.map(([kind,title])=><button type="button" key={kind} aria-pressed={portfolioSource===kind} onClick={()=>selectUploadKind(kind)}>{title}</button>)}</nav>}
  {view==='obligations'&&!company&&!bankInn&&<DossierPortfolio profile={null} />}
  {company&&<><p>Досье компании · ИНН {company.inn}</p>
  {['home','bfo','analysis','documents'].includes(view)&&(model?.full||profile.financial||profile.obligations.length>0||profile.publicProfile||(ownerTestWorkspace&&profile.settlements.length>0))&&reportButton('Версия отчёта для PDF')}
@@ -283,12 +308,12 @@ export function CompanySources({view,id,bankInn,bank,analysisId,model,openBank,o
    })}</ul></Panel>}
  </>}
  {visibleKinds.length>0&&<section className="pc-panel pc-source-intake" id="dossier-intake"><h2>Добавить источник</h2>
- {view==='documents'&&<label className="pc-document-kind">Вид документа <select value={documentKind} disabled={busy} onChange={e=>setDocumentKind(e.target.value)}>{kinds.documents.map(k=><option key={k} value={k}>{labels[k]}</option>)}</select></label>}
+ {view==='documents'&&<label className="pc-document-kind">Вид документа <select value={documentKind} disabled={busy} onChange={e=>selectUploadKind(e.target.value)}>{kinds.documents.map(k=><option key={k} value={k}>{labels[k]}</option>)}</select></label>}
  {analysisId&&profile?.versions[0]&&profile.versions[0].id!==analysisId&&<p>Документы обновляют последний анализ этой компании. <a href={'/dashboard?'+new URLSearchParams({dossierId:profile.company.id,analysisId:profile.versions[0].id,view})}>Открыть актуальную версию</a></p>}
  {visibleKinds.map(kind=>{
    const contract=['CREDIT_DOCUMENT','COMMERCIAL_DOCUMENT'].includes(kind),bureau=kind==='BKI',scan=contract||bureau||kind==='BFO_REVIEW';
    const accept=kind==='CALENDAR_SHEET'?'.xls,.xlsx,.csv':kind==='ACCOUNT_51'?'.xls,.xlsx':contract?'.pdf,.docx,.png,.jpg,.jpeg':scan?'.pdf,.png,.jpg,.jpeg':kind.endsWith('LEDGER')||kind==='COUNTERPARTIES'?'.csv,.xls,.xlsx':'.pdf,.xls,.xlsx,.csv';
-   return <form onSubmit={upload} key={kind} aria-label={labels[kind]}><input name="kind" type="hidden" value={kind}/>
+   return <form onSubmit={upload} key={kind} id={id?'source-'+kind.toLowerCase():undefined} aria-label={labels[kind]}><input name="kind" type="hidden" value={kind}/>
      <label>{labels[kind]} <input aria-label={labels[kind]} name="file" required type="file" accept={accept}/></label>
      {(kind==='COUNTERPARTIES'||kind==='DEBT_LEDGER')&&<label><input type="checkbox" name="identityConfirmed" value="yes"/> Подтверждаю компанию и период ОСВ, если он указан только в имени файла</label>}
      {bureau&&<label>Кому принадлежит отчёт <select name="relationship">{['Компания-заёмщик','ИП-заёмщик','Собственник','Руководитель','Поручитель'].map(r=><option key={r}>{r}</option>)}</select></label>}

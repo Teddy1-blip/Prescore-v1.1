@@ -3,12 +3,12 @@ import type {WorkspaceModelV1} from "../../../lib/workspace/model";
 import {scopedEvidence} from "../../../lib/workspace/scoped-evidence";
 
 type Scope="home"|"bfo"|"counterparties"|"obligations";
-type Route="analysis"|"actions"|"financing"|"documents"|"obligations"|"counterparties"|"bfo";
+type Route='analysis'|'actions'|'financing'|'counterparties';
 
 const labels:Record<Scope,string>={home:"Общий анализ компании",bfo:"По бухгалтерской отчётности",counterparties:"По данным покупателей и поставщиков",obligations:"По кредитным обязательствам"};
 
 /** One analytical presentation, sourced from saved canonical evidence. No local credit calculations. */
-export function ClientAnalyticPipeline({model,scope,choose}:{model:WorkspaceModelV1;scope:Scope;choose:(view:string)=>void}){
+export function ClientAnalyticPipeline({model,scope,choose}:{model:WorkspaceModelV1;scope:Scope;choose:(view:string,section?:string)=>void}){
  const report=model.full?.report;
  const statements=model.basic.bankingFacts;
  const {stopFactor,recommendation,action}=scopedEvidence(model.full,scope);
@@ -26,10 +26,10 @@ export function ClientAnalyticPipeline({model,scope,choose}:{model:WorkspaceMode
  const note=scope==="home"
   ?"Объединённые результаты выбранного анализа"
   :"Только опубликованные факты этого раздела; общий кредитный вывод — в «Кредитном профиле»";
- const steps:Array<{title:string;summary:string;route:Route}>=[
-  {title:"Экспертность",summary:expert,route:scope==="bfo"?"bfo":scope==="obligations"?"obligations":scope==="counterparties"?"counterparties":"analysis"},
-  {title:"Стоп-факторы",summary:stopFactor?.title??"Отдельный подтверждённый фактор не опубликован",route:"analysis"},
-  {title:"Рекомендации",summary:recommendation?.title??"Нет отдельной рекомендации по подтверждённым фактам раздела",route:"analysis"},
+ const steps:Array<{title:string;summary:string;route:Route;section?:string}>=[
+  {title:"Экспертность",summary:expert,route:scope==='counterparties'?'counterparties':'analysis',section:scope==='bfo'?'financials':scope==='obligations'?'obligations':'expertise'},
+  {title:"Стоп-факторы",summary:stopFactor?.title??"Отдельный подтверждённый фактор не опубликован",route:"analysis",section:"factors"},
+  {title:"Рекомендации",summary:recommendation?.title??"Нет отдельной рекомендации по подтверждённым фактам раздела",route:"analysis",section:"recommendations"},
   {title:"Предложения",summary:scope==="home"?report?.productFit.primary[0]?.title??"Подбор требует уточнения данных":"Финансирование подбирается по общему кредитному профилю",route:"financing"},
   {title:"План 7 / 30 / 60",summary:action?.title??"Откройте общий план действий и необходимые подтверждения",route:"actions"},
  ];
@@ -38,7 +38,7 @@ export function ClientAnalyticPipeline({model,scope,choose}:{model:WorkspaceMode
   <ol>{steps.map((step,i)=><li key={step.title}>
    <span className="pc-analytic-step">{i+1} / 5</span>
    <h3>{step.title}</h3><p>{step.summary}</p>
-   <button type="button" onClick={()=>choose(step.route)}>Открыть раздел ↗</button>
+   <button type="button" aria-label={'Открыть: '+step.title} onClick={()=>choose(step.route,step.section)}>Открыть раздел ↗</button>
   </li>)}</ol>
  </section>;
 }
