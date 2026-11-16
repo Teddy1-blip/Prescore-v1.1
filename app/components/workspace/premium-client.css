@@ -26,3 +26,9 @@
 .approved-client .pc-decision-band small,.approved-client .pc-decision-band strong{display:block}
 .approved-client .pc-decision-band strong{margin-top:5px;font-size:19px;font-variant-numeric:tabular-nums}
 .approved-client .kpis,.approved-client .hero-score{font-variant-numeric:tabular-nums}
+.approved-client .pc-credit-recap{margin-block:18px;padding:16px;border:1px solid #d9e2dd;border-radius:12px;background:#fff}
+.approved-client .pc-credit-recap>summary{font-weight:650;cursor:pointer}
+.approved-client .pc-credit-recap[open]>summary{margin-bottom:16px}
+.approved-client .pc-factor-source{display:block;color:#50656a;margin-block:4px}
+.approved-client .pc-plan-steps{list-style:decimal;margin:8px 0;padding-inline-start:24px}
+.approved-client .pc-plan-steps li{padding:4px 0;border:0}

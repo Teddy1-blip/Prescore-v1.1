@@ -21,10 +21,10 @@ function EvidenceWarnings({warnings}:{warnings:readonly string[]}){
   {references.length>0&&<details><summary>Коды ограничений для сверки</summary><ul>{references.map(code=><li key={code}><code>{code}</code></li>)}</ul></details>}
  </div>;
 }
-export function Why({model,ids}:{model:WorkspaceModelV1;ids:string[]}){
+export function Why({model,ids,buttonLabel="Почему?"}:{model:WorkspaceModelV1;ids:string[];buttonLabel?:string}){
  const dialog=useRef<HTMLDialogElement>(null),e=model.full?.canonical.explainability;
  const claims=linkedWhyClaims(e,ids);
- return <><button className="pc-text-button" onClick={()=>dialog.current?.showModal()}>Почему?</button><dialog className="pc-evidence" ref={dialog} onClick={event=>{if(event.target===event.currentTarget)dialog.current?.close();}} aria-label="Основания вывода">
+ return <><button className="pc-text-button" onClick={()=>dialog.current?.showModal()}>{buttonLabel}</button><dialog className="pc-evidence" ref={dialog} onClick={event=>{if(event.target===event.currentTarget)dialog.current?.close();}} aria-label="Основания вывода">
   <header><h2>Основания вывода</h2><button onClick={()=>dialog.current?.close()} autoFocus>Закрыть</button></header>
   {claims.length?claims.map(({claim:c,linked,missingLinked})=><section key={c.claimId} data-claim-id={c.claimId}>
    <h3>{clientText(c.titleRu)}</h3><p>{clientText(c.textRu)}</p><small>Достоверность: {label(c.confidence)}</small>

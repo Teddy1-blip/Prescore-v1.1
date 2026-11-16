@@ -2,7 +2,8 @@
 import type {WorkspaceModelV1} from '../../../lib/workspace/model';
 import {publicText} from '../../../lib/credit-engine/client-report/copy';
 import {Panel, Why, ActionItem} from './client-insights';
-import {label} from './credit-depth';
+import {label,sourceLabel} from './credit-depth';
+import {whySources,whySourceDates} from '../../../lib/workspace/why-evidence';
 
 export function RiskSections({model}:{model:WorkspaceModelV1}){
  const full=model.full;
@@ -19,8 +20,9 @@ export function RiskSections({model}:{model:WorkspaceModelV1}){
   const content=<Panel key={scope} title={title}><div className="pc-factor-list">
    {items.map(c=><article className={'pc-factor '+(scope==='GLOBAL_STOP'?'tone-critical':scope==='CREDIT_RISK'?'tone-attention':'tone-info')} key={c.claimId}>
     <div><h3>{publicText(c.titleRu)}</h3><p>{publicText(c.textRu)}</p>
+     {whySources(full.canonical.explainability,c).slice(0,2).map(source=><small className="pc-factor-source" key={source.sourceReferenceId}>{sourceLabel(source.sourceKind)} · {whySourceDates(source)}</small>)}
      {actions.filter(a=>c.recommendationIds.includes(a.canonicalId)||full.canonical.recommendations.recommendations.some(rec=>rec.recommendationId===a.canonicalId&&rec.riskFindingIds.some(id=>c.riskFindingIds.includes(id)))).slice(0,1).map(a=><p key={a.id}>Следующий шаг · {publicText(a.title)}</p>)}
-    </div><Why model={model} ids={[c.claimId]}/>
+    </div><Why model={model} ids={[c.claimId]} buttonLabel="Почему Prescore сделал этот вывод?"/>
    </article>)}
   </div></Panel>;
   return scope==='INFORMATION'?<details key={scope}><summary>Контекст и информация</summary>{content}</details>:content;
@@ -51,5 +53,5 @@ export function RecommendationsSection({model}:{model:WorkspaceModelV1}){
  if(!recommendations)return null;
  const {primary,backlog}=recommendations;
  return <><Panel title="Приоритетные рекомендации">{primary.length?primary.map(item=><ActionItem key={item.id} item={item} model={model}/>):<p>Для этого выпуска приоритетные действия не назначены.</p>}</Panel>
-  {backlog.length>0&&<Panel title="Другие действия">{backlog.map(item=><ActionItem key={item.id} item={item} model={model}/>)}</Panel>}</>;
+  {backlog.length>0&&<details className="pc-credit-recap"><summary>Другие действия · {backlog.length}</summary><Panel title="Дополнительные рекомендации">{backlog.map(item=><ActionItem key={item.id} item={item} model={model}/>)}</Panel></details>}</>;
 }

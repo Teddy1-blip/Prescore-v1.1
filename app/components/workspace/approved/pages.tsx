@@ -629,12 +629,12 @@ export function ApprovedPage(p: ScreenProps) {
     );
   return (
     <>
-      {content}
+      {!(page === 'analysis' && hasDetails) && content}
       {p.details && (inlineCanonical ? (
         <section className="approved-canonical-section" id="approved-source-operations" aria-label={canonicalHeadings[page]}>
           <div className="approved-canonical-heading">
             <h2>{canonicalHeadings[page]}</h2>
-            <p>Показатели и действия относятся к выбранному анализу. Отсутствующий источник не заменяется выдуманными значениями.</p>
+            {d.asOf && <p>Версия анализа на {d.asOf}</p>}
           </div>
           {p.details}
         </section>
@@ -644,6 +644,9 @@ export function ApprovedPage(p: ScreenProps) {
           {p.details}
         </details>
       ))}
+      {page === 'analysis' && hasDetails && <details className="pc-credit-recap" open>
+        <summary>Сводка кредитного профиля</summary>{content}
+      </details>}
       {drawer && (
         <Drawer
           title={counter?.name ?? task?.title ?? (app ? 'Карточка заявки' : 'Основания оценки')}

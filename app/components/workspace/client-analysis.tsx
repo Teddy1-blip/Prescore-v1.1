@@ -153,7 +153,7 @@ export function ActionPlan({model}:{model:WorkspaceModelV1}){
  const now=r.recommendations.primary.filter(a=>!scheduled.has(a.canonicalId));
  return <>
   <Panel title="Сейчас">{now.length?now.map(a=><ActionItem key={a.id} item={a} model={model}/>):<p>Приоритетные действия включены в ближайший этап плана ниже.</p>}</Panel>
-  {r.actionPlan.horizons.map(h=><Panel key={h.id} title={h.title+' · '+date(h.date)}><ol className="pc-timeline">{h.items.map(a=><li key={a.id} id={a.id}><b>{publicText(a.title)}</b><p>{publicText(a.steps[0]??a.summary)}</p>{a.why && a.why !== a.summary && <p>{publicText(a.why)}</p>}<small>{publicText(a.recheck)}</small>{a.evidence.length>0&&<p><b>Что подтвердить</b> · {a.evidence.map(publicText).join(' · ')}</p>}<Why model={model} ids={[a.claimId]}/></li>)}</ol>{!h.items.length&&<p>Отдельные действия на этот срок не назначены.</p>}</Panel>)}
+  {r.actionPlan.horizons.map(h=><Panel key={h.id} title={h.title+' · '+date(h.date)}><ol className="pc-timeline">{h.items.map(a=><li key={a.id} id={a.id}><b>{publicText(a.title)}</b><p>{publicText(a.summary)}</p>{a.steps.length>0&&<ol className="pc-plan-steps">{a.steps.map((step,i)=><li key={i}>{publicText(step)}</li>)}</ol>}{a.why && a.why !== a.summary && <p>{publicText(a.why)}</p>}<small>{publicText(a.recheck)}</small>{a.evidence.length>0&&<p><b>Что подтвердить</b> · {a.evidence.map(publicText).join(' · ')}</p>}<Why model={model} ids={[a.claimId]}/></li>)}</ol>{!h.items.length&&<p>Отдельные действия на этот срок не назначены.</p>}</Panel>)}
 
   <p className="pc-muted">{r.actionPlan.disclaimer}</p>
  </>;
