@@ -7,7 +7,7 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import {analyzeBankStatements,analysisForStorage} from '../lib/prescore.ts';
 import {buildCanonicalCreditAnalysis} from '../lib/credit-engine/production/orchestrator.ts';
 import {publicText} from '../lib/credit-engine/client-report/copy.ts';
-import {linkedWhyClaims,whySources,whySourceDates,whyTitle} from '../lib/workspace/why-evidence.ts';
+import {linkedWhyClaims,whySources,whySourceDates,whyTitle,whyWarnings} from '../lib/workspace/why-evidence.ts';
 const require=createRequire(import.meta.url),ts=require('typescript');
 // Actual Why component and actual canonical pipeline; child components not rendered here.
 function whyComponent(){
@@ -91,4 +91,14 @@ test('same source kind with no shared identity never coalesces independent refer
  const e=structuredClone(explanation),risk=e.claims.find(c=>c.claimCode==='RISK-CF-CUSTOMER-CONCENTRATION');
  for(const s of e.sourceReferences)s.sourceIds=[];
  assert.equal(whySources(e,risk).length,4);
+});
+
+
+test('evidence dialog explains and deduplicates checkpoint restrictions without losing unknown references',()=>{
+ const warnings=['PRESCORE_ANALYTICAL_CHECKPOINT_NOT_LEGAL_DEADLINE','WEAK_EVIDENCE_VERIFY_FIRST','PRESCORE_ANALYTICAL_CHECKPOINT_NOT_LEGAL_DEADLINE','TASK_COMPLETION_NOT_ANALYTICAL_RESOLUTION','Часть периода отсутствует.','NEW_REFERENCE','NEW_REFERENCE'];
+ const {labels,references}=whyWarnings(Object.freeze(warnings));
+ assert.equal(labels.length,4);
+ assert.ok(labels.every(value=>/[А-Яа-я]/u.test(value)));
+ assert.ok(labels.includes('Часть периода отсутствует.'));
+ assert.deepEqual(references,['NEW_REFERENCE']);
 });

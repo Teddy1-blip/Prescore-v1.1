@@ -1,3 +1,4 @@
+import {COPY,publicText} from '../credit-engine/client-report/copy.ts';
 import type {ExplainabilityV1, ExplanationClaimV1, ExplanationSourceReferenceV1, ExplanationValueBindingV1} from '../credit-engine/contracts/explainability.ts';
 
 // Read-only presentation traversal. No engine rerun, textual joins or analysis-wide dates.
@@ -40,4 +41,35 @@ const names:Record<string,string>={BANK_TOP1:'Доля крупнейшего п
 export function whyBindingText(v:ExplanationValueBindingV1) {
  const unit=v.unit==='RATIO'?' (доля от 1)':v.unit==='DAYS'?' дней':v.unit==='MONTHS'?' месяцев':'';
  return (names[v.bindingCode]??'Значение')+': '+v.formattedValueRu+(typeof v.rawValue==='number'?unit:'');
+}
+
+// Wording for the evidence dialog only. Untranslated references remain available for a detailed reconciliation.
+const warningLabels:Record<string,string>={
+ ...COPY.requirements,
+ PRESCORE_ANALYTICAL_CHECKPOINT_NOT_LEGAL_DEADLINE:'Дата в плане указывает, когда вернуться к проверке.',
+ TASK_COMPLETION_NOT_ANALYTICAL_RESOLUTION:'После выполнения действия повторите анализ, чтобы проверить изменение фактора.',
+ WEAK_EVIDENCE_VERIFY_FIRST:'Сначала подтвердите исходные сведения документами.',
+ ACCOUNT_COVERAGE_NOT_PROVEN:'Полнота выписок по счетам компании пока не подтверждена.',
+ ASSESSMENT_NOT_COMPLETE:'Для завершения оценки требуются дополнительные сведения.',
+ CAPACITY_NOT_COMPLETE:'Для оценки доступного платежа нужны дополнительные сведения.',
+ DEBT_PAYMENT_UNMATCHED:'Часть платежей по долгу требует сверки с договорами.',
+ UNSPLIT_PAYMENT_NOT_PRINCIPAL_REDUCTION:'Для определения погашенной суммы разделите основной долг и проценты по документам кредитора.',
+ NEW_OBLIGATION_REQUIRES_REVIEW:'Подтвердите условия выявленного обязательства.',
+ 'SOURCE_MISSING:QUARTERLY':'Для проверки нужна промежуточная бухгалтерская отчётность.',
+ 'SOURCE_MISSING:BFO':'Для проверки нужна бухгалтерская отчётность.',
+ 'SOURCE_MISSING:BKI':'Для проверки нужен отчёт о кредитной истории.',
+ SHORT_FULL_MONTH_HISTORY:'В выписке недостаточно полных месяцев для этого расчёта.',
+ PRODUCT_FIT_NOT_BANK_APPROVAL:'Условия финансирования подтверждает кредитор после рассмотрения заявки.',
+};
+export function whyWarnings(warnings:readonly string[]){
+ const labels=new Set<string>(),references=new Set<string>();
+ for(const value of warnings){
+  const warning=value.trim();
+  if(!warning)continue;
+  const label=warningLabels[warning];
+  if(label)labels.add(label);
+  else if(/[А-Яа-яЁё]/.test(warning))labels.add(publicText(warning));
+  else references.add(warning);
+ }
+ return {labels:[...labels],references:[...references]};
 }

@@ -1,6 +1,6 @@
 "use client";
 import {useRef,type ReactNode} from 'react';
-import {linkedWhyClaims,whyBindings,whySources,whySourceDates,whyBindingText} from '../../../lib/workspace/why-evidence';
+import {linkedWhyClaims,whyBindings,whySources,whySourceDates,whyBindingText,whyWarnings} from '../../../lib/workspace/why-evidence';
 import type {WorkspaceModelV1} from '../../../lib/workspace/model';
 import type {PresentationFactorV1,PresentationActionV1} from '../../../lib/credit-engine/contracts/client-report';
 import {money,date,FullAccessNotice} from './presentation';
@@ -13,6 +13,14 @@ import {BankProfileDetails,CheckoOverview,FlowComposition} from './profile-overv
 import {FinancialSnapshot} from './client-financials';
 import {Panel} from './panel';
 export {Panel};
+function EvidenceWarnings({warnings}:{warnings:readonly string[]}){
+ const {labels,references}=whyWarnings(warnings);
+ if(!labels.length&&!references.length)return null;
+ return <div><b>Ограничения исходных данных</b>
+  {labels.length>0&&<ul>{labels.map(text=><li key={text}>{text}</li>)}</ul>}
+  {references.length>0&&<details><summary>Коды ограничений для сверки</summary><ul>{references.map(code=><li key={code}><code>{code}</code></li>)}</ul></details>}
+ </div>;
+}
 export function Why({model,ids}:{model:WorkspaceModelV1;ids:string[]}){
  const dialog=useRef<HTMLDialogElement>(null),e=model.full?.canonical.explainability;
  const claims=linkedWhyClaims(e,ids);
@@ -21,7 +29,7 @@ export function Why({model,ids}:{model:WorkspaceModelV1;ids:string[]}){
   {claims.length?claims.map(({claim:c,linked,missingLinked})=><section key={c.claimId} data-claim-id={c.claimId}>
    <h3>{clientText(c.titleRu)}</h3><p>{clientText(c.textRu)}</p><small>Достоверность: {label(c.confidence)}</small>
    <ul>{whyBindings(c).map((v,i)=><li key={i}>{whyBindingText(v)}</li>)}</ul>
-   {c.warnings.length>0&&<p>Ограничения исходных данных: {c.warnings.map(clientText).join('; ')}</p>}
+   <EvidenceWarnings warnings={c.warnings}/>
    {missingLinked&&<p>Связанное основание этого ограничения отсутствует в текущем отчёте; конкретный фактор и его значения не восстановлены.</p>}
    {!linked&&e&&whySources(e,c).map(s=><p key={s.sourceReferenceId} data-source-ref={s.sourceReferenceId}><b>{sourceLabel(s.sourceKind)}</b><br/>{whySourceDates(s)}{s.receipts?.map(r=><small key={r.sourceId}> · {receiptLabel(r)||sourceLabel(r.sourceType)} · получено {date(r.receivedAt?.slice(0,10))}{r.informationDate?' · сведения на '+date(r.informationDate):''}</small>)}<br/><small>Достоверность источника: {label(s.confidence)}</small></p>)}
   </section>):<p>Подробные основания этого вывода в текущей версии не раскрыты. Проверьте комплект документов.</p>}
