@@ -8,6 +8,7 @@ import type {SourceRow} from './dossier-sources.ts';
 export function verifiedCreditDocument(row:SourceRow,inn:string):DebtDocumentObservationBatch|null {
  const verified=row.payload.verified,review=row.payload.review;
  if(row.kind!=='CREDIT_DOCUMENT'||!row.documentId||row.payload.envelope.companyInn!==inn||review?.status!=='READY_FOR_REVIEW'||!verified)return null;
+ if(review.issues.includes('CREDIT_OFFER_ACCEPTANCE_UNVERIFIED'))return null; // Offer alone is not a funded debt.
  const read=(key:string)=>verified[key]?.value;
  const creditor=read('creditor'),number=read('agreement_number'),date=read('agreement_date');
  if(!creditor||!number||!validDate(date)||!read('borrower')||read('borrower_inn')!==inn)return null;

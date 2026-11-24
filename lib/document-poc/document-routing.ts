@@ -9,7 +9,7 @@ export type DocumentFamily = UploadFamily | 'OTHER' | 'UNKNOWN' | 'MIXED';
 export type DocumentSubtype =
   | 'BALANCE_SHEET' | 'INCOME_STATEMENT' | 'CASH_FLOW_STATEMENT'
   | 'EQUITY_STATEMENT' | 'AUDIT_REPORT' | 'FINANCIAL_NOTES'
-  | 'CREDIT_AGREEMENT' | 'LOAN_AGREEMENT' | 'CREDIT_LINE' | 'OVERDRAFT'
+  | 'CREDIT_AGREEMENT' | 'CREDIT_OFFER' | 'LOAN_AGREEMENT' | 'CREDIT_LINE' | 'OVERDRAFT'
   | 'CREDIT_PAYMENT_SCHEDULE' | 'GUARANTEE' | 'SURETY' | 'PLEDGE'
   | 'LEASING' | 'FACTORING'
   | 'SUPPLY' | 'PURCHASE_SALE' | 'WORKS' | 'SUBCONTRACT' | 'SERVICES'
@@ -119,6 +119,8 @@ const rules: readonly Rule[] = [
   {family:'BFO',subtype:'EQUITY_STATEMENT',pattern:/^отчет\s+об\s+изменениях\s+капитала(?:\s|$)/iu},
   {family:'BFO',subtype:'AUDIT_REPORT',pattern:/^аудиторское\s+заключение(?:\s|$)/iu},
   {family:'BFO',subtype:'FINANCIAL_NOTES',pattern:/^пояснения\s+к\s+(?:бухгалтерскому\s+балансу|бухгалтерской\s+отчетности)(?:\s|$)/iu},
+  // Credit offer / application does not prove disbursement or acceptance.
+  {family:'CREDIT',subtype:'CREDIT_OFFER',pattern:/^заявление\s*[-–—]\s*оферта\s+на\s+заключение\s+договора\s+о\s+предоставлении\s+кредита(?:\s|$)/iu},
   {family:'CREDIT',subtype:'CREDIT_LINE',pattern:/^(?:договор\s+(?:об?\s+)?(?:открытии\s+|о\s+предоставлении\s+)?(?:возобновляемой\s+|невозобновляемой\s+)?кредитной\s+линии|кредитный\s+договор\s+.*кредитной\s+линии)(?:\s|$)/iu},
   {family:'CREDIT',subtype:'OVERDRAFT',pattern:/^(?:договор\s+(?:кредитования\s+(?:в\s+форме\s+)?|о\s+предоставлении\s+)?овердрафта|овердрафт)(?:\s|$)/iu},
   {family:'CREDIT',subtype:'CREDIT_AGREEMENT',pattern:/^кредитный\s+договор(?:\s|$|№|N)/iu},
@@ -143,7 +145,7 @@ const normal = (s: string) => s.replace(/ё/giu,'е').replace(/[\u00a0\u202f]/gu
   .replace(/[\t ]+/gu,' ').replace(/^["«]+|["»]+$/gu,'').trim();
 const compact = (s: string) => s.replace(/\s+/gu,' ').trim();
 const supported = new Set<DocumentSubtype>([
-  'BALANCE_SHEET','INCOME_STATEMENT','CREDIT_AGREEMENT','LOAN_AGREEMENT','CREDIT_LINE','OVERDRAFT',
+  'BALANCE_SHEET','INCOME_STATEMENT','CREDIT_AGREEMENT','CREDIT_OFFER','LOAN_AGREEMENT','CREDIT_LINE','OVERDRAFT',
   'SUPPLY','PURCHASE_SALE','WORKS','SUBCONTRACT','SERVICES','FRAMEWORK',
 ]);
 const dependent = new Set<DocumentSubtype>(['AMENDMENT','SPECIFICATION','UNLINKED_PAYMENT_SCHEDULE','ACCEPTANCE_DOCUMENT']);
@@ -240,7 +242,13 @@ export function routeDocument(input: RoutingInput): RoutingDecision {
         || /^(?:\d+[.)]\s+|приложени[ея]\s+\d|перечень\s+документов|например|см\.|согласно|включая)/iu.test(text))continue;
       if(i>firstUseful+14 && (i===0||lines[i-1]!==''))continue;
       const joined=lines[i+1]&&lines[i+1].length<=130?text+' '+lines[i+1]:text;
-      const match=rules.find(r=>r.pattern.test(text))??rules.find(r=>r.pattern.test(joined));
+      // Scanned F2 can print "Отчёт / о финансовых / результатах"
+      // on three consecutive lines. Join only a BFO heading in the same
+      // page preamble, not arbitrary body clauses or adjoining pages.
+      const joinedThree=lines[i+1]&&lines[i+2]&&lines[i+1].length<=80&&lines[i+2].length<=80
+        ?text+' '+lines[i+1]+' '+lines[i+2]:text;
+      const match=rules.find(r=>r.pattern.test(text))??rules.find(r=>r.pattern.test(joined))
+        ??(i<=firstUseful+14?rules.find(r=>r.family==='BFO'&&r.pattern.test(joinedThree)):undefined);
       if(!match)continue;
       const evidence:TypeEvidence={family:match.family,subtype:match.subtype,
         physicalPage:page.page,logicalPage:page.logicalPage,line:i+1,text:originalLines[i].slice(0,210)};

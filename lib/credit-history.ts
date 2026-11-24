@@ -387,9 +387,12 @@ function maxDelinquencyFromNbki(block: string) {
 }
 
 function parseNbkiObligation(block: string, index: number): CreditObligation | null {
-  const creditor = nbkiField(block, "Кредитор:") || "Кредитор не определён";
+  const declaredCreditor = nbkiField(block, "Кредитор:");
   const account = nbkiField(block, "Счет:") || "";
-  if (!creditor && !account) return null;
+  // Other NBKI sections (including the creditor directory) can print "Вид:".
+  // The default label is not proof of a loan; require an actual creditor or account.
+  if (!declaredCreditor && !account) return null;
+  const creditor = declaredCreditor || "Кредитор не определён";
   const kind = nbkiField(block, "Вид:");
   const role = nbkiField(block, "Отношение:") || "Не указано";
   const limit = numberValue(nbkiField(block, "Размер\\/лимит:"));

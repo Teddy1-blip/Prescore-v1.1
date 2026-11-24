@@ -27,14 +27,15 @@ import {Account51Comparison} from './account51-comparison';
 import type {WorkspaceBasicV1,WorkspaceModelV1} from '../../../lib/workspace/model';
 import {DossierSettlementBalances} from './dossier-settlement-balances';
 import {buyerBalanceSummary} from '../../../lib/workspace/settlement-events';
+import {BankAccountRegistry} from './bank-account-registry';
 import {CompanyPassport} from './client-passport';
 import type {PassportPublicProfile} from '../../../lib/workspace/public-passport';
 
 type Company={id:string;inn:string};
 type PublicProfile=PassportPublicProfile;
 type Profile=ReturnType<typeof sourceProjection>&{company:Company;versions:{id:string;name:string;start:string;end:string}[];publicProfile:PublicProfile|null;entitlement:string};
-const labels:Record<string,string>={CALENDAR_SHEET:'График платежей · XLS, XLSX, CSV',ACCOUNT_51:'Карточка счёта 51 · XLS / XLSX',BFO:'Годовая бухгалтерская отчётность',QUARTERLY:'Промежуточная отчётность',BKI:'БКИ · НБКИ, ОКБ или СБ БКИ',COUNTERPARTIES:'ОСВ 60, 62 и 76',DEBT_LEDGER:'ОСВ 66, 67 и 76',CHECKO:'Публичные сведения',BANK_STATEMENT:'Банковская выписка',CALENDAR:'Календарь',CREDIT_DOCUMENT:'Кредитные договоры',COMMERCIAL_DOCUMENT:'Контракты и договоры контрагентов',BFO_REVIEW:'Проверка полей БФО PDF'};
-const kinds:Record<string,string[]>={calendar:['CALENDAR_SHEET'],banking:['ACCOUNT_51'],bfo:['BFO','QUARTERLY','BFO_REVIEW'],obligations:['BKI','DEBT_LEDGER','CREDIT_DOCUMENT'],counterparties:['COUNTERPARTIES','COMMERCIAL_DOCUMENT'],documents:['ACCOUNT_51','BFO','QUARTERLY','BKI','COUNTERPARTIES','DEBT_LEDGER','BFO_REVIEW','CREDIT_DOCUMENT','COMMERCIAL_DOCUMENT','CALENDAR_SHEET']};
+const labels:Record<string,string>={CALENDAR_SHEET:'График платежей · XLS, XLSX, CSV',ACCOUNT_51:'Карточка счёта 51 · XLS / XLSX',BFO:'Годовая бухгалтерская отчётность',QUARTERLY:'Промежуточная отчётность',BKI:'БКИ · НБКИ, ОКБ или СБ БКИ',COUNTERPARTIES:'ОСВ 60, 62 и 76',DEBT_LEDGER:'ОСВ 66, 67 и 76',CHECKO:'Публичные сведения',BANK_STATEMENT:'Банковская выписка',BANK_XLSX:'Банковская выписка СберБизнес XLSX · проверка',BANK_QUESTIONNAIRE:'Банковская анкета XLSX · предварительное извлечение',CALENDAR:'Календарь',CREDIT_DOCUMENT:'Кредитные договоры',COMMERCIAL_DOCUMENT:'Контракты и договоры контрагентов',BFO_REVIEW:'Проверка полей БФО PDF'};
+const kinds:Record<string,string[]>={calendar:['CALENDAR_SHEET'],banking:['ACCOUNT_51','BANK_XLSX'],bfo:['BFO','QUARTERLY','BFO_REVIEW'],obligations:['BKI','DEBT_LEDGER','CREDIT_DOCUMENT'],counterparties:['COUNTERPARTIES','COMMERCIAL_DOCUMENT'],documents:['BANK_QUESTIONNAIRE','BANK_XLSX','ACCOUNT_51','BFO','QUARTERLY','BKI','COUNTERPARTIES','DEBT_LEDGER','BFO_REVIEW','CREDIT_DOCUMENT','COMMERCIAL_DOCUMENT','CALENDAR_SHEET']};
 const dossierHref=(id:string,view:string)=>'/dashboard?'+new URLSearchParams({dossierId:id,view});
 async function read<T>(url:string,options?:RequestInit):Promise<T>{
  const unavailable='Связь с сервисом прервалась. Обновите сведения досье, чтобы проверить результат.';
@@ -256,15 +257,16 @@ export function CompanySources({view,choose,id,bankInn,bank,analysisId,model,ope
  }
 
  const passport=view==='home'&&(company||preview)?<CompanyPassport dossier={company?{statementCompanyName:profile?.versions[0]?.name}:undefined} inn={company?.inn??inn} profile={company&&inn!==company.inn?(profile?.publicProfile??null):(preview??profile?.publicProfile??null)} hasStatements={(profile?.versions.length??0)>0} hasAnnual={!!profile?.financial?.history.some(p=>p.period.kind==='ANNUAL')} full={profile?.entitlement==='FULL'} onBankUpload={openBank}/>:null;
- const intake=visibleKinds.length>0&&<section className="pc-panel pc-source-intake" id="dossier-intake"><h2>Добавить источник</h2>
+ const intake=visibleKinds.length>0&&<section className="pc-panel pc-source-intake" id="dossier-intake"><h2>Добавить источник</h2>{visibleKinds.some(k=>['BANK_XLSX','BANK_QUESTIONNAIRE'].includes(k))&&<p>Банковский XLSX и анкета сохраняются только как предварительный разбор — без автоматического изменения скоринга или заполнения персональных данных.</p>}
  {view==='documents'&&<label className="pc-document-kind">Вид документа <select value={activeDocumentKind} disabled={busy} onChange={e=>selectUploadKind(e.target.value)}>{documentKinds.map(k=><option key={k} value={k}>{labels[k]}</option>)}</select></label>}
  {analysisId&&profile?.versions[0]&&profile.versions[0].id!==analysisId&&<p>Документы обновляют последний анализ этой компании. <a href={'/dashboard?'+new URLSearchParams({dossierId:profile.company.id,analysisId:profile.versions[0].id,view})}>Открыть актуальную версию</a></p>}
  {visibleKinds.map(kind=>{
    const contract=['CREDIT_DOCUMENT','COMMERCIAL_DOCUMENT'].includes(kind),bureau=kind==='BKI',scan=contract||bureau||kind==='BFO_REVIEW';
-   const accept=kind==='CALENDAR_SHEET'?'.xls,.xlsx,.csv':kind==='ACCOUNT_51'?'.xls,.xlsx':contract?'.pdf,.docx,.png,.jpg,.jpeg':scan?'.pdf,.png,.jpg,.jpeg':kind.endsWith('LEDGER')||kind==='COUNTERPARTIES'?'.csv,.xls,.xlsx':'.pdf,.xls,.xlsx,.csv';
+   const accept=['BANK_XLSX','BANK_QUESTIONNAIRE'].includes(kind)?'.xlsx':kind==='CALENDAR_SHEET'?'.xls,.xlsx,.csv':kind==='ACCOUNT_51'?'.xls,.xlsx':contract?'.pdf,.docx,.png,.jpg,.jpeg':scan?'.pdf,.png,.jpg,.jpeg':kind.endsWith('LEDGER')||kind==='COUNTERPARTIES'?'.csv,.xls,.xlsx':'.pdf,.xls,.xlsx,.csv';
    return <form onSubmit={upload} key={kind} id={id?'source-'+kind.toLowerCase():undefined} aria-label={labels[kind]}><input name="kind" type="hidden" value={kind}/>
      <label>{labels[kind]} <input aria-label={labels[kind]} name="file" required type="file" accept={accept}/></label>
      {(kind==='COUNTERPARTIES'||kind==='DEBT_LEDGER')&&<label><input type="checkbox" name="identityConfirmed" value="yes"/> Подтверждаю компанию и период ОСВ, если он указан только в имени файла</label>}
+     {kind==='BANK_QUESTIONNAIRE'&&<label><input type="checkbox" name="identityConfirmed" value="yes"/> Подтверждаю право передать анкету для обработки</label>}
      {bureau&&<label>Кому принадлежит отчёт <select name="relationship">{['Компания-заёмщик','ИП-заёмщик','Собственник','Руководитель','Поручитель'].map(r=><option key={r}>{r}</option>)}</select></label>}
      {scan&&<><ScanLayout/><small>{contract?'PDF, DOCX, JPG, PNG':'PDF, JPG, PNG'} · скан до 16 МБ</small></>}
      {bureau&&<label><input required type="checkbox"/> Подтверждаю право передать отчёт и согласие на обработку.</label>}
@@ -287,7 +289,31 @@ export function CompanySources({view,choose,id,bankInn,bank,analysisId,model,ope
   {view==='counterparties'&&<SettlementRegisters rows={profile?.settlements??[]} full={profile?.entitlement==='FULL'} save={async(entry,key,revision)=>{if(!company)throw Error('Выберите компанию.');await read('/api/dossier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'settlement',id:company.id,entry,key,revision})});setRevision(v=>v+1);}}/>}
   {view==='counterparties'&&company&&profile?.entitlement==='FULL'&&<ReceivablesReview rows={profile.settlements} checks={profile.counterpartyChecks} refresh={async inn=>{await read('/api/dossier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'counterparty-check',id:company.id,inn})});setRevision(n=>n+1);}}/>}
   {view==='banking'&&!model&&profile?.matrix&&<BfoMatrix matrix={profile.matrix}/>}
+  {profile&&company&&['home','banking','bfo','documents','obligations','counterparties'].includes(view)&&
+   <Panel title="Покрытие периодов · дозагрузка и пересечения">
+    <BankAccountRegistry data={profile.bankAccountRegister} busy={busy} onUpload={openBank}/>
+    <p>Новые документы дополняют досье. Совпадающие даты не означают одинаковые операции или суммы. Эта проверка не изменяет скоринг без сверки источников.</p>
+    {profile.periodAudit.duplicates.length>0&&<details open><summary>Одинаковые файлы: {profile.periodAudit.duplicates.length} групп</summary>
+     <p>Побайтово одинаковые документы обнаружены повторно. Они сохранены в истории досье, но не считаются двумя независимыми периодами. Само совпадение периода без совпадения файла проверяется отдельно.</p>
+     {profile.periodAudit.duplicates.map((d,i)=><p key={i}>Повторный файл: {d.kinds.join(' / ')} · экземпляров: {d.sourceIds.length}. Не суммировать; сохранены исходные версии.</p>)}
+    </details>}
+    {profile.periodAudit.groups.filter(g=>g.kind!=='BANK_STATEMENT'&&g.kind!=='BANK_XLSX_PREVIEW'&&(g.gaps.length||g.overlaps.length)).map(g=>
+     <details key={g.id} open={g.gaps.length>0}>
+      <summary>{g.kind} · {g.scope} · пробелов: {g.gaps.length}, пересечений: {g.overlaps.length}</summary>
+      <p>{g.note}</p>
+      {g.gaps.map((gap,i)=><p key={'gap'+i}>{gap.action} Не покрыто {gap.days} календарных дней.</p>)}
+      {g.overlaps.map((o,i)=><p key={'overlap'+i}>Пересечение {o.from} — {o.to}: {o.kind==='SAME_DATE'?'совпадает дата снимков':o.kind==='SAME_PERIOD'?'один отчётный период':'частично совпадают периоды'}. Не складывать без проверки первичных данных.</p>)}
+      {g.gaps.length>0&&(g.kind==='BANK_STATEMENT'
+        ?<button type="button" disabled={busy} onClick={openBank}>Дозагрузить выписку для этого периода</button>
+        :<a href={dossierHref(company.id,g.kind==='BFO'||g.kind==='QUARTERLY'?'bfo':g.kind==='ACCOUNT_51'||g.kind==='BANK_XLSX_PREVIEW'?'banking':'documents')}>Открыть загрузку недостающего документа</a>)}
+     </details>)}
+    {!profile.periodAudit.requiresRecalculationReview&&<p>Во внутренних интервалах с подтверждёнными датами пробелов или пересечений не найдено. Полнота за пределами загруженного диапазона не подтверждена.</p>}
+    {profile.periodAudit.unknown.length>0&&<p>Для {profile.periodAudit.unknown.length} документов период пока не установлен или непрерывное покрытие к ним неприменимо.</p>}
+    <p>БКИ и ОСВ — снимки по датам. Договоры и анкеты — отдельные документы. Предварительный банковский XLSX пока не участвует в B-Score.</p>
+   </Panel>}
   {view==='banking'&&<Account51Comparison cards={profile?.cards51??[]} bank={bank}/>}
+  {view==='banking'&&profile?.bankXlsxReviews.map(p=><Panel key={p.id} title={'XLSX: '+p.name}><p>Предварительно извлечено операций: {p.totalOperations}. Счетов: {p.accounts}. Этот файл пока не участвует в B-Score.</p><p>Требуется проверка ИНН владельца, периодов и банковских остатков.</p></Panel>)}
+  {view==='documents'&&profile?.questionnaireReviews.map(p=><Panel key={p.id} title={'Анкета: '+p.name}><p>Предварительные сведения по компании. Поля не заполняют анкеты автоматически; паспортные и персональные данные не извлекаются.</p>{p.sheets.map(s=><details key={s.name}><summary>{s.name} · кандидатов: {s.fields.length}</summary><dl>{s.fields.map((f,i)=><div key={f.key+':'+i}><dt>{f.key} · строка {f.row}</dt><dd>{f.raw}</dd></div>)}</dl></details>)}</Panel>)}
   {!company&&passport}
   {view==='home'&&preview&&!company&&<p className="pc-muted">Публичная проверка выполнена для предварительного просмотра. Чтобы сохранить сведения в личном досье, нажмите «{ownerTestWorkspace?'Сохранить компанию':'Добавить компанию'}».</p>}
   {view==='obligations'&&<nav className="pc-source-actions" aria-label="Источники кредитного портфеля">{portfolioTabs.map(([kind,title])=><button type="button" key={kind} aria-pressed={portfolioSource===kind} onClick={()=>selectUploadKind(kind)}>{title}</button>)}</nav>}
