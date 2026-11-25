@@ -24,7 +24,7 @@ export type ScreenProps = {
 export function ApprovedPage(p: ScreenProps) {
   const { page, data: d, go } = p;
   const matrix=useContext(DossierMatrixContext);
-  const [statement, setStatement] = useState(false),
+  const [statement] = useState(false),
     [drawer, setDrawer] = useState(''),
     [promiseDate, setPromiseDate] = useState('');
   const detailsRef = useRef<HTMLDetailsElement>(null);
@@ -200,16 +200,7 @@ export function ApprovedPage(p: ScreenProps) {
   if (page === 'banking')
     content = (
       <>
-        <div className="section-tabs">
-          <button className={!statement ? 'active' : ''} onClick={() => setStatement(false)}>
-            Деньги и платежи
-          </button>
-          <button className={statement ? 'active' : ''} onClick={() => setStatement(true)}>
-            Бухгалтерская отчётность
-          </button>
-          {d.hasBankBfo && <a className="text-link" href="#bank-bfo-comparison">Сверка выписок и БФО ↓</a>}
-        </div>
-        {statement && matrix?.periods.length ? <BfoMatrix matrix={matrix}/> : statement ? (
+        {statement ? (
           <Card title="БФО: показатели и основания" sub={d.fiscalDate || 'Отдельный отчётный период'}>
             {d.bfo.length ? (
               <Table
@@ -276,7 +267,7 @@ export function ApprovedPage(p: ScreenProps) {
               Это независимая финансовая диагностика компании и подготовка к возможному финансированию,
               а не решение банка. Условия конкретного кредитора проверяются отдельно.
             </p>
-            {d.factors.slice(0, 2).map((f) => (
+            {d.factors.map((f) => (
               <Review key={f.title} title={f.title}>
                 {f.detail}
               </Review>
@@ -316,7 +307,7 @@ export function ApprovedPage(p: ScreenProps) {
               Это факторы по методике Prescore, не объявление решения или стоп-критериев конкретного банка.
             </p>
             {d.riskSummary.length ? (
-              d.riskSummary.slice(0, 5).map((finding) => (
+              d.riskSummary.map((finding) => (
                 <Review
                   key={finding.id}
                   title={(finding.status === 'GLOBAL_STOP' ? 'Критический фактор · ' : 'Существенный риск · ') + finding.title}

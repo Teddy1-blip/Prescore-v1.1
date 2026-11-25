@@ -1520,3 +1520,20 @@
 .approved-client .pc-analytic-rail li button { margin-top:auto; text-align:left; padding:7px 0 0; background:transparent; border:0; color:var(--accent); cursor:pointer; font-size:11px; }
 @media(max-width:1150px){.approved-client .pc-analytic-rail ol{grid-template-columns:repeat(2,minmax(0,1fr));}}
 @media(max-width:600px){.approved-client .pc-analytic-rail ol{grid-template-columns:1fr;}.approved-client .pc-analytic-rail{padding:14px;}}
+
+/* ── Targeted polish: upload blocks, KPI accents, embedded full report ── */
+.approved-client .pc-statement-upload,
+.approved-client .pc-source-intake{background:var(--card,#fff);border:1px solid rgba(120,135,219,.22);border-radius:16px;padding:20px 24px;margin:0 0 20px}
+.approved-client .pc-statement-upload h2,
+.approved-client .pc-source-intake h2{margin:0 0 6px;font-size:18px}
+.approved-client .pc-statement-upload>p{margin:0 0 12px}
+.approved-client .pc-source-intake form{display:grid;gap:10px;margin-top:12px}
+.approved-client .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px}
+.approved-client .kpi strong,.approved-client .kpi .value{color:#4b5bb8;font-variant-numeric:tabular-nums}
+.approved-client .card{height:100%}
+.approved-client .content>section+section{margin-top:20px}
+.approved-client .approved-full-report .av-header,
+.approved-client .approved-full-report .av-context,
+.approved-client .approved-full-report .av-mobile-menu,
+.approved-client .approved-full-report .av-skip{display:none}
+.approved-client .approved-full-report .av-main{padding:0;max-width:none}

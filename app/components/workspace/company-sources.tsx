@@ -3,21 +3,18 @@ import {DocumentRegister} from './document-register';
 import './premium-client.css';
 import {BfoMatrix} from './bfo-matrix';
 import {CompanyReportButton} from './company-report-button';
-import {ClientAnalyticPipeline} from './client-analytic-pipeline';
 import {useEffect,useState,useRef,useSyncExternalStore} from 'react';
 import type {FormEvent} from 'react';
 import type {sourceProjection} from '../../../lib/workspace/dossier-sources';
 import {PLAN} from '../../../lib/billing/domain';
 import {SourceReview} from './source-review';
 import {LiquidityCalendar} from './liquidity-calendar';
-import {InvestmentProfile} from './investment-profile';
 import {CalendarSheetReview} from './calendar-sheet-review';
 import {CalendarEntries} from './calendar-entries';
 import {FinancialDynamics} from './financial-dynamics';
 import {label} from './credit-depth';
 import {numeric,Warnings} from './client-financials';
 import {Panel} from './client-insights';
-import DocumentsHub from '../../dashboard/documents-hub';
 import {ManualDebtForm} from './manual-debt-form';
 import {DossierPortfolio} from './dossier-portfolio';
 import './client-registers.css';
@@ -82,17 +79,40 @@ export function CompanySources({view,choose,id,bankInn,bank,analysisId,model,ope
  const mounted=useRef(true);
  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
  async function recognize(id:string,sourceId:string,layout:string){
-   let through=0;
+   // Server keeps a 3-page batch limit (timeout guard); the client chains batches until every page is read.
+   let through=0,stalls=0;
    while(mounted.current){
-     const batch=await read<{through:number;total:number}>('/api/dossier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'recognize',id,sourceId,layout})});
+     let batch:{through:number;total:number};
+     try{batch=await read<{through:number;total:number}>('/api/dossier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'recognize',id,sourceId,layout})});}
+     catch(e){
+       if(++stalls>3||!mounted.current)throw e;
+       setNotice('Сервер распознавания занят, повторяем…');
+       await new Promise(r=>setTimeout(r,2000*stalls));
+       continue;
+     }
      if(!mounted.current)return;
-     if(batch.through<=through)throw Error('Распознавание приостановлено. Продолжите с сохранённой страницы.');
-     through=batch.through;
-     setNotice('Распознано страниц: '+through+' из '+batch.total);
-     if(through===batch.total)break;
+     if(batch.through<=through&&through>0){
+       if(++stalls>3)throw Error('Распознавание приостановлено. Продолжите с сохранённой страницы.');
+       continue;
+     }
+     stalls=0;through=batch.through;
+     setNotice('Распознаём страницы: '+through+' из '+batch.total+'…');
+     if(through>=batch.total)break;
    }
+   setNotice('');
    setRevision(n=>n+1);
  }
+ const resumed=useRef(new Set<string>());
+ useEffect(()=>{
+   // Auto-resume documents whose OCR was interrupted (page reload, remount, busy server) — no manual clicks.
+   if(!profile||!company||busy)return;
+   const pending=profile.reviews.find(r=>r.ocr&&r.ocr.through<r.ocr.total&&!resumed.current.has(r.id));
+   if(!pending)return;
+   resumed.current.add(pending.id);
+   setBusy(true);setError('');
+   recognize(company.id,pending.id,pending.ocr?.layout??'SINGLE').catch(e=>{if(mounted.current)setError((e as Error).message);}).finally(()=>{if(mounted.current)setBusy(false);});
+   // eslint-disable-next-line react-hooks/exhaustive-deps
+ },[profile,company,busy]);
  async function submit(action:'preview'|'save'){
   setBusy(true);setError('');setNotice('');
   try{
@@ -137,7 +157,7 @@ export function CompanySources({view,choose,id,bankInn,bank,analysisId,model,ope
  const years=profile?.financial?.history??[],period=years.find(p=>p.id===selectedPeriodId)??years.at(-1);
  const periodSourceId=profile?.lines.find(s=>s.id===period?.id)?.sourceId;
  const periodSource=profile?.sources.find(s=>s.id===periodSourceId)??(period&&profile?.publicProfile&&[...profile.sources].reverse().find(s=>s.kind==='CHECKO'));
- const relevantClaims=profile?.claims.filter(c=>(view==='home'||view==='analysis')&&!model?.full||view==='actions'&&!model?.full&&['recommendation','plan'].includes(c.stage)||view==='financing'&&!model?.full&&c.stage==='product'||c.sources.some(s=>view==='bfo'?['BFO','QUARTERLY'].includes(s.type):view==='obligations'?s.type==='BKI'||profile.sources.some(r=>c.sourceIds.includes(r.id)&&r.kind==='CREDIT_DOCUMENT'):false))??[];
+ const relevantClaims=view==='bfo'?[]:profile?.claims.filter(c=>(view==='home'||view==='analysis')&&!model?.full||view==='actions'&&!model?.full&&['recommendation','plan'].includes(c.stage)||view==='financing'&&!model?.full&&c.stage==='product'||c.sources.some(s=>view==='bfo'?['BFO','QUARTERLY'].includes(s.type):view==='obligations'?s.type==='BKI'||profile.sources.some(r=>c.sourceIds.includes(r.id)&&r.kind==='CREDIT_DOCUMENT'):false))??[];
  const [documentKind,setDocumentKind]=useState('BFO');
  const [portfolioSource,setPortfolioSource]=useState('BKI');
  useEffect(()=>{
@@ -251,15 +271,15 @@ export function CompanySources({view,choose,id,bankInn,bank,analysisId,model,ope
      <details className="pc-bfo-detail"><summary>Финансовые коэффициенты за выбранный период</summary>{period.groups.filter(g=>g.key!=='amounts').map(g=><section key={g.key}><h3>{g.title}</h3><dl>{g.metrics.filter(m=>m.value!==null).map(m=><div key={m.key}><dt>{m.label}</dt><dd>{numeric(m.value,m.status,m.unit)}</dd></div>)}</dl></section>)}</details>
     </>:<div className="pc-bfo-no-finances"><h3>Компания добавлена в финансовый профиль</h3><p>{profile.publicProfile?'Данные Checko доступны в пределах текущего тарифа. Загрузите БФО, чтобы получить показатели и динамику в этом разделе.':'Загрузите БФО либо получите доступные сведения Checko по ИНН. Финансовые цифры без источников не создаются.'}</p></div>}
    </section>}
-   {model?.full&&<ClientAnalyticPipeline model={model} scope="bfo" choose={choose}/>}
+   
    {profile&&!analysisId&&<section className="pc-bfo-insights" aria-label="Экспертные выводы по БФО"><header><h2>Экспертность и следующие действия</h2><p>Все выводы видны сразу. Содержание зависит от подтверждённых данных компании.</p></header><div className="pc-bfo-insight-grid">{stages.map((stage,i)=>{const items=bfoClaims.filter(c=>c.stage===stage.key);const balanceText=stage.key==='expert'&&period?(period.quality.balanceReconciled===true?'БФО: баланс сходится':period.quality.balanceReconciled===false?'БФО: баланс требует сверки':'БФО: сверка баланса не подтверждена'):null;return <article className="pc-bfo-insight" key={stage.key}><span>{i+1} / 5</span><h3>{stage.title}</h3>{balanceText&&<p className="pc-bfo-main-fact">{balanceText}</p>}{items.length>0?<ul>{items.map(c=><li key={c.id}><strong>{c.horizon?({'DAY_7':'7 дней','DAY_30':'30 дней','DAY_60':'60 дней'}[c.horizon])+' · ':''}{c.title}</strong><p>{c.text}</p>{c.sources.length>0&&<small>Основание: {c.sources.map(s=>s.type+' · '+s.date).join('; ')}</small>}</li>)}</ul>:!balanceText&&<p>{stage.empty}</p>}</article>})}</div></section>}
    {reviewPanels}
    {busy&&<p role="status">Обрабатываем источник…</p>}{error&&<p role="alert">{error} <button disabled={busy} type="button" onClick={()=>{setError('');setRevision(n=>n+1);}}>Обновить сведения досье</button></p>}{notice&&<p role="status">{notice}</p>}
   </div>;
  }
 
- const passport=view==='home'&&(company||preview)?<CompanyPassport dossier={company?{statementCompanyName:profile?.versions[0]?.name}:undefined} inn={company?.inn??inn} profile={company&&inn!==company.inn?(profile?.publicProfile??null):(preview??profile?.publicProfile??null)} hasStatements={(profile?.versions.length??0)>0} hasAnnual={!!profile?.financial?.history.some(p=>p.period.kind==='ANNUAL')} full={profile?.entitlement==='FULL'} onBankUpload={openBank}/>:null;
- const intake=visibleKinds.length>0&&<section className="pc-panel pc-source-intake" id="dossier-intake"><h2>Добавить источник</h2>{visibleKinds.some(k=>['BANK_XLSX','BANK_QUESTIONNAIRE'].includes(k))&&<p>Банковский XLSX и анкета сохраняются только как предварительный разбор — без автоматического изменения скоринга или заполнения персональных данных.</p>}
+ const passport=view==='home'&&(company||preview)?<CompanyPassport dossier={company?{statementCompanyName:profile?.versions[0]?.name}:undefined} inn={company?.inn??inn} profile={company&&inn!==company.inn?(profile?.publicProfile??null):(preview??profile?.publicProfile??null)} hasStatements={(profile?.versions.length??0)>0} hasAnnual={!!profile?.financial?.history.some(p=>p.period.kind==='ANNUAL')} full={profile?.entitlement==='FULL'||model?.entitlement==='FULL'} onBankUpload={openBank}/>:null;
+ const intake=visibleKinds.length>0&&<section className="pc-panel pc-source-intake" id="dossier-intake"><h2>{view==='documents'||view==='bfo'?'Бухгалтерская отчётность (PDF / Excel)':'Добавить источник'}</h2>{visibleKinds.some(k=>['BANK_XLSX','BANK_QUESTIONNAIRE'].includes(k))&&<p>Банковский XLSX и анкета сохраняются только как предварительный разбор — без автоматического изменения скоринга или заполнения персональных данных.</p>}
  {view==='documents'&&<label className="pc-document-kind">Вид документа <select value={activeDocumentKind} disabled={busy} onChange={e=>selectUploadKind(e.target.value)}>{documentKinds.map(k=><option key={k} value={k}>{labels[k]}</option>)}</select></label>}
  {analysisId&&profile?.versions[0]&&profile.versions[0].id!==analysisId&&<p>Документы обновляют последний анализ этой компании. <a href={'/dashboard?'+new URLSearchParams({dossierId:profile.company.id,analysisId:profile.versions[0].id,view})}>Открыть актуальную версию</a></p>}
  {visibleKinds.map(kind=>{
@@ -278,7 +298,7 @@ export function CompanySources({view,choose,id,bankInn,bank,analysisId,model,ope
  {view==='documents'&&company&&profile&&<DocumentRegister companyName={profile.publicProfile?.company.name||bank?.analysis.company.name} profile={profile} inn={company.inn} bankSourceIds={model?.full?.bankingSources?.map(s=>s.sourceId)} labels={labels} choose={choose} recentId={recentId} openBank={openBank}/>}
  {view==='documents'&&intake}
  {company&&view!=='documents'&&passport}
- {(!company||view==='home')&&<Panel title={view==='home'?'Выбрать или добавить компанию':'Компания по ИНН'}>
+ {(!company||(view==='home'&&companyEntry>0))&&<Panel title={view==='home'?'Выбрать или добавить компанию':'Компания по ИНН'}>
   {companies.length>0&&<label>Компании в моём досье <select value={company?.id??''} onChange={e=>{if(e.target.value)location.assign(dossierHref(e.target.value,view))}}><option value="">Выберите компанию</option>{companies.map(c=><option key={c.id} value={c.id}>{c.inn}</option>)}</select></label>}
   <form onSubmit={e=>{e.preventDefault();void submit('save')}}><label>ИНН новой компании <input ref={companyInput} required inputMode="numeric" pattern="[0-9]{10}|[0-9]{12}" value={inn} disabled={busy} onChange={e=>{setInn(e.target.value.replace(/\D/g,'').slice(0,12));setPreview(null);setNotice('')}} placeholder="10 или 12 цифр"/></label>
   {view==='home'&&<button type="button" disabled={busy||!inn} onClick={()=>void submit('preview')}>Проверить Checko</button>}
@@ -291,7 +311,7 @@ export function CompanySources({view,choose,id,bankInn,bank,analysisId,model,ope
   {view==='counterparties'&&<SettlementRegisters rows={profile?.settlements??[]} full={profile?.entitlement==='FULL'} save={async(entry,key,revision)=>{if(!company)throw Error('Выберите компанию.');await read('/api/dossier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'settlement',id:company.id,entry,key,revision})});setRevision(v=>v+1);}}/>}
   {view==='counterparties'&&company&&profile?.entitlement==='FULL'&&<ReceivablesReview rows={profile.settlements} checks={profile.counterpartyChecks} refresh={async inn=>{await read('/api/dossier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'counterparty-check',id:company.id,inn})});setRevision(n=>n+1);}}/>}
   {view==='banking'&&!model&&profile?.matrix&&<BfoMatrix matrix={profile.matrix}/>}
-  {profile&&company&&['home','banking','bfo','documents','obligations','counterparties'].includes(view)&&
+  {profile&&company&&['banking'].includes(view)&&
    <Panel title="Покрытие периодов · дозагрузка и пересечения">
     <BankAccountRegistry data={profile.bankAccountRegister} busy={busy} onUpload={openBank}/>
     <p>Новые документы дополняют досье. Совпадающие даты не означают одинаковые операции или суммы. Эта проверка не изменяет скоринг без сверки источников.</p>
@@ -311,10 +331,10 @@ export function CompanySources({view,choose,id,bankInn,bank,analysisId,model,ope
      </details>)}
     {!profile.periodAudit.requiresRecalculationReview&&<p>Во внутренних интервалах с подтверждёнными датами пробелов или пересечений не найдено. Полнота за пределами загруженного диапазона не подтверждена.</p>}
     {profile.periodAudit.unknown.length>0&&<p>Для {profile.periodAudit.unknown.length} документов период пока не установлен или непрерывное покрытие к ним неприменимо.</p>}
-    <p>БКИ и ОСВ — снимки по датам. Договоры и анкеты — отдельные документы. Предварительный банковский XLSX пока не участвует в B-Score.</p>
+    <p>БКИ и ОСВ — снимки по датам. Договоры и анкеты — отдельные документы. Предварительный банковский XLSX пока не участвует в кредитном расчёте.</p>
    </Panel>}
   {view==='banking'&&<Account51Comparison cards={profile?.cards51??[]} bank={bank}/>}
-  {view==='banking'&&profile?.bankXlsxReviews.map(p=><Panel key={p.id} title={'XLSX: '+p.name}><p>Предварительно извлечено операций: {p.totalOperations}. Счетов: {p.accounts}. Этот файл пока не участвует в B-Score.</p><p>Требуется проверка ИНН владельца, периодов и банковских остатков.</p></Panel>)}
+  {view==='banking'&&profile?.bankXlsxReviews.map(p=><Panel key={p.id} title={'XLSX: '+p.name}><p>Предварительно извлечено операций: {p.totalOperations}. Счетов: {p.accounts}. Этот файл пока не участвует в кредитном расчёте.</p><p>Требуется проверка ИНН владельца, периодов и банковских остатков.</p></Panel>)}
   {view==='documents'&&profile?.questionnaireReviews.map(p=><Panel key={p.id} title={'Анкета: '+p.name}><p>Предварительные сведения по компании. Поля не заполняют анкеты автоматически; паспортные и персональные данные не извлекаются.</p>{p.sheets.map(s=><details key={s.name}><summary>{s.name} · кандидатов: {s.fields.length}</summary><dl>{s.fields.map((f,i)=><div key={f.key+':'+i}><dt>{f.key} · строка {f.row}</dt><dd>{f.raw}</dd></div>)}</dl></details>)}</Panel>)}
   {!company&&passport}
   {view==='home'&&preview&&!company&&<p className="pc-muted">Публичная проверка выполнена для предварительного просмотра. Чтобы сохранить сведения в личном досье, нажмите «{ownerTestWorkspace?'Сохранить компанию':'Добавить компанию'}».</p>}
@@ -329,12 +349,7 @@ export function CompanySources({view,choose,id,bankInn,bank,analysisId,model,ope
  {view==='home'&&!profile.publicProfile&&<p className="pc-muted">Публичный паспорт можно дополнить через Checko. Банковские выписки загружаются независимо от его доступности.</p>}
  {(view==='home'||view==='analysis'||view==='documents')&&profile.versions.length>0&&<Panel title="Сохранённые банковские анализы">{profile.versions.map(v=><p key={v.id}><a href={'/dashboard?'+new URLSearchParams({analysisId:v.id,view:view==='documents'?'documents':'analysis'})}>{v.name} · {v.start} — {v.end}</a></p>)}</Panel>}
 
- {view==='bfo'&&period&&<Panel title="Финансовый профиль БФО"><label>Отчётный период <select value={period.id} onChange={e=>setYear(e.target.value)}>{years.map(p=><option value={p.id} key={p.id}>{p.period.from} — {p.period.to}</option>)}</select></label>
- <dl className="pc-source-kpis">{period.groups.flatMap(g=>g.metrics).filter(m=>['REVENUE','NET_PROFIT','ASSETS_TOTAL','EQUITY','RECEIVABLES','PAYABLES','TOTAL_BORROWINGS','currentRatio'].includes(m.key)&&m.value!==null).map(m=><div key={m.key}><dt>{m.label}</dt><dd>{numeric(m.value,m.status,m.unit).replace(/[\u00a0\u202f]/g,' ')}</dd><small>{m.periodFrom&&m.periodTo?m.periodFrom+' — '+m.periodTo:m.asOf??period.period.asOf}</small><details><summary>Основание</summary><p>{label(m.origin)} · {label(m.confidence)}</p>{periodSource?.documentId?<a href={'/api/documents?download='+encodeURIComponent(periodSource.documentId)}>{periodSource.name}</a>:<p>{periodSource?.name??labels[period.source]??'Бухгалтерская отчётность'}</p>}<Warnings items={m.warnings}/></details>{profile.financial?.trends.filter(t=>t.currentId===period.id&&t.absolute.key===m.key&&t.comparability.startsWith('COMPARABLE')&&t.absolute.value!==null).map(t=><small key={t.previousId}>Изменение · {numeric(t.absolute.value,t.absolute.status,t.absolute.unit)}</small>)}</div>)}</dl>
- <FinancialDynamics history={years}/><p><a href={dossierHref(company.id,'counterparties')}>Открыть расчёты с контрагентами</a></p><p>Сверка баланса · {period.quality.balanceReconciled===true?'сходится':period.quality.balanceReconciled===false?'есть расхождение':'недостаточно строк'}</p><Warnings items={period.quality.warnings}/>
- {period.groups.flatMap(g=>g.metrics).some(m=>['INVENTORIES','RECEIVABLES','PAYABLES','netWorkingCapital'].includes(m.key)&&m.value!==null)&&<section><h3>Оборотный капитал</h3><dl className="pc-definition">{period.groups.flatMap(g=>g.metrics).filter(m=>['INVENTORIES','RECEIVABLES','PAYABLES','netWorkingCapital'].includes(m.key)&&m.value!==null).map(m=><div key={m.key}><dt>{m.label}</dt><dd>{numeric(m.value,m.status,m.unit)}</dd></div>)}</dl></section>}
- {profile.lines.filter(s=>s.id===period.id&&s.rows.length).map(s=><details key={s.id}><summary>Подробная отчётность Ф1/Ф2</summary><dl>{s.rows.map(v=><div key={v.code}><dt>Строка {v.code}</dt><dd>{v.raw.toLocaleString('ru-RU')} {v.scale===1000?'тыс. ₽':v.scale===1000000?'млн ₽':v.scale===1?'₽':'(единица не подтверждена)'}</dd></div>)}</dl></details>)}
- {period.groups.map(g=><details key={g.key}><summary>{g.title}</summary><dl>{g.metrics.filter(m=>m.value!==null).map(m=><div key={m.key}><dt>{m.label}</dt><dd>{numeric(m.value,m.status,m.unit)}</dd></div>)}</dl></details>)}</Panel>}
+ 
  {(['expert','stop','recommendation','product','plan'] as const).map(stage=>{const items=relevantClaims.filter(c=>c.stage===stage);if(!items.length)return null;return <Panel key={stage} title={{expert:'Экспертные выводы',stop:'Подтверждённые стоп-факторы',recommendation:'Рекомендации',product:'Подходящие виды финансирования',plan:'План 7/30/60'}[stage]}>{items.map(c=><details key={c.id}><summary>{c.horizon&&({'DAY_7':'7 дней','DAY_30':'30 дней','DAY_60':'60 дней'}[c.horizon])} {c.title}</summary><p>{c.text}</p><p>{c.sources.map((s,i)=>(profile.sources.find(r=>r.id===c.sourceIds[i])?.name??labels[s.type]??'Источник')+' · '+(s.periods[0]?.from&&s.periods[0]?.to?s.periods[0].from+' — '+s.periods[0].to:s.date)).join(', ')}</p></details>)}</Panel>})}
  {view==='billing'&&<Panel title="Подписка компании"><p>Текущий доступ · {profile.entitlement}</p><p>{PLAN.name} · {(PLAN.amountMinor/100).toLocaleString('ru-RU')} ₽</p></Panel>}
  {view==='financing'&&!model?.full&&<Panel title="Финансирование">{profile.versions.length?<a href={'/dashboard?'+new URLSearchParams({analysisId:profile.versions[0].id,view:'financing'})}>Открыть подбор и заявки по сохранённому анализу</a>:<p>Предложения появятся при подтверждённом соответствии условиям продукта.</p>}</Panel>}
@@ -348,11 +363,10 @@ export function CompanySources({view,choose,id,bankInn,bank,analysisId,model,ope
  </Panel>}
  {view==='analysis'&&!bankInn&&profile.entitlement==='FULL'&&profile.obligations.length>0&&<DossierPortfolio profile={profile}/>}
  {view==='analysis'&&ownerTestWorkspace&&!bankInn&&profile.settlements.length>0&&<DossierSettlementBalances rows={profile.settlements}/>}
- {view==='analysis'&&profile.entitlement==='FULL'&&<InvestmentProfile/>}
  {view==='calendar'&&profile.entitlement==='FULL'&&<CalendarEntries items={profile.calendar} save={async(entry,key)=>{await read('/api/dossier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'calendar',id:company.id,entry,key})});setRevision(v=>v+1);}}/>}
    {reviewPanels}
 
- {view==='documents'&&!bankInn&&<details><summary>Архив файлов и документов компании</summary><DocumentsHub companyInn={company.inn} companyName={profile.publicProfile?.company.name??company.inn} analysisId="" dossierId={company.id} showHeading={false}/></details>}
+
 
  {view==='obligations'&&portfolioSource==='BKI'&&profile.bureauReports.map(report=><details key={report.id}><summary>{report.source} · {report.date} · {report.companyDebt?'Отчёт заёмщика':'Личный отчёт · вне долга компании'}</summary>{report.obligations.map((o,i)=><p key={i}>{o.creditor} · {o.product} · {o.status}{o.total!==null&&' · Общая задолженность '+o.total.toLocaleString('ru-RU')+' ₽'} · {o.reference}</p>)}</details>)}
  {view==='obligations'&&!bankInn&&<DossierPortfolio profile={profile} />}

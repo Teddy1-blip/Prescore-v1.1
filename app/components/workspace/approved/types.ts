@@ -8,12 +8,12 @@ export const pages = {
   counterparties: ['Контрагенты', 'Расчёты с контрагентами', 'Задолженность, авансы и договорные сроки'],
   financing: ['Финансирование', 'Финансирование бизнеса', 'От задачи до подготовленной заявки'],
   applications: ['Заявки', 'Ваши заявки', 'Документы, ответственные и следующий шаг'],
-  documents: ['Досье клиента', 'Досье клиента', 'Источники и статусы обработки документов'],
+  documents: ['Документы', 'Досье клиента', 'Источники и статусы обработки документов'],
   actions: ['План действий', 'Что сделать дальше', 'Действия из анализа и задачи по расчётам'],
   analyst: ['Кредитный эксперт', 'Кредитный эксперт', 'Вопросы и пояснения по выбранному анализу'],
   billing: ['Подписка', 'Подписка компании', 'Доступ к рабочему пространству'],
 } as const;
-export const clientNavigation = ['home', 'banking', 'bfo', 'counterparties', 'obligations', 'calendar', 'analysis', 'analyst', 'financing', 'documents', 'billing'] as const satisfies readonly (keyof typeof pages)[];
+export const clientNavigation = ['home', 'documents', 'banking', 'bfo', 'analysis', 'analyst', 'billing'] as const satisfies readonly (keyof typeof pages)[];
 export type Page = keyof typeof pages;
 export type Amount = number | null;
 export type Row = {

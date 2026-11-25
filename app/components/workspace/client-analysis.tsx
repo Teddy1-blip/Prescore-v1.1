@@ -3,7 +3,7 @@ import {whyTitle} from '../../../lib/workspace/why-evidence';
 import {useState} from 'react';
 import type {WorkspaceModelV1} from '../../../lib/workspace/model';
 import {CompanyReportButton} from './company-report-button';
-import {Financing} from '../../dashboard/report-v2/analysis-v3';
+import {Financing,AnalysisV3} from '../../dashboard/report-v2/analysis-v3';
 import {Panel,FactorRows,ActionItem,Why,CreditSummary,SourceSummary,AssessmentLimits} from './client-insights';
 import type {ReactNode} from 'react';
 import {ReconciliationDetails,FinancialStatements} from './client-financials';
@@ -101,12 +101,12 @@ function CapacityEvidenceGaps({model}:{model:WorkspaceModelV1}){
 export function FullCreditAnalysis({model,retry,dossierId,statementMatrix,compactHeader=false,initialSection='conclusion'}:{compactHeader?:boolean;statementMatrix?:ReactNode;model:WorkspaceModelV1;retry:()=>void;dossierId?:string;initialSection?:string}){
  const [tab,setTab]=useState(()=>{
   const value=typeof window==='undefined'?initialSection:new URLSearchParams(window.location.search).get('section')||initialSection;
-  return ['conclusion','factors','expertise','capacity','financials','obligations','financing','reconciliation','recommendations','plan','evidence','history'].includes(value)?value:'conclusion';
+  return ['conclusion','factors','expertise','capacity','financials','obligations','financing','reconciliation','recommendations','plan','evidence','history','full'].includes(value)?value:'conclusion';
  });
  const r=model.full?.report;
  if(!r)return <FullAccessNotice model={model} retry={retry}/>;
  const snapshot=r.meta.snapshot;
- const tabs=[['conclusion','Заключение'],['factors','Стоп-факторы и риски'],['expertise','Экспертная оценка'],['capacity','Долговая ёмкость'],['financials','Финансовое состояние'],['obligations','Кредитный портфель'],['financing','Финансирование'],['reconciliation','Сверка'],['recommendations','Рекомендации'],['plan','План 7 / 30 / 60'],['evidence','Основания'],['history','История']];
+ const tabs=[['conclusion','Заключение'],['factors','Стоп-факторы и риски'],['expertise','Экспертная оценка'],['capacity','Долговая ёмкость'],['financials','Финансовое состояние'],['obligations','Кредитный портфель'],['financing','Финансирование'],['reconciliation','Сверка'],['recommendations','Рекомендации'],['plan','План 7 / 30 / 60'],['evidence','Основания'],['history','История'],['full','Полный отчёт · все блоки']];
  const economic=r.primaryFactors?.find(f=>model.full?.canonical.explainability.claims.some(c=>c.claimId===f.claimId&&['GLOBAL_STOP','CREDIT_RISK'].includes(c.status??'')));
  const topConstraint=economic??r.readiness.constraints[0]??r.limitations[0]??r.dataQuality[0];
  function select(next:string){setTab(next);const url=new URL(window.location.href);url.searchParams.set('section',next);window.history.replaceState(null,'',url);}
@@ -141,6 +141,7 @@ export function FullCreditAnalysis({model,retry,dossierId,statementMatrix,compac
    <Panel title="Ограничения достоверности"><FactorRows model={model} items={[...r.dataQuality,...r.limitations]}/></Panel>
    <ExplanationLibrary model={model}/>
   </>}
+  {tab==='full'&&<div className="approved-full-report"><p className="pc-muted"><a href={'/dashboard/report-v2?analysisId='+encodeURIComponent(model.analysisId)+'&print=1'} target="_blank" rel="noreferrer">Открыть печатную версию и скачать PDF ↗</a></p><AnalysisV3 model={r} realAnalysisId={model.analysisId}/></div>}
   {tab==='history'&&<DecisionHistory key={model.analysisId+snapshot?.snapshotId} analysisId={model.analysisId} currentSnapshotId={snapshot?.snapshotId}/>}
   {tab!=='plan'&&<button className="pc-text-button" onClick={()=>select('plan')} id="plan">Перейти к плану действий →</button>}
  </>;

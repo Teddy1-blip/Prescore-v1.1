@@ -63,9 +63,12 @@ export function ClientShell(p: Workspace) {
   };
   const company = p.model?.basic.analysis.company.name || p.selected?.companyName || (p.dossier?.inn?'ИНН '+p.dossier.inn:'Кабинет компании');
   const data = {...liveView(p.model, company, period),buyerBalances:p.buyerBalances};
-  const directory=p.companies??[];
-  const options=directory.map(d=>({id:'dossier:'+d.id,label:p.analyses.find(a=>a.companyInn===d.inn)?.companyName||'ИНН '+d.inn}));
-  for(const a of p.analyses.filter(a=>(a.historyPurpose!=='QA'||a.id===p.selected?.id)&&!directory.some(d=>d.inn===a.companyInn))){
+  const synthetic=(inn:string,name:string)=>inn.startsWith('009111')||/синтетическ|учебн/i.test(name);
+  const allDirectory=p.companies??[];
+  const nameOf=(inn:string)=>p.analyses.find(a=>a.companyInn===inn)?.companyName||'';
+  const directory=allDirectory.filter(d=>d.id===p.dossier?.id||!synthetic(d.inn,nameOf(d.inn)));
+  const options=directory.map(d=>({id:'dossier:'+d.id,label:nameOf(d.inn)||'ИНН '+d.inn}));
+  for(const a of p.analyses.filter(a=>(a.historyPurpose!=='QA'||a.id===p.selected?.id)&&!allDirectory.some(d=>d.inn===a.companyInn)&&(a.id===p.selected?.id||!synthetic(a.companyInn,a.companyName)))){
     options.push({id:a.id,label:a.companyName+' · '+date(a.periodTo)});
   }
   if(!p.dossier&&!p.selected)options.unshift({id:'',label:'Выберите компанию'});

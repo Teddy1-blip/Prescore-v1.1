@@ -16,7 +16,7 @@ export function SourceReview({review,save,recognize,approveBureau}:{review:Revie
  <button type="button" disabled={busy} onClick={async()=>{setBusy(true);setError('');try{await recognize(layout);}catch(e){setError((e as Error).message);}finally{setBusy(false);}}}>{review.ocr?'Продолжить распознавание':'Распознать страницы для проверки'}</button></section>}
  {review.ocr&&<p>Обработано страниц: {review.ocr.through} из {review.ocr.total}</p>}
  {review.fields.filter(f=>f.fragment).map((f,i)=><blockquote key={i}><small>{word?'Абзац':'Страница'} {f.page}</small><p>{f.fragment}</p></blockquote>)}</section>
- <section><h3>Извлечённые поля</h3><small>Версия обработки · {review.version}</small>
+ <section><h3>Извлечённые поля</h3>
  {review.bureauPages&&<details><summary>Текст по страницам</summary>{review.bureauPages.map((p,i)=><details key={i}><summary>Страница {p.page}</summary><pre style={{whiteSpace:'pre-wrap'}}>{p.text}</pre></details>)}</details>}
  {review.nbkiStructure&&<details><summary>Сопоставление НБКИ · УИд: {review.nbkiStructure.modern.length}, старых карточек: {review.nbkiStructure.legacy.length}</summary>
  <p>Предварительный индекс, не действующий кредитный портфель. Между форматами учитываются только точные совпадения УИд; остатки и просрочки не подтверждены.</p>

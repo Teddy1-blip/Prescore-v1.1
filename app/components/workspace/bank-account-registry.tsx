@@ -28,7 +28,7 @@ export function BankAccountRegistry({data,busy,onUpload}:{data:AccountRegister;b
     {a.overlapCount>0&&<p className="pc-bank-account-alert">Пересечений: {a.overlapCount}. Операции требуют сверки, суммы не складываются.</p>}
     {a.bankNameConflict&&<p className="pc-bank-account-alert">В источниках одного счёта различаются названия банков. Проверьте принадлежность выписок.</p>}
     {a.latestCovered>data.referenceDate&&<p className="pc-bank-account-alert">В документах указаны даты позже контрольного дня. Проверьте период.</p>}
-    {a.preview&&<p className="pc-bank-account-detail">Предварительные данные XLSX не участвуют в B-Score.</p>}
+    {a.preview&&<p className="pc-bank-account-detail">Предварительные данные XLSX не участвуют в кредитном расчёте.</p>}
     <details><summary>Загруженные файлы и даты ({a.periods.length})</summary>
       <ul>{a.periods.map((s,i)=><li key={s.sourceId+':'+i}>{d(s.from)}–{d(s.to)} · {s.file}</li>)}</ul>
     </details>

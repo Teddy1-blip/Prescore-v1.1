@@ -45,7 +45,7 @@ export function CompanyPassport({
           :<p>{dossier?'Сведения о регистрации, регионе и ОКВЭД появятся после получения данных Checko.':'Сохраните компанию, чтобы привязать источники к досье.'}</p>}
       </div>
       <div className="pc-passport-section">
-        <div className="pc-passport-section-title"><h3>Экспертная оценка · Free</h3><span>Из известных фактов</span></div>
+        <div className="pc-passport-section-title"><h3>{full?'Экспертная оценка':'Экспертная оценка · Free'}</h3><span>Из известных фактов</span></div>
         <p className="pc-passport-lead">{passport.publicExpertise}</p>
         {passport.attention.length>0?<div className="pc-passport-attentions">
           {passport.attention.map(item=><article key={item.title}>
@@ -56,7 +56,7 @@ export function CompanyPassport({
     </div>
     <div className="pc-passport-grid">
       <div className="pc-passport-section">
-        <div className="pc-passport-section-title"><h3>Что сделать дальше</h3><span>До двух Free-рекомендаций</span></div>
+        <div className="pc-passport-section-title"><h3>Что сделать дальше</h3><span>{full?'Из полного расчёта':'До двух Free-рекомендаций'}</span></div>
         <ol className="pc-passport-actions">{passport.actions.map(item=><li key={item.title}><strong>{item.title}</strong><p>{item.detail}</p><small>{item.evidence}</small></li>)}</ol>
       </div>
       <div className="pc-passport-section">

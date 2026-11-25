@@ -54,7 +54,7 @@ export function statementColumns(matrix:StatementMatrix,history=false):Statement
   if(!matrix.interim)return columns;
   const interim=periods.filter(p=>p.period.kind!=='ANNUAL'&&(history||p.period.year!>lastAnnual));
   const interimYears=new Set(interim.map(p=>p.period.year!));
-  if(lastAnnual&&lastAnnual+1===Number(matrix.through.slice(0,4)))interimYears.add(lastAnnual+1);
+  if(lastAnnual)for(let y=lastAnnual+1;y<=Number(matrix.through.slice(0,4));y++)interimYears.add(y);
   for(const year of [...interimYears].sort()){
     for(const [index,end] of ends.entries()){
       const date=year+'-'+end, matches=interim.filter(p=>p.period.asOf===date);
