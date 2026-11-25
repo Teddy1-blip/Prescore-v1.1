@@ -4,7 +4,7 @@ import './premium-client.css';
 import {BfoMatrix} from './bfo-matrix';
 import {CompanyReportButton} from './company-report-button';
 import {ClientAnalyticPipeline} from './client-analytic-pipeline';
-import {useEffect,useState,useRef} from 'react';
+import {useEffect,useState,useRef,useSyncExternalStore} from 'react';
 import type {FormEvent} from 'react';
 import type {sourceProjection} from '../../../lib/workspace/dossier-sources';
 import {PLAN} from '../../../lib/billing/domain';
@@ -36,6 +36,7 @@ type PublicProfile=PassportPublicProfile;
 type Profile=ReturnType<typeof sourceProjection>&{company:Company;versions:{id:string;name:string;start:string;end:string}[];publicProfile:PublicProfile|null;entitlement:string};
 const labels:Record<string,string>={CALENDAR_SHEET:'График платежей · XLS, XLSX, CSV',ACCOUNT_51:'Карточка счёта 51 · XLS / XLSX',BFO:'Годовая бухгалтерская отчётность',QUARTERLY:'Промежуточная отчётность',BKI:'БКИ · НБКИ, ОКБ или СБ БКИ',COUNTERPARTIES:'ОСВ 60, 62 и 76',DEBT_LEDGER:'ОСВ 66, 67 и 76',CHECKO:'Публичные сведения',BANK_STATEMENT:'Банковская выписка',BANK_XLSX:'Банковская выписка СберБизнес XLSX · проверка',BANK_QUESTIONNAIRE:'Банковская анкета XLSX · предварительное извлечение',CALENDAR:'Календарь',CREDIT_DOCUMENT:'Кредитные договоры',COMMERCIAL_DOCUMENT:'Контракты и договоры контрагентов',BFO_REVIEW:'Проверка полей БФО PDF'};
 const kinds:Record<string,string[]>={calendar:['CALENDAR_SHEET'],banking:['ACCOUNT_51','BANK_XLSX'],bfo:['BFO','QUARTERLY','BFO_REVIEW'],obligations:['BKI','DEBT_LEDGER','CREDIT_DOCUMENT'],counterparties:['COUNTERPARTIES','COMMERCIAL_DOCUMENT'],documents:['BANK_QUESTIONNAIRE','BANK_XLSX','ACCOUNT_51','BFO','QUARTERLY','BKI','COUNTERPARTIES','DEBT_LEDGER','BFO_REVIEW','CREDIT_DOCUMENT','COMMERCIAL_DOCUMENT','CALENDAR_SHEET']};
+const onUrlChange=(notify:()=>void)=>{window.addEventListener('popstate',notify);return()=>window.removeEventListener('popstate',notify);};
 const dossierHref=(id:string,view:string)=>'/dashboard?'+new URLSearchParams({dossierId:id,view});
 async function read<T>(url:string,options?:RequestInit):Promise<T>{
  const unavailable='Связь с сервисом прервалась. Обновите сведения досье, чтобы проверить результат.';
@@ -53,8 +54,9 @@ function ScanLayout(){
 export function CompanySources({view,choose,id,bankInn,bank,analysisId,model,openBank,onCompany,onMatrix,onSourceChanged,ownerTestWorkspace=false,companyEntry=0,onBuyerBalances}:{onBuyerBalances?:(item:{id:string;balances:ReturnType<typeof buyerBalanceSummary>})=>void;ownerTestWorkspace?:boolean;companyEntry?:number;view:string;choose:(view:string,section?:string)=>void;id:string;analysisId?:string;model?:WorkspaceModelV1|null;bankInn?:string;bank?:WorkspaceBasicV1;openBank:()=>void;onCompany:(inn:string)=>void;onMatrix?:(profile:Pick<Profile,'company'|'matrix'>)=>void;onSourceChanged?:()=>Promise<unknown>}){
 
  const [inn,setInn]=useState(bankInn??''),[companies,setCompanies]=useState<Company[]>([]),[profile,setProfile]=useState<Profile|null>(null),[preview,setPreview]=useState<PublicProfile|null>(null);
- const [recentId,setRecentId]=useState('');
- useEffect(()=>{setRecentId(new URLSearchParams(window.location.search).get('source')??'');},[id]);
+ const urlSource=useSyncExternalStore(onUrlChange,()=>new URLSearchParams(window.location.search).get('source')??'',()=>'');
+ const [recentOverride,setRecentOverride]=useState<{id:string;value:string}|null>(null);
+ const recentId=recentOverride?.id===id?recentOverride.value:urlSource;
  const [error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[revision,setRevision]=useState(0),[selectedYear,setYear]=useState('');
  useEffect(()=>{const ctrl=new AbortController();(async()=>{
    const list=await read<{companies:Company[]}>('/api/dossier',{signal:ctrl.signal});
@@ -112,7 +114,7 @@ export function CompanySources({view,choose,id,bankInn,bank,analysisId,model,ope
     if(targetId&&result.dossierId!==targetId)throw Error('Документ вернул ссылку на другое досье. Обновите страницу для проверки.');
     if(!mounted.current)return;
     if(view==='bfo'&&!result.pending)setYear(result.id);
-    setRecentId(result.id);
+    setRecentOverride({id,value:result.id});
     form.reset();setRevision(n=>n+1);
     if(result.pending){
       try{await recognize(result.dossierId,result.id,result.layout??String(data.get('layout')??'SINGLE'));}

@@ -85,7 +85,8 @@ export function inspectSberBusinessXlsxRows(rows:readonly BankXlsxRow[],rowNumbe
   const debitPartyCol=accountCol>=0&&/^дебет$/iu.test(cell(next,accountCol))?accountCol:-1;
   const creditPartyCol=accountCol>=0?next.findIndex((s:BankXlsxRow[number],i:number)=>i>accountCol&&/^кредит$/iu.test(single(String(s??'')))):-1;
   const hasSecondaryHeader=next.some((c:BankXlsxRow[number])=>/^(?:дебет|кредит)$/iu.test(single(String(c??''))));
-  let totalIn=0,totalOut=0,seenDates:string[]=[];
+  const seenDates:string[]=[];
+  let totalIn=0,totalOut=0;
   for(let i=headerIndex+(hasSecondaryHeader?2:1);i<rows.length;i++){
     const row=rows[i],rawDate=cell(row,dateCol),debitText=cell(row,debitCol),creditText=cell(row,creditCol);
     if(!rawDate&&!debitText&&!creditText)continue;
