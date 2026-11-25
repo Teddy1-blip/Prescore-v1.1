@@ -487,7 +487,38 @@ function parseExchange(text: string) {
     else header[key] = value;
   }
 
+  // Russian 40817 accounts belong to individuals. A bank TXT for such an
+  // account may be readable, but it is not corporate settlement turnover.
+  // Reject the source rather than risk mixing private cash flow into B-Score.
+  if (accounts.some(({ account }) => /^40817\d{15}$/.test(account))) {
+    throw new Error("Личный счёт 40817 не является подтверждённым расчётным счётом компании.");
+  }
   if (!documents.length) throw new Error("В выписке нет операций. Владение счётом по этой выписке не подтверждено.");
+  // Some bank 1C exports put every dated account section before every
+  // payment document. The most recently printed section is then NOT the
+  // payment's account. Resolve the posting account from the document's
+  // own payer/recipient side, never from an unrelated preceding section.
+  const declared = new Set(accounts.map(item => item.account).filter(Boolean));
+  for (const document of documents) {
+    const payer = normalizeAccount(field(document, "ПлательщикСчет", "СчетПлательщика"));
+    const recipient = normalizeAccount(field(document, "ПолучательСчет", "СчетПолучателя"));
+    const payerOwn = Boolean(payer && declared.has(payer));
+    const recipientOwn = Boolean(recipient && declared.has(recipient));
+    if (payerOwn && !recipientOwn) document.__account = payer;
+    else if (recipientOwn && !payerOwn) document.__account = recipient;
+    else if (payerOwn && recipientOwn) {
+      // Two genuine company accounts: the bank's posting-side date identifies
+      // the outgoing vs incoming leg. Do not infer a leg from payment number.
+      const debit = Boolean(field(document, "ДатаСписано"));
+      const credit = Boolean(field(document, "ДатаПоступило"));
+      document.__account = debit !== credit ? (debit ? payer : recipient)
+        : (declared.has(normalizeAccount(document.__account)) ? document.__account : "");
+    } else {
+      // Neither party account is in the declared corporate account sections.
+      // A neighboring section is not positive ownership evidence.
+      document.__account = "";
+    }
+  }
   return { header, accounts, documents };
 }
 

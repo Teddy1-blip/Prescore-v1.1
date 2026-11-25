@@ -55,8 +55,13 @@ function cents(n: number): number { return Math.round(n * 100); }
  * contains newlines. Rows must be supplied as cells, never split on text newlines.
  * No mutation of canonical bank metrics or credit portfolio is performed here.
  */
-export function parseAccount51Card(rows: readonly (readonly Cell[])[]): Account51Card {
+export function parseAccount51Card(rows: readonly (readonly Cell[])[], sourceRows?: readonly number[]): Account51Card {
   if (!rows.length || rows.length > 100_000) throw Error('ACCOUNT51_ROW_LIMIT');
+  // XLSX extraction skips empty physical rows. Keep source line evidence stable.
+  if (sourceRows && (sourceRows.length !== rows.length ||
+    sourceRows.some((value,index)=>!Number.isSafeInteger(value)||value<1||(index>0&&value<=sourceRows[index-1]))))
+    throw Error('ACCOUNT51_SOURCE_ROWS_INVALID');
+  const sourceRow=(index:number)=>sourceRows?.[index]??index+1;
   const title = rows.slice(0, 12).flatMap(row => row.map(c => String(c ?? '')))
     .find(text => /Карточка\s+сч[её]та\s+51\b/i.test(text));
   if (!title) throw Error('ACCOUNT51_HEADER_MISSING');
@@ -88,14 +93,14 @@ export function parseAccount51Card(rows: readonly (readonly Cell[])[]): Account5
       if (openingBalance !== null || operations.length) throw Error('ACCOUNT51_OPENING_POSITION_INVALID');
       openingBalance = signed(row, balance);
       if (value(row, balance) === 'Д' && openingBalance !== null && openingBalance < 0)
-        warnings.push('ACCOUNT51_NEGATIVE_DEBIT_BALANCE:' + (i + 1));
+        warnings.push('ACCOUNT51_NEGATIVE_DEBIT_BALANCE:' + (sourceRow(i)));
       previous = openingBalance === null ? null : cents(openingBalance);
       continue;
     }
     if (/^(?:Обороты\s+за\s+период\s+и\s+)?Сальдо\s+на\s+конец/i.test(first)) {
       closingBalance = signed(row, balance);
       if (value(row, balance) === 'Д' && closingBalance !== null && closingBalance < 0)
-        warnings.push('ACCOUNT51_NEGATIVE_DEBIT_BALANCE:' + (i + 1));
+        warnings.push('ACCOUNT51_NEGATIVE_DEBIT_BALANCE:' + (sourceRow(i)));
       continue;
     }
     if (/^Оборот(?:ы)?\b|^Итого\b|^Всего\b/i.test(first)) continue;
@@ -103,7 +108,7 @@ export function parseAccount51Card(rows: readonly (readonly Cell[])[]): Account5
     if (!occurred) {
       if (/^(?:\d{2}\.\d{2}\.\d{4}|\d{4}-\d{2}-\d{2})$/.test(first)) throw Error('ACCOUNT51_BAD_DATE');
       if (i <= headerIndex + 2 && /^Сч[её]т$/i.test(value(row, debit))) continue;
-      warnings.push('ACCOUNT51_UNRECOGNIZED_ROW:' + (i + 1));
+      warnings.push('ACCOUNT51_UNRECOGNIZED_ROW:' + (sourceRow(i)));
       continue;
     }
     if (occurred < periodFrom || occurred > periodTo) throw Error('ACCOUNT51_DATE_OUTSIDE_PERIOD');
@@ -123,14 +128,14 @@ export function parseAccount51Card(rows: readonly (readonly Cell[])[]): Account5
       throw Error('ACCOUNT51_TWO_AMOUNT_COLUMNS');
     const balanceAfter = signed(row, balance);
     if (value(row, balance) === 'Д' && balanceAfter !== null && balanceAfter < 0)
-      warnings.push('ACCOUNT51_NEGATIVE_DEBIT_BALANCE:' + (i + 1));
+      warnings.push('ACCOUNT51_NEGATIVE_DEBIT_BALANCE:' + (sourceRow(i)));
     const current = balanceAfter === null ? null : cents(balanceAfter);
     if (previous !== null && current !== null) {
       const expected = previous + (direction === 'INTERNAL_TRANSFER' ? 0 : isDr ? 1 : -1) * cents(amount);
-      if (Math.abs(current - expected) > 1) warnings.push('ACCOUNT51_RUNNING_BALANCE_MISMATCH:' + (i + 1));
+      if (Math.abs(current - expected) > 1) warnings.push('ACCOUNT51_RUNNING_BALANCE_MISMATCH:' + (sourceRow(i)));
     }
     previous = current;
-    operations.push({row:i + 1,date:occurred,document:value(row, 1),direction,amount,
+    operations.push({row:sourceRow(i),date:occurred,document:value(row, 1),direction,amount,
       correspondingAccount:isDr ? cr : dr,analytic:direction === 'INTERNAL_TRANSFER' ? [value(row,analyticDr>=0?analyticDr:2),value(row,analyticCr>=0?analyticCr:3)].join(' / ') : value(row,isDr?(analyticCr>=0?analyticCr:3):(analyticDr>=0?analyticDr:2)),balanceAfter});
   }
   if (!operations.length) throw Error('ACCOUNT51_NO_TRANSACTIONS');

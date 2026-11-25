@@ -117,3 +117,54 @@ test("rejects another INN and exposes an explicit per-file screening result", ()
   assert.deepEqual(screened.unrecognizedFiles, ["unknown.txt"]);
   assert.equal(screened.screeningResults.find((item) => item.fileName === "foreign.txt")?.status, "COMPANY_MISMATCH");
 });
+
+test("personal 40817 TXT cannot enter company B-Score even if payment contains an INN", () => {
+  const personal = statement({ account: "40817" + "0".repeat(15), inn: "5032333146", company: "ООО Тест", bank: "Банк" });
+  assert.throws(() => inspectBankStatement(personal, "personal.txt"), /Личный счёт 40817/);
+  assert.throws(() => analyzeBankStatements([{ text: personal, fileName: "personal.txt" }]), /Личный счёт 40817/);
+  const screened = screenBankStatements([{ text: personal, fileName: "personal.txt" }]);
+  assert.equal(screened.accepted.length, 0);
+});
+test("genuine 1C account sections without operations do not prove zero company turnover", () => {
+  const active = statement({ account: "40702810111110000001", inn: "5032333146", company: "ООО Тест", bank: "Банк" });
+  const idle = active.replace(/СекцияДокумент=[\s\S]*?КонецДокумента\n/, "");
+  assert.throws(() => inspectBankStatement(idle, "idle.txt"), /В выписке нет операций/);
+  const screened = screenBankStatements([{ text: idle, fileName: "idle.txt" }]);
+  assert.equal(screened.accepted.length, 0);
+});
+
+test("multiple account sections preceding payment documents are resolved by real payer/recipient evidence", () => {
+  const owner = "5032333146";
+  const accountA = "40702810111110000001";
+  const accountB = "40702810222220000002";
+  const base = statement({ account: accountA, inn: owner, company: "ООО Тест", bank: "Банк" });
+  // 1C exporters often print all account sections first, then all documents.
+  const inactiveB = [
+    "СекцияРасчСчет", "ДатаНачала=01.07.2026", "ДатаКонца=31.07.2026",
+    `РасчСчет=${accountB}`, "НачальныйОстаток=0.00",
+    "ВсегоПоступило=0.00", "ВсегоСписано=0.00",
+    "КонечныйОстаток=0.00", "КонецРасчСчет",
+  ].join("\n");
+  const text = base.replace("СекцияДокумент=", inactiveB + "\nСекцияДокумент=");
+  const inspection = inspectBankStatement(text, "accounts-before-docs.txt");
+  assert.equal(inspection.companyInn, owner);
+  assert.equal(inspection.ownerEvidenceCount, 1);
+  assert.deepEqual(inspection.accounts.sort(), [accountA, accountB].sort());
+  assert.equal(screenBankStatements([{ text, fileName: "accounts-before-docs.txt" }]).accepted.length, 1);
+});
+test("a genuinely active account without matching INN evidence is rejected, even after a different active section", () => {
+  const owner = "5032333146";
+  const accountA = "40702810111110000001";
+  const accountB = "40702810222220000002";
+  const a = statement({ account: accountA, inn: owner, company: "ООО Тест", bank: "Банк" })
+    .replace(`ПолучательИНН=${owner}`, "ПолучательИНН=");
+  const b = statement({ account: accountB, inn: owner, company: "ООО Тест", bank: "Банк", amount: "200.00" });
+  const sectionB = b.match(/СекцияРасчСчет[\s\S]*?КонецРасчСчет/)?.[0];
+  const paymentB = b.match(/СекцияДокумент=[\s\S]*?КонецДокумента/)?.[0];
+  assert.ok(sectionB && paymentB);
+  const text = a.replace("СекцияДокумент=", sectionB + "\nСекцияДокумент=")
+    .replace("КонецФайла", paymentB + "\nКонецФайла");
+  assert.throws(() => inspectBankStatement(text, "mixed-evidence.txt"), /активных счетов/);
+  const screened = screenBankStatements([{ text, fileName: "mixed-evidence.txt" }]);
+  assert.equal(screened.accepted.length, 0);
+});

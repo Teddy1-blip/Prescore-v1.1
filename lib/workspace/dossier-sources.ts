@@ -18,10 +18,12 @@ import {activeFinancialSnapshots,currentFinancialSnapshots,economicPeriodKey} fr
 import {publicFinancialAnalysis} from '../credit-engine/client-report/source-detail.ts';
 import {buildCreditPortfolio} from '../credit-engine/credit-portfolio/resolver.ts';
 import {adaptUploadedBki} from '../credit-engine/credit-portfolio/bki-adapter.ts';
+import {sourcePeriodAudit} from './source-period-audit.ts';
+import {bankAccountRegister} from './bank-account-registry.ts';
 
 export type Account51Summary={from:string;to:string;opening:number|null;closing:number|null;inflow:number;outflow:number;entries:number;requiresReview:boolean};
 export type CounterpartyCheck={inn:string;fetchedAt:string;cases:number|null;enforcements:number|null};
-export type PrivateSource={financialHistory?:FinancialStatementSnapshot[];counterpartyCheck?:CounterpartyCheck;manualDebt?:import('./manual-debt.ts').ManualDebt;calendarSheet?:string[][];sheetEntries?:Record<string,import('./calendar-entry.ts').CalendarEntry>;settlementEvent?:SettlementEvent;bankPayments?:PaymentFact[];account51?:Account51Summary;relationship?:import("../credit-history.ts").CreditSubjectRelationship;ocr?:import("./dossier-ocr.ts").OcrProgress;publicProfile?:import("../company-profile.ts").CompanyProfileData;envelope:SourceEnvelope; snapshot?:FinancialStatementSnapshot; bki?:CreditHistoryReport; ledger?:LedgerBalance[]; calendar?:import("./calendar-entry.ts").CalendarEntry; review?:import("../document-poc/review-fields.ts").DocumentReview; verified?:Record<string,{value:string;page:number;fragment:string}>};
+export type PrivateSource={financialHistory?:FinancialStatementSnapshot[];counterpartyCheck?:CounterpartyCheck;manualDebt?:import('./manual-debt.ts').ManualDebt;calendarSheet?:string[][];sheetEntries?:Record<string,import('./calendar-entry.ts').CalendarEntry>;settlementEvent?:SettlementEvent;bankPayments?:PaymentFact[];bankXlsxReview?:{version:string;totalOperations:number;accounts:number;warnings:string[];sheets:{name:string;account:string|null;periodFrom:string|null;periodTo:string|null;operations:number;inMinor:number;outMinor:number}[]};questionnaireReview?:{version:string;sheets:{name:string;fields:import('../document-poc/bank-questionnaire.ts').QuestionnaireField[];issues:string[]}[]};account51?:Account51Summary;relationship?:import("../credit-history.ts").CreditSubjectRelationship;ocr?:import("./dossier-ocr.ts").OcrProgress;publicProfile?:import("../company-profile.ts").CompanyProfileData;envelope:SourceEnvelope; snapshot?:FinancialStatementSnapshot; bki?:CreditHistoryReport; ledger?:LedgerBalance[]; calendar?:import("./calendar-entry.ts").CalendarEntry; review?:import("../document-poc/review-fields.ts").DocumentReview; verified?:Record<string,{value:string;page:number;fragment:string}>};
 export type SourceRow={id:string;kind:string;documentId:string|null;payload:PrivateSource};
 export async function dossierSources(db:QueryExecutor,owner:string,id:string){
   const result=await db.query(`SELECT s.source_id AS id,s.source_type AS kind,s.document_id AS "documentId",s.payload
@@ -117,9 +119,14 @@ export function sourceProjection(rows:SourceRow[],inn:string,includeFull=true,in
     else if(prior&&(prior.amount!==p.amount||prior.inn!==p.inn||prior.date!==p.date||prior.direction!==p.direction))bankPayments.set(p.id,null);
   }
   const payments=[...bankPayments.values()].filter((p):p is PaymentFact=>p!==null);
+  const periodAudit=sourcePeriodAudit(rows,inn);
   return {
+    periodAudit,
+    bankAccountRegister:bankAccountRegister(rows,inn,periodAudit),
     settlements:settlementPositions(rows).map(p=>settlementState(p,history,payments)),
     cards51:rows.flatMap(r=>r.payload.account51?[{...r.payload.account51,id:r.id,name:r.payload.envelope.fileName??"Карточка 51"}]:[]),
+    bankXlsxReviews:rows.flatMap(r=>r.payload.bankXlsxReview?[{id:r.id,name:r.payload.envelope.fileName??'Банковская XLSX',...r.payload.bankXlsxReview}]:[]),
+    questionnaireReviews:rows.flatMap(r=>r.payload.questionnaireReview?[{id:r.id,name:r.payload.envelope.fileName??'Банковская анкета',...r.payload.questionnaireReview}]:[]),
     sources:rows.filter(r=>!r.payload.settlementEvent&&(includeFull||!r.payload.counterpartyCheck)).map(r=>({id:r.id,kind:r.kind,documentId:r.documentId,name:r.payload.envelope.fileName??r.payload.envelope.sourceName??r.kind,received:r.payload.envelope.receivedAt,
       status:r.payload.envelope.status,from:r.payload.envelope.periodFrom,to:r.payload.envelope.periodTo})),
     bureauReports:rows.flatMap(r=>r.payload.bki?[{id:r.id,source:r.payload.bki.source,date:r.payload.bki.reportDate,companyDebt:r.payload.bki.affectsCompanyDebt,
