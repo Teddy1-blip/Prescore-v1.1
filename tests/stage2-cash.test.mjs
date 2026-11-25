@@ -95,12 +95,24 @@ test('one-kopeck discrepancy hides derived liquidity yet preserves the reported 
   for(const field of ['averageDailyBalance','minimumDailyBalance','lowLiquidityDays'])assert.equal(a.metricsV2.liquidity[field].status,'UNKNOWN');
 });
 
-test('service account, unproven inactive account, mixed owners and malformed INN cannot establish ownership',()=>{
+test('service account, mixed owners and malformed INN cannot establish ownership',()=>{
   for(const text of [
     cashStatement().replaceAll('40702810111110000001','45202810111110000001'),
     cashStatement().replaceAll('9900000002','broken9900000002'),
-    cashStatement().replace('КонецРасчСчет','КонецРасчСчет\nСекцияРасчСчет\nРасчСчет=40702810555550000002\nКонецРасчСчет'),
   ]) assert.throws(()=>analyze({fileName:'boundary.txt',text}),/владельц|ИНН/);
+});
+
+test('a declared inactive account is not ownership evidence and does not change the proven owner or postings',()=>{
+  // Postings resolve to the account named by their own payer/recipient side, not to the
+  // neighbouring declared section, so an empty declared account neither proves nor blocks ownership.
+  const base=analyze({fileName:'base.txt',text:cashStatement()});
+  const text=cashStatement().replace('КонецРасчСчет','КонецРасчСчет\nСекцияРасчСчет\nРасчСчет=40702810555550000002\nКонецРасчСчет');
+  const a=analyze({fileName:'boundary.txt',text});
+  assert.equal(a.companyInn,'9900000002');
+  assert.equal(a.transactions.length,base.transactions.length);
+  // The extra account has no balance evidence, so the combined endpoint is not asserted.
+  assert.equal(a.metricsV2.liquidity.endingBalance.value,null);
+  assert.equal(a.metricsV2.cashFlow.grossExternalCashInflow.value,base.metricsV2.cashFlow.grossExternalCashInflow.value);
 });
 
 test('one journal can contain distinct postings with the same document number only when both bank turnover totals agree',()=>{
