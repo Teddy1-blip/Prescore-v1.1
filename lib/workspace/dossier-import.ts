@@ -3,7 +3,7 @@ import {documentStorage} from '../storage/documents.ts';
 import {validateZipBudget} from '../release/archive-limits.ts';
 import type {TransactionPool} from '../db/compatibility.ts';
 import type {SourceEnvelope} from '../credit-engine/contracts/sources.ts';
-import type {PrivateSource} from './dossier-sources.ts';
+import {dossierSources,type PrivateSource} from './dossier-sources.ts';
 import {wordParagraphs} from '../document-poc/word-paragraphs.ts';
 import {wordReviewPages} from '../document-poc/word-review.ts';
 import {reviewFields} from '../document-poc/review-fields.ts';
@@ -26,6 +26,7 @@ import {parseCreditHistoryText} from '../credit-history.ts';
 import {financialTableRows} from '../document-poc/financial-layout.ts';
 import {validInn} from '../external/checko-inn.ts';
 import {inspectSberBusinessWorkbook} from './bank-xlsx-intake.ts';
+import {compactBankXlsxSheets} from './bank-sources-adapter.ts';
 import {inspectQuestionnaireRows} from '../document-poc/bank-questionnaire.ts';
 import {dossierTier} from './dossier-view.ts';
 import {ownedDossier,saveDossier} from './dossier.ts';
@@ -160,11 +161,11 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
       const review=inspectSberBusinessWorkbook(extractXlsxSheets(bytes));
       if(review.format!=='SBER_BUSINESS_XLSX_WORKBOOK'||review.totalOperations<1)
         throw new InputError('Формат банковской XLSX не распознан или не содержит операций. Пока поддерживается предварительный разбор СберБизнес.');
-      payload.bankXlsxReview={version:review.version,totalOperations:review.totalOperations,accounts:review.accountCount,warnings:review.warnings,
-        sheets:review.sheets.filter(s=>s.preview.format!=='UNSUPPORTED').map(s=>({
-          name:s.name,account:s.preview.account,periodFrom:s.preview.periodFrom,periodTo:s.preview.periodTo,
-          operations:s.preview.operations.length,inMinor:s.preview.totalInMinor,outMinor:s.preview.totalOutMinor}))};
-      Object.assign(envelope,{parserVersion:review.version,status:'PROCESSING',warnings:review.warnings});
+      const sheets=compactBankXlsxSheets(review);
+      const fromDates=sheets.map(s=>s.periodFrom).filter((d):d is string=>Boolean(d)).sort();
+      const toDates=sheets.map(s=>s.periodTo).filter((d):d is string=>Boolean(d)).sort();
+      payload.bankXlsxReview={version:review.version,totalOperations:review.totalOperations,accounts:review.accountCount,warnings:review.warnings,sheets};
+      Object.assign(envelope,{parserVersion:review.version,status:'READY',warnings:review.warnings,...(fromDates[0]?{periodFrom:fromDates[0]}:{}),...(toDates.at(-1)?{periodTo:toDates.at(-1)}:{}),});
     }else if(kind==='BANK_QUESTIONNAIRE'){
       if(!identityConfirmed)throw new InputError('Подтвердите право передать и обработать банковскую анкету.');
       const recognized=extractXlsxSheets(bytes).map(s=>({name:s.sheet,review:inspectQuestionnaireRows(s.rows,s.rowNumbers)}))
@@ -189,6 +190,7 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
       const sum=(direction:'INFLOW'|'OUTFLOW')=>card.operations.filter(row=>row.direction===direction).reduce((total,row)=>total+Math.round(row.amount*100),0)/100;
       Object.assign(envelope,{periodFrom:card.periodFrom,periodTo:card.periodTo,parserVersion:'1C-ACCOUNT-51-V1',warnings:card.warnings});
       payload.account51={from:card.periodFrom,to:card.periodTo,opening:card.openingBalance,closing:card.closingBalance,inflow:sum('INFLOW'),outflow:sum('OUTFLOW'),entries:card.operations.length,requiresReview:!card.reconciled||card.closingBalance===null||card.openingBalance===null};
+      payload.account51Operations=card.operations;
     }else if(ledger){
       const rows=accountingSheet?.rows??text.split(/\r?\n/).map(r=>r.split('\t'));
       payload.ledger=nativePartyLedger(rows,inn,identityConfirmed,kind as 'COUNTERPARTIES'|'DEBT_LEDGER',file.name,accountingSheet?.rowNumbers)??parseLedger(text,inn,kind as 'COUNTERPARTIES'|'DEBT_LEDGER');
@@ -241,13 +243,68 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
       VALUES($1,$2,$3,$4,$5,$6,'',$7,$7,$8)`,[doc,inn,kind,file.name,mime,bytes.length,owner,storageKey]);
     await tx.query('INSERT INTO dossier_sources(dossier_id,source_id,source_type,payload,document_id) VALUES($1,$2,$3,$4,$5)',[id,sourceId,kind,JSON.stringify(payload),doc]);
     // Update only the owner's latest working version. Previously issued report snapshots stay immutable.
-    if(payload.snapshot || payload.bki?.affectsCompanyDebt || kind==='DEBT_LEDGER'||kind==='COUNTERPARTIES'&&payload.ledger?.some(r=>r.account.startsWith('76')&&r.contract&&r.component?.toLocaleLowerCase('ru')==='основной долг')){
-      const current=(await tx.query("SELECT id,payload FROM analyses WHERE owner_email=$1 AND company_inn=$2 AND archive_state='ACTIVE' ORDER BY created_at DESC,id DESC LIMIT 1 FOR UPDATE",[owner,inn])).rows[0];
-      if(current){
+    const affectsAnalysis=Boolean(payload.snapshot || payload.bki?.affectsCompanyDebt || kind==='BANK_XLSX' || kind==='ACCOUNT_51' || kind==='DEBT_LEDGER'||kind==='COUNTERPARTIES'&&payload.ledger?.some(r=>r.account.startsWith('76')&&r.contract&&r.component?.toLocaleLowerCase('ru')==='основной долг'));
+    const current=(await tx.query("SELECT id,payload FROM analyses WHERE owner_email=$1 AND company_inn=$2 AND archive_state='ACTIVE' ORDER BY created_at DESC,id DESC LIMIT 1 FOR UPDATE",[owner,inn])).rows[0];
+    if(current){
+      if(affectsAnalysis){
         const bank=JSON.parse(String(current.payload)) as AnalysisResult;
         const next=withDossierSources(bank,[{id:sourceId,kind,documentId:doc,payload}]);
-        await tx.query("UPDATE analyses SET payload=$1 WHERE id=$2 AND owner_email=$3 AND archive_state='ACTIVE'",[JSON.stringify(next),current.id,owner]);
+        await tx.query("UPDATE analyses SET payload=$1,period_from=$2,period_to=$3,score=$4,grade=$5,readiness=$6 WHERE id=$7 AND owner_email=$8 AND archive_state='ACTIVE'",[JSON.stringify(next),next.periodFrom,next.periodTo,next.score,next.grade,next.readiness,current.id,owner]);
+      } else if(envelope.sourceType==='OTHER'){
+        const bank=JSON.parse(String(current.payload)) as AnalysisResult;
+        if(!bank.metricsV2){
+          const existingExt=bank.sourceManifest?.external??[];
+          if(!existingExt.some(s=>s.sourceId===envelope.sourceId)){
+            const next:AnalysisResult={...bank,sourceManifest:{...(bank.sourceManifest??{}),bankStatements:bank.sourceManifest?.bankStatements??[],external:[...existingExt,envelope]}};
+            await tx.query("UPDATE analyses SET payload=$1 WHERE id=$2 AND owner_email=$3 AND archive_state='ACTIVE'",[JSON.stringify(next),current.id,owner]);
+          }
+        }
       }
+    } else {
+      const allRows=await dossierSources(tx,owner,id);
+      let companyName=allRows.flatMap(r=>r.payload.publicProfile?.company?.name?[r.payload.publicProfile.company.name]:[]).at(-1)??'';
+      if(!companyName){
+        try{
+          const cached=(await tx.query('SELECT payload FROM checko_profiles WHERE inn=$1 LIMIT 1',[inn])).rows[0] as {payload?:string}|undefined;
+          const parsed=cached?.payload?JSON.parse(cached.payload) as {company?:{name?:string}}:null;
+          if(typeof parsed?.company?.name==='string'&&parsed.company.name.trim())companyName=parsed.company.name.trim();
+        }catch{ /* fallback below */ }
+      }
+      if(!companyName)companyName=`Компания ИНН ${inn}`;
+      const today=now.slice(0,10);
+      const iso=(v?:string|null)=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v.slice(0,10))?v.slice(0,10):null;
+      const toDate=iso(envelope.periodTo)??iso(payload.snapshot?.period.to)??iso(payload.snapshot?.period.asOf)??iso(payload.account51?.to)??iso(payload.bki?.reportDate)??today;
+      const rawFrom=iso(envelope.periodFrom)??iso(payload.snapshot?.period.from)??iso(payload.account51?.from)??toDate;
+      const fromDate=rawFrom<=toDate?rawFrom:toDate;
+      const anchor:AnalysisResult={
+        id:`dossier-${randomUUID()}`,
+        companyName,
+        companyInn:inn,
+        fileName:file.name,
+        sourceFiles:[file.name],
+        bankNames:[],
+        periodFrom:fromDate,
+        periodTo:toDate,
+        score:0,
+        grade:'—',
+        readiness:'Недостаточно данных',
+        createdAt:now,
+        metrics:{
+          months:0,statements:0,accounts:0,transactions:0,grossInflow:0,operatingInflow:0,nonOperatingInflow:0,unknownInflow:0,
+          inflow:0,outflow:0,avgMonthlyInflow:0,monthlyTrend:0,volatility:0,topOneConcentration:0,topThreeConcentration:0,
+          topFiveConcentration:0,largeIncomingShare:0,taxRegularity:0,riskyOutflowShare:0,debtServiceShare:0,
+          endingBalance:null,liquidityDays:null,averageDailyBalance:null,minimumDailyBalance:null,cashGapDays:null,negativeBalanceDays:null,
+          seasonality:0,supplierPaymentRegularity:0,dataQuality:0,estimatedLimitMin:0,estimatedLimitMax:0,stressLimitMax:0,
+          currentMonthlyDebtPayment:0,baseMonthlyPaymentCapacity:0,stressMonthlyPaymentCapacity:0,stressMonthlyInflow:0,
+          referenceTermMonths:0,referenceAnnualRate:0,limitConfidence:0,
+        },
+        monthly:[],topCounterparties:[],factors:[],topRisks:[],strengths:[],evidence:[],recommendations:[],productFits:[],transactions:[],warnings:[],
+        sourceManifest:{bankStatements:[],...(envelope.sourceType==='OTHER'?{external:[envelope]}:{})},
+      };
+      const next=withDossierSources(anchor,allRows);
+      await tx.query(`INSERT INTO analyses (id, company_name, company_inn, file_name, period_from, period_to, score, grade, readiness, payload, owner_email, created_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+        [next.id,next.companyName,next.companyInn,next.fileName,next.periodFrom,next.periodTo,next.score,next.grade,next.readiness,JSON.stringify(next),owner,next.createdAt]);
     }
     await tx.query('COMMIT');
     return {id:sourceId,dossierId:id,duplicate:false,pending:bureauScan||reviewKind&&ext!=='docx'&&(image||payload.review?.status==='INCOMPLETE')};

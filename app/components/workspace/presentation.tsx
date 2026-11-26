@@ -6,6 +6,7 @@ import { DataPanel, concentrationPercent, factValue } from "./data-panel";
 import { useState, type ReactNode } from "react";
 import { LayoutDashboard, FileSearch, Gauge, WalletCards, Building2, Landmark, Sparkles, BriefcaseBusiness, Files, Menu, X, ShieldCheck, UserRound, Plus, CircleHelp } from "lucide-react";
 import type { WorkspaceModelV1, WorkspaceFactV1 } from "../../../lib/workspace/model";
+import { workspaceDiagnosticMessage } from "../../../lib/workspace/diagnostic-view";
 export const money = (value: number | null | undefined) => value == null || !Number.isFinite(value) ? "Недостаточно данных" : new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(value) + " ₽";
 export const date = (value: string | null | undefined) => value ? value.slice(0,10).split("-").reverse().join(".") : "Период не указан";
 export const reportUrl = (id: string) => `/dashboard/report-v2?analysisId=${encodeURIComponent(id)}`;
@@ -15,10 +16,25 @@ export function Heading({eyebrow,title,children}:{eyebrow:string;title:string;ch
 export function EmptyHome({start}:{start?:()=>void}) {
  return <section className="ws-empty"><div className="pc-page-title"><h1>Обзор компании</h1><p>Введите ИНН для просмотра публичных сведений или загрузите выписку для анализа движения денег.</p></div>{start&&<button onClick={start} className="ws-primary">Загрузить банковскую выписку</button>}</section>;
 }
-export function Upgrade({id}:{id:string}){return <section className="ws-upgrade"><span className="ws-eyebrow">СЛЕДУЮЩИЙ УРОВЕНЬ АНАЛИЗА</span><h2>От банковских фактов<br/>к кредитной интерпретации</h2><p>Отчётность и кредитная история дополняют картину. Полный анализ объясняет ограничения, доступное обслуживание долга и подходящие продукты.</p><a className="ws-primary" href={`/checkout?analysisId=${encodeURIComponent(id)}`}>Открыть полный анализ ↗</a></section>;}
-export function FullAccessNotice({model,retry}:{model:WorkspaceModelV1;retry?:()=>void}) {
- if(model.fullAvailability==='UNAVAILABLE'||model.entitlement==='FULL')return <section className="ws-unavailable" role="status"><h2>Полный расчёт сейчас недоступен</h2><p>{model.entitlement==='FULL'?'Доступ к полному анализу уже открыт. Повторная оплата не требуется.':'Не удалось проверить доступность полного расчёта.'} Доступные банковские факты сохранены.</p><button onClick={()=>retry?retry():window.location.reload()}>Повторить загрузку расчёта</button><a href={'/dashboard?analysisId='+encodeURIComponent(model.analysisId)+'&view=company'}>Проверить источники компании ↗</a></section>;
- return <Upgrade id={model.analysisId}/>;
+export function WorkspaceDiagnosticBlock({model,diagnosticMessage}:{model?:WorkspaceModelV1|null;diagnosticMessage?:string}) {
+ const message = diagnosticMessage || workspaceDiagnosticMessage(model?.diagnostic);
+ const show = Boolean((model && (model.fullAvailability === "UNAVAILABLE" || model.fullAvailability === "LOCKED" || model.diagnostic)) || message);
+ if (!show) return null;
+ const d = model?.diagnostic;
+ return <aside className="ws-diagnostic" aria-label="Диагностика workspace-model">
+  <div className="ws-diagnostic-head">Диагностика workspace-model</div>
+  <dl className="ws-diagnostic-meta">
+   {model && <><div><dt>entitlement</dt><dd><code>{model.entitlement}</code></dd></div><div><dt>fullAvailability</dt><dd><code>{model.fullAvailability}</code></dd></div></>}
+   {d?.stage && <div><dt>stage</dt><dd><code>{d.stage}</code></dd></div>}
+   {d?.reason && <div><dt>reason</dt><dd><code>{d.reason}</code></dd></div>}
+  </dl>
+  {message && <p className="ws-diagnostic-message">{message}</p>}
+ </aside>;
+}
+export function Upgrade({id,model,diagnosticMessage}:{id:string;model?:WorkspaceModelV1;diagnosticMessage?:string}){return <section className="ws-upgrade"><span className="ws-eyebrow">СЛЕДУЮЩИЙ УРОВЕНЬ АНАЛИЗА</span><h2>От банковских фактов<br/>к кредитной интерпретации</h2><p>Отчётность и кредитная история дополняют картину. Полный анализ объясняет ограничения, доступное обслуживание долга и подходящие продукты.</p><a className="ws-primary" href={`/checkout?analysisId=${encodeURIComponent(id)}`}>Открыть полный анализ ↗</a><WorkspaceDiagnosticBlock model={model} diagnosticMessage={diagnosticMessage}/></section>;}
+export function FullAccessNotice({model,retry,diagnosticMessage}:{model:WorkspaceModelV1;retry?:()=>void;diagnosticMessage?:string}) {
+ if(model.fullAvailability==='UNAVAILABLE'||model.entitlement==='FULL')return <section className="ws-unavailable" role="status"><h2>Полный расчёт сейчас недоступен</h2><p>{model.entitlement==='FULL'?'Доступ к полному анализу уже открыт. Повторная оплата не требуется.':'Не удалось проверить доступность полного расчёта.'} Доступные банковские факты сохранены.</p><WorkspaceDiagnosticBlock model={model} diagnosticMessage={diagnosticMessage}/><button onClick={()=>retry?retry():window.location.reload()}>Повторить загрузку расчёта</button><a href={'/dashboard?analysisId='+encodeURIComponent(model.analysisId)+'&view=company'}>Проверить источники компании ↗</a></section>;
+ return <Upgrade id={model.analysisId} model={model} diagnosticMessage={diagnosticMessage}/>;
 }
 export function Flow({model}:{model:WorkspaceModelV1}) {
  const rows=model.basic.bankingFacts.monthly??[],preview=rows.slice(-3);

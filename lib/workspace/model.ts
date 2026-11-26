@@ -38,6 +38,7 @@ export type WorkspaceBasicV1 = {
   coverageGaps?:ReturnType<typeof import("../credit-engine/credit-assessment/coverage.ts").bankCoverageGaps>;
   legalRegistry?: import("../legal-registry.ts").LegalRegistryV1;
   financingRequest?: import("./financing-request.ts").FinancingRequestV1;
+  account51Reconciliation?: import("./bank-sources-adapter.ts").Account51ReconciliationV1[];
   analysis: {
     id: string;
     company: { name: string; inn: string };
@@ -190,6 +191,7 @@ export function projectWorkspaceBasic(
     ...(analysis.checkoAttempt?{checko:analysis.checkoAttempt}:{}),
     ...(analysis.legalRegistryV1 ? {legalRegistry: legalRegistryView(analysis)} : {}),
     financingRequest: analysis.financingRequestV1 ? structuredClone(analysis.financingRequestV1) : undefined,
+    ...(analysis.account51Reconciliation?.length ? { account51Reconciliation: structuredClone(analysis.account51Reconciliation) } : {}),
     analysis: {
       id: analysis.id,
       company: { name: analysis.companyName, inn: analysis.companyInn },

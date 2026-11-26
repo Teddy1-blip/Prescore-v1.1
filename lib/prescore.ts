@@ -178,6 +178,7 @@ export type AnalysisResult = FinancialShadowFields & ReconciliationShadowFields 
   checkoAttempt?: import("./external/checko-cache.ts").CheckoState;
   legalRegistryV1?: import("./legal-registry.ts").LegalRegistryV1;
   financingRequestV1?: import("./workspace/financing-request.ts").FinancingRequestV1;
+  account51Reconciliation?: import("./workspace/bank-sources-adapter.ts").Account51ReconciliationV1[];
   id: string;
   companyName: string;
   companyInn: string;

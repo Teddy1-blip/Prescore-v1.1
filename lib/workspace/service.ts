@@ -99,8 +99,19 @@ export async function loadWorkspaceModelV1(analysisId: string, dependencies: Wor
   }
   if (tier !== "FULL") {
     // A saved bank analysis without metrics is a processing problem, not a paid feature.
-    // No FULL engine or provider is invoked to diagnose this structural BASIC input.
-    const missingBankMetrics = !analysis.metricsV2;
+    // Source-only dossiers with financial/BKI/external sources are valid without bank metrics.
+    const hasBankStatements = Boolean(analysis.sourceManifest?.bankStatements?.length);
+    const hasOtherSources = Boolean(
+      analysis.financialStatementsV2?.length ||
+      analysis.financialAnalysisV2?.history.length ||
+      analysis.creditHistory ||
+      analysis.sourceManifest?.bki ||
+      analysis.sourceManifest?.bfo ||
+      analysis.sourceManifest?.quarterly ||
+      analysis.sourceManifest?.financialUploads?.length ||
+      analysis.sourceManifest?.external?.length
+    );
+    const missingBankMetrics = !analysis.metricsV2 && (hasBankStatements || !hasOtherSources);
     return { ...base, state: "READY_BASIC", fullAvailability: "LOCKED",
       ...(missingBankMetrics ? { diagnostic: diagnostic("BANK_METRICS_REQUIRED", "BANK_METRICS_MISSING") } : {}) };
   }

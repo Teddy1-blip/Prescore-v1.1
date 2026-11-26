@@ -209,3 +209,11 @@
 .ps-client-recovery .conclusion-index>p{color:#d0e5df}
 @media(max-width:600px){.ps-client-recovery .conclusion-heading{margin:10px 0 16px}.ps-client-recovery .conclusion-heading h1{margin:6px 0 12px}.ps-client-recovery .conclusion-context{padding:0}.ps-client-recovery .conclusion-context label{width:100%}.ps-client-recovery .conclusion-context select{height:38px}}
 .ps-client-recovery .conclusion-footer{background:transparent;padding:0;border:0;color:#567079}
+.ws-diagnostic{margin-top:16px;padding:12px 14px;border:1px solid #d5e0e4;border-left:3px solid #138a7e;border-radius:6px;background:#f7fafb;color:#17323d;font-size:12px;line-height:1.5;text-align:left}
+.ws-diagnostic-head{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#4a6570;margin-bottom:8px}
+.ws-diagnostic-meta{display:flex;flex-wrap:wrap;gap:8px 18px;margin:0}
+.ws-diagnostic-meta>div{display:flex;align-items:baseline;gap:6px}
+.ws-diagnostic-meta dt{font-size:11px;color:#567079;margin:0}
+.ws-diagnostic-meta dd{margin:0}
+.ws-diagnostic-meta code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;padding:1px 5px;border-radius:4px;background:#e8f0f2;color:#102a35}
+.ws-diagnostic-message{margin:8px 0 0;font-size:12px;color:#274450}

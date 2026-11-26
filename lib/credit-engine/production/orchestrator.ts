@@ -50,6 +50,7 @@ function sourcesOf({analysis: a, companyProfile: p}: CanonicalSavedInput): Sourc
 // Upload/receipt times are fixed source provenance, not a new "today" on each render.
 export function canonicalAsOf(input: CanonicalSavedInput): string {
   const a = input.analysis, p = input.companyProfile;
+  const hasBank = Boolean(a.metricsV2 || a.sourceManifest?.bankStatements?.length);
   const dates = [a.periodTo, a.metricsV2?.period.to, a.creditHistory?.reportDate, p?.fetchedAt,
     // A saved client declaration is a recorded observation, not a wall-clock refresh.
     // Advancing knowledge does not advance the effective dates of source balances.
@@ -60,8 +61,12 @@ export function canonicalAsOf(input: CanonicalSavedInput): string {
     ...(a.financialStatementsV2 ?? []).map(s => s.period.asOf),
     ...(p?.financialStatementsV2 ?? []).map(s => s.period.asOf)];
   const present = dates.filter((d): d is string => typeof d === 'string' && d.length > 0);
+  if (!present.length && !hasBank && typeof a.createdAt === 'string' && a.createdAt.length > 0) present.push(a.createdAt);
   if (!present.length || present.some(d => !validDate(d.slice(0, 10)))) throw new CanonicalUnavailable('SOURCE_DATES', 'INVALID_SOURCE_DATES');
-  if (!validDate(a.periodFrom) || !validDate(a.periodTo) || a.periodFrom > a.periodTo || sourcesOf(input).some(s => s.periodFrom && s.periodTo && s.periodFrom > s.periodTo)) throw new CanonicalUnavailable('SOURCE_DATES', 'INVALID_SOURCE_DATES');
+  const periodInvalid = hasBank
+    ? (!validDate(a.periodFrom) || !validDate(a.periodTo) || a.periodFrom > a.periodTo)
+    : ((a.periodFrom && !validDate(a.periodFrom)) || (a.periodTo && !validDate(a.periodTo)) || (a.periodFrom && a.periodTo && a.periodFrom > a.periodTo));
+  if (periodInvalid || sourcesOf(input).some(s => s.periodFrom && s.periodTo && s.periodFrom > s.periodTo)) throw new CanonicalUnavailable('SOURCE_DATES', 'INVALID_SOURCE_DATES');
   return present.map(d => d.slice(0, 10)).sort().at(-1)!;
 }
 
@@ -95,12 +100,35 @@ export function buildCanonicalCreditAnalysis(input: CanonicalSavedInput, experim
     const a = structuredClone(input.analysis), p = input.companyProfile ? structuredClone(input.companyProfile) : undefined;
     const allSources = sourcesOf(input);
     if (!/^\d{10}(\d{2})?$/.test(a.companyInn) || p && p.inn !== a.companyInn || allSources.some(s => s.companyInn !== a.companyInn)) throw new CanonicalUnavailable(stage, 'SOURCE_IDENTITY_MISMATCH');
-    if (!a.metricsV2 || !a.sourceManifest?.bankStatements.length) throw new CanonicalUnavailable('BANK_METRICS_REQUIRED', 'BANK_METRICS_MISSING');
+    const bankStatements = a.sourceManifest?.bankStatements ?? [];
+    const hasBankMetrics = Boolean(a.metricsV2 && bankStatements.length);
+    const hasFinancial = Boolean(
+      a.financialStatementsV2?.length ||
+      a.financialAnalysisV2?.history.length ||
+      p?.financialStatementsV2?.length ||
+      p?.financialAnalysisV2?.history.length ||
+      financialSources(a.sourceManifest).length ||
+      financialSources(p?.sourceManifest).length
+    );
+    const hasBkiOrPortfolio = Boolean(
+      a.creditHistory ||
+      a.sourceManifest?.bki ||
+      a.creditPortfolioV1?.obligations?.length ||
+      a.creditPortfolioV1?.observationHistory?.length
+    );
+    const hasProfileOrExternal = Boolean(
+      p ||
+      a.legalRegistryV1 ||
+      a.sourceManifest?.external?.length
+    );
+    if (!hasBankMetrics && !hasFinancial && !hasBkiOrPortfolio && !hasProfileOrExternal) {
+      throw new CanonicalUnavailable('BANK_METRICS_REQUIRED', 'BANK_METRICS_MISSING');
+    }
     const asOfDate = canonicalAsOf(input);
-    const analysisBfo = a.sourceManifest.bfo;
+    const analysisBfo = a.sourceManifest?.bfo;
     const profileBfo = p?.sourceManifest?.bfo;
     const authoritativeBfo = analysisBfo?.status === 'READY' ? analysisBfo : profileBfo ?? analysisBfo;
-    const manifest = {...a.sourceManifest, ...(authoritativeBfo ? {bfo: authoritativeBfo} : {}), external: [...(a.sourceManifest.external ?? []), ...(p?.sourceManifest?.external ?? [])]};
+    const manifest = {...(a.sourceManifest ?? {}), bankStatements, ...(authoritativeBfo ? {bfo: authoritativeBfo} : {}), external: [...(a.sourceManifest?.external ?? []), ...(p?.sourceManifest?.external ?? [])]};
     stage = 'FINANCIAL_ANALYSIS';
     const availableSnapshots = [...(a.financialStatementsV2 ?? a.financialAnalysisV2?.history.map(h => h.snapshot) ?? []),
       ...(p?.financialStatementsV2 ?? p?.financialAnalysisV2?.history.map(h => h.snapshot) ?? [])];
@@ -114,7 +142,7 @@ export function buildCanonicalCreditAnalysis(input: CanonicalSavedInput, experim
     const creditPortfolio = buildCreditPortfolio({companyInn: a.companyInn, asOfDate,
       previousPortfolio: a.creditPortfolioV1, creditHistorySnapshots: bki ? [bki] : [], paymentObservations: a.debtPaymentObservationsV1});
     stage = 'RECONCILIATION';
-    const reconciliation = buildReconciliation({companyInn: a.companyInn, bank: a.metricsV2, manifest, integrity: a.integrity,
+    const reconciliation = buildReconciliation({companyInn: a.companyInn, bank: hasBankMetrics ? a.metricsV2 : undefined, manifest, integrity: a.integrity,
       // Authority chooses calculation inputs, not which current evidence may be compared.
       // Keep competing source facts for reconciliation without duplicating financial history.
       snapshots: currentSnapshots, financialAnalysis, bki: source?.status === 'READY' ? a.creditHistory : undefined});
@@ -125,7 +153,7 @@ export function buildCanonicalCreditAnalysis(input: CanonicalSavedInput, experim
     const riskAssessment = evaluateRiskFacts({companyInn: a.companyInn, asOfDate, facts: adaptRiskFacts({analysis, companyProfile, asOfDate})}, experiment?.riskRules);
     stage = 'CONTEXT';
     const contextAssessment = buildContextAssessment({analysis, companyProfile, riskAssessment, asOfDate, financingCase: input.financingCase});
-    const decisions = decisionStages(riskAssessment,contextAssessment,creditPortfolio,asOfDate,{analysis:a,metrics:a.metricsV2},input.scenarios,experiment,next=>{stage=next;});
+    const decisions = decisionStages(riskAssessment,contextAssessment,creditPortfolio,asOfDate,hasBankMetrics&&a.metricsV2?{analysis:a,metrics:a.metricsV2}:undefined,input.scenarios,experiment,next=>{stage=next;});
     const {actionPlan,...recommendations}=decisions;
     stage = 'EXPLAINABILITY';
     const receipts=new Map<string,DecisionReceipt>(allSources.map(s=>[s.sourceId,publicReceipt(s)]));
