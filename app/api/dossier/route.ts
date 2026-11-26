@@ -1,7 +1,7 @@
 import {stagingOwnerWorkspace} from '../../../lib/platform/staging-access';
 import {reviewedFinancial} from '../../../lib/workspace/reviewed-financial';
 import {nullableFinancialNumber} from '../../../lib/credit-engine/financial-analysis/normalizer';
-import {withDossierSources} from '../../../lib/workspace/dossier-bank';
+import {buildDossierAnchorAnalysis,withDossierSources} from '../../../lib/workspace/dossier-bank';
 import type {AnalysisResult} from '../../../lib/prescore';
 import {bureauRoles,readBureau,bureauEnvelope} from '../../../lib/workspace/bureau-review';
 import type {PrivateSource} from '../../../lib/workspace/dossier-sources';
@@ -255,7 +255,45 @@ export async function POST(request:Request){
       const profile=found&&!found.limited?found.result.profile:(await loadChecko(env.DB,inn,{key:'',cacheOnly:true}).catch(()=>null))?.profile;
       if(!profile)return reply({company,publicStatus:'PENDING'});
       const sourceId='checko:'+inn+':'+profile.fetchedAt;
-      await pool.query(`INSERT INTO dossier_sources(dossier_id,source_id,source_type,payload) VALUES($1,$2,'CHECKO',$3) ON CONFLICT DO NOTHING`,[company.id,sourceId,JSON.stringify({publicProfile:profile,envelope:{sourceId,sourceType:'CHECKO',companyInn:inn,sourceName:'Checko',status:'READY',receivedAt:profile.fetchedAt,confidence:null,warnings:[]}})]);
+      const checkoEnvelope={sourceId,sourceType:'CHECKO' as const,companyInn:inn,sourceName:'Checko',status:'READY' as const,receivedAt:profile.fetchedAt,confidence:null,warnings:[] as string[]};
+      const checkoPayload:PrivateSource={publicProfile:profile,envelope:checkoEnvelope};
+      const tx=await pool.connect();
+      try{
+        await tx.query('BEGIN');
+        await tx.query('SELECT id FROM company_dossiers WHERE id=$1 AND owner_email=$2 FOR UPDATE',[company.id,user.email]);
+        await tx.query(`INSERT INTO dossier_sources(dossier_id,source_id,source_type,payload) VALUES($1,$2,'CHECKO',$3) ON CONFLICT DO NOTHING`,[company.id,sourceId,JSON.stringify(checkoPayload)]);
+        const current=(await tx.query("SELECT id,payload FROM analyses WHERE owner_email=$1 AND company_inn=$2 AND archive_state='ACTIVE' ORDER BY created_at DESC,id DESC LIMIT 1 FOR UPDATE",[user.email,inn])).rows[0];
+        if(current){
+          if(profile.financialStatementsV2?.length){
+            const existing=JSON.parse(String(current.payload)) as AnalysisResult;
+            const next=withDossierSources(existing,[{id:sourceId,kind:'CHECKO',documentId:null,payload:checkoPayload}]);
+            await tx.query("UPDATE analyses SET payload=$1 WHERE id=$2 AND owner_email=$3 AND archive_state='ACTIVE'",[JSON.stringify(next),current.id,user.email]);
+          }
+        } else {
+          const allRows=await dossierSources(tx,user.email,company.id);
+          const iso=(v?:string|null)=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v.slice(0,10))?v.slice(0,10):null;
+          const snapshots=profile.financialStatementsV2??[];
+          const latestSnap=[...snapshots].sort((x,y)=>(x.period.asOf??'').localeCompare(y.period.asOf??'')).at(-1);
+          const fetchedDay=iso(profile.fetchedAt)??new Date().toISOString().slice(0,10);
+          const toDate=iso(latestSnap?.period.asOf)??iso(latestSnap?.period.to)??fetchedDay;
+          const fromDate=iso(latestSnap?.period.from)??toDate;
+          const companyName=typeof profile.company?.name==='string'&&profile.company.name.trim()?profile.company.name.trim():`Компания ИНН ${inn}`;
+          const anchor=buildDossierAnchorAnalysis({
+            companyInn:inn,
+            companyName,
+            fileName:`Checko · ${inn}`,
+            periodFrom:fromDate,
+            periodTo:toDate,
+            createdAt:profile.fetchedAt||new Date().toISOString(),
+            externalEnvelope:checkoEnvelope,
+          });
+          const next=withDossierSources(anchor,allRows);
+          await tx.query(`INSERT INTO analyses (id, company_name, company_inn, file_name, period_from, period_to, score, grade, readiness, payload, owner_email, created_at)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+            [next.id,next.companyName,next.companyInn,next.fileName,next.periodFrom,next.periodTo,next.score,next.grade,next.readiness,JSON.stringify(next),user.email,next.createdAt]);
+        }
+        await tx.query('COMMIT');
+      }catch(e){await tx.query('ROLLBACK');throw e;}finally{tx.release();}
     }
     return reply({company});
   }catch(error){

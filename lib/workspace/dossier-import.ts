@@ -16,7 +16,7 @@ import {extractXlsxRows,extractXlsxSheets,extractLegacyXlsSheets} from '../credi
 import {nativePartyLedger} from './one-c-ledger.ts';
 import {selectAccountingSheet} from './accounting-xlsx-scope.ts';
 import {parseLedger} from './ledger-import.ts';
-import {withDossierSources} from './dossier-bank.ts';
+import {buildDossierAnchorAnalysis,withDossierSources} from './dossier-bank.ts';
 import type {AnalysisResult} from '../prescore.ts';
 import {parseQuarterlyReportText} from '../quarterly-report.ts';
 import {OCR_MAX_BYTES,BUREAU_MAX_PDF_PAGES,ocrFormat,nativeLayoutText} from '../document-poc/local-ocr.ts';
@@ -274,33 +274,16 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
       const today=now.slice(0,10);
       const iso=(v?:string|null)=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v.slice(0,10))?v.slice(0,10):null;
       const toDate=iso(envelope.periodTo)??iso(payload.snapshot?.period.to)??iso(payload.snapshot?.period.asOf)??iso(payload.account51?.to)??iso(payload.bki?.reportDate)??today;
-      const rawFrom=iso(envelope.periodFrom)??iso(payload.snapshot?.period.from)??iso(payload.account51?.from)??toDate;
-      const fromDate=rawFrom<=toDate?rawFrom:toDate;
-      const anchor:AnalysisResult={
-        id:`dossier-${randomUUID()}`,
-        companyName,
+      const fromDate=iso(envelope.periodFrom)??iso(payload.snapshot?.period.from)??iso(payload.account51?.from)??toDate;
+      const anchor=buildDossierAnchorAnalysis({
         companyInn:inn,
+        companyName,
         fileName:file.name,
-        sourceFiles:[file.name],
-        bankNames:[],
         periodFrom:fromDate,
         periodTo:toDate,
-        score:0,
-        grade:'—',
-        readiness:'Недостаточно данных',
         createdAt:now,
-        metrics:{
-          months:0,statements:0,accounts:0,transactions:0,grossInflow:0,operatingInflow:0,nonOperatingInflow:0,unknownInflow:0,
-          inflow:0,outflow:0,avgMonthlyInflow:0,monthlyTrend:0,volatility:0,topOneConcentration:0,topThreeConcentration:0,
-          topFiveConcentration:0,largeIncomingShare:0,taxRegularity:0,riskyOutflowShare:0,debtServiceShare:0,
-          endingBalance:null,liquidityDays:null,averageDailyBalance:null,minimumDailyBalance:null,cashGapDays:null,negativeBalanceDays:null,
-          seasonality:0,supplierPaymentRegularity:0,dataQuality:0,estimatedLimitMin:0,estimatedLimitMax:0,stressLimitMax:0,
-          currentMonthlyDebtPayment:0,baseMonthlyPaymentCapacity:0,stressMonthlyPaymentCapacity:0,stressMonthlyInflow:0,
-          referenceTermMonths:0,referenceAnnualRate:0,limitConfidence:0,
-        },
-        monthly:[],topCounterparties:[],factors:[],topRisks:[],strengths:[],evidence:[],recommendations:[],productFits:[],transactions:[],warnings:[],
-        sourceManifest:{bankStatements:[],...(envelope.sourceType==='OTHER'?{external:[envelope]}:{})},
-      };
+        externalEnvelope:envelope.sourceType==='OTHER'?envelope:undefined,
+      });
       const next=withDossierSources(anchor,allRows);
       await tx.query(`INSERT INTO analyses (id, company_name, company_inn, file_name, period_from, period_to, score, grade, readiness, payload, owner_email, created_at)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,

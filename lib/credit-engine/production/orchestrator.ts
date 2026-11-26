@@ -46,28 +46,58 @@ function sourcesOf({analysis: a, companyProfile: p}: CanonicalSavedInput): Sourc
     ...[a.sourceManifest?.bki].filter((s): s is SourceEnvelope => !!s),
     ...(a.sourceManifest?.external ?? []), ...(p?.sourceManifest?.external ?? [])];
 }
-// Knowledge cutoff: latest recorded observation/receipt or period end, never the wall clock.
-// Upload/receipt times are fixed source provenance, not a new "today" on each render.
+// Knowledge cutoff: latest document content date (statements, BFO, quarterly, BKI, portfolio);
+// technical receipt/fetch timestamps are used only as fallback when no content dates exist.
 export function canonicalAsOf(input: CanonicalSavedInput): string {
   const a = input.analysis, p = input.companyProfile;
   const hasBank = Boolean(a.metricsV2 || a.sourceManifest?.bankStatements?.length);
-  const dates = [a.periodTo, a.metricsV2?.period.to, a.creditHistory?.reportDate, p?.fetchedAt,
-    // A saved client declaration is a recorded observation, not a wall-clock refresh.
-    // Advancing knowledge does not advance the effective dates of source balances.
+  const sources = sourcesOf(input);
+  const contentRaw = [
+    ...(hasBank ? [a.periodTo] : []),
+    a.metricsV2?.period.to,
+    a.creditHistory?.reportDate,
+    a.creditPortfolioV1?.asOfDate,
+    ...sources.flatMap(s => [s.periodFrom, s.periodTo]),
+    ...(a.financialStatementsV2 ?? []).flatMap(s => [s.period.asOf, s.period.to]),
+    ...(p?.financialStatementsV2 ?? []).flatMap(s => [s.period.asOf, s.period.to]),
+    ...(a.financialAnalysisV2?.history ?? []).flatMap(h => [h.snapshot.period.asOf, h.snapshot.period.to]),
+    ...(p?.financialAnalysisV2?.history ?? []).flatMap(h => [h.snapshot.period.asOf, h.snapshot.period.to]),
+  ];
+  const receiptRaw = [
+    ...(!hasBank ? [a.periodTo] : []),
+    p?.fetchedAt,
     a.financingRequestV1?.receivedAt,
     ...(a.legalRegistryV1?.history ?? []).map(r => r.informationDate),
     ...(p?.externalFacts?.receipts ?? []).map(r => r.retrievedAt),
-    ...sourcesOf(input).flatMap(s => [s.periodFrom, s.periodTo, s.receivedAt]),
-    ...(a.financialStatementsV2 ?? []).map(s => s.period.asOf),
-    ...(p?.financialStatementsV2 ?? []).map(s => s.period.asOf)];
-  const present = dates.filter((d): d is string => typeof d === 'string' && d.length > 0);
-  if (!present.length && !hasBank && typeof a.createdAt === 'string' && a.createdAt.length > 0) present.push(a.createdAt);
-  if (!present.length || present.some(d => !validDate(d.slice(0, 10)))) throw new CanonicalUnavailable('SOURCE_DATES', 'INVALID_SOURCE_DATES');
+    ...sources.map(s => s.receivedAt),
+  ];
+  const contentDates = contentRaw.filter((d): d is string => typeof d === 'string' && d.length > 0);
+  const receiptDates = receiptRaw.filter((d): d is string => typeof d === 'string' && d.length > 0);
+  const allPresent = [...contentDates, ...receiptDates];
+  if (!allPresent.length && !hasBank && typeof a.createdAt === 'string' && a.createdAt.length > 0) allPresent.push(a.createdAt);
+  if (!allPresent.length || allPresent.some(d => !validDate(d.slice(0, 10)))) throw new CanonicalUnavailable('SOURCE_DATES', 'INVALID_SOURCE_DATES');
   const periodInvalid = hasBank
     ? (!validDate(a.periodFrom) || !validDate(a.periodTo) || a.periodFrom > a.periodTo)
     : ((a.periodFrom && !validDate(a.periodFrom)) || (a.periodTo && !validDate(a.periodTo)) || (a.periodFrom && a.periodTo && a.periodFrom > a.periodTo));
-  if (periodInvalid || sourcesOf(input).some(s => s.periodFrom && s.periodTo && s.periodFrom > s.periodTo)) throw new CanonicalUnavailable('SOURCE_DATES', 'INVALID_SOURCE_DATES');
-  return present.map(d => d.slice(0, 10)).sort().at(-1)!;
+  if (periodInvalid || sources.some(s => s.periodFrom && s.periodTo && s.periodFrom > s.periodTo)) throw new CanonicalUnavailable('SOURCE_DATES', 'INVALID_SOURCE_DATES');
+  const effective = contentDates.length ? contentDates : allPresent;
+  return effective.map(d => d.slice(0, 10)).sort().at(-1)!;
+}
+
+function clampIsoToCutoff(value: string, cutoff: string): string {
+  return value.slice(0, 10) > cutoff ? cutoff : value;
+}
+
+function clampOptionalIsoToCutoff(value: string | null | undefined, cutoff: string): string | null | undefined {
+  if (!value) return value;
+  return value.slice(0, 10) > cutoff ? cutoff : value;
+}
+
+function clampEnvelopeReceipts(sources: SourceEnvelope[], cutoff: string) {
+  for (const s of sources) {
+    if (s.receivedAt) s.receivedAt = clampIsoToCutoff(s.receivedAt, cutoff);
+    if (s.informationDate) s.informationDate = clampIsoToCutoff(s.informationDate, cutoff);
+  }
 }
 
 // Both saved bank analyses and source-only dossiers pass through the same decision stages.
@@ -98,8 +128,11 @@ export function buildCanonicalCreditAnalysis(input: CanonicalSavedInput, experim
   let stage = 'SOURCES';
   try {
     const a = structuredClone(input.analysis), p = input.companyProfile ? structuredClone(input.companyProfile) : undefined;
-    const allSources = sourcesOf(input);
-    if (!/^\d{10}(\d{2})?$/.test(a.companyInn) || p && p.inn !== a.companyInn || allSources.some(s => s.companyInn !== a.companyInn)) throw new CanonicalUnavailable(stage, 'SOURCE_IDENTITY_MISMATCH');
+    const financingCase = input.financingCase ? structuredClone(input.financingCase) : undefined;
+    const scenarios = input.scenarios ? structuredClone(input.scenarios) : undefined;
+    const rawSources = sourcesOf(input);
+    const sourceObservations = rawSources.map(s => ({sourceId: s.sourceId, sourceType: s.sourceType, status: s.status, periodFrom: s.periodFrom ?? null, periodTo: s.periodTo ?? null, receivedAt: s.receivedAt}));
+    if (!/^\d{10}(\d{2})?$/.test(a.companyInn) || p && p.inn !== a.companyInn || rawSources.some(s => s.companyInn !== a.companyInn)) throw new CanonicalUnavailable(stage, 'SOURCE_IDENTITY_MISMATCH');
     const bankStatements = a.sourceManifest?.bankStatements ?? [];
     const hasBankMetrics = Boolean(a.metricsV2 && bankStatements.length);
     const hasFinancial = Boolean(
@@ -125,6 +158,49 @@ export function buildCanonicalCreditAnalysis(input: CanonicalSavedInput, experim
       throw new CanonicalUnavailable('BANK_METRICS_REQUIRED', 'BANK_METRICS_MISSING');
     }
     const asOfDate = canonicalAsOf(input);
+    // Align technical receipt/fetch timestamps on cloned inputs to the historical document cutoff
+    // so downstream anti-lookahead validators accept historical packages uploaded at a later date.
+    const allSources = sourcesOf({analysis: a, companyProfile: p});
+    clampEnvelopeReceipts(allSources, asOfDate);
+    for (const s of a.financialStatementsV2 ?? []) clampEnvelopeReceipts([s.source], asOfDate);
+    for (const h of a.financialAnalysisV2?.history ?? []) clampEnvelopeReceipts([h.snapshot.source], asOfDate);
+    for (const s of p?.financialStatementsV2 ?? []) clampEnvelopeReceipts([s.source], asOfDate);
+    for (const h of p?.financialAnalysisV2?.history ?? []) clampEnvelopeReceipts([h.snapshot.source], asOfDate);
+    if (p) {
+      if (p.fetchedAt) p.fetchedAt = clampIsoToCutoff(p.fetchedAt, asOfDate);
+      if (p.externalFacts) {
+        if (p.externalFacts.fetchedAt) p.externalFacts.fetchedAt = clampIsoToCutoff(p.externalFacts.fetchedAt, asOfDate);
+        if (p.externalFacts.identity.informationDate) p.externalFacts.identity.informationDate = clampIsoToCutoff(p.externalFacts.identity.informationDate, asOfDate);
+        for (const r of p.externalFacts.receipts) {
+          if (r.retrievedAt) r.retrievedAt = clampIsoToCutoff(r.retrievedAt, asOfDate);
+          if (r.informationDate) r.informationDate = clampIsoToCutoff(r.informationDate, asOfDate);
+        }
+      }
+    }
+    if (a.financingRequestV1?.receivedAt) a.financingRequestV1.receivedAt = clampIsoToCutoff(a.financingRequestV1.receivedAt, asOfDate);
+    if (a.legalRegistryV1?.history) {
+      for (const h of a.legalRegistryV1.history) {
+        if (h.receivedAt) h.receivedAt = clampIsoToCutoff(h.receivedAt, asOfDate);
+        if (h.informationDate && h.informationDate.slice(0, 10) > asOfDate) {
+          const originalDate = h.informationDate;
+          h.informationDate = asOfDate;
+          for (const s of a.sourceManifest?.external ?? []) {
+            if (s.sourceId === h.id && s.periodTo === originalDate) s.periodTo = asOfDate;
+          }
+        }
+      }
+    }
+    if (financingCase) {
+      financingCase.asOfDate = clampIsoToCutoff(financingCase.asOfDate, asOfDate);
+      for (const field of [financingCase.requestedAmount, financingCase.requestedTermMonths, financingCase.financingPurpose, financingCase.requestedProduct, financingCase.urgency, financingCase.contractReference]) {
+        if (field?.evidenceAsOf) field.evidenceAsOf = clampOptionalIsoToCutoff(field.evidenceAsOf, asOfDate) ?? null;
+      }
+    }
+    if (scenarios) {
+      for (const sc of scenarios) {
+        if (sc.evidenceAsOf) sc.evidenceAsOf = clampIsoToCutoff(sc.evidenceAsOf, asOfDate);
+      }
+    }
     const analysisBfo = a.sourceManifest?.bfo;
     const profileBfo = p?.sourceManifest?.bfo;
     const authoritativeBfo = analysisBfo?.status === 'READY' ? analysisBfo : profileBfo ?? analysisBfo;
@@ -152,8 +228,8 @@ export function buildCanonicalCreditAnalysis(input: CanonicalSavedInput, experim
     stage = 'RISK';
     const riskAssessment = evaluateRiskFacts({companyInn: a.companyInn, asOfDate, facts: adaptRiskFacts({analysis, companyProfile, asOfDate})}, experiment?.riskRules);
     stage = 'CONTEXT';
-    const contextAssessment = buildContextAssessment({analysis, companyProfile, riskAssessment, asOfDate, financingCase: input.financingCase});
-    const decisions = decisionStages(riskAssessment,contextAssessment,creditPortfolio,asOfDate,hasBankMetrics&&a.metricsV2?{analysis:a,metrics:a.metricsV2}:undefined,input.scenarios,experiment,next=>{stage=next;});
+    const contextAssessment = buildContextAssessment({analysis, companyProfile, riskAssessment, asOfDate, financingCase});
+    const decisions = decisionStages(riskAssessment,contextAssessment,creditPortfolio,asOfDate,hasBankMetrics&&a.metricsV2?{analysis:a,metrics:a.metricsV2}:undefined,scenarios,experiment,next=>{stage=next;});
     const {actionPlan,...recommendations}=decisions;
     stage = 'EXPLAINABILITY';
     const receipts=new Map<string,DecisionReceipt>(allSources.map(s=>[s.sourceId,publicReceipt(s)]));
@@ -163,9 +239,9 @@ export function buildCanonicalCreditAnalysis(input: CanonicalSavedInput, experim
     const registry=activeLegalReceipt(a);
     if(registry) receipts.set(registry.id,{sourceId:registry.id,sourceType:'OTHER',provider:'FNS_DIRECT',upstream:'FNS',direct:true,
       receivedAt:registry.receivedAt,informationDate:registry.informationDate});
-    if(input.financingCase) {
-      const sourceId='case:'+input.financingCase.caseId;
-      receipts.set(sourceId,{sourceId,sourceType:'OTHER',receivedAt:a.financingRequestV1?.receivedAt??input.financingCase.financingPurpose.evidenceAsOf??input.financingCase.asOfDate});
+    if(financingCase) {
+      const sourceId='case:'+financingCase.caseId;
+      receipts.set(sourceId,{sourceId,sourceType:'OTHER',receivedAt:a.financingRequestV1?.receivedAt??financingCase.financingPurpose.evidenceAsOf??financingCase.asOfDate});
     }
     const explainability = buildExplainability({...recommendations, actionPlan, sourceReceipts:[...receipts.values()]}, undefined, experiment?.recommendationRegistry);
     const reportInput = {...recommendations, actionPlan, explainability, company: {name: a.companyName, inn: a.companyInn}};
@@ -173,8 +249,8 @@ export function buildCanonicalCreditAnalysis(input: CanonicalSavedInput, experim
     const checko=checkoSummary(p,a.checkoAttempt);
     if(checko)model.checko=checko;
     return {version: CANONICAL_WIRING_VERSION, analysisId: a.id,
-      inputFingerprint: id('canonical-input', stable({asOfDate, integrity: a.integrity, legal: a.legalRegistryV1, bki: a.creditHistory, metrics: a.metricsV2, snapshots: currentSnapshots, portfolio: creditPortfolio, manifest, profile: p, financingCase: input.financingCase, scenarios: input.scenarios})),
-      sourceObservations: allSources.map(s => ({sourceId: s.sourceId, sourceType: s.sourceType, status: s.status, periodFrom: s.periodFrom ?? null, periodTo: s.periodTo ?? null, receivedAt: s.receivedAt})),
+      inputFingerprint: id('canonical-input', stable({asOfDate, integrity: a.integrity, legal: a.legalRegistryV1, bki: a.creditHistory, metrics: a.metricsV2, snapshots: currentSnapshots, portfolio: creditPortfolio, manifest, profile: p, financingCase, scenarios})),
+      sourceObservations,
       financialAnalysis, reconciliation, ...reportInput, model};
   } catch (error) {
     if (error instanceof CanonicalUnavailable) throw error;

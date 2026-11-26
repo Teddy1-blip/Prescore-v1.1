@@ -30,5 +30,5 @@ export function get(d: RiskDataset, code: string): RiskFact | undefined {
 export const usable = (f?: RiskFact): f is RiskFact & { value: NonNullable<RiskFact["value"]> } => !!f && f.status === "KNOWN" && f.value !== null && adequate(f.confidence) && !f.warnings.includes("DATA_CONFLICT");
 export const result = (status: RiskRuleEvaluationResult["status"], facts: Array<RiskFact | undefined>, reasonCodes: string[] = []): RiskRuleEvaluationResult => ({ status, facts: facts.filter((f): f is RiskFact => !!f), reasonCodes });
 export const missing = (facts: Array<RiskFact | undefined>, reasons = ["INSUFFICIENT_DATA", "MISSING_NOT_ZERO"]) => result(facts.some(f => f?.status === "NOT_APPLICABLE") ? "NOT_APPLICABLE" : "INSUFFICIENT_DATA", facts, reasons);
-export function freshness(date: string | null | undefined, asOf: string, maxDays: number): boolean { return validDate(date) && validDate(asOf) && date <= asOf && (Date.parse(asOf) - Date.parse(date)) / 86400000 <= maxDays; }
+export function freshness(date: string | null | undefined, asOf: string, maxDays: number): boolean { return validDate(date) && validDate(asOf) && (Date.parse(asOf) - Date.parse(date)) / 86400000 <= maxDays; }
 export function sourceConfidence(n: number | null | undefined): RiskConfidence { return finite(n) ? n >= 85 ? "HIGH" : n >= 60 ? "MEDIUM" : "LOW" : "UNKNOWN"; }

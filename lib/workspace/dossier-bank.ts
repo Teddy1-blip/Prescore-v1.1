@@ -1,5 +1,7 @@
+import {randomUUID} from 'node:crypto';
 import {ledgerObservations} from './ledger-observations.ts';
 import {analysisForStorage,analyzeBankStatements,type AnalysisResult} from '../prescore.ts';
+import type {SourceEnvelope} from '../credit-engine/contracts/sources.ts';
 import type {SourceRow} from './dossier-sources.ts';
 import {activeFinancialSnapshots,financialSources} from '../credit-engine/financial-analysis/source-selection.ts';
 import {buildFinancialAnalysis} from '../credit-engine/financial-analysis/engine.ts';
@@ -16,6 +18,43 @@ import {
   bankXlsxToStatementInputs,
   reconcileBankWithAccount51,
 } from './bank-sources-adapter.ts';
+
+export function buildDossierAnchorAnalysis(input: {
+  companyInn: string;
+  companyName: string;
+  fileName: string;
+  periodFrom: string;
+  periodTo: string;
+  createdAt: string;
+  externalEnvelope?: SourceEnvelope;
+}): AnalysisResult {
+  const fromDate = input.periodFrom <= input.periodTo ? input.periodFrom : input.periodTo;
+  return {
+    id: `dossier-${randomUUID()}`,
+    companyName: input.companyName || `Компания ИНН ${input.companyInn}`,
+    companyInn: input.companyInn,
+    fileName: input.fileName,
+    sourceFiles: [input.fileName],
+    bankNames: [],
+    periodFrom: fromDate,
+    periodTo: input.periodTo,
+    score: 0,
+    grade: '—',
+    readiness: 'Недостаточно данных',
+    createdAt: input.createdAt,
+    metrics: {
+      months: 0, statements: 0, accounts: 0, transactions: 0, grossInflow: 0, operatingInflow: 0, nonOperatingInflow: 0, unknownInflow: 0,
+      inflow: 0, outflow: 0, avgMonthlyInflow: 0, monthlyTrend: 0, volatility: 0, topOneConcentration: 0, topThreeConcentration: 0,
+      topFiveConcentration: 0, largeIncomingShare: 0, taxRegularity: 0, riskyOutflowShare: 0, debtServiceShare: 0,
+      endingBalance: null, liquidityDays: null, averageDailyBalance: null, minimumDailyBalance: null, cashGapDays: null, negativeBalanceDays: null,
+      seasonality: 0, supplierPaymentRegularity: 0, dataQuality: 0, estimatedLimitMin: 0, estimatedLimitMax: 0, stressLimitMax: 0,
+      currentMonthlyDebtPayment: 0, baseMonthlyPaymentCapacity: 0, stressMonthlyPaymentCapacity: 0, stressMonthlyInflow: 0,
+      referenceTermMonths: 0, referenceAnnualRate: 0, limitConfidence: 0,
+    },
+    monthly: [], topCounterparties: [], factors: [], topRisks: [], strengths: [], evidence: [], recommendations: [], productFits: [], transactions: [], warnings: [],
+    sourceManifest: { bankStatements: [], ...(input.externalEnvelope ? { external: [input.externalEnvelope] } : {}) },
+  };
+}
 
 export function withDossierSources(bank:AnalysisResult, rows:SourceRow[]):AnalysisResult {
   if(!rows.length)return bank;
