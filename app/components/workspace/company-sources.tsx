@@ -20,7 +20,6 @@ import {DossierPortfolio} from './dossier-portfolio';
 import './client-registers.css';
 import {ReceivablesReview} from './receivables-review';
 import {SettlementRegisters} from './settlement-registers';
-import {Account51Comparison} from './account51-comparison';
 import type {WorkspaceBasicV1,WorkspaceModelV1} from '../../../lib/workspace/model';
 import {DossierSettlementBalances} from './dossier-settlement-balances';
 import {buyerBalanceSummary} from '../../../lib/workspace/settlement-events';
@@ -66,11 +65,11 @@ export function CompanySources({view,choose,id,bankInn,bank,analysisId,model,ope
  const companyInput=useRef<HTMLInputElement>(null);
  const lastEntry=useRef(0);
  useEffect(()=>{
-   if(!ownerTestWorkspace || !companyEntry || companyEntry===lastEntry.current || !companyInput.current)return;
+   if(!companyEntry || companyEntry===lastEntry.current || !companyInput.current)return;
    lastEntry.current=companyEntry;
    setInn('');setPreview(null);setNotice('');setError('');
    companyInput.current.focus();
- },[ownerTestWorkspace,companyEntry,company?.id]);
+ },[companyEntry,company?.id]);
  useEffect(()=>{
    if(view!=='documents'||!profile||!window.location.hash.startsWith('#review-'))return;
    const review=profile.reviews.find(item=>'#review-'+encodeURIComponent(item.id)===window.location.hash);
@@ -214,51 +213,27 @@ export function CompanySources({view,choose,id,bankInn,bank,analysisId,model,ope
    {key:'product',title:'Предложения',empty:'Финансирование подбирается по общему кредитному профилю, а не по одному балансу.'},
    {key:'plan',title:'План 7 / 30 / 60',empty:'План действий формируется по подтверждённым фактам компании.'}
   ] as const;
-  async function lookup(){
-   setBusy(true);setError('');setNotice('');
-   try{
-     const post=(nextAction:'preview'|'save',attachPublic=false)=>({
-       method:'POST',headers:{'Content-Type':'application/json'},
-       body:JSON.stringify({action:nextAction,inn,attachPublic}),
-     });
-     // A BFO entry always opens an existing company dossier. Checko is
-     // optional, and failed external lookup cannot block an INN-only company.
-     let attachPublic=!!preview;
-     if(!attachPublic){
-       try{
-         const result=await read<{profile:PublicProfile|null;status:string}>('/api/dossier',post('preview'));
-         attachPublic=!!result.profile;
-       }catch{
-         // Preserve the independent INN-only path.
-       }
-     }
-     const result=await read<{company:Company}>('/api/dossier',post('save',attachPublic));
-     location.assign(dossierHref(result.company.id,view));
-   }catch(e){setError((e as Error).message);}
-   finally{setBusy(false);}
-  }
   return <div className="ws pc-company-sources pc-bfo" aria-label="Финансовый профиль БФО">
-   <div className="pc-bfo-intro"><span>ФИНАНСОВАЯ АНАЛИТИКА PRESCORE</span><h2>Бухгалтерская отчётность</h2><p>Финансовые показатели, динамика и выводы по подтверждённым источникам. Начните с ИНН или загрузите отчётность.</p></div>
-   <div className="pc-bfo-start">
-    <section className="pc-bfo-input">
-     <h3>Найти компанию по ИНН</h3><p>Проверим доступные сведения через Checko и откроем финансовый профиль.</p>
-     <form onSubmit={e=>{e.preventDefault();void lookup()}}>
-      <label htmlFor="bfo-company-inn">ИНН компании</label>
-      <div className="pc-bfo-inline"><input id="bfo-company-inn" required inputMode="numeric" pattern="[0-9]{10}|[0-9]{12}" value={inn} onChange={e=>{setInn(e.target.value.replace(/\D/g,'').slice(0,12));setPreview(null);}} placeholder="10 или 12 цифр" disabled={busy}/><button type="submit" disabled={busy}>Получить данные</button></div>
-     </form>
-     {companies.length>0&&<label className="pc-bfo-existing">Мои компании <select value={company?.id??''} onChange={e=>{if(e.target.value)location.assign(dossierHref(e.target.value,'bfo'))}}><option value="">Выберите компанию</option>{companies.map(c=><option key={c.id} value={c.id}>{c.inn}</option>)}</select></label>}
-    </section>
-    <section className="pc-bfo-input">
-     <h3>Загрузить баланс и Ф2</h3><p>Годовая отчётность доступна бесплатно. Промежуточная отчётность и углублённый анализ входят в полный доступ.</p>
-     <form onSubmit={upload}>
-      <input type="hidden" name="kind" value="AUTO_BFO"/>
-      <label htmlFor="bfo-upload-file">Файл отчётности (PDF, фото, Excel, CSV)</label>
-      <input id="bfo-upload-file" type="file" name="file" accept=".pdf,.png,.jpg,.jpeg,.xls,.xlsx,.csv" required disabled={busy}/>
-      <ScanLayout/>
-      <button type="submit" disabled={busy}>Загрузить и проанализировать</button>
-     </form>
-    </section>
-   </div>
+   <div className="pc-bfo-intro"><span>ФИНАНСОВАЯ АНАЛИТИКА PRESCORE</span><h2>Бухгалтерская отчётность</h2><p>Финансовые показатели, динамика и выводы по подтверждённым источникам.</p></div>
+   {!company ? (
+    <Panel title="Компания не выбрана">
+     <p>Выберите компанию в шапке кабинета, нажмите «+ Добавить компанию» или перейдите в «Обзор», чтобы добавить компанию по ИНН.</p>
+     <button type="button" className="btn primary" onClick={()=>choose('home')}>Перейти в «Обзор»</button>
+    </Panel>
+   ) : (
+    <div className="pc-bfo-start">
+     <section className="pc-bfo-input">
+      <h3>Загрузить баланс и Ф2</h3><p>Годовая отчётность доступна бесплатно. Промежуточная отчётность и углублённый анализ входят в полный доступ.</p>
+      <form onSubmit={upload}>
+       <input type="hidden" name="kind" value="AUTO_BFO"/>
+       <label htmlFor="bfo-upload-file">Файл отчётности (PDF, фото, Excel, CSV)</label>
+       <input id="bfo-upload-file" type="file" name="file" accept=".pdf,.png,.jpg,.jpeg,.xls,.xlsx,.csv" required disabled={busy}/>
+       <ScanLayout/>
+       <button type="submit" disabled={busy}>Загрузить и проанализировать</button>
+      </form>
+     </section>
+    </div>
+   )}
    {profile&&<section className="pc-bfo-dashboard" aria-label="Дашборд бухгалтерской отчётности">
     <div className="pc-bfo-identity"><div><span>ФИНАНСОВЫЙ ПРОФИЛЬ</span><h2>{profile.publicProfile?.company.name||profile.versions[0]?.name||'Компания · ИНН '+company?.inn}</h2><p>ИНН {company?.inn}{profile.publicProfile?.company.region?' · '+profile.publicProfile.company.region:''}{profile.publicProfile?.company.status?' · '+profile.publicProfile.company.status:''}</p></div>
      {company&&(period||profile.publicProfile)&&reportButton('Отчёт PDF')}
@@ -327,13 +302,12 @@ export function CompanySources({view,choose,id,bankInn,bank,analysisId,model,ope
       {g.overlaps.map((o,i)=><p key={'overlap'+i}>Пересечение {o.from} — {o.to}: {o.kind==='SAME_DATE'?'совпадает дата снимков':o.kind==='SAME_PERIOD'?'один отчётный период':'частично совпадают периоды'}. Не складывать без проверки первичных данных.</p>)}
       {g.gaps.length>0&&(g.kind==='BANK_STATEMENT'
         ?<button type="button" disabled={busy} onClick={openBank}>Дозагрузить выписку для этого периода</button>
-        :<a href={dossierHref(company.id,g.kind==='BFO'||g.kind==='QUARTERLY'?'bfo':g.kind==='ACCOUNT_51'||g.kind==='BANK_XLSX_PREVIEW'?'banking':'documents')}>Открыть загрузку недостающего документа</a>)}
+        :<a href={dossierHref(company.id,g.kind==='BFO'||g.kind==='QUARTERLY'?'bfo':'documents')}>Открыть загрузку недостающего документа</a>)}
      </details>)}
     {!profile.periodAudit.requiresRecalculationReview&&<p>Во внутренних интервалах с подтверждёнными датами пробелов или пересечений не найдено. Полнота за пределами загруженного диапазона не подтверждена.</p>}
     {profile.periodAudit.unknown.length>0&&<p>Для {profile.periodAudit.unknown.length} документов период пока не установлен или непрерывное покрытие к ним неприменимо.</p>}
     <p>БКИ и ОСВ — снимки по датам. Договоры и анкеты — отдельные документы. Предварительный банковский XLSX пока не участвует в кредитном расчёте.</p>
    </Panel>}
-  {view==='banking'&&<Account51Comparison cards={profile?.cards51??[]} bank={bank}/>}
   {view==='banking'&&profile?.bankXlsxReviews.map(p=><Panel key={p.id} title={'XLSX: '+p.name}><p>Предварительно извлечено операций: {p.totalOperations}. Счетов: {p.accounts}. Этот файл пока не участвует в кредитном расчёте.</p><p>Требуется проверка ИНН владельца, периодов и банковских остатков.</p></Panel>)}
   {view==='documents'&&profile?.questionnaireReviews.map(p=><Panel key={p.id} title={'Анкета: '+p.name}><p>Предварительные сведения по компании. Поля не заполняют анкеты автоматически; паспортные и персональные данные не извлекаются.</p>{p.sheets.map(s=><details key={s.name}><summary>{s.name} · кандидатов: {s.fields.length}</summary><dl>{s.fields.map((f,i)=><div key={f.key+':'+i}><dt>{f.key} · строка {f.row}</dt><dd>{f.raw}</dd></div>)}</dl></details>)}</Panel>)}
   {!company&&passport}
@@ -384,7 +358,7 @@ export function CompanySources({view,choose,id,bankInn,bank,analysisId,model,ope
      </li>;
    })}</ul></Panel>}
  </>}
- {view!=='documents'&&intake}
+ {view!=='documents'&&view!=='banking'&&intake}
  {busy&&<p role="status">Обрабатываем источник…</p>}{error&&<p role="alert">{error} <button disabled={busy} type="button" onClick={()=>{setError('');setRevision(n=>n+1);}}>Обновить сведения досье</button></p>}{notice&&<p role="status">{notice}</p>}
  </div>;
 }

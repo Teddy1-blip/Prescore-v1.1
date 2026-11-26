@@ -207,7 +207,7 @@ export function ApprovedShell(p: ShellProps) {
                       ))}
                     </select>
                     {text === 'Компания' && p.onAddCompany && (
-                      <button className="text-link" type="button" onClick={p.onAddCompany}>+ Добавить компанию</button>
+                      <button className="text-link nowrap" type="button" onClick={p.onAddCompany}>+ Добавить компанию</button>
                     )}
                   </div>
                 ))}

@@ -30,6 +30,16 @@ export function liveView(model: WorkspaceModelV1 | null, name: string, month: st
         net: cashValue(r, 'netExternal'),
         debt: cashValue(r, 'debtService'),
         tax: cashValue(r, 'taxPayments'),
+        otherReceipts: cashValue(r, 'otherReceipts'),
+        nonOperatingReceipts: cashValue(r, 'nonOperatingReceipts'),
+        unknownInflows: cashValue(r, 'unknownInflows'),
+        principal: cashValue(r, 'principal'),
+        interest: cashValue(r, 'interest'),
+        unsplit: cashValue(r, 'unsplit'),
+        leasing: cashValue(r, 'leasing'),
+        taxOnly: cashValue(r, 'taxOnly'),
+        social: cashValue(r, 'social'),
+        individualBusiness: cashValue(r, 'individualBusiness'),
       }));
   const m = month ? months[0] : undefined;
   const incoming = month ? (m?.incoming ?? null) : amount(b?.grossInflow),

@@ -13,7 +13,7 @@ export const pages = {
   analyst: ['Кредитный эксперт', 'Кредитный эксперт', 'Вопросы и пояснения по выбранному анализу'],
   billing: ['Подписка', 'Подписка компании', 'Доступ к рабочему пространству'],
 } as const;
-export const clientNavigation = ['home', 'documents', 'banking', 'bfo', 'analysis', 'analyst', 'billing'] as const satisfies readonly (keyof typeof pages)[];
+export const clientNavigation = ['home', 'banking', 'bfo', 'analysis', 'analyst', 'documents', 'billing'] as const satisfies readonly (keyof typeof pages)[];
 export type Page = keyof typeof pages;
 export type Amount = number | null;
 export type Row = {
@@ -26,6 +26,16 @@ export type Row = {
   debt: Amount;
   tax: Amount;
   net: Amount;
+  otherReceipts?: Amount;
+  nonOperatingReceipts?: Amount;
+  unknownInflows?: Amount;
+  principal?: Amount;
+  interest?: Amount;
+  unsplit?: Amount;
+  leasing?: Amount;
+  taxOnly?: Amount;
+  social?: Amount;
+  individualBusiness?: Amount;
   parts?: number[];
   receipts?: number[];
 };

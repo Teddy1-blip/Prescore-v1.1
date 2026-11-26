@@ -637,9 +637,6 @@ export function ApprovedPage(p: ScreenProps) {
           {p.details}
         </details>
       ))}
-      {page === 'analysis' && hasDetails && <details className="pc-credit-recap" open>
-        <summary>Сводка кредитного профиля</summary>{content}
-      </details>}
       {drawer && (
         <Drawer
           title={counter?.name ?? task?.title ?? (app ? 'Карточка заявки' : 'Основания оценки')}
