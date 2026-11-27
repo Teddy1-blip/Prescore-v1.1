@@ -25,7 +25,7 @@ import {bureauRoles,readBureau,bureauEnvelope,bureauReview,modernNbkiSummaryRevi
 import {parseCreditHistoryText} from '../credit-history.ts';
 import {financialTableRows} from '../document-poc/financial-layout.ts';
 import {validInn} from '../external/checko-inn.ts';
-import {inspectSberBusinessWorkbook} from './bank-xlsx-intake.ts';
+import {bankXlsxReadyForAnalysis,inspectSberBusinessWorkbook} from './bank-xlsx-intake.ts';
 import {compactBankXlsxSheets} from './bank-sources-adapter.ts';
 import {inspectQuestionnaireRows} from '../document-poc/bank-questionnaire.ts';
 import {dossierTier} from './dossier-view.ts';
@@ -128,6 +128,7 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
   const envelope:SourceEnvelope={sourceId,sourceType:ledger||reviewKind||['ACCOUNT_51','CALENDAR_SHEET','BANK_XLSX','BANK_QUESTIONNAIRE'].includes(kind)?'OTHER':kind as 'BFO'|'QUARTERLY'|'BKI',fileName:file.name,
     status:'READY',companyInn:inn,warnings:[],confidence:null,receivedAt:now,contentHash:hash,rawReference:'sha256:'+hash};
   const payload:PrivateSource={envelope};
+  let bankXlsxAppliedToAnalysis=false;
   try{
     if(bureauScan){
       payload.relationship=relationship;
@@ -158,13 +159,14 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
       envelope.status='PROCESSING';
     }else{
     if(kind==='BANK_XLSX'){
+      if(!identityConfirmed)throw new InputError('Подтвердите, что выписка и все её счета относятся к выбранной компании.');
       const review=inspectSberBusinessWorkbook(extractXlsxSheets(bytes));
       if(review.format!=='SBER_BUSINESS_XLSX_WORKBOOK'||review.totalOperations<1)
         throw new InputError('Формат банковской XLSX не распознан или не содержит операций. Пока поддерживается предварительный разбор СберБизнес.');
       const sheets=compactBankXlsxSheets(review);
       const fromDates=sheets.map(s=>s.periodFrom).filter((d):d is string=>Boolean(d)).sort();
       const toDates=sheets.map(s=>s.periodTo).filter((d):d is string=>Boolean(d)).sort();
-      payload.bankXlsxReview={version:review.version,totalOperations:review.totalOperations,accounts:review.accountCount,warnings:review.warnings,sheets};
+      payload.bankXlsxReview={version:review.version,totalOperations:review.totalOperations,accounts:review.accountCount,warnings:review.warnings,verifiedForAnalysis:bankXlsxReadyForAnalysis(review),sheets};
       Object.assign(envelope,{parserVersion:review.version,status:'READY',warnings:review.warnings,...(fromDates[0]?{periodFrom:fromDates[0]}:{}),...(toDates.at(-1)?{periodTo:toDates.at(-1)}:{}),});
     }else if(kind==='BANK_QUESTIONNAIRE'){
       if(!identityConfirmed)throw new InputError('Подтвердите право передать и обработать банковскую анкету.');
@@ -234,7 +236,7 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
         await tx.query('UPDATE dossier_sources SET payload=$1 WHERE dossier_id=$2 AND source_id=$3',[JSON.stringify(payload),id,existing.source_id]);
       }
       await tx.query('COMMIT');
-      return {id:String(existing.source_id),dossierId:id,duplicate:true,pending:existing.payload.ocr?existing.payload.ocr.through<existing.payload.ocr.total:existing.payload.review?.status==='INCOMPLETE',layout:existing.payload.ocr?.layout};
+      return {id:String(existing.source_id),dossierId:id,duplicate:true,pending:existing.payload.ocr?existing.payload.ocr.through<existing.payload.ocr.total:existing.payload.review?.status==='INCOMPLETE',layout:existing.payload.ocr?.layout,appliedToAnalysis:existing.payload.bankXlsxReview?.appliedToAnalysis??false};
     }
     const doc=randomUUID();
     const mime=image?(ext==='png'?'image/png':'image/jpeg'):ext==='xls'?'application/vnd.ms-excel':ext==='docx'?'application/vnd.openxmlformats-officedocument.wordprocessingml.document':ext==='xlsx'?'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':ext==='pdf'?'application/pdf':'text/csv';
@@ -243,12 +245,14 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
       VALUES($1,$2,$3,$4,$5,$6,'',$7,$7,$8)`,[doc,inn,kind,file.name,mime,bytes.length,owner,storageKey]);
     await tx.query('INSERT INTO dossier_sources(dossier_id,source_id,source_type,payload,document_id) VALUES($1,$2,$3,$4,$5)',[id,sourceId,kind,JSON.stringify(payload),doc]);
     // Update only the owner's latest working version. Previously issued report snapshots stay immutable.
-    const affectsAnalysis=Boolean(payload.snapshot || payload.bki?.affectsCompanyDebt || kind==='BANK_XLSX' || kind==='ACCOUNT_51' || kind==='DEBT_LEDGER'||kind==='COUNTERPARTIES'&&payload.ledger?.some(r=>r.account.startsWith('76')&&r.contract&&r.component?.toLocaleLowerCase('ru')==='основной долг'));
+    const affectsAnalysis=Boolean(payload.snapshot || payload.bki?.affectsCompanyDebt || payload.bankXlsxReview?.verifiedForAnalysis || kind==='ACCOUNT_51' || kind==='DEBT_LEDGER'||kind==='COUNTERPARTIES'&&payload.ledger?.some(r=>r.account.startsWith('76')&&r.contract&&r.component?.toLocaleLowerCase('ru')==='основной долг'));
     const current=(await tx.query("SELECT id,payload FROM analyses WHERE owner_email=$1 AND company_inn=$2 AND archive_state='ACTIVE' ORDER BY created_at DESC,id DESC LIMIT 1 FOR UPDATE",[owner,inn])).rows[0];
     if(current){
       if(affectsAnalysis){
         const bank=JSON.parse(String(current.payload)) as AnalysisResult;
-        const next=withDossierSources(bank,[{id:sourceId,kind,documentId:doc,payload}]);
+        const sourceRows=kind==='BANK_XLSX'?await dossierSources(tx,owner,id):[{id:sourceId,kind,documentId:doc,payload}];
+        const next=withDossierSources(bank,sourceRows);
+        bankXlsxAppliedToAnalysis=Boolean(payload.bankXlsxReview?.verifiedForAnalysis&&(next.sourceManifest?.bankStatements??[]).some(s=>s.sourceId===sourceId||s.sourceId.startsWith(sourceId+':sheet:')));
         await tx.query("UPDATE analyses SET payload=$1,period_from=$2,period_to=$3,score=$4,grade=$5,readiness=$6 WHERE id=$7 AND owner_email=$8 AND archive_state='ACTIVE'",[JSON.stringify(next),next.periodFrom,next.periodTo,next.score,next.grade,next.readiness,current.id,owner]);
       } else if(envelope.sourceType==='OTHER'){
         const bank=JSON.parse(String(current.payload)) as AnalysisResult;
@@ -285,12 +289,17 @@ export async function importSource(db:TransactionPool,owner:string,id:string,kin
         externalEnvelope:envelope.sourceType==='OTHER'?envelope:undefined,
       });
       const next=withDossierSources(anchor,allRows);
+      bankXlsxAppliedToAnalysis=Boolean(payload.bankXlsxReview?.verifiedForAnalysis&&(next.sourceManifest?.bankStatements??[]).some(s=>s.sourceId===sourceId||s.sourceId.startsWith(sourceId+':sheet:')));
       await tx.query(`INSERT INTO analyses (id, company_name, company_inn, file_name, period_from, period_to, score, grade, readiness, payload, owner_email, created_at)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
         [next.id,next.companyName,next.companyInn,next.fileName,next.periodFrom,next.periodTo,next.score,next.grade,next.readiness,JSON.stringify(next),owner,next.createdAt]);
     }
+    if(payload.bankXlsxReview){
+      payload.bankXlsxReview={...payload.bankXlsxReview,appliedToAnalysis:bankXlsxAppliedToAnalysis};
+      await tx.query('UPDATE dossier_sources SET payload=$1 WHERE dossier_id=$2 AND source_id=$3',[JSON.stringify(payload),id,sourceId]);
+    }
     await tx.query('COMMIT');
-    return {id:sourceId,dossierId:id,duplicate:false,pending:bureauScan||reviewKind&&ext!=='docx'&&(image||payload.review?.status==='INCOMPLETE')};
+    return {id:sourceId,dossierId:id,duplicate:false,pending:bureauScan||reviewKind&&ext!=='docx'&&(image||payload.review?.status==='INCOMPLETE'),appliedToAnalysis:bankXlsxAppliedToAnalysis};
   }catch(error){
     await tx.query('ROLLBACK');
     if(storageKey && !(await db.query('SELECT id FROM client_documents WHERE storage_key=$1',[storageKey])).rows.length) await storage.delete(storageKey);

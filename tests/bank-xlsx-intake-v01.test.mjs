@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {inspectSberBusinessXlsxRows} from '../lib/workspace/bank-xlsx-intake.ts';
+import {bankXlsxReadyForAnalysis,inspectSberBusinessWorkbook,inspectSberBusinessXlsxRows} from '../lib/workspace/bank-xlsx-intake.ts';
 const sample=()=>{
  const r=()=>Array(22).fill('');
  const pre=r();pre[2]='ПАО СБЕРБАНК';pre[5]='СберБизнес';
@@ -42,4 +42,13 @@ test('40817 personal account is never declared a corporate settlement account',(
  assert.equal(r.account,null);
  assert.ok(r.warnings.includes('BANK_XLSX_PERSONAL_40817_ACCOUNT_REVIEW_REQUIRED'));
  assert.equal(r.automaticApply,false);assert.equal(r.scoreUpdated,false);
+});
+test('only complete non-overlapping RUB corporate-account workbooks can enter analysis',()=>{
+ const valid=inspectSberBusinessWorkbook([{sheet:'May',rows:sample()}]);
+ assert.equal(bankXlsxReadyForAnalysis(valid),true);
+ const overlapping=inspectSberBusinessWorkbook([{sheet:'May',rows:sample()},{sheet:'May copy',rows:sample()}]);
+ assert.ok(overlapping.warnings.includes('BANK_XLSX_ACCOUNT_PERIOD_OVERLAP_REVIEW_REQUIRED'));
+ assert.equal(bankXlsxReadyForAnalysis(overlapping),false);
+ const personal=sample();personal[1][12]='40817'+'0'.repeat(15);
+ assert.equal(bankXlsxReadyForAnalysis(inspectSberBusinessWorkbook([{sheet:'Personal',rows:personal}])),false);
 });

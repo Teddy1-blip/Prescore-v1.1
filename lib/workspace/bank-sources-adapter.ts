@@ -7,6 +7,7 @@ import type { Account51Summary } from './dossier-sources.ts';
 export type StoredBankXlsxSheet = {
   name: string;
   account: string | null;
+  currency: 'RUB' | null;
   periodFrom: string | null;
   periodTo: string | null;
   operations: number;
@@ -357,6 +358,7 @@ export function compactBankXlsxSheets(review: BankXlsxBookPreview): StoredBankXl
     .map(s => ({
       name: s.name,
       account: s.preview.account,
+      currency: s.preview.currency,
       periodFrom: s.preview.periodFrom,
       periodTo: s.preview.periodTo,
       operations: s.preview.operations.length,

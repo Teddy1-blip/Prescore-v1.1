@@ -6,7 +6,8 @@ import {BALANCE_CODES,INCOME_CODES} from '../credit-engine/contracts/financial-s
 // Explicitly confirmed RAS rows only. A partial form never implies zeros in missing rows.
 export function reviewedFinancial(source:PrivateSource,inn:string){
  const fields=source.verified;
- if(!fields||source.review?.status!=='READY_FOR_REVIEW'||source.envelope.companyInn!==inn)return;
+ const reviewFields=source.review?.fields;
+ if(!fields||!Array.isArray(reviewFields)||source.review?.status!=='READY_FOR_REVIEW'||source.envelope.companyInn!==inn)return;
  // Server-verified values must retain the page and exact source fragment from
  // this document's review. A field injected into the stored confirmation map
  // or copied from another report must never become a financial source fact.
@@ -14,7 +15,7 @@ export function reviewedFinancial(source:PrivateSource,inn:string){
    const value=fields[key];
    if(!value||!Number.isSafeInteger(value.page)||value.page<1||
       !value.fragment?.trim())return null;
-   const matches=source.review!.fields.filter(x=>x.key===key);
+   const matches=reviewFields.filter(x=>x.key===key);
    if(matches.length!==1||matches[0].page!==value.page||
       matches[0].fragment!==value.fragment)return null;
    return value.value;

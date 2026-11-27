@@ -59,9 +59,17 @@ export function buildDossierAnchorAnalysis(input: {
 export function withDossierSources(bank:AnalysisResult, rows:SourceRow[]):AnalysisResult {
   if(!rows.length)return bank;
   if(rows.some(r=>r.payload.envelope.companyInn!==bank.companyInn))throw Error('SOURCE_COMPANY_MISMATCH');
-  const hasRealBankMetrics=Boolean(bank.metricsV2 && !bank.warnings?.includes(ACCOUNT_51_FALLBACK_WARNING));
-  const xlsxInputs=!hasRealBankMetrics
-    ? rows.flatMap(row=>row.payload.bankXlsxReview?.sheets.some(s=>s.entries?.length)
+  const hasRealBankMetrics=Boolean(bank.metricsV2 &&
+    !bank.warnings?.includes(ACCOUNT_51_FALLBACK_WARNING) &&
+    !bank.warnings?.includes(BANK_XLSX_ADAPTER_WARNING));
+  const xlsxPeriods=rows.flatMap(row=>row.payload.bankXlsxReview?.verifiedForAnalysis
+    ?row.payload.bankXlsxReview.sheets.filter(s=>s.entries?.length&&s.account&&s.periodFrom&&s.periodTo)
+      .map(s=>({account:s.account!,from:s.periodFrom!,to:s.periodTo!}))
+    :[]);
+  const xlsxOverlap=xlsxPeriods.some((period,index)=>xlsxPeriods.slice(index+1)
+    .some(other=>period.account===other.account&&period.from<=other.to&&other.from<=period.to));
+  const xlsxInputs=!hasRealBankMetrics&&!xlsxOverlap
+    ? rows.flatMap(row=>row.payload.bankXlsxReview?.verifiedForAnalysis&&row.payload.bankXlsxReview.sheets.some(s=>s.entries?.length)
       ? bankXlsxToStatementInputs({
           sheets:row.payload.bankXlsxReview.sheets,
           companyInn:bank.companyInn,

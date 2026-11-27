@@ -190,9 +190,10 @@ test('Private company dossier, independent inputs and canonical combined analysi
   await t.test('confirmed financial rows require identity, dates, unit and source evidence',async()=>{
     const {reviewedFinancial}=await import('../lib/workspace/reviewed-financial.ts');
     const verified=Object.fromEntries(Object.entries({company_inn:inn,period_start:'2025-01-01',period_end:'2025-12-31',statement_date:'2025-12-31',statement_unit:'тыс. ₽','2110':'1250'}).map(([k,value])=>[k,{value,page:1,fragment:k+' '+value}]));
-    const input={envelope:{sourceType:'OTHER',sourceId:'fixture:review',companyInn:inn,status:'PROCESSING',receivedAt:'2026-02-01'},review:{status:'READY_FOR_REVIEW',version:'fixture'},verified};
+    const input={envelope:{sourceType:'OTHER',sourceId:'fixture:review',companyInn:inn,status:'PROCESSING',receivedAt:'2026-02-01'},review:{status:'READY_FOR_REVIEW',version:'fixture',fields:Object.entries(verified).map(([key,value])=>({key,label:key,value:value.value,unit:'',page:value.page,fragment:value.fragment,status:'READ'}))},verified};
     const result=reviewedFinancial(input,inn);assert.equal(result.income.REVENUE.value,1250000);assert.equal(result.income.NET_PROFIT.value,null);
     assert.equal(reviewedFinancial(input,'500100732259'),undefined);assert.equal(reviewedFinancial({...input,verified:{...verified,statement_unit:undefined}},inn),undefined);
+    assert.equal(reviewedFinancial({...input,review:{status:'READY_FOR_REVIEW',version:'fixture'}},inn),undefined);
   });
   const ledger=new File(['ИНН организации;Дата остатка;Счёт;Контрагент;Договор;Дебет, руб.;Кредит, руб.\n'+inn+';2025-12-31;62.01;Покупатель;Д-1;1800;'],'balances.csv');
   await t.test('OSV-only preserves missing credit balance and tenant boundaries',async()=>{

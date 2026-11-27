@@ -31,6 +31,17 @@ type Company={id:string;inn:string};
 type PublicProfile=PassportPublicProfile;
 type Profile=ReturnType<typeof sourceProjection>&{company:Company;versions:{id:string;name:string;start:string;end:string}[];publicProfile:PublicProfile|null;entitlement:string};
 const labels:Record<string,string>={CALENDAR_SHEET:'График платежей · XLS, XLSX, CSV',ACCOUNT_51:'Карточка счёта 51 · XLS / XLSX',BFO:'Годовая бухгалтерская отчётность',QUARTERLY:'Промежуточная отчётность',BKI:'БКИ · НБКИ, ОКБ или СБ БКИ',COUNTERPARTIES:'ОСВ 60, 62 и 76',DEBT_LEDGER:'ОСВ 66, 67 и 76',CHECKO:'Публичные сведения',BANK_STATEMENT:'Банковская выписка',BANK_XLSX:'Банковская выписка СберБизнес XLSX · проверка',BANK_QUESTIONNAIRE:'Банковская анкета XLSX · предварительное извлечение',CALENDAR:'Календарь',CREDIT_DOCUMENT:'Кредитные договоры',COMMERCIAL_DOCUMENT:'Контракты и договоры контрагентов',BFO_REVIEW:'Проверка полей БФО PDF'};
+const bankXlsxWarningLabels:Record<string,string>={
+ BANK_XLSX_ACCOUNT_PERIOD_OVERLAP_REVIEW_REQUIRED:'Периоды листов пересекаются.',
+ BANK_XLSX_UNSUPPORTED_SHEETS:'В книге есть неподдерживаемые листы.',
+ BANK_XLSX_SHEET_ACCOUNT_UNCONFIRMED:'Для одного или нескольких листов не подтверждён счёт.',
+ BANK_XLSX_ACCOUNT_NOT_PROVEN:'Расчётный счёт не распознан.',
+ BANK_XLSX_MULTIPLE_OWN_ACCOUNTS:'В книге найдено несколько счетов.',
+ BANK_XLSX_PERSONAL_40817_ACCOUNT_REVIEW_REQUIRED:'Найден личный счёт, его нельзя автоматически считать счётом компании.',
+ BANK_XLSX_CURRENCY_UNCONFIRMED:'Валюта счёта не подтверждена.',
+ BANK_XLSX_OWNER_INN_UNCONFIRMED:'ИНН владельца отсутствует в источнике; требуется ручная проверка.',
+ BANK_XLSX_NO_OPERATIONS:'Операции не найдены.',
+};
 const kinds:Record<string,string[]>={calendar:['CALENDAR_SHEET'],banking:['ACCOUNT_51','BANK_XLSX'],bfo:['BFO','QUARTERLY','BFO_REVIEW'],obligations:['BKI','DEBT_LEDGER','CREDIT_DOCUMENT'],counterparties:['COUNTERPARTIES','COMMERCIAL_DOCUMENT'],documents:['BANK_QUESTIONNAIRE','BANK_XLSX','ACCOUNT_51','BFO','QUARTERLY','BKI','COUNTERPARTIES','DEBT_LEDGER','BFO_REVIEW','CREDIT_DOCUMENT','COMMERCIAL_DOCUMENT','CALENDAR_SHEET']};
 const onUrlChange=(notify:()=>void)=>{window.addEventListener('popstate',notify);return()=>window.removeEventListener('popstate',notify);};
 const dossierHref=(id:string,view:string)=>'/dashboard?'+new URLSearchParams({dossierId:id,view});
@@ -129,7 +140,7 @@ export function CompanySources({view,choose,id,bankInn,bank,analysisId,model,ope
   if(targetId)data.set('id',targetId);else if(inn.trim())data.set('inn',inn.trim());
   setBusy(true);setError('');setNotice('');
   try{
-    const result=await read<{id:string;duplicate:boolean;dossierId:string;pending:boolean;layout?:string}>('/api/dossier',{method:'POST',body:data});
+    const result=await read<{id:string;duplicate:boolean;dossierId:string;pending:boolean;layout?:string;appliedToAnalysis?:boolean}>('/api/dossier',{method:'POST',body:data});
     if(targetId&&result.dossierId!==targetId)throw Error('Документ вернул ссылку на другое досье. Обновите страницу для проверки.');
     if(!mounted.current)return;
     if(view==='bfo'&&!result.pending)setYear(result.id);
@@ -147,7 +158,7 @@ export function CompanySources({view,choose,id,bankInn,bank,analysisId,model,ope
     if(!mounted.current)return;
     if(!targetId){if(window.location.href===submittedFrom)location.assign(dossierHref(result.dossierId,view)+'&source='+encodeURIComponent(result.id));return;}
     if(!result.pending)await onSourceChanged?.();
-    setNotice(result.duplicate?'Оригинал уже есть в досье.':result.pending?'Документ сохранён. Проверьте распознанные поля.':'Документ сохранён.');
+    setNotice(result.duplicate?'Оригинал уже есть в досье.':result.pending?'Документ сохранён. Проверьте распознанные поля.':data.get('kind')==='BANK_XLSX'?(result.appliedToAnalysis?'Выписка XLSX включена в расчёт ядра.':'Файл сохранён для сверки; индекс не изменён.'):'Документ сохранён.');
   }
   catch(e){setError((e as Error).message);}finally{setBusy(false);}
  }
@@ -254,7 +265,7 @@ export function CompanySources({view,choose,id,bankInn,bank,analysisId,model,ope
  }
 
  const passport=view==='home'&&(company||preview)?<CompanyPassport dossier={company?{statementCompanyName:profile?.versions[0]?.name}:undefined} inn={company?.inn??inn} profile={company&&inn!==company.inn?(profile?.publicProfile??null):(preview??profile?.publicProfile??null)} hasStatements={(profile?.versions.length??0)>0} hasAnnual={!!profile?.financial?.history.some(p=>p.period.kind==='ANNUAL')} full={profile?.entitlement==='FULL'||model?.entitlement==='FULL'} onBankUpload={openBank}/>:null;
- const intake=visibleKinds.length>0&&<section className="pc-panel pc-source-intake" id="dossier-intake"><h2>{view==='documents'||view==='bfo'?'Бухгалтерская отчётность (PDF / Excel)':'Добавить источник'}</h2>{visibleKinds.some(k=>['BANK_XLSX','BANK_QUESTIONNAIRE'].includes(k))&&<p>Банковский XLSX и анкета сохраняются только как предварительный разбор — без автоматического изменения скоринга или заполнения персональных данных.</p>}
+ const intake=visibleKinds.length>0&&<section className="pc-panel pc-source-intake" id="dossier-intake"><h2>{view==='documents'||view==='bfo'?'Бухгалтерская отчётность (PDF / Excel)':'Добавить источник'}</h2>{visibleKinds.includes('BANK_XLSX')&&<p>Выписка СберБизнес XLSX попадёт в ядро только после подтверждения владельца и полноты периода, если валюта и расчётный счёт распознаны, а периоды листов не пересекаются. При наличии обычной банковской выписки TXT XLSX останется сверочным источником.</p>}{visibleKinds.includes('BANK_QUESTIONNAIRE')&&<p>Банковская анкета сохраняется как предварительное извлечение и не заполняет персональные данные автоматически.</p>}
  {view==='documents'&&<label className="pc-document-kind">Вид документа <select value={activeDocumentKind} disabled={busy} onChange={e=>selectUploadKind(e.target.value)}>{documentKinds.map(k=><option key={k} value={k}>{labels[k]}</option>)}</select></label>}
  {analysisId&&profile?.versions[0]&&profile.versions[0].id!==analysisId&&<p>Документы обновляют последний анализ этой компании. <a href={'/dashboard?'+new URLSearchParams({dossierId:profile.company.id,analysisId:profile.versions[0].id,view})}>Открыть актуальную версию</a></p>}
  {visibleKinds.map(kind=>{
@@ -263,6 +274,7 @@ export function CompanySources({view,choose,id,bankInn,bank,analysisId,model,ope
    return <form onSubmit={upload} key={kind} id={id?'source-'+kind.toLowerCase():undefined} aria-label={labels[kind]}><input name="kind" type="hidden" value={kind}/>
      <label>{labels[kind]} <input aria-label={labels[kind]} name="file" required type="file" accept={accept}/></label>
      {(kind==='COUNTERPARTIES'||kind==='DEBT_LEDGER')&&<label><input type="checkbox" name="identityConfirmed" value="yes"/> Подтверждаю компанию и период ОСВ, если он указан только в имени файла</label>}
+     {kind==='BANK_XLSX'&&<label><input required type="checkbox" name="identityConfirmed" value="yes"/> Подтверждаю, что расчётный счёт и полный период этой выписки относятся к выбранной компании</label>}
      {kind==='BANK_QUESTIONNAIRE'&&<label><input type="checkbox" name="identityConfirmed" value="yes"/> Подтверждаю право передать анкету для обработки</label>}
      {bureau&&<label>Кому принадлежит отчёт <select name="relationship">{['Компания-заёмщик','ИП-заёмщик','Собственник','Руководитель','Поручитель'].map(r=><option key={r}>{r}</option>)}</select></label>}
      {scan&&<><ScanLayout/><small>{contract?'PDF, DOCX, JPG, PNG':'PDF, JPG, PNG'} · скан до 16 МБ</small></>}
@@ -308,7 +320,7 @@ export function CompanySources({view,choose,id,bankInn,bank,analysisId,model,ope
     {profile.periodAudit.unknown.length>0&&<p>Для {profile.periodAudit.unknown.length} документов период пока не установлен или непрерывное покрытие к ним неприменимо.</p>}
     <p>БКИ и ОСВ — снимки по датам. Договоры и анкеты — отдельные документы. Предварительный банковский XLSX пока не участвует в кредитном расчёте.</p>
    </Panel>}
-  {view==='banking'&&profile?.bankXlsxReviews.map(p=><Panel key={p.id} title={'XLSX: '+p.name}><p>Предварительно извлечено операций: {p.totalOperations}. Счетов: {p.accounts}. Этот файл пока не участвует в кредитном расчёте.</p><p>Требуется проверка ИНН владельца, периодов и банковских остатков.</p></Panel>)}
+  {view==='banking'&&profile?.bankXlsxReviews.map(p=><Panel key={p.id} title={'XLSX: '+p.name}><p>Распознано операций: {p.totalOperations}. Счетов: {p.accounts}.</p>{p.appliedToAnalysis?<p>Подтверждённая выписка включена в расчёт ядра через адаптер СберБизнес. Проверьте период и итоговые показатели.</p>:<p>Этот файл сохранён для сверки и не меняет индекс. Для включения требуются подтверждённый счёт и валюта, полный период без пересечений; при наличии обычной выписки TXT используется TXT.</p>}{p.warnings.map(w=><small key={w}>{bankXlsxWarningLabels[w]??'Файл требует дополнительной проверки.'}</small>)}</Panel>)}
   {view==='documents'&&profile?.questionnaireReviews.map(p=><Panel key={p.id} title={'Анкета: '+p.name}><p>Предварительные сведения по компании. Поля не заполняют анкеты автоматически; паспортные и персональные данные не извлекаются.</p>{p.sheets.map(s=><details key={s.name}><summary>{s.name} · кандидатов: {s.fields.length}</summary><dl>{s.fields.map((f,i)=><div key={f.key+':'+i}><dt>{f.key} · строка {f.row}</dt><dd>{f.raw}</dd></div>)}</dl></details>)}</Panel>)}
   {!company&&passport}
   {view==='home'&&preview&&!company&&<p className="pc-muted">Публичная проверка выполнена для предварительного просмотра. Чтобы сохранить сведения в личном досье, нажмите «{ownerTestWorkspace?'Сохранить компанию':'Добавить компанию'}».</p>}

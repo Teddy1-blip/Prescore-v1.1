@@ -149,3 +149,12 @@ export function inspectSberBusinessWorkbook(sheets:readonly {sheet:string;rows:r
   status:accepted.length?'REVIEW_REQUIRED':'UNSUPPORTED',sheets:previews,totalOperations,
   accountCount:accounts.size,warnings,automaticApply:false,scoreUpdated:false};
 }
+
+export function bankXlsxReadyForAnalysis(review:BankXlsxBookPreview):boolean{
+ return review.status==='REVIEW_REQUIRED'&&review.totalOperations>0&&review.sheets.length>0&&
+  !review.warnings.includes('BANK_XLSX_ACCOUNT_PERIOD_OVERLAP_REVIEW_REQUIRED')&&
+  !review.warnings.includes('BANK_XLSX_UNSUPPORTED_SHEETS')&&
+  review.sheets.every(({preview})=>preview.format==='SBER_BUSINESS_OPERATIONS_XLSX'&&
+   preview.account!==null&&preview.currency==='RUB'&&preview.operations.length>0&&
+   preview.periodFrom!==null&&preview.periodTo!==null);
+}
