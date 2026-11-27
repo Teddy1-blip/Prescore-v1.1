@@ -169,6 +169,35 @@ export type StatementInspection = {
   endingBalanceKnown?: boolean;
 };
 
+export type InspectedStatement = StatementInput & { inspection: StatementInspection };
+export type StatementIntakeDecision = {
+  statement: InspectedStatement;
+  status: "ACCEPTED" | "COMPANY_MISMATCH" | "DUPLICATE";
+  reason?: string;
+};
+
+export function screenAdditionalBankStatements(
+  existing: InspectedStatement[],
+  candidates: InspectedStatement[],
+  expectedInn: string,
+): StatementIntakeDecision[] {
+  const seenHashes = new Set(existing.map((item) => item.contentHash).filter((hash): hash is string => Boolean(hash)));
+  return candidates.map((statement): StatementIntakeDecision => {
+    if (statement.inspection.companyInn !== expectedInn) {
+      return {
+        statement,
+        status: "COMPANY_MISMATCH",
+        reason: `ИНН файла ${statement.inspection.companyInn} не совпадает с ИНН выбранной компании ${expectedInn}.`,
+      };
+    }
+    if (statement.contentHash && seenHashes.has(statement.contentHash)) {
+      return { statement, status: "DUPLICATE", reason: "Эта выписка уже добавлена в набор." };
+    }
+    if (statement.contentHash) seenHashes.add(statement.contentHash);
+    return { statement, status: "ACCEPTED" };
+  });
+}
+
 export type AnalysisResult = FinancialShadowFields & ReconciliationShadowFields & CreditPortfolioShadowFields & RiskShadowFields & {
   id: string;
   companyName: string;
@@ -546,28 +575,18 @@ export function screenBankStatements(inputs: StatementInput[], anchorInn = "") {
     }
   }
   const companyInn = anchorInn || recognized[0]?.inspection.companyInn || "";
-  const accepted: StatementInput[] = [];
-  const seenHashes = new Set<string>();
+  const intakeCandidates = provisional.flatMap((item) => (
+    !item.status && item.inspection ? [{ ...item.input, inspection: item.inspection }] : []
+  ));
+  const intakeDecisions = screenAdditionalBankStatements([], intakeCandidates, companyInn);
+  let decisionIndex = 0;
   const screeningResults: StatementScreeningResult[] = provisional.map((item) => {
     const inspection = item.inspection;
-    let status = item.status;
-    let reason = item.reason;
-    if (!status && inspection) {
-      if (inspection.companyInn !== companyInn) {
-        status = "COMPANY_MISMATCH";
-        reason = `ИНН файла ${inspection.companyInn} не совпадает с ИНН выбранной компании ${companyInn}.`;
-      } else if (item.input.contentHash && seenHashes.has(item.input.contentHash)) {
-        status = "DUPLICATE";
-        reason = "Файл с таким SHA-256 уже присутствует в наборе.";
-      } else {
-        status = "ACCEPTED";
-        if (item.input.contentHash) seenHashes.add(item.input.contentHash);
-        accepted.push(item.input);
-      }
-    }
+    const decision = !item.status && inspection ? intakeDecisions[decisionIndex++] : undefined;
+    const status = item.status ?? decision?.status ?? "INVALID";
     return {
       fileName: item.input.fileName,
-      status: status ?? "INVALID",
+      status,
       detectedInn: inspection?.companyInn,
       expectedInn: companyInn || undefined,
       bankName: inspection?.bankName,
@@ -577,9 +596,15 @@ export function screenBankStatements(inputs: StatementInput[], anchorInn = "") {
       contentHash: item.input.contentHash,
       openingBalanceStatus: inspection ? (inspection.openingBalanceKnown ? "KNOWN" : "UNKNOWN") : undefined,
       endingBalanceStatus: inspection ? (inspection.endingBalanceKnown ? "KNOWN" : "UNKNOWN") : undefined,
-      reason,
+      reason: item.reason ?? decision?.reason,
     };
   });
+  const accepted = intakeDecisions.filter((item) => item.status === "ACCEPTED").map(({ statement }) => ({
+    text: statement.text,
+    fileName: statement.fileName,
+    sourceId: statement.sourceId,
+    contentHash: statement.contentHash,
+  }));
   return {
     companyInn,
     accepted: companyInn ? accepted : [],
@@ -1154,12 +1179,19 @@ function addSourceFoundation(
     infrastructureVersions: INFRASTRUCTURE_VERSIONS,
     integrity: buildAnalysisIntegrity(sourceManifest, result.transactions, integrityWarnings),
   };
+  const bankPeriods = bankStatements.filter((source) =>
+    /^\d{4}-\d{2}-\d{2}$/.test(source.periodFrom ?? "")
+    && /^\d{4}-\d{2}-\d{2}$/.test(source.periodTo ?? "")
+    && source.periodFrom! <= source.periodTo!,
+  );
+  const metricPeriodFrom = bankPeriods.map((source) => source.periodFrom!).sort()[0] ?? enriched.periodFrom;
+  const metricPeriodTo = bankPeriods.map((source) => source.periodTo!).sort().at(-1) ?? enriched.periodTo;
   const shadow = buildBankStatementMetricsV2({
     transactions: enriched.transactions,
     integrity: enriched.integrity,
     sourceManifest: enriched.sourceManifest,
-    periodFrom: enriched.periodFrom,
-    periodTo: enriched.periodTo,
+    periodFrom: metricPeriodFrom,
+    periodTo: metricPeriodTo,
     openingBalance: (result as AnalysisWithMetricsV2Input)[METRICS_V2_OPENING_BALANCE] ?? null,
     legacyMetrics: enriched.metrics,
   });

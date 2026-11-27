@@ -2,8 +2,7 @@ import { getChatGPTUser } from "../../chatgpt-auth";
 import { controlDefinitions, ensureControlSettings, isKnownControlKey, readControlSettings, type ControlCategory } from "../../../lib/admin-controls";
 import { ensureEntitlementSchema, grantFullEntitlement, setAnalysisTier } from "../../../lib/entitlements";
 
-type PreparedStatement = { bind: (...values: unknown[]) => PreparedStatement; run: () => Promise<unknown>; first: <T = unknown>() => Promise<T | null> };
-type RuntimeDatabase = { prepare: (query: string) => PreparedStatement; batch: (statements: PreparedStatement[]) => Promise<Array<{ results: unknown[] }>> };
+type RuntimeDatabase = import("../../../lib/runtime-database").RuntimeDatabase;
 
 const ADMIN_EMAIL = "dorogovab@gmail.com";
 const moduleDefaults = [

@@ -112,7 +112,7 @@ export function buildUnifiedRiskContext(profile: CompanyProfileData, analysis: A
       ...analysis.evidence,
       { id: "EV-BFO", conclusion: "Финансовая устойчивость", metric: "F-Score", value: assessment.fScore == null ? "Недостаточно данных" : String(assessment.fScore), source: "Официальная БФО", period: profile.finances.latestYear || "не указан" },
       { id: "EV-LEGAL", conclusion: "Правовой контур", metric: "События к проверке", value: String(profile.legal.legalCases + profile.legal.enforcements), source: "Официальные и открытые источники", period: "актуальный статус" },
-      ...(bki ? [{ id: "EV-BKI", conclusion: "Кредитный портфель", metric: "Совокупный платёж", value: money(bki.summary.monthlyPayment), source: bki.bureau, period: bki.reportDate }] : []),
+      ...(bki ? [{ id: "EV-BKI", conclusion: "Кредитный портфель", metric: "Совокупный платёж", value: money(bki.summary.monthlyPayment), source: bki.source, period: bki.reportDate }] : []),
     ],
   };
 }

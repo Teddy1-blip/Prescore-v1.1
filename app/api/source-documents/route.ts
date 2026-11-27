@@ -19,16 +19,7 @@ import { reconciliationForAnalysis } from "../../../lib/credit-engine/reconcilia
 import { portfolioForAnalysis } from "../../../lib/credit-engine/credit-portfolio/integration";
 import { requireApiUser, unauthorized } from "../api-auth";
 
-type Statement = {
-  bind: (...values: unknown[]) => Statement;
-  run: () => Promise<unknown>;
-  first: <T = unknown>() => Promise<T | null>;
-};
-
-type Database = {
-  prepare: (query: string) => Statement;
-  batch: (statements: Statement[]) => Promise<Array<{ results: unknown[] }>>;
-};
+type Database = import("../../../lib/runtime-database").RuntimeDatabase;
 
 const BKI_MAX_BYTES = 35 * 1024 * 1024;
 const QUARTERLY_MAX_BYTES = 25 * 1024 * 1024;

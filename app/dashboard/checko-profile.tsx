@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import type { CompanyProfileData } from "../../lib/company-profile";
 import type { AnalysisResult } from "../../lib/prescore";
 import type { UnifiedRiskContext } from "../../lib/risk-context";
+import type { CreditEngineProfile } from "../../lib/credit-engine/compose-profile";
 import type { QuarterlyFinancialReport } from "../../lib/quarterly-report";
 import QuarterlyReport from "./quarterly-report";
 
@@ -15,17 +16,19 @@ const pct = (value: number | null) => value == null ? "—" : `${value}%`;
 const initials = (value: string) => value.replace(/^(ООО|ПАО|АО|ИП)\s*[«"]?/i, "").replace(/[»"]/g, "").trim().split(/\s+/).slice(0, 2).map((word) => word[0]).join("").toUpperCase() || "RU";
 
 type AnalysisSummary = Omit<AnalysisResult, "transactions"> & { transactions?: AnalysisResult["transactions"] };
+type ConclusionResponse = UnifiedRiskContext & { creditEngineProfile?: CreditEngineProfile };
 
 export default function CheckoProfile({ analysis, onAttachQuarterly }: { analysis: AnalysisSummary | null; onAttachQuarterly: (file: File) => Promise<QuarterlyFinancialReport> }) {
   const inn = (analysis?.companyInn ?? "").replace(/\D/g, "");
   const [profile, setProfile] = useState<CompanyProfileData | null>(null);
-  const [unified, setUnified] = useState<UnifiedRiskContext | null>(null);
+  const [unified, setUnified] = useState<ConclusionResponse | null>(null);
   const [loading, setLoading] = useState(Boolean(inn));
   const [error, setError] = useState("");
   const assessment = unified?.assessment ?? null;
   const combinedInsights = unified?.combinedInsights ?? [];
   const finalConclusion = unified?.finalConclusion ?? null;
   const actionPlan = unified?.actionPlan ?? [];
+  const creditEngineProfile = unified?.creditEngineProfile;
 
   async function load(refresh = false) {
     if (!inn) return;
@@ -63,7 +66,7 @@ export default function CheckoProfile({ analysis, onAttachQuarterly }: { analysi
     const controller = new AbortController();
     fetch(`/api/conclusion?analysisId=${encodeURIComponent(analysis.id)}`, { signal: controller.signal })
       .then(async (response) => {
-        const body = await response.json() as UnifiedRiskContext & { error?: string };
+        const body = await response.json() as ConclusionResponse & { error?: string };
         if (!response.ok) throw new Error(body.error || "Не удалось сформировать заключение");
         return body;
       })
@@ -96,6 +99,24 @@ export default function CheckoProfile({ analysis, onAttachQuarterly }: { analysi
         <div className="ps-conclusion-sources"><span className="ready"><CheckCircle2 /><b>Выписки</b><small>{analysis.metrics.statements} файлов · {analysis.metrics.months} мес.</small></span><span className={profile.finances.latestYear ? "ready" : "missing"}><TrendingUp /><b>БФО</b><small>{profile.finances.latestYear || "не найдена"}</small></span><span className={analysis.quarterlyReport ? "ready" : "missing"}><FileSpreadsheet /><b>Квартальная</b><small>{analysis.quarterlyReport?.period ?? "не загружена"}</small></span><span className="ready"><Scale /><b>Правовой контур</b><small>{profile.legal.legalCases + profile.legal.enforcements} событий к проверке</small></span><span className={profile.contracts?.totalCount ? "ready" : "missing"}><FileSearch /><b>Контракты</b><small>{profile.contracts?.totalCount ?? 0} записей</small></span><span className={analysis.creditHistory ? "ready" : "missing"}><WalletCards /><b>БКИ</b><small>{analysis.creditHistory ? `${analysis.creditHistory.obligations.length} обязательств` : "не загружено"}</small></span></div>
         <div className="ps-conclusion-conditions"><b>{finalConclusion.conditions.length ? "Что ограничивает решение" : "Условия для подачи выполнены"}</b>{finalConclusion.conditions.length ? finalConclusion.conditions.map((item) => <span key={item}><AlertTriangle />{item}</span>) : <span><CheckCircle2 />Критические взаимные противоречия источников не выявлены</span>}</div>
         <p className="ps-legal-disclaimer">Заключение носит информационно-аналитический характер, не является решением, рейтингом или предложением банка и не заменяет проверку первичных документов.</p>
+      </section>}
+
+      {creditEngineProfile && <section className="ps-card ps-credit-engine-profile">
+        <div className="ps-card-title"><span><b>Сквозной профиль ядер Prescore</b><small>Связанные аналитические модули на данных анализа, БФО, БКИ и сверки источников</small></span><strong className={creditEngineProfile.status === "COMPLETE" ? "ready" : "partial"}>{creditEngineProfile.status === "COMPLETE" ? "Полный расчёт" : creditEngineProfile.status === "PARTIAL" ? "Частичный расчёт" : "Недоступен"}</strong></div>
+        <p className="ps-credit-engine-notice">Все показатели в этом блоке — теневые аналитические расчёты (SHADOW / PRE-CALIBRATION), а не банковский рейтинг, решение или подтверждённый кредитный лимит.</p>
+        <div className="ps-credit-engine-grid">
+          <article><small>Risk V1</small><b>{creditEngineProfile.riskAssessmentV1 ? `${creditEngineProfile.riskAssessmentV1.findings.length} факторов` : "Нет результата"}</b></article>
+          <article><small>Контекст</small><b>{creditEngineProfile.contextAssessmentV1 ? `${creditEngineProfile.contextAssessmentV1.summary.supportedRelationCount} связей · ${creditEngineProfile.contextAssessmentV1.facts.length} фактов` : "Нет результата"}</b></article>
+          <article><small>Индекс Prescore</small><b>{creditEngineProfile.prescoreIndexV1?.value == null ? creditEngineProfile.prescoreIndexV1?.status ?? "Нет результата" : `${creditEngineProfile.prescoreIndexV1.value} / 1000`}</b></article>
+          <article><small>Готовность к финансированию</small><b>{creditEngineProfile.financingReadinessV1 ? `${creditEngineProfile.financingReadinessV1.level} · ${creditEngineProfile.financingReadinessV1.status}` : "Нет результата"}</b></article>
+          <article><small>Кредитная оценка</small><b>{creditEngineProfile.creditAssessmentV1 ? `${creditEngineProfile.creditAssessmentV1.status} · ${creditEngineProfile.creditAssessmentV1.summary.materialRiskCount} значимых факторов` : "Нет результата"}</b></article>
+          <article><small>Долговая ёмкость</small><b>{creditEngineProfile.debtCapacityV1?.headlineCapacity.monthlyIncrementalDebtServiceCapacity.prudential == null ? creditEngineProfile.debtCapacityV1?.status ?? "Нет результата" : `${money(creditEngineProfile.debtCapacityV1.headlineCapacity.monthlyIncrementalDebtServiceCapacity.prudential)} / мес.`}</b></article>
+          <article><small>Подбор продуктов</small><b>{creditEngineProfile.productSelectionV1 ? `${creditEngineProfile.productSelectionV1.primaryCandidateProducts.length} подходящих вариантов` : "Нет результата"}</b></article>
+          <article><small>Рекомендации</small><b>{creditEngineProfile.recommendationSetV1 ? `${creditEngineProfile.recommendationSetV1.summary.primaryCount} приоритетных` : "Нет результата"}</b></article>
+          <article><small>План действий</small><b>{creditEngineProfile.actionPlanV1 ? `${creditEngineProfile.actionPlanV1.summary.focusItemCount} задач · 7/30/60 дней` : "Нет результата"}</b></article>
+          <article><small>Объяснимость</small><b>{creditEngineProfile.explainabilityV1 ? `${creditEngineProfile.explainabilityV1.summary.sectionCount} разделов · ${creditEngineProfile.explainabilityV1.summary.claimCount} выводов` : "Нет результата"}</b></article>
+        </div>
+        {creditEngineProfile.warnings.length > 0 && <details className="ps-credit-engine-warnings"><summary>Диагностика неполных модулей ({creditEngineProfile.warnings.length})</summary><ul>{creditEngineProfile.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></details>}
       </section>}
 
       <div className="ps-financial-score-grid">

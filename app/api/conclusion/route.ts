@@ -1,4 +1,4 @@
-import { buildRiskShadow } from "../../../lib/credit-engine/risk/integration";
+import { composeCreditProfile } from "../../../lib/credit-engine/compose-profile";
 import { buildUnifiedRiskContext } from "../../../lib/risk-context";
 import type { AnalysisResult } from "../../../lib/prescore";
 import type { CompanyProfileData } from "../../../lib/company-profile";
@@ -7,8 +7,7 @@ import { applyAnalysisControls, readControlState } from "../../../lib/admin-cont
 import { readableAnalysis, requireApiUser, unauthorized } from "../api-auth";
 import { resolveAnalysisTier } from "../../../lib/entitlements";
 
-type Statement = { bind: (...values: unknown[]) => Statement; first: <T = unknown>() => Promise<T | null>; run: () => Promise<unknown> };
-type Database = { prepare: (query: string) => Statement; batch: (statements: Statement[]) => Promise<Array<{ results: unknown[] }>> };
+type Database = import("../../../lib/runtime-database").RuntimeDatabase;
 
 export async function GET(request: Request) {
   const user = await requireApiUser();
@@ -30,8 +29,14 @@ export async function GET(request: Request) {
     const profile = JSON.parse(profileRow.payload) as CompanyProfileData;
     const reconciliation = reconciliationForAnalysis(analysis, profile);
     const asOfDate = [analysis.periodTo, profile.fetchedAt?.slice(0, 10) ?? "", analysis.creditHistory?.reportDate ?? ""].filter(date => /^\d{4}-\d{2}-\d{2}$/.test(date)).sort().at(-1) ?? "";
-    const risk = buildRiskShadow({ analysis: { ...analysis, ...reconciliation }, companyProfile: profile, asOfDate });
-    return Response.json({ ...buildUnifiedRiskContext(profile, analysis, controls), ...reconciliation, ...risk, readOnly: access.access === "agent" });
+    const creditEngineProfile = composeCreditProfile(analysis, profile, asOfDate);
+    return Response.json({
+      ...buildUnifiedRiskContext(profile, analysis, controls),
+      ...reconciliation,
+      ...creditEngineProfile,
+      creditEngineProfile,
+      readOnly: access.access === "agent",
+    });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Не удалось сформировать единое заключение" }, { status: 500 });
   }

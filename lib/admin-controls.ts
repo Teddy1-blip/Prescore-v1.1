@@ -3,6 +3,7 @@ import { financingOffers } from "./financing-offers.ts";
 import { partnerCommissions } from "./partner-commissions.ts";
 import { guaranteePolicies } from "./bank-guarantees.ts";
 import type { AnalysisResult, Recommendation, StopFactor } from "./prescore.ts";
+import type { RuntimeDatabase } from "./runtime-database";
 
 export type ControlCategory = "stop_factor" | "policy_rule" | "recommendation" | "bank" | "product" | "metric";
 export type ControlDefinition = {
@@ -15,9 +16,6 @@ export type ControlDefinition = {
 };
 export type ControlSetting = ControlDefinition & { enabled: number; updatedAt?: string };
 export type ControlState = { enabled: Record<string, boolean>; disabled: Set<string> };
-
-type PreparedStatement = { bind: (...values: unknown[]) => PreparedStatement; run: () => Promise<unknown> };
-type RuntimeDatabase = { prepare: (query: string) => PreparedStatement; batch: (statements: PreparedStatement[]) => Promise<Array<{ results: unknown[] }>> };
 
 function slug(value: string) {
   return value.toLocaleLowerCase("ru-RU").replace(/ё/g, "е").replace(/[^a-zа-я0-9]+/g, "-").replace(/^-|-$/g, "");

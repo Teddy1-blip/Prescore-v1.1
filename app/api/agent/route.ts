@@ -3,16 +3,7 @@ import { bankControlKey, productControlKey, readControlState } from "../../../li
 import { matchGuaranteePolicies } from "../../../lib/bank-guarantees";
 import { ADMIN_EMAIL, requireApiUser, unauthorized } from "../api-auth";
 
-type PreparedStatement = {
-  bind: (...values: unknown[]) => PreparedStatement;
-  run: () => Promise<unknown>;
-  first: <T = Record<string, unknown>>() => Promise<T | null>;
-};
-
-type RuntimeDatabase = {
-  prepare: (query: string) => PreparedStatement;
-  batch: (statements: PreparedStatement[]) => Promise<Array<{ results: unknown[] }>>;
-};
+type RuntimeDatabase = import("../../../lib/runtime-database").RuntimeDatabase;
 
 async function getDatabase() {
   const { env } = await import("cloudflare:workers");

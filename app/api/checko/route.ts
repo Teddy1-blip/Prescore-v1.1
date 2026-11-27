@@ -3,15 +3,7 @@ import { resolveAnalysisTier, type AnalysisTier } from "../../../lib/entitlement
 import { INFRASTRUCTURE_VERSIONS, type SourceEnvelope } from "../../../lib/credit-engine/contracts/sources";
 import { checkoFinancialShadow } from "../../../lib/credit-engine/financial-analysis/integration";
 
-type PreparedStatement = {
-  bind: (...values: unknown[]) => PreparedStatement;
-  first: <T = unknown>() => Promise<T | null>;
-  run: () => Promise<unknown>;
-};
-
-type RuntimeDatabase = {
-  prepare: (query: string) => PreparedStatement;
-};
+type RuntimeDatabase = import("../../../lib/runtime-database").RuntimeDatabase;
 
 type JsonRecord = Record<string, unknown>;
 

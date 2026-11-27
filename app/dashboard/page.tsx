@@ -12,7 +12,7 @@ import { ChangeEvent, DragEvent, ReactNode, useEffect, useRef, useState } from "
 import "./dashboard.css";
 import {
   type AnalysisResult, type StatementInput, type StatementInspection,
-  inspectBankStatement,
+  inspectBankStatement, screenAdditionalBankStatements,
 } from "../../lib/prescore";
 import CheckoProfile from "./checko-profile";
 import BankOffers from "./bank-offers";
@@ -214,7 +214,7 @@ export default function Dashboard() {
   function choose(next: View) { setView(next); setMenu(false); }
 
   const moduleKeyForView: Record<View, string> = { overview: "overview", analyze: "analysis", report: "report", credit: "credit", company: "company", offers: "offers", analyst: "analyst", crm: "applications", documents: "documents", method: "methodology" };
-  const availableNav = nav.filter((item) => modules[moduleKeyForView[item.id]] !== false && (!readOnly || !["analyze", "crm"].includes(item.id)));
+  const availableNav = nav.filter((item) => (item.id === "credit" || modules[moduleKeyForView[item.id]] !== false) && (!readOnly || !["analyze", "crm"].includes(item.id)));
   const effectiveView = availableNav.some((item) => item.id === view) ? view : availableNav[0]?.id ?? "overview";
 
   return <main className="ps-shell">
@@ -225,7 +225,7 @@ export default function Dashboard() {
       </div>
       <div className="ps-workspace-label">РАБОЧИЙ КАБИНЕТ</div>
       <nav>{availableNav.map((item) => <button key={item.id} className={effectiveView === item.id ? "active" : ""} onClick={() => choose(item.id)}>{item.icon}<span>{item.label}</span>{item.id === "crm" && deals.length > 0 && <i>{deals.length}</i>}</button>)}</nav>
-      <div className="ps-source-card"><ShieldCheck /><span><small>КОНТУР ДАННЫХ</small><b>Минимизация исходных документов</b><p>TXT рассчитывается в защищённом серверном модуле без постоянного хранения; PDF БКИ разбирается в браузере. В досье сохраняется структурированный результат.</p></span></div>
+      <div className="ps-source-card"><ShieldCheck /><span><small>КОНТУР ДАННЫХ</small><b>Минимизация исходных документов</b><p>TXT рассчитывается в защищённом серверном модуле без постоянного хранения; PDF БКИ предварительно разбирается в браузере и повторно проверяется сервером. В досье сохраняется структурированный результат.</p></span></div>
       <div className="ps-sidebar-user"><i><UserRound /></i><span><b>Владелец кабинета</b><small>Приватная beta · РФ</small></span></div>
     </aside>
 
@@ -366,7 +366,9 @@ function Analyze({ onResult }: { onResult: (result: AnalysisResult) => void }) {
         if (!text.toLowerCase().includes("1cclientbankexchange") || text.includes("�")) text = new TextDecoder("windows-1251").decode(buffer);
         const inspection = inspectBankStatement(text, file.name);
         if (!inspection.companyInn) return { rejected: true as const, fileName: file.name, reason: "Не удалось определить владельца счёта или в файле отсутствуют операции." };
-        return { rejected: false as const, text, fileName: file.name, inspection };
+        const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+        const contentHash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+        return { rejected: false as const, text, fileName: file.name, inspection, contentHash };
       } catch (caught) {
         const detail = caught instanceof Error && /ни одного документа|операц/i.test(caught.message)
           ? "В файле не найдено банковских операций."
@@ -377,13 +379,17 @@ function Analyze({ onResult }: { onResult: (result: AnalysisResult) => void }) {
     const rejected = checked.filter((item): item is Extract<typeof item, { rejected: true }> => item.rejected);
     const recognized = checked.filter((item): item is Extract<typeof item, { rejected: false }> => !item.rejected);
     const anchorInn = statements[0]?.inspection.companyInn || recognized[0]?.inspection.companyInn || "";
-    const accepted = anchorInn ? recognized.filter((item) => item.inspection.companyInn === anchorInn) : [];
-    setRejectedFiles(rejected.map((item) => ({ fileName: item.fileName, reason: item.reason })));
+    const decisions = screenAdditionalBankStatements(statements, recognized, anchorInn);
+    const accepted = decisions.filter((item) => item.status === "ACCEPTED").map((item) => item.statement);
+    setRejectedFiles([
+      ...rejected.map((item) => ({ fileName: item.fileName, reason: item.reason })),
+      ...decisions.filter((item) => item.status !== "ACCEPTED").map(({ statement, reason }) => ({
+        fileName: statement.fileName,
+        reason: reason ?? "Выписка исключена из анализа.",
+      })),
+    ]);
     if (accepted.length) {
-      setStatements((current) => {
-        const keys = new Set(current.map((item) => `${item.fileName}:${item.inspection.accounts.join(",")}`));
-        return [...current, ...accepted.filter((item) => !keys.has(`${item.fileName}:${item.inspection.accounts.join(",")}`))];
-      });
+      setStatements((current) => [...current, ...accepted]);
     }
     if (input.current) input.current.value = "";
   }

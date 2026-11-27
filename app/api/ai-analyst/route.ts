@@ -6,8 +6,7 @@ import { applyAnalysisControls, readControlState } from "../../../lib/admin-cont
 import { readableAnalysis, requireApiUser, unauthorized } from "../api-auth";
 import { resolveAnalysisTier } from "../../../lib/entitlements";
 
-type Statement = { bind: (...values: unknown[]) => Statement; first: <T = unknown>() => Promise<T | null>; all: <T = unknown>() => Promise<{ results?: T[] }>; run: () => Promise<unknown> };
-type Database = { prepare: (query: string) => Statement; batch: (statements: Statement[]) => Promise<Array<{ results: unknown[] }>> };
+type Database = import("../../../lib/runtime-database").RuntimeDatabase;
 type AiMessage = { id: string; role: "user" | "assistant"; content: string; createdAt: string };
 
 const DEFAULT_DAILY_LIMIT = 30;
@@ -130,7 +129,6 @@ export async function POST(request: Request) {
     await db.prepare(`INSERT INTO ai_conversations (id, analysis_id, owner_email, analysis_version, prompt_version, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET analysis_version = excluded.analysis_version, prompt_version = excluded.prompt_version, updated_at = excluded.updated_at`)
       .bind(conversationId, analysisId, user.email, source.analysis.methodologyVersion || "PRESCORE-CORE-2026.08", AI_ANALYST_PROMPT_VERSION, now, now).run();
-    const history = await db.prepare("SELECT id, role, content, created_at AS createdAt FROM ai_messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 8").bind(conversationId).all<AiMessage>();
     const providerQuestion = minimizeQuestion(question);
     const sanitized = buildSanitizedCreditContext(providerQuestion, source.analysis, source.company, source.risk);
     const response = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
@@ -143,7 +141,6 @@ export async function POST(request: Request) {
         messages: [
           { role: "system", content: AI_ANALYST_SYSTEM_PROMPT },
           { role: "system", content: `Текущий SanitizedCreditContext:\n${JSON.stringify(sanitized)}` },
-          ...(history.results ?? []).reverse().map((item) => ({ role: item.role, content: item.content })),
           { role: "user", content: providerQuestion },
         ],
       }),

@@ -32,8 +32,7 @@ export async function POST(request: Request) {
     const rejectedFiles = screened.unrecognizedFiles;
     const result = analyzeBankStatements(safeStatements, { screeningResults: screened.screeningResults });
     const { env } = await import("cloudflare:workers");
-    type Statement = { bind: (...values: unknown[]) => Statement; run: () => Promise<unknown>; first: <T = unknown>() => Promise<T | null> };
-    const db = env.DB as unknown as { prepare: (query: string) => Statement; batch: (statements: Statement[]) => Promise<Array<{ results: unknown[] }>> };
+    const db = env.DB as unknown as import("../../../lib/runtime-database").RuntimeDatabase;
     await db.prepare(`CREATE TABLE IF NOT EXISTS analyses (
       id TEXT PRIMARY KEY, company_name TEXT NOT NULL, company_inn TEXT NOT NULL DEFAULT '', file_name TEXT NOT NULL,
       period_from TEXT NOT NULL, period_to TEXT NOT NULL, score INTEGER NOT NULL, grade TEXT NOT NULL,

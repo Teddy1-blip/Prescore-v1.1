@@ -8,8 +8,7 @@ import { applyAnalysisControls, filterOfferProducts, readControlState } from "..
 import { readableAnalysis, requireApiUser, unauthorized } from "../api-auth";
 import { resolveAnalysisTier } from "../../../lib/entitlements";
 
-type Statement = { bind: (...values: unknown[]) => Statement; first: <T = unknown>() => Promise<T | null>; run: () => Promise<unknown> };
-type Database = { prepare: (query: string) => Statement; batch: (statements: Statement[]) => Promise<Array<{ results: unknown[] }>> };
+type Database = import("../../../lib/runtime-database").RuntimeDatabase;
 const allowedNeeds = new Set<FinancingNeed>(["auto", "working-capital", "staged-limit", "cash-gap", "receivables", "government-contract", "marketplace", "equipment", "refinance", "secured"]);
 
 function chooseRoutes(routes: BankRoute[], need: FinancingNeed) {

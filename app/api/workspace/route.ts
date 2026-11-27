@@ -6,16 +6,7 @@ import { readableAnalysis, requireApiUser, unauthorized } from "../api-auth";
 import { analysisView, resolveAnalysisTier } from "../../../lib/entitlements";
 import { structuredAttachmentIsUntrusted } from "../../../lib/credit-engine/source-foundation";
 
-type PreparedStatement = {
-  bind: (...values: unknown[]) => PreparedStatement;
-  run: () => Promise<unknown>;
-  first: <T = unknown>() => Promise<T | null>;
-};
-
-type RuntimeDatabase = {
-  prepare: (query: string) => PreparedStatement;
-  batch: (statements: PreparedStatement[]) => Promise<Array<{ results: unknown[] }>>;
-};
+type RuntimeDatabase = import("../../../lib/runtime-database").RuntimeDatabase;
 
 async function getDatabase() {
   const { env } = await import("cloudflare:workers");

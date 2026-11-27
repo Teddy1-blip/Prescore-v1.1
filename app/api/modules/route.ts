@@ -1,8 +1,7 @@
 import { requireApiUser, unauthorized } from "../api-auth";
 import { readControlSettings } from "../../../lib/admin-controls";
 
-type PreparedStatement = { bind: (...values: unknown[]) => PreparedStatement; run: () => Promise<unknown> };
-type RuntimeDatabase = { prepare: (query: string) => PreparedStatement; batch: (statements: PreparedStatement[]) => Promise<Array<{ results: unknown[] }>> };
+type RuntimeDatabase = import("../../../lib/runtime-database").RuntimeDatabase;
 
 const defaults = ["overview", "analysis", "report", "credit", "company", "offers", "analyst", "applications", "documents", "chats", "exports", "methodology", "agent", "prospects"];
 

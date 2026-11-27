@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { analyzeBankStatements, inspectBankStatement, screenBankStatements } from "../lib/prescore.ts";
+import { analyzeBankStatements, inspectBankStatement, screenAdditionalBankStatements, screenBankStatements } from "../lib/prescore.ts";
 
 function statement({ account, inn, company, bank, date = "01.07.2026", amount = "100000.00", incoming = true }) {
   const payerAccount = incoming ? "40702810999990000001" : account;
@@ -54,4 +54,29 @@ test("rejects another INN and exposes an explicit per-file screening result", ()
   assert.deepEqual(screened.accepted.map((item) => item.fileName), ["own.txt"]);
   assert.deepEqual(screened.unrecognizedFiles, ["unknown.txt"]);
   assert.equal(screened.screeningResults.find((item) => item.fileName === "foreign.txt")?.status, "COMPANY_MISMATCH");
+});
+
+test("additional statement screening exposes company mismatches and removes content duplicates", () => {
+  const inspection = (companyInn) => ({ companyInn });
+  const existing = {
+    text: "existing",
+    fileName: "own.txt",
+    contentHash: "same-content",
+    inspection: inspection("5032333146"),
+  };
+  const decisions = screenAdditionalBankStatements([existing], [
+    { ...existing, fileName: "renamed-copy.txt" },
+    { text: "foreign", fileName: "foreign.txt", contentHash: "foreign", inspection: inspection("7701234567") },
+    { text: "new", fileName: "new.txt", contentHash: "new", inspection: inspection("5032333146") },
+    { text: "new", fileName: "new-copy.txt", contentHash: "new", inspection: inspection("5032333146") },
+  ], "5032333146");
+
+  assert.deepEqual(decisions.map(({ statement, status }) => [statement.fileName, status]), [
+    ["renamed-copy.txt", "DUPLICATE"],
+    ["foreign.txt", "COMPANY_MISMATCH"],
+    ["new.txt", "ACCEPTED"],
+    ["new-copy.txt", "DUPLICATE"],
+  ]);
+  assert.match(decisions[0].reason, /уже добавлена/);
+  assert.match(decisions[1].reason, /не совпадает/);
 });

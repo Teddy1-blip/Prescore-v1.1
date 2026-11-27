@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtempSync,readFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {performance} from 'node:perf_hooks';
 import {CREDIT_LAB_VERSION,CREDIT_LAB_CASE_VERSION,CREDIT_LAB_PACK_VERSION} from '../lib/credit-engine/contracts/credit-lab.ts';
 import {runCreditLabCase,runCreditLabPack} from '../lib/credit-engine/credit-lab/runner.ts';
@@ -123,7 +124,7 @@ test('private real case blocked by CLI before any export',()=>{const e=entry();e
 test('CLI default read-only and succeeds',()=>{const before=readFileSync(new URL('./fixtures/credit-lab/fingerprints-v0.json',import.meta.url),'utf8');assert.equal(creditLabCli().exitCode,0);assert.equal(readFileSync(new URL('./fixtures/credit-lab/fingerprints-v0.json',import.meta.url),'utf8'),before);});
 test('CLI exits nonzero on hard GOLDEN failure',()=>{const e=entry();e.caseDefinition.expectation.forbiddenFindingCodes.push(req.code);assert.equal(creditLabCli([],pack([e])).exitCode,1);});
 test('CLI emits JSON only to explicit new path',()=>{const d=mkdtempSync(path.join(tmpdir(),'credit-lab-'));try{const file=path.join(d,'report.json');creditLabCli(['--json',file]);assert.equal(JSON.parse(readFileSync(file,'utf8')).summary.caseCount,31);assert.throws(()=>creditLabCli(['--json',file]),/EEXIST/);}finally{rmSync(d,{recursive:true});}});
-test('CLI cannot overwrite golden fixtures',()=>assert.throws(()=>creditLabCli(['--json',new URL('./fixtures/credit-lab/fingerprints-v0.json',import.meta.url).pathname]),/OUTPUT_MUST_NOT/));
+test('CLI cannot overwrite golden fixtures',()=>assert.throws(()=>creditLabCli(['--json',fileURLToPath(new URL('./fixtures/credit-lab/fingerprints-v0.json',import.meta.url))]),/OUTPUT_MUST_NOT/));
 test('deterministic runner without machine clock or randomness',()=>{const now=Date.now,random=Math.random;Date.now=()=>{throw Error('clock')};Math.random=()=>{throw Error('random')};try{assert.deepEqual(result(),result());}finally{Date.now=now;Math.random=random;}});
 test('irrelevant direct-fact reorder preserves byte output',()=>{const e=entry(),r=result(e);e.material.facts.reverse();assert.equal(JSON.stringify(result(e)),JSON.stringify(r));});
 test('direct material and expectations remain immutable',()=>{const e=entry(),before=structuredClone(e);result(e);assert.deepEqual(e,before);});

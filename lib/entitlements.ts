@@ -1,15 +1,10 @@
 import type { AnalysisResult, NormalizedTransaction } from "./prescore";
+import type { RuntimePreparedStatement } from "./runtime-database";
 
 export type AnalysisTier = "FREE" | "FULL";
 
-type Statement = {
-  bind: (...values: unknown[]) => Statement;
-  run: () => Promise<unknown>;
-  first: <T = unknown>() => Promise<T | null>;
-};
-
 export type EntitlementDatabase = {
-  prepare: (query: string) => Statement;
+  prepare: (query: string) => RuntimePreparedStatement;
 };
 
 export type LockedSummary = {
