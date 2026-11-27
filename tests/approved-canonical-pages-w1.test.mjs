@@ -14,7 +14,7 @@ test('approved core pages expose canonical detail without hidden disclosure', as
   const {model}=conclusionFixture();
   const data=liveView(model,'ООО ТЕСТ','');
   const detail=React.createElement('div',{'data-testid':'canonical-evidence'},'CANONICAL_EVIDENCE_SENTINEL');
-  const renderWith = (page, viewData) => renderToStaticMarkup(React.createElement(ApprovedPage,{page,data:viewData,focus:'Финансист',go:()=>{},apps:[],details:detail}));
+  const renderWith = (page, viewData, details=detail) => renderToStaticMarkup(React.createElement(ApprovedPage,{page,data:viewData,focus:'Финансист',go:()=>{},apps:[],details}));
   const render = (page) => renderWith(page, data);
   for(const page of ['analysis','banking','financing','documents','applications','actions']){
    const html=render(page);
@@ -23,8 +23,20 @@ test('approved core pages expose canonical detail without hidden disclosure', as
    assert.doesNotMatch(html,/class="details"/,page);
    assert.match(html,/id="approved-source-operations"/,page);
   }
+  for(const [page,heading] of [
+   ['bfo','Бухгалтерская отчётность'],
+   ['obligations','Кредитный портфель'],
+   ['calendar','Подтверждённые даты платежей'],
+   ['analyst','Кредитный эксперт'],
+  ]){
+   const html=render(page);
+   assert.match(html,new RegExp(heading),page);
+   assert.match(html,/class="approved-canonical-section"/,page);
+   assert.match(html,/CANONICAL_EVIDENCE_SENTINEL/,page);
+   assert.doesNotMatch(html,/class="details"/,page);
+  }
   assert.match(render('home'),/class="details"/);
-  const analysis=render('analysis');
+  const analysis=renderWith('analysis',data,null);
   assert.match(analysis,/Финансово-кредитное заключение Prescore/);
   assert.match(analysis,/независимая финансовая диагностика/);
   assert.match(analysis,/не показывает/);
@@ -35,7 +47,7 @@ test('approved core pages expose canonical detail without hidden disclosure', as
   const stopped=conclusionFixture('CL-RU-BUS-017');
   const stoppedView=liveView(stopped.model,'ООО СИНТЕТИЧЕСКОЕ','');
   assert.ok(stoppedView.riskSummary?.some((item) => item.status === 'GLOBAL_STOP'));
-  assert.match(renderWith('analysis',stoppedView),/Критический фактор/);
+  assert.match(renderWith('analysis',stoppedView,null),/Критический фактор/);
   const basic=structuredClone(stopped.model);
   delete basic.full;
   basic.entitlement='BASIC';
@@ -54,11 +66,14 @@ test('approved core pages expose canonical detail without hidden disclosure', as
  } finally {await rt.close();}
 });
 
-test('action plan uses canonical renderer and password eye is display-only',()=>{
+test('all supported client sections use ApprovedPage; action plan uses the canonical renderer and password eye is display-only',()=>{
  const client=fs.readFileSync('app/components/workspace/client.tsx','utf8');
  const live=fs.readFileSync('app/components/workspace/approved/live-shell.tsx','utf8');
  assert.match(client,/view==='actions'&&model&&\(model\.full\?<ActionPlan/);
  assert.match(client,/view==='analysis'&&model&&<FullCreditAnalysis/);
+ assert.doesNotMatch(live,/includes\(c\.view\)/);
+ assert.match(client,/dossierOnlyApprovedViews/);
+ assert.match(client,/view==='calendar'&&model&&<ClientPaymentCalendar/);
  assert.match(live,/details=\{billing \|\| ar \? undefined/);
  for(const file of ['app/login/credentials.tsx','app/reset-password/page.tsx']){
   const source=fs.readFileSync(file,'utf8');

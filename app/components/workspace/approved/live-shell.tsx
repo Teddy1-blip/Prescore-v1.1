@@ -156,10 +156,6 @@ export function ClientShell(p: Workspace) {
 export function LivePage({ children }: { children: ReactNode }) {
   const c = useContext(ScreenContext);
   if (!c?.renderPage || !Object.hasOwn(pages, c.view)) return <>{children}</>;
-  if (['obligations', 'bfo', 'calendar', 'analyst'].includes(c.view)) {
-    if (children == null || typeof children === 'boolean') return null;
-    return <div className="ws">{children}</div>;
-  }
   const page = c.view as Page;
   const billing = page === 'billing',
     ar = page === 'counterparties';

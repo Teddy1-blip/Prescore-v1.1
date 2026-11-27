@@ -30,10 +30,14 @@ export function ApprovedPage(p: ScreenProps) {
   const detailsRef = useRef<HTMLDetailsElement>(null);
   const hasDetails = Boolean(p.details);
   // Canonical conclusions and document operations remain visible on their actual product pages.
-  const inlineCanonical = (['banking', 'analysis', 'financing', 'documents', 'applications', 'actions'] as Page[]).includes(page);
+  const inlineCanonical = (['banking', 'bfo', 'analysis', 'obligations', 'calendar', 'analyst', 'financing', 'documents', 'applications', 'actions'] as Page[]).includes(page);
   const canonicalHeadings: Partial<Record<Page, string>> = {
     banking: 'Подробные банковские показатели и отчётность',
+    bfo: 'Показатели и динамика бухгалтерской отчётности',
     analysis: 'Полное кредитное заключение',
+    obligations: 'Детали кредитного портфеля',
+    calendar: 'Даты и суммы подтверждённых платежей',
+    analyst: 'Пояснения по выбранному анализу',
     financing: 'Расчёты и подготовка финансирования',
     documents: 'Источники, загрузка и проверка документов',
     applications: 'Работа с заявками и документами',
@@ -251,6 +255,48 @@ export function ApprovedPage(p: ScreenProps) {
           </>
         )}
       </>
+    );
+  if (page === 'bfo')
+    content = (
+      <Card title="Бухгалтерская отчётность" sub={d.fiscalDate || d.asOf || 'Отдельный отчётный период'}>
+        {d.bfo.length ? (
+          <Table label="Показатели бухгалтерской отчётности" heads={['Показатель', 'Источник', 'Значение', 'Дата']} rows={d.bfo} />
+        ) : (
+          <p>{d.hasFinancialSource
+            ? d.plan === 'BASIC' ? 'Отчётность сохранена. Подробные показатели доступны в полном кредитном профиле.' : 'В выбранной версии нет подтверждённых показателей отчётности.'
+            : 'Добавьте годовую или промежуточную отчётность в документы компании.'}</p>
+        )}
+        {jump('Открыть кредитный профиль', 'analysis')}
+      </Card>
+    );
+  if (page === 'obligations')
+    content = (
+      <Card title="Кредитный портфель" sub={d.debtDate}>
+        {d.obligations.length ? (
+          <Table label="Обязательства компании" heads={['Кредитор или обязательство', 'Остаток долга', 'Основание']} rows={d.obligations} />
+        ) : (
+          <p>{d.plan === 'BASIC'
+            ? 'Подробные сведения о кредитных обязательствах доступны в полном кредитном профиле.'
+            : 'В выбранной версии нет подтверждённых остатков по обязательствам. Проверьте отчёт БКИ и договоры в документах.'}</p>
+        )}
+        <p className="note">Остаток долга и датированный будущий платёж — разные показатели; график показывается отдельно.</p>
+        {jump('Открыть платёжный календарь', 'calendar')}
+      </Card>
+    );
+  if (page === 'calendar')
+    content = (
+      <Card title="Подтверждённые даты платежей" sub={d.asOf || d.debtDate}>
+        <p>Ниже отображаются только платежи, для которых в источниках есть подтверждённые дата и сумма. История выписок не считается прогнозом будущих поступлений.</p>
+        {!p.details && <p className="note">Для просмотра календаря выберите анализ с данными кредитного портфеля.</p>}
+        {jump('Проверить кредитный портфель', 'obligations')}
+      </Card>
+    );
+  if (page === 'analyst')
+    content = (
+      <Card title="Кредитный эксперт" sub={d.asOf || 'Выбранный анализ'}>
+        <p>Пояснения относятся к финансовым данным выбранной версии анализа.</p>
+        {!p.details && <p className="note">Инструмент пояснений недоступен для этой версии анализа.</p>}
+      </Card>
     );
   if (page === 'analysis')
     content = (

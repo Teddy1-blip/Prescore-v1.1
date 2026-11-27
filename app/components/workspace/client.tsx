@@ -22,6 +22,7 @@ import {BankingLedger} from './banking-ledger';
 import {FinancingRequest} from './financing-request';
 import {BrokerPermissions} from './client-operations';
 import {DocumentSources} from './client-documents';
+import {FinancialStatements} from './client-financials';
 import AiAnalyst from "../../dashboard/ai-analyst";
 import "../../dashboard/dashboard.css";
 import "./workspace.css";
@@ -140,7 +141,10 @@ export default function ClientWorkspace(){
  const needsModel=clientViewNeedsModel(view);
  useEffect(()=>{if(loading||modulesLoading||state.loading)return;const timer=setTimeout(()=>{const allowed=clientAvailableViews(modules,locked);if(!allowed.includes(view)){const fallback=allowed.includes('home')?'home':allowed[0];setNotice(view==='upload'&&locked?'Загрузка выписок недоступна в режиме чтения.':'Раздел временно недоступен.');if(fallback){setView(fallback);const url=new URL(window.location.href);url.searchParams.set('view',fallback);window.history.replaceState(null,'',url);}}},0);return()=>clearTimeout(timer);},[loading,modulesLoading,state.loading,modules,locked,view]);
  const disabled=modules[clientModuleKeys[view]]===false;
- const showApproved=!(['counterparties','calendar'].includes(view)&&!agentWorkspace&&!locked)&&!loading&&!modulesLoading&&!disabled&&!error&&!unavailable&&(!needsModel||!!model)&&!!selected&&!(view==='applications'&&(!operationsReady||!!operationsError));
+ const dossierOnlyApprovedViews=['home','counterparties','bfo','obligations','calendar','documents'];
+ const showApproved=!loading&&!modulesLoading&&!disabled&&!error&&!unavailable&&
+  (selected?(!needsModel||!!model):!!dossierId&&dossierOnlyApprovedViews.includes(view))&&
+  !(view==='applications'&&(!operationsReady||!!operationsError));
  const companyName=model?.basic.analysis.company.name?.trim()||selected?.companyName?.trim()||'Ваш кредитный профиль';
  const sourcesVisible=!loading&&!modulesLoading&&!disabled&&!error&&!locked&&!agentWorkspace&&!unavailable&&(!selectedId||!!selected)&&['home','banking','bfo','counterparties','obligations','documents','analysis','calendar','actions','financing','billing'].includes(view);
  const sourcesWidget=sourcesVisible?<CompanySources key={'sources:'+dossierId+':'+selectedId+':'+view} view={view} choose={choose} id={dossierId} analysisId={selected?.id} model={model} onMatrix={setFinancialDossier} ownerTestWorkspace={ownerTestWorkspace} onBuyerBalances={ownerTestWorkspace&&view==='home'?setBuyerData:undefined} companyEntry={view==='home'?companyEntry:0} bankInn={selected?.companyInn} bank={model?.basic} onCompany={setDossierInn} onSourceChanged={selectedId||dossierId?refreshSource:undefined} openBank={()=>choose('documents')}/>:null;
@@ -171,8 +175,9 @@ export default function ClientWorkspace(){
  {!needsModel&&state.error&&<><p role="alert">{state.error} Это не означает, что документы отсутствуют. <button onClick={refresh}>Повторить загрузку сводки</button></p><WorkspaceDiagnosticBlock model={model} diagnosticMessage={state.diagnostic}/></>}
  {view==='billing'&&<ClientBilling key={selectedId} analysisId={selectedId} readOnly={locked}/>}
  {view==='home'&&model&&!showApproved&&<ClientOverview key={selectedId} model={model} choose={choose} retry={refresh}/>} 
- {view==='calendar'&&model&&(agentWorkspace||locked)&&<ClientPaymentCalendar model={model}/>}
+ {view==='calendar'&&model&&<ClientPaymentCalendar model={model}/>}
  {view==='banking'&&model&&<><div className="pc-page-title"><div><h1>Финансы</h1><p>Денежный поток, ликвидность и финансовая отчётность</p></div></div><BankingLedger model={model}/><Account51ServerReconciliation items={model.basic.account51Reconciliation}/><BankBfoReconciliation rows={model.full?.report.reconciliation?.bankBfo}/>{model.full&&!model.full.report.financialAnalysis?.history.length&&<button className="pc-text-button" onClick={()=>choose('documents')}>Добавить отчётность в документах →</button>}<Panel title="Крупнейшие контрагенты">{model.basic.bankingFacts.topCounterparties?.length?<div className="pc-table-scroll"><table><thead><tr><th>Контрагент</th><th>Поступления, ₽</th><th>Доля</th></tr></thead><tbody>{model.basic.bankingFacts.topCounterparties.map((c,i)=><tr key={c.name+i}><th>{c.name}</th><td>{new Intl.NumberFormat('ru-RU').format(c.amount)}</td><td>{new Intl.NumberFormat('ru-RU',{maximumFractionDigits:1}).format(c.share*100)}%</td></tr>)}</tbody></table></div>:<p>Контрагенты не определены в доступной выписке.</p>}</Panel></>}
+ {view==='bfo'&&model&&<FinancialStatements model={model}/>}
  {view==='analysis'&&model&&<FullCreditAnalysis key={selectedId} compactHeader={showApproved} statementMatrix={currentMatrix?<BfoMatrix matrix={currentMatrix}/>:null} model={model} dossierId={locked||agentWorkspace?undefined:dossierId} retry={refresh}/>}
   {view==='actions'&&model&&(model.full?<ActionPlan key={selectedId} model={model}/>:<FullAccessNotice model={model} retry={refresh} diagnosticMessage={state.diagnostic}/>)}
  {view==='financing'&&model&&<><div className="pc-page-title"><div><h1>Финансирование</h1><p>Цель, параметры и подходящие механизмы финансирования</p></div></div><FinancingRequest key={selectedId+'-request'} model={model} saved={refresh}/><FinancingProducts model={model} showHeading={false}/>{operationsReady&&!operationsError&&<Crm key={selectedId+'-financing-deals'} readOnly={locked} deals={deals.filter(d=>d.analysisId===selectedId)} analyses={[selected]} selected={selected} addDeal={addDeal} updateDeal={updateDeal}/>} {!operationsReady&&!operationsError&&<p role="status">Загружаем заявки и переписку…</p>}</>}
