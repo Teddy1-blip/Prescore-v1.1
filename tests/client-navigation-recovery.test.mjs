@@ -103,8 +103,10 @@ for(const [view,title]of Object.entries({analysis:'Кредитный профи
 for(const failure of [{modelError:'Model unavailable'},{modelLoading:true}]){
  test(`documents remain reachable with ${failure.modelError?'failed':'loading'} analytical model`,()=>{
   const tree=harness({view:'documents',selectedId:company.id,...failure}).render();
-  assert.deepEqual(named(tree,'SourceUpload').map(n=>n.props.kind).sort(),['BFO','BKI','QUARTERLY']);
-  assert.equal(named(tree,'documents-hub').length,1);
+  assert.equal(named(tree,'CompanySources').length,1,'source intake stays available without an analytical model');
+  assert.equal(named(tree,'CompanySources')[0].props.view,'documents');
+  assert.equal(named(tree,'CompanySources')[0].props.analysisId,company.id);
+  assert.equal(named(tree,'ClientShell')[0].props.locked,false);
   assert.equal(named(tree,'DocumentSources').length,0,'do not pass null to model-only summary');
  });
 }
@@ -112,7 +114,6 @@ test('BKI upload remains reachable in Obligations when the analytical model fail
  const tree=harness({view:'obligations',selectedId:company.id,modelError:'Model unavailable'}).render();
  // The unified portfolio form owns BKI intake for the client, including during a model error.
  assert.deepEqual(named(tree,'CompanySources').map(n=>[n.props.view,n.props.bankInn]),[['obligations',company.companyInn]]);
- assert.equal(named(tree,'SourceUpload').length,0);
  assert.equal(named(tree,'DebtPortfolio').length,0);
  assert.match(text(tree),/Обязательства/);
 });
@@ -127,9 +128,9 @@ test('billing can load its own API without the analytical model',()=>{
 });
 test('read-only documents remain readable without exposing any source upload',()=>{
  const tree=harness({view:'documents',selectedId:company.id,modelError:'Model unavailable',readOnly:true}).render();
- assert.equal(named(tree,'SourceUpload').length,0);
- assert.equal(named(tree,'CompanyData').length,0);
- assert.equal(named(tree,'documents-hub')[0]?.props.readOnly,true);
+ assert.equal(named(tree,'CompanySources').length,0);
+ assert.equal(named(tree,'ClientShell')[0].props.locked,true);
+ assert.equal(named(tree,'DocumentSources').length,0);
 });
 test('model fetch does not hide the new-analysis entry point',()=>{
  const tree=harness({view:'analysis',selectedId:company.id,modelLoading:true}).render();
@@ -185,14 +186,16 @@ test('an empty Documents section offers a working route to statement upload',()=
 test('ready Documents retains both analytical source summary and upload forms',()=>{
  const tree=harness({view:'documents',selectedId:company.id,model:readyModel()}).render();
  assert.equal(named(tree,'DocumentSources').length,1);
- assert.deepEqual(named(tree,'SourceUpload').map(n=>n.props.kind).sort(),['BFO','BKI','QUARTERLY']);
+ assert.equal(named(tree,'CompanySources').length,1);
+ assert.equal(named(tree,'CompanySources')[0].props.view,'documents');
+ assert.equal(named(tree,'CompanySources')[0].props.analysisId,company.id);
 });
 test('model-provided read-only access is still enforced in operational sections',()=>{
  const model=readyModel();model.access.readOnly=true;
  const tree=harness({view:'documents',selectedId:company.id,model}).render();
- assert.equal(named(tree,'SourceUpload').length,0);
- assert.equal(named(tree,'CompanyData').length,0);
- assert.equal(named(tree,'documents-hub')[0]?.props.readOnly,true);
+ assert.equal(named(tree,'CompanySources').length,0);
+ assert.equal(named(tree,'ClientShell')[0].props.locked,true);
+ assert.equal(named(tree,'DocumentSources')[0].props.readOnly,true);
 });
 
 
@@ -201,7 +204,9 @@ test('internal diagnostic copy is hidden in Documents while recovery controls re
  assert.equal(nodes(tree).filter(n=>n.props?.['data-workspace-diagnostic']).length,0);
  assert.doesNotMatch(text(tree),/Safe processing diagnostic/);
  assert.match(text(tree),/Model unavailable/);
- assert.deepEqual(named(tree,'SourceUpload').map(n=>n.props.kind).sort(),['BFO','BKI','QUARTERLY']);
+ assert.equal(named(tree,'CompanySources').length,1);
+ assert.equal(named(tree,'CompanySources')[0].props.view,'documents');
+ assert.equal(named(tree,'CompanySources')[0].props.analysisId,company.id);
 });
 test('no diagnostic is shown for an unselected or inaccessible analysis',()=>{
  for(const selectedId of ['', 'not-owned']){

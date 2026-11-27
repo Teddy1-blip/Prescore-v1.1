@@ -15,9 +15,10 @@ test('real ClientOverview preserves FREE/FULL routing and original props inside 
  assertClientOverviewRouting(source);
 });
 test('routing contract accepts an equivalent container without depending on return spelling', () => {
- const from = `return <>\n    ${executive}\n      ${decision}\n    </ExecutiveOverview>\n  </>;`;
- const to = `return <section>\n    ${executive}\n      ${decision}\n    </ExecutiveOverview>\n  </section>;`;
- assertClientOverviewRouting(change(from, to));
+ const wrapper = source.match(/return\s*<>\s*(<ExecutiveOverview \{\.\.\.props\}>[\s\S]*?<\/ExecutiveOverview>)\s*<\/>;/);
+ assert.ok(wrapper, 'find the FULL overview wrapper independently of whitespace');
+ assert.equal(source.match(/return\s*<>\s*<ExecutiveOverview \{\.\.\.props\}>/g)?.length, 1);
+ assertClientOverviewRouting(source.replace(wrapper[0], `return <section>${wrapper[1]}</section>;`));
 });
 for (const [name, from, to] of [
  ['missing FULL guard', guard, ''],
