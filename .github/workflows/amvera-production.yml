@@ -24,18 +24,18 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: 277400d858968b774eaf967ae8de918408dcd663
+          ref: 233ee73fb6b9d4bf48d54814200a30257e7c05bd
           fetch-depth: 0
           persist-credentials: false
       - name: Verify literal product SHA
         shell: bash
-        run: test "$(git rev-parse HEAD)" = "277400d858968b774eaf967ae8de918408dcd663"
+        run: test "$(git rev-parse HEAD)" = "233ee73fb6b9d4bf48d54814200a30257e7c05bd"
       - name: Prepare isolated production delivery tool
         shell: bash
         run: |
           cat > "$RUNNER_TEMP/prescore-prod-delivery.py" <<'PY'
           import hashlib, json, os, pathlib, re, subprocess, sys
-          SOURCE = "277400d858968b774eaf967ae8de918408dcd663"
+          SOURCE = "233ee73fb6b9d4bf48d54814200a30257e7c05bd"
           URL = "https://git.msk1.amvera.ru/dorogovab/prescore-prod"
           root = pathlib.Path(os.environ["RUNNER_TEMP"]) / "prescore-prod-delivery"
           workspace = pathlib.Path(os.environ["GITHUB_WORKSPACE"])
