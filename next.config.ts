@@ -6,7 +6,7 @@ const forwardedHost = process.env.CODESPACES === 'true' && process.env.NODE_ENV 
   : undefined;
 const nextConfig:NextConfig={...(forwardedHost && {allowedDevOrigins:[forwardedHost]}),output:'standalone',poweredByHeader:false,
  // The proxy must leave one overflow byte for the existing per-route body checks.
- experimental:{proxyClientMaxBodySize:64*1024*1024+1},
+ experimental:{proxyClientMaxBodySize:64*1024*1024+1,agentUpgrade:'security'},
  serverExternalPackages:['pdfjs-dist','@napi-rs/canvas'],
  outputFileTracingIncludes:{'/api/ready':['./lib/db/migrations/*.sql'],'/dashboard/report-v2':['./tests/fixtures/credit-lab/development-v1/business-sources.zip'],'/api/source-documents':['./node_modules/pdfjs-dist/legacy/build/**','./node_modules/@napi-rs/canvas/**','./node_modules/@napi-rs/canvas-linux-x64-gnu/**']}};
 export default nextConfig;
