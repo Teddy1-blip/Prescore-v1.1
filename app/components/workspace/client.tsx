@@ -101,10 +101,23 @@ export default function ClientWorkspace(){
   }
   if(v!=='upload'&&selection.current)url.searchParams.set('analysisId',selection.current);url.searchParams.set('view',v);if(url.href!==window.location.href)(window.history.pushState??window.history.replaceState).call(window.history,null,'',url);}
  useEffect(()=>{const restore=()=>window.location.reload();window.addEventListener('popstate',restore);return()=>window.removeEventListener('popstate',restore);},[]);
- const loadOperations=useCallback(async()=>{const request=++operationsRequest.current;setOperationsLoading(true);try{const r=await fetch(scope.current?`/api/workspace?client=${encodeURIComponent(scope.current)}&from=agent`:'/api/workspace',{cache:'no-store'});const d=await r.json();if(!r.ok){if(request===operationsRequest.current&&[401,403].includes(r.status)){setAnalyses([]);setDeals(null);}throw Error(r.status===401?'Сессия завершена. Войдите в кабинет повторно.':d.error||'Не удалось обновить заявки');}if(request===operationsRequest.current){setAnalyses(d.analyses??[]);setDeals(d.deals??[]);setReadOnly(!!d.readOnly);setOperationsError('');}return true;}catch(e){if(request===operationsRequest.current)setOperationsError(e instanceof Error?e.message:'Не удалось обновить данные');return false;}finally{if(request===operationsRequest.current)setOperationsLoading(false);}},[]);
+ const loadOperations=useCallback(async()=>{const request=++operationsRequest.current;setOperationsLoading(true);try{const r=await fetch(scope.current?`/api/workspace?client=${encodeURIComponent(scope.current)}&from=agent`:'/api/workspace',{cache:'no-store'});const d=await r.json();if(!r.ok){if(request===operationsRequest.current&&[401,403].includes(r.status)){setAnalyses([]);setDeals(null);}throw Error(r.status===401?'Сессия завершена. Войдите в кабинет повторно.':d.error||'Не удалось обновить заявки');}const rows:StoredAnalysis[]=d.analyses??[];if(request===operationsRequest.current){setAnalyses(rows);setDeals(d.deals??[]);setReadOnly(!!d.readOnly);setOperationsError('');return rows;}return null;}catch(e){if(request===operationsRequest.current)setOperationsError(e instanceof Error?e.message:'Не удалось обновить данные');return null;}finally{if(request===operationsRequest.current)setOperationsLoading(false);}},[]);
  const reloadModel=state.refresh;
  const refresh=useCallback(async()=>{await loadOperations();await reloadModel();},[loadOperations,reloadModel]);
- const refreshSource=useCallback(async()=>{await loadOperations();if(!await reloadModel())throw Error('Документ сохранён, но обновление анализа не подтверждено. Нажмите «Повторить» в сообщении над разделом.');},[loadOperations,reloadModel]);
+ const refreshSource=useCallback(async()=>{
+  const refreshed=await loadOperations();
+  if(!refreshed)throw Error('Документ сохранён, но список анализов не обновился. Нажмите «Повторить» перед продолжением.');
+  if(!selectedId&&dossierId){
+   const latest=latestCompanyVersion(refreshed,dossierInn);
+   if(latest){
+    selection.current=latest.id;setSelectedId(latest.id);
+    const url=new URL(window.location.href);url.searchParams.set('dossierId',dossierId);url.searchParams.set('analysisId',latest.id);
+    window.history.replaceState(null,'',url);
+    return;
+   }
+  }
+  if(!selectedId||!await reloadModel())throw Error('Документ сохранён, но актуальная версия анализа не подтвердилась. Нажмите «Повторить» перед продолжением.');
+ },[loadOperations,reloadModel,selectedId,dossierId,dossierInn]);
  useEffect(()=>{if(!['applications','financing'].includes(view)||loading)return;const timer=setTimeout(()=>void loadOperations(),0);return()=>clearTimeout(timer);},[view,loading,loadOperations]);
  function chooseAnalysis(id:string,inn=analyses.find(a=>a.id===id)?.companyInn,directory=companies){
   const company=directory.find(item=>item.inn===inn);
@@ -130,7 +143,7 @@ export default function ClientWorkspace(){
  const showApproved=!(['counterparties','calendar'].includes(view)&&!agentWorkspace&&!locked)&&!loading&&!modulesLoading&&!disabled&&!error&&!unavailable&&(!needsModel||!!model)&&!!selected&&!(view==='applications'&&(!operationsReady||!!operationsError));
  const companyName=model?.basic.analysis.company.name?.trim()||selected?.companyName?.trim()||'Ваш кредитный профиль';
  const sourcesVisible=!loading&&!modulesLoading&&!disabled&&!error&&!locked&&!agentWorkspace&&!unavailable&&(!selectedId||!!selected)&&['home','banking','bfo','counterparties','obligations','documents','analysis','calendar','actions','financing','billing'].includes(view);
- const sourcesWidget=sourcesVisible?<CompanySources key={'sources:'+dossierId+':'+selectedId+':'+view} view={view} choose={choose} id={dossierId} analysisId={selected?.id} model={model} onMatrix={setFinancialDossier} ownerTestWorkspace={ownerTestWorkspace} onBuyerBalances={ownerTestWorkspace&&view==='home'?setBuyerData:undefined} companyEntry={view==='home'?companyEntry:0} bankInn={selected?.companyInn} bank={model?.basic} onCompany={setDossierInn} onSourceChanged={selectedId?refreshSource:undefined} openBank={()=>choose('documents')}/>:null;
+ const sourcesWidget=sourcesVisible?<CompanySources key={'sources:'+dossierId+':'+selectedId+':'+view} view={view} choose={choose} id={dossierId} analysisId={selected?.id} model={model} onMatrix={setFinancialDossier} ownerTestWorkspace={ownerTestWorkspace} onBuyerBalances={ownerTestWorkspace&&view==='home'?setBuyerData:undefined} companyEntry={view==='home'?companyEntry:0} bankInn={selected?.companyInn} bank={model?.basic} onCompany={setDossierInn} onSourceChanged={selectedId||dossierId?refreshSource:undefined} openBank={()=>choose('documents')}/>:null;
  const openCompanyEntry=!locked&&availableViews.includes('home')&&!agentWorkspace&&!error
   ?()=>{choose('home');setCompanyEntry(n=>n+1);} : undefined;
  const currentMatrix=sourcesVisible&&financialDossier?.matrix&&

@@ -43,6 +43,13 @@ test('company selection is independent of bank history and rejects crossed ident
  assert.throws(()=>resolve('dossierId=other'));
  assert.deepEqual(resolve('client=delegated'),{dossier:undefined,version:'delegated'});
 });
+test('source refresh adopts the analysis created for a dossier without a selected analysis',()=>{
+ const client=fs.readFileSync('app/components/workspace/client.tsx','utf8');
+ assert.match(client,/const refreshed=await loadOperations\(\)/);
+ assert.match(client,/if\(!selectedId&&dossierId\)/);
+ assert.match(client,/latestCompanyVersion\(refreshed,dossierInn\)/);
+ assert.match(client,/onSourceChanged=\{selectedId\|\|dossierId\?refreshSource:undefined\}/);
+});
 test('without a company neither phantom ID is serialized', () => {
   const q = query(clientNavigationHref('?analysisId=stale&dossierId=stale', 'home'));
   assert.equal(q.has('analysisId'), false);
