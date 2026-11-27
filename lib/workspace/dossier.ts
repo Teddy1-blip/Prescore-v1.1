@@ -14,6 +14,14 @@ export async function ownedDossier(db:QueryExecutor, owner:string, id:string) {
   return (await db.query('SELECT id,company_inn AS inn FROM company_dossiers WHERE id=$1 AND owner_email=$2',[id,owner])).rows[0] as {id:string;inn:string}|undefined;
 }
 
-export async function dossierVersions(db:QueryExecutor, owner:string, inn:string) {
-  return (await db.query("SELECT id,company_name AS name,period_from AS start,period_to AS end FROM analyses WHERE owner_email=$1 AND company_inn=$2 AND archive_state='ACTIVE' ORDER BY created_at DESC,id",[owner,inn])).rows as {id:string;name:string;start:string;end:string}[];
+export async function dossierAnalysisCatalog(db:QueryExecutor, owner:string, inn:string) {
+  const rows=(await db.query("SELECT id,company_name AS name,period_from AS start,period_to AS end,payload FROM analyses WHERE owner_email=$1 AND company_inn=$2 AND archive_state='ACTIVE' ORDER BY created_at DESC,id",[owner,inn])).rows as {id:string;name:string;start:string;end:string;payload:string}[];
+  const bankAnalysis=(row:typeof rows[number])=>{
+    const analysis=JSON.parse(row.payload) as {sourceManifest?:{bankStatements?:unknown[]};transactions?:unknown[];metrics?:{transactions?:number}};
+    return Boolean(analysis.sourceManifest?.bankStatements?.length||analysis.transactions?.length||(analysis.metrics?.transactions??0)>0);
+  };
+  return {
+    analysisIds:rows.map(row=>row.id),
+    versions:rows.filter(bankAnalysis).map(({id,name,start,end})=>({id,name,start,end})),
+  };
 }

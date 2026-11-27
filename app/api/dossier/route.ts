@@ -16,7 +16,7 @@ import {getRuntime} from '../../../lib/platform/runtime';
 import {checkoKey,loadChecko,validInn,checkoState} from '../../../lib/external/checko-cache';
 import {profileView} from '../../../lib/external/checko-profile';
 import {rateLimit,logUploadFailure} from '../../../lib/release/security';
-import {ownedDossier,saveDossier,dossierVersions} from '../../../lib/workspace/dossier';
+import {ownedDossier,saveDossier,dossierAnalysisCatalog} from '../../../lib/workspace/dossier';
 import {dossierTier,visibleProjection} from '../../../lib/workspace/dossier-view';
 import {dossierSources} from '../../../lib/workspace/dossier-sources';
 import {FullRequired,InputError,importSource,uploadKinds} from '../../../lib/workspace/dossier-import';
@@ -35,9 +35,9 @@ export async function GET(request:Request){
     const {readDossierReport}=await import('../../../lib/workspace/dossier-report');
     const model=await readDossierReport(pool,user,company,snapshotId);return model?reply({company,model}):reply({error:'Версия недоступна.'},404);
   }
-  const versions=await dossierVersions(pool,user.email,company.inn);
+  const {analysisIds,versions}=await dossierAnalysisCatalog(pool,user.email,company.inn);
   const selection=new URL(request.url).searchParams.get('analysisId');
-  if(selection&&!versions.some(v=>v.id===selection))return reply({error:'Анализ недоступен в этом досье.'},404);
+  if(selection&&!analysisIds.includes(selection))return reply({error:'Анализ недоступен в этом досье.'},404);
   const result=await visibleProjection(pool,user,company,!selection);
   return reply({company,...result,versions});
 }
