@@ -5,7 +5,7 @@ import {getRuntime} from "../../../lib/platform/runtime";
 import { createHash } from "node:crypto";
 import { loadWorkspaceModelV1, readWorkspaceOperations } from "../../../lib/workspace/service.ts";
 import type { WorkspaceModelV1 } from "../../../lib/workspace/model.ts";
-import { AI_ANALYST_PROMPT_VERSION, AI_ANALYST_SYSTEM_PROMPT, ANALYST_QUESTIONS, analystTopic, type CanonicalAnalystContextV1, buildLocalAnalystAnswer, buildSanitizedCreditContext } from "../../../lib/ai-credit-analyst";
+import { AI_ANALYST_PROMPT_VERSION, AI_ANALYST_SYSTEM_PROMPT, ANALYST_QUESTIONS, analystTopic, type CanonicalAnalystContextV1, buildFinancialOnlyAnalystContext, buildLocalAnalystAnswer, buildSanitizedCreditContext, isFinancialAnalystQuestion } from "../../../lib/ai-credit-analyst";
 import { readableAnalysis, requireApiUser, unauthorized } from "../api-auth";
 import { resolveAnalysisTier } from "../../../lib/entitlements";
 
@@ -162,23 +162,26 @@ export async function POST(request: Request) {
     usageId=reservationId;
     request.signal.throwIfAborted();
     const sanitized = buildSanitizedCreditContext(question, workspace);
+    const financialProjection = isFinancialAnalystQuestion(question)
+      ? buildFinancialOnlyAnalystContext(question, workspace, sanitized)
+      : null;
     // Classify locally: user-pasted identifiers/documents and past assistant answers
-    // never become provider context. Every answer is grounded afresh in this snapshot.
+    // never become provider context. Only the financial projection can reach the provider.
     let provider: ReturnType<typeof configuredProvider> = null;
     try { provider = configuredProvider(); } catch { /* Invalid provider configuration uses the same canonical fallback. */ }
-    const generated = await generateWithFallback(analystTopic(question)==="boundary" ? null : provider, [
+    const generated = await generateWithFallback(financialProjection ? provider : null, [
       {role:"system",content:AI_ANALYST_SYSTEM_PROMPT},
-      {role:"system",content:`Текущий CanonicalAnalystContextV1:\n${JSON.stringify(sanitized)}`},
+      ...(financialProjection ? [{role:"system" as const,content:`Текущий FinancialOnlyAnalystContextV1:\n${JSON.stringify(financialProjection.context)}`}] : []),
       {role:"user",content:ANALYST_QUESTIONS[analystTopic(question)]},
     ], () => buildLocalAnalystAnswer(question, workspace),request.signal);
     request.signal.throwIfAborted();
     let firstEvidence:number|null=null;
     let mode=generated.mode, failure=generated.failure;
-    if(mode==="provider"){
-      try { firstEvidence=evidenceChoice(generated.text,sanitized.explanations.length); }
+    if(mode==="provider" && financialProjection){
+      try { firstEvidence=evidenceChoice(generated.text,financialProjection.context.explanations.length); }
       catch { mode="rules"; failure="AI_RESPONSE_UNGROUNDED"; }
     }
-    if (provider && analystTopic(question)!=="boundary") {
+    if (provider && financialProjection) {
       const latest=await ownedContext(db,analysisId,user);
       const deniedNow=accessError(latest);
       if(deniedNow || contextVersion(latest as WorkspaceModelV1)!==version){
@@ -187,9 +190,13 @@ export async function POST(request: Request) {
         return deniedNow??Response.json({error:"Версия анализа изменилась. Откройте актуальный диалог."},{status:409});
       }
     }
-    const answer=buildLocalAnalystAnswer(question,workspace,firstEvidence??undefined);
-    const evidence=analystTopic(question)==="boundary"?[]:sanitized.explanations
-      .filter(x=>x.evidence.length).sort((a,b)=>Number(b===sanitized.explanations[firstEvidence??-1])-Number(a===sanitized.explanations[firstEvidence??-1])).slice(0,4);
+    const selectedExplanationIndex = firstEvidence == null ? undefined : financialProjection?.sourceExplanationIndexes[firstEvidence];
+    const answer=buildLocalAnalystAnswer(question,workspace,selectedExplanationIndex);
+    const responseExplanations = financialProjection
+      ? financialProjection.context.explanations
+      : analystTopic(question)==="boundary" ? [] : sanitized.explanations;
+    const evidence=responseExplanations.filter(x=>x.evidence.length)
+      .sort((a,b)=>Number(b===responseExplanations[firstEvidence??-1])-Number(a===responseExplanations[firstEvidence??-1])).slice(0,4);
     const turn=version+":"+crypto.randomUUID(), userId=turn+":0", answerId=turn+":1", createdAt=new Date().toISOString();
     const reply={id:answerId,role:"assistant" as const,content:JSON.stringify({text:answer,evidence}),createdAt};
     request.signal.throwIfAborted();

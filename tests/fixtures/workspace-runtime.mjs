@@ -26,11 +26,12 @@ export async function createWorkspaceRuntime({checkoFetch}={}){
  if(!name.startsWith('.'))return require(name);
  const base=path.resolve(path.dirname(file),name),target=[base,base+'.ts',base+'.tsx',base+'.json',path.join(base,'index.ts')].find(p=>fs.existsSync(p)&&fs.statSync(p).isFile());
  if(!target)throw Error('MISSING_MODULE:'+name);
- if(target.endsWith('/lib/platform/runtime.ts'))return {getRuntime:()=>({DB:db,...(checkoFetch?{CHECKO_API_KEY:"isolated-fixture"}:{})})};
- if(target.endsWith('/app/chatgpt-auth.ts'))return {getChatGPTUser:async()=>scope.getStore()??null,requireChatGPTUser:async()=>{const user=scope.getStore();if(!user)throw Error('UNAUTHORIZED');return user;}};
+ const normalizedTarget=target.split(path.sep).join('/');
+ if(normalizedTarget.endsWith('/lib/platform/runtime.ts'))return {getRuntime:()=>({DB:db,...(checkoFetch?{CHECKO_API_KEY:"isolated-fixture"}:{})})};
+ if(normalizedTarget.endsWith('/app/chatgpt-auth.ts'))return {getChatGPTUser:async()=>scope.getStore()??null,requireChatGPTUser:async()=>{const user=scope.getStore();if(!user)throw Error('UNAUTHORIZED');return user;}};
  if(target.endsWith('.json'))return JSON.parse(fs.readFileSync(target,'utf8'));
  return load(target);
- },checkoFetch&&file.endsWith("/lib/external/checko-provider.ts")?checkoFetch:(...args)=>globalThis.fetch(...args));return exports;
+ },checkoFetch&&file.split(path.sep).join('/').endsWith("/lib/external/checko-provider.ts")?checkoFetch:(...args)=>globalThis.fetch(...args));return exports;
  }
  const owner={email:'owner@workspace.test',roles:['CLIENT']},broker={email:'broker@workspace.test',roles:['AGENT']},admin={email:'admin@workspace.test',displayName:'QA Admin',roles:['CLIENT','ADMIN']},stranger={email:'other@workspace.test',roles:['CLIENT']};
  async function request(url,init={},user=owner){const route=path.resolve('app'+new URL(url,'http://workspace.test').pathname+'/route.ts');if(!fs.existsSync(route))return Response.json({error:'Route missing'},{status:404});return scope.run(user,()=>load(route)[init.method??'GET'](new Request(new URL(url,'http://workspace.test'),init)));}
