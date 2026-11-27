@@ -1,0 +1,15 @@
+.git
+node_modules
+.next
+.prescore-build
+dist
+.wrangler
+.sites-runtime
+.env*
+*.log
+outputs
+work
+
+# GitHub staging builds from source, never transport archives.
+source.tar.gz
+amvera-staging-upload/

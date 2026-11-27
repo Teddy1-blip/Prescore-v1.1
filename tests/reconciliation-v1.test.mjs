@@ -182,3 +182,78 @@ test("finite output on overflow", () => { const b = bank(); b.monthly.forEach(m 
 test("invalid BKI date unavailable", () => assert.equal(stock({ bki: bki({ reportDate: "2025-02-30" }) }).outcome, "INSUFFICIENT_DATA"));
 test("calendar gap rejects invalid date", () => assert.equal(gapDays("2025-02-30", "2025-03-01"), null));
 test("100 companies with bank, six periods and BKI performance measurement", () => { const i = input({ bki: bki(), snapshots: [...[2021, 2022, 2023, 2024, 2025].map(y => snapshot("BFO", annualPeriod(y))), snapshot("QUARTERLY")] }); const start = performance.now(); let count = 0; for (let n = 0; n < 100; n++) count += buildReconciliation(i).findings.length; console.log(`Block 6 performance: 100 companies, 6 periods, BKI: ${(performance.now() - start).toFixed(1)} ms; ${count} findings`); assert.ok(count > 0); });
+
+test("nearest known borrowings inside the window survive a closer incomplete balance", () => {
+  const knownDate = {...annualPeriod(2025), asOf:"2025-12-15"};
+  const comparable = snapshot("QUARTERLY", knownDate, {"1410":1200,"1510":300});
+  const blank = snapshot("BFO", annualPeriod(2025), {"1410":undefined});
+  const f = stock({snapshots:[blank, comparable]});
+  assert.equal(f.outcome,"RELATIONSHIP_OBSERVED");
+  assert.equal(f.temporalGapDays,16);
+  assert.equal(f.leftFacts[0].value,2000);
+  assert.equal(f.rightFacts[0].value,1500);
+  assert.equal(f.absoluteDifference,500);
+});
+
+import {bankBfoComparisons} from "../lib/credit-engine/client-report/bank-bfo.ts";
+const flowCard = changes => bankBfoComparisons(run(changes)).find(row => row.accounting.label.includes("выручка"));
+test("X02 golden: facts, sources, period and conditional action survive serialization", () => {
+  const b = bank(undefined, undefined, 800);
+  b.operating.customerAdvanceAmount.value = 174;
+  const r = run({bank:b});
+  const row = bankBfoComparisons(JSON.parse(JSON.stringify(r))).find(x => x.difference === 2400);
+  assert.equal(row.bank.value, 9600);
+  assert.equal(row.accounting.value, 12000);
+  assert.equal(row.direction, "LEFT_BELOW_RIGHT");
+  assert.deepEqual(row.bank.sourceIds, ["BANK_STATEMENT:current"]);
+  assert.deepEqual(row.accounting.sourceIds, ["BFO:current"]);
+  assert.equal(row.bank.period.from, "2025-01-01");
+  assert.deepEqual(row.context.map(f=>f.value).sort((a,b)=>a-b), [174,2000]);
+  assert.match(row.action, /авансы/);
+  assert.equal(rule(r,"REC-REV").requiresDataReview,false);
+});
+test("X02 equality has no attributed cause or follow-up", () => {
+  const row = flowCard({});
+  assert.equal(row.difference,0); assert.equal(row.action,null); assert.deepEqual(row.context,[]);
+});
+test("X02 evidence requires same period and reported positive value", () => {
+  const b = bank(undefined,undefined,500); b.operating.customerAdvanceAmount.value=200;
+  b.operating.customerAdvanceAmount.periodFrom="2024-01-01";
+  const row = flowCard({bank:b,snapshots:[snapshot("BFO",annualPeriod(2025),{"1230":undefined})]});
+  assert.deepEqual(row.context,[]); assert.doesNotMatch(row.action,/аванс|дебитор/);
+});
+test("X02 and X03 reject unsupported units even in previously serialized sources", () => {
+  const s=snapshot(); s.currency="USD";
+  const rows=bankBfoComparisons(run({snapshots:[s]})); assert.equal(rows.length,2);
+  for(const row of rows){assert.equal(row.difference,null);assert.equal(row.accounting.value,null);assert.equal(row.action,null);}
+  const b=bank();b.operating.operatingCashReceipts.unit="COUNT";b.liquidity.endingBalance.unit="RATIO";
+  assert.ok(bankBfoComparisons(run({bank:b})).every(row=>row.difference===null));
+});
+test("X03 compares reported dates and preserves unknown account coverage", () => {
+  const b=bank();b.liquidity.endingBalance.periodTo="2025-12-30";
+  assert.equal(cash({bank:b}).absoluteDifference,null);
+  b.liquidity.endingBalance.periodTo="2025-12-31";b.liquidity.endingBalance.warnings=["INCOMPLETE_ACCOUNT_OR_BALANCE_COVERAGE"];
+  assert.equal(cash({bank:b}).absoluteDifference,null);
+});
+test("X02 partial months and mixed company monthly facts cannot produce a comparison", () => {
+  const data=buildFacts(input());
+  const month=data.facts.find(f=>f.semanticCode==="BANK_MONTHLY_OPERATING_RECEIPTS");
+  month.period.to="2025-01-29"; assert.equal(rule(reconcileFacts(data),"REC-REV").ratio,null);
+  month.period.to="2025-01-31";month.companyInn="9900002999";
+  assert.ok(!bankBfoComparisons(reconcileFacts(data)).some(row=>row.accounting.label.includes("выручка")));
+});
+test("bank-only does not fabricate a joint profile",()=>assert.deepEqual(bankBfoComparisons(run({snapshots:[]})),[]));
+
+import {parseQuarterlyReportText} from "../lib/quarterly-report.ts";
+for(const [declaration,scale] of [
+  ["Код по ОКЕИ 383",1],["ОКЕИ 384",1000],["Код по ОКЕИ 385",1000000],
+  ["Единица измерения: тыс. руб.\nОКЕИ 383",null],
+  ["Единица измерения: тыс. USD\nСправочно: тыс. руб.",null],
+  ["Валюта отчётности: BYN\nЕдиница измерения: тыс. руб.",null],
+]) test("BFO units before normalization: "+declaration,()=>{
+  const text="Бухгалтерская отчетность за 2025 год\nИНН "+inn+"\n"+declaration+
+    "\nБаланс 1600 4000\nОборотные активы 1200 3200\nКапитал и резервы 1300 2100\nДенежные средства 1250 500\nВыручка 2110 1200\nПрибыль от продаж 2200 350\nЧистая прибыль 2400 300";
+  const m=parseQuarterlyReportText(text,"synthetic.csv").financialMetadataV2;
+  assert.equal(m.scaleConfirmed,scale!==null);
+  if(scale!==null)assert.equal(m.rawScale,scale);
+});

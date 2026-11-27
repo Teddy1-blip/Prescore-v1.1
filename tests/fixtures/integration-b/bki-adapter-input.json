@@ -1,0 +1,37 @@
+{
+  "source": "Синтетическая БКИ-фикстура Credit Lab",
+  "subjectType": "Юридическое лицо",
+  "subjectInn": "9900002906",
+  "relationshipToCompany": "Компания-заёмщик",
+  "affectsCompanyDebt": true,
+  "reportDate": "2026-06-30",
+  "parserConfidence": 98,
+  "warnings": [
+    "SYNTHETIC_ADAPTER_FIXTURE_NOT_BUREAU_EXPORT"
+  ],
+  "summary": {},
+  "obligations": [
+    {
+      "id": "INTEGRATION-B-12M-loan-1",
+      "creditor": "Синтетический кредитор",
+      "product": "Срочный кредит",
+      "role": "Заёмщик",
+      "status": "Действующий",
+      "openedAt": "2024-01-01",
+      "scheduledCloseAt": "2028-06-30",
+      "outstandingPrincipal": 1500000,
+      "totalOutstanding": 1500000,
+      "originalAmount": 2500000,
+      "accountNumber": "",
+      "annualRate": 20,
+      "overdueAmount": 0,
+      "maxDelinquencyDays": 0,
+      "monthlyPayment": 100000,
+      "nextPaymentAmount": 100000,
+      "nextPaymentDate": "2026-07-15",
+      "creditLimit": null,
+      "guaranteeAmount": null,
+      "collateral": ""
+    }
+  ]
+}

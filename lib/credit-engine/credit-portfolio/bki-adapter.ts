@@ -27,7 +27,7 @@ export type UploadedBkiContext = { companyInn: string; source: SourceEnvelope; r
   confirmedZeroFields?: Record<string, string[]>; identityHints?: Record<string, PortfolioIdentityHints>; creditHistoryRequestId?: string; consentArtifactId?: string };
 export function adaptUploadedBki(report: CreditHistoryReport, context: UploadedBkiContext): CanonicalCreditHistorySnapshot {
   const s = context.source, asOf = validDate(report.reportDate) ? report.reportDate : null;
-  const provider = context.provider ?? (report.source === "НБКИ" ? "NBKI" : report.source === "СБ БКИ" ? "SBKI" : "UPLOADED_FILE");
+  const provider = context.provider ?? (report.source === "ОКБ" ? "OKB" : report.source === "НБКИ" ? "NBKI" : report.source === "СБ БКИ" ? "SBKI" : "UPLOADED_FILE");
   const available = s.sourceType === "BKI" && ["READY", "STALE"].includes(s.status);
   const c = available ? weakest(confidence(report.parserConfidence), confidence(s.confidence), s.status === "STALE" ? "LOW" : "HIGH") : "UNKNOWN";
   const warnings = [...(!available ? ["SOURCE_NOT_READY"] : []), ...(s.status === "STALE" ? ["SOURCE_STALE"] : [])];
@@ -44,16 +44,20 @@ export function adaptUploadedBki(report: CreditHistoryReport, context: UploadedB
       rawReference: s.rawReference, observedAt: asOf, description: `Uploaded bureau obligation: ${field}` });
     const fields: Record<string, string | number | null> = { creditorName: o.creditor, creditorInn: hints.creditorInn ?? null, contractNumber: hints.contractNumber ?? null, contractDate: hints.contractDate ?? null,
       accountNumber: o.accountNumber, productType: type === "UNKNOWN" ? null : type, status: obligationStatus(o.status) === "UNKNOWN" ? null : obligationStatus(o.status), originalAmount: o.originalAmount, creditLimit: o.creditLimit,
-      principalOutstanding: o.outstandingPrincipal, totalOutstanding: o.totalOutstanding, scheduledPaymentAmount: o.monthlyPayment,
+      principalOutstanding: o.outstandingPrincipal, totalOutstanding: o.totalOutstanding, scheduledPaymentAmount: o.contractualPayment ?? o.monthlyPayment,
+      ...(o.paymentFrequency ? {scheduledPaymentFrequency:o.paymentFrequency} : {}),
       nextPaymentAmount: o.nextPaymentAmount, nextPaymentDate: validDate(o.nextPaymentDate) ? o.nextPaymentDate : null, annualRate: o.annualRate,
       openedAt: hints.openedAt ?? null, maturityDate: !["BANK_GUARANTEE", "GUARANTORSHIP"].includes(type) && validDate(o.scheduledCloseAt) ? o.scheduledCloseAt : null,
       guaranteeExpiry: ["BANK_GUARANTEE", "GUARANTORSHIP"].includes(type) && validDate(o.scheduledCloseAt) ? o.scheduledCloseAt : null,
+      ...(Number.isInteger(o.currentDelinquencyDays) && o.currentDelinquencyDays! >= 0 ? {currentDelinquencyDays: o.currentDelinquencyDays!} : {}),
       overdueAmount: o.overdueAmount, delinquencyDays: o.maxDelinquencyDays, collateralDescription: o.collateral, guaranteeAmount: o.guaranteeAmount, contingentExposure: guarantorship ? o.guaranteeAmount : null };
     const canonical = Object.fromEntries(Object.entries(fields).map(([field, rawValue]) => {
-      const zeroConfirmed = rawValue !== 0 || context.confirmedZeroFields?.[o.id]?.includes(field);
+      const sourceField = field === "delinquencyDays" ? "maxDelinquencyDays" : field;
+      const provenance = o.fieldProvenance?.[sourceField];
+      const zeroConfirmed = rawValue !== 0 || (provenance ? provenance.origin === "REPORTED" && provenance.value === 0 && !!provenance.reference : context.confirmedZeroFields?.[o.id]?.includes(field));
       const refs = [evidenceFor(field, rawValue)];
       const underlyingBorrowerFact = guarantorship && ["originalAmount", "creditLimit", "principalOutstanding", "totalOutstanding", "scheduledPaymentAmount", "nextPaymentAmount", "nextPaymentDate", "annualRate", "overdueAmount", "delinquencyDays"].includes(field);
-      return [field, { ...reported(available && zeroConfirmed && !underlyingBorrowerFact ? rawValue : null, asOf, refs, c), warnings: [...warnings, ...(!zeroConfirmed ? ["MISSING_NOT_ZERO", "ZERO_NOT_SOURCE_CONFIRMED"] : [])] }];
+      return [field, { ...reported(available && zeroConfirmed && (!provenance || provenance.origin === "REPORTED" && provenance.value === rawValue && !!provenance.reference) && !underlyingBorrowerFact ? rawValue : null, asOf, refs, c), warnings: [...warnings, ...(!zeroConfirmed ? ["MISSING_NOT_ZERO", "ZERO_NOT_SOURCE_CONFIRMED"] : [])] }];
     }));
     return { observationKey: key, identityHints: hints, type, fields: canonical, evidence: Object.values(canonical).flatMap(v => v.evidence), warnings: obligationWarnings };
   }).sort((a, b) => a.observationKey.localeCompare(b.observationKey));

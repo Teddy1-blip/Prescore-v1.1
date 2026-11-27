@@ -1,3 +1,4 @@
+import {reportedEndpoint,reconcileStatementBalances, statementMoney, type BalanceCheck} from "./credit-engine/metrics/statement-balances.ts";
 import type { RiskShadowFields } from "./credit-engine/contracts/risk.ts";
 import { buildRiskShadow } from "./credit-engine/risk/integration.ts";
 import type { CreditHistoryInsight, CreditHistoryReport, CreditPortfolioComparison } from "./credit-history";
@@ -34,10 +35,10 @@ import { linkInternalTransfersAndReversals } from "./credit-engine/normalization
 import type { ClassificationSummary, TransactionClassification } from "./credit-engine/contracts/classification.ts";
 import { classifyEconomicTransaction, summarizeClassifications } from "./credit-engine/classification/classifier.ts";
 import type { BankStatementMetricsV2, MetricsComparisonSummary } from "./credit-engine/contracts/metrics.ts";
-import { buildBankStatementMetricsV2 } from "./credit-engine/metrics/engine.ts";
+import { buildBankStatementMetricsV2, cashSeriesRows, classifyTransactions } from "./credit-engine/metrics/engine.ts";
 
-const METRICS_V2_OPENING_BALANCE = Symbol("metrics-v2-opening-balance");
-type AnalysisWithMetricsV2Input = AnalysisResult & { [METRICS_V2_OPENING_BALANCE]?: number | null };
+
+
 
 export type TransactionDirection = "in" | "out" | "unknown";
 
@@ -78,6 +79,7 @@ export type NormalizedTransaction = {
   sourceFileName?: string;
   bank?: string;
   sourceRow?: number;
+  fileHash?: boolean;
   rawReference?: string;
   parserVersion?: string;
   classifierVersion?: string;
@@ -149,6 +151,8 @@ export type ProductFit = {
 };
 
 export type StatementInput = {
+  fileHash?: boolean;
+  parserVersion?: string;
   text: string;
   fileName: string;
   sourceId?: string;
@@ -156,6 +160,7 @@ export type StatementInput = {
 };
 
 export type StatementInspection = {
+  ownerEvidenceCount: number;
   fileName: string;
   companyInn: string;
   companyName: string;
@@ -170,6 +175,10 @@ export type StatementInspection = {
 };
 
 export type AnalysisResult = FinancialShadowFields & ReconciliationShadowFields & CreditPortfolioShadowFields & RiskShadowFields & {
+  checkoAttempt?: import("./external/checko-cache.ts").CheckoState;
+  legalRegistryV1?: import("./legal-registry.ts").LegalRegistryV1;
+  financingRequestV1?: import("./workspace/financing-request.ts").FinancingRequestV1;
+  account51Reconciliation?: import("./workspace/bank-sources-adapter.ts").Account51ReconciliationV1[];
   id: string;
   companyName: string;
   companyInn: string;
@@ -247,12 +256,15 @@ export type AnalysisResult = FinancialShadowFields & ReconciliationShadowFields 
   classification?: ClassificationSummary;
   metricsV2?: BankStatementMetricsV2;
   metricsComparison?: MetricsComparisonSummary;
+  statementBalanceCheck?: BalanceCheck;
   transactionsTruncated?: boolean;
   storedTransactionCount?: number;
   originalTransactionCount?: number;
 };
 
 type AccountBlock = {
+  declaredIn: number | null;
+  declaredOut: number | null;
   account: string;
   openingBalance: number | null;
   endingBalance: number | null;
@@ -275,31 +287,36 @@ function annuityPrincipal(payment: number, annualRate: number, months: number) {
   return payment * (1 - Math.pow(1 + rate, -months)) / rate;
 }
 
-function cleanNumber(value?: string) {
-  if (!value) return 0;
-  const normalized = value.replace(/\s/g, "").replace(",", ".").replace(/[^\d.-]/g, "");
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
 function normalizeDate(value?: string) {
   if (!value) return "";
   const matched = value.trim().match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})$/);
   if (!matched) return "";
   const [, day, month, year] = matched;
-  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  const iso=`${year}-${month.padStart(2,"0")}-${day.padStart(2,"0")}`;
+  const stamp=Date.parse(iso);
+  return Number.isFinite(stamp) && new Date(stamp).toISOString().slice(0,10)===iso ? iso : "";
 }
 
 function normalizeAccount(value?: string) {
-  return (value ?? "").replace(/\D/g, "");
+  return /^\d{20}$/.test((value ?? "").replace(/[ -]/g,"")) ? value!.replace(/[ -]/g,"") : "";
 }
 
 function normalizeInn(value?: string) {
-  return (value ?? "").replace(/\D/g, "");
+  return /^(?:\d{10}|\d{12})$/.test((value ?? "").trim()) ? value!.trim() : "";
 }
 
 function field(record: Record<string, string>, ...names: string[]) {
   for (const name of names) if (record[name]) return record[name].trim();
+  // Some bank 1C exporters vary only the key casing. Keep exact aliases
+  // authoritative, then fall back to a case-insensitive lookup without
+  // widening the accepted field names.
+  const entries = Object.entries(record);
+  for (const name of names) {
+    const normalizedName = name.toLocaleLowerCase("ru-RU").replace(/ё/g, "е");
+    const matched = entries.find(([key, value]) =>
+      Boolean(value) && key.trim().toLocaleLowerCase("ru-RU").replace(/ё/g, "е") === normalizedName);
+    if (matched) return matched[1].trim();
+  }
   return "";
 }
 
@@ -311,7 +328,7 @@ function companySideName(record: Record<string, string>, side: "payer" | "recipi
 
 function isBankInterfaceName(value: string) {
   const text = value.toLowerCase().replace(/ё/g, "е");
-  return !value.trim() || /(psb\s*online|псб\s*онлайн|промсвязьбанк|client.?bank|клиент.?банк|банк.?клиент|internet.?bank|интернет.?банк|online.?bank|isimplebank|bankfaktura)/i.test(text);
+  return !value.trim() || /(psb[\s-]*online|псб[\s-]*онлайн|промсвязьбанк|client.?bank|клиент.?банк|банк.?клиент|internet.?bank|интернет.?банк|online.?bank|isimplebank|bankfaktura)/i.test(text);
 }
 
 function cleanCompanyName(value: string) {
@@ -376,7 +393,9 @@ function normalizedBankLabel(value: string) {
 }
 
 function bankNameFromDocuments(documents: ParsedDocument[], accounts: AccountBlock[], header: Record<string, string>, fileName: string) {
-  const accountSet = new Set(accounts.map((item) => item.account).filter(Boolean));
+  // Settlement accounts identify the client. Correspondent, bank loan and transit
+  // accounts on a payment order supply no ownership evidence by themselves.
+  const accountSet = new Set(accounts.map((item) => item.account).filter(a=>/^(?:40[5-8]|42[0-3])\d{17}$/.test(a)));
   const candidates = new Map<string, number>();
   const add = (value: string) => {
     const label = normalizedBankLabel(value);
@@ -416,7 +435,7 @@ function getCategory(purpose: string, direction: TransactionDirection, internal:
 
 function parseExchange(text: string) {
   const normalized = text.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n");
-  const lines = normalized.split("\n").map((line) => line.trim()).filter(Boolean);
+  const lines = normalized.split("\n").map((line) => line.trim());
   if (!lines.some((line) => line.toLowerCase().includes("1cclientbankexchange"))) {
     throw new Error("Файл не похож на 1CClientBankExchange TXT");
   }
@@ -428,7 +447,8 @@ function parseExchange(text: string) {
   let documentFields: ParsedDocument | null = null;
   let currentAccount = "";
 
-  for (const line of lines) {
+  let documentStart = 0;
+  for (const [index, line] of lines.entries()) {
     if (line === "СекцияРасчСчет") {
       accountFields = {};
       continue;
@@ -438,8 +458,10 @@ function parseExchange(text: string) {
         currentAccount = normalizeAccount(field(accountFields, "РасчСчет")) || currentAccount;
         accounts.push({
           account: currentAccount,
-          openingBalance: field(accountFields, "НачальныйОстаток") ? cleanNumber(accountFields.НачальныйОстаток) : null,
-          endingBalance: field(accountFields, "КонечныйОстаток") ? cleanNumber(accountFields.КонечныйОстаток) : null,
+          openingBalance: statementMoney(field(accountFields, "НачальныйОстаток")),
+          declaredIn: statementMoney(field(accountFields, "ВсегоПоступило")),
+          declaredOut: statementMoney(field(accountFields, "ВсегоСписано")),
+          endingBalance: statementMoney(field(accountFields, "КонечныйОстаток")),
           periodFrom: normalizeDate(field(accountFields, "ДатаНачала")),
           periodTo: normalizeDate(field(accountFields, "ДатаКонца")),
         });
@@ -448,11 +470,12 @@ function parseExchange(text: string) {
       continue;
     }
     if (line.startsWith("СекцияДокумент=")) {
+      documentStart = index + 1;
       documentFields = { ТипДокумента: line.slice(line.indexOf("=") + 1), __account: currentAccount };
       continue;
     }
     if (line === "КонецДокумента") {
-      if (documentFields) documents.push(documentFields);
+      if (documentFields) documents.push({ ...documentFields, __sourceRow: String(documentStart) });
       documentFields = null;
       continue;
     }
@@ -465,15 +488,50 @@ function parseExchange(text: string) {
     else header[key] = value;
   }
 
-  if (!documents.length) throw new Error("В выписке не найдено ни одного документа");
+  // Russian 40817 accounts belong to individuals. A bank TXT for such an
+  // account may be readable, but it is not corporate settlement turnover.
+  // Reject the source rather than risk mixing private cash flow into B-Score.
+  if (accounts.some(({ account }) => /^40817\d{15}$/.test(account))) {
+    throw new Error("Личный счёт 40817 не является подтверждённым расчётным счётом компании.");
+  }
+  if (!documents.length) throw new Error("В выписке нет операций. Владение счётом по этой выписке не подтверждено.");
+  // Some bank 1C exports put every dated account section before every
+  // payment document. The most recently printed section is then NOT the
+  // payment's account. Resolve the posting account from the document's
+  // own payer/recipient side, never from an unrelated preceding section.
+  const declared = new Set(accounts.map(item => item.account).filter(Boolean));
+  for (const document of documents) {
+    const payer = normalizeAccount(field(document, "ПлательщикСчет", "СчетПлательщика"));
+    const recipient = normalizeAccount(field(document, "ПолучательСчет", "СчетПолучателя"));
+    const payerOwn = Boolean(payer && declared.has(payer));
+    const recipientOwn = Boolean(recipient && declared.has(recipient));
+    if (payerOwn && !recipientOwn) document.__account = payer;
+    else if (recipientOwn && !payerOwn) document.__account = recipient;
+    else if (payerOwn && recipientOwn) {
+      // Two genuine company accounts: the bank's posting-side date identifies
+      // the outgoing vs incoming leg. Do not infer a leg from payment number.
+      const debit = Boolean(field(document, "ДатаСписано"));
+      const credit = Boolean(field(document, "ДатаПоступило"));
+      document.__account = debit !== credit ? (debit ? payer : recipient)
+        : (declared.has(normalizeAccount(document.__account)) ? document.__account : "");
+    } else {
+      // Neither party account is in the declared corporate account sections.
+      // A neighboring section is not positive ownership evidence.
+      document.__account = "";
+    }
+  }
   return { header, accounts, documents };
 }
 
 function deriveIdentity(documents: ParsedDocument[], accounts: AccountBlock[], header: Record<string, string> = {}) {
-  const accountSet = new Set(accounts.map((item) => item.account).filter(Boolean));
+  // Settlement accounts identify the client. Correspondent, bank loan and transit
+  // accounts on a payment order supply no ownership evidence by themselves.
+  const accountSet = new Set(accounts.map((item) => item.account).filter(a=>/^(?:40[5-8]|42[0-3])\d{17}$/.test(a)));
   const candidates = new Map<string, { inn: string; names: Map<string, number>; hits: number }>();
-  const addCandidate = (inn: string, name: string) => {
+  const evidencedAccounts = new Set<string>();
+  const addCandidate = (account:string, inn: string, name: string) => {
     if (!inn) return;
+    evidencedAccounts.add(account);
     const value = candidates.get(inn) ?? { inn, names: new Map<string, number>(), hits: 0 };
     value.hits += 1;
     const cleaned = cleanCompanyName(name);
@@ -486,13 +544,23 @@ function deriveIdentity(documents: ParsedDocument[], accounts: AccountBlock[], h
     const payerInn = normalizeInn(field(doc, "ПлательщикИНН", "ИННПлательщика"));
     const recipientInn = normalizeInn(field(doc, "ПолучательИНН", "ИННПолучателя"));
     if (accountSet.has(payerAccount) && payerInn) {
-      addCandidate(payerInn, companySideName(doc, "payer"));
+      addCandidate(payerAccount, payerInn, companySideName(doc, "payer"));
     }
     if (accountSet.has(recipientAccount) && recipientInn) {
-      addCandidate(recipientInn, companySideName(doc, "recipient"));
+      addCandidate(recipientAccount, recipientInn, companySideName(doc, "recipient"));
     }
   }
-  const selected = [...candidates.values()].sort((a, b) => b.hits - a.hits)[0];
+  // Require owner evidence only for accounts that actually have postings in
+  // this export. A declared but inactive account must not invalidate an
+  // otherwise valid statement batch.
+  const activeAccounts = new Set(documents
+    .map((doc) => normalizeAccount(doc.__account))
+    .filter((account): account is string => Boolean(account)));
+  if (accounts.some(a=>activeAccounts.has(a.account) && !evidencedAccounts.has(a.account))) {
+    throw new Error("По одному из активных счетов нет подтверждения владельца по ИНН и стороне операции.");
+  }
+  if (candidates.size > 1) throw new Error("По указанным счетам найдены разные ИНН владельцев. Проверьте состав файла.");
+  const selected = [...candidates.values()][0];
   if (!selected) return { inn: "", name: "Компания", hits: 0 };
   const rankedNames = [...selected.names.entries()].sort((a, b) => b[1] - a[1] || b[0].length - a[0].length);
   const headerName = cleanCompanyName(field(header, "ВладелецСчета", "Организация", "Клиент", "Наименование"));
@@ -502,6 +570,12 @@ function deriveIdentity(documents: ParsedDocument[], accounts: AccountBlock[], h
 
 export function inspectBankStatement(text: string, fileName = "bank.txt"): StatementInspection {
   const { header, accounts, documents } = parseExchange(text);
+  const rubleCode = (code:string) => !code || /^(?:RUB|RUR|643|810|руб\.?|российский рубль)$/i.test(code.trim());
+  const foreignAccount=accounts.some(({account})=>/^\d{20}$/.test(account) && !["643","810"].includes(account.slice(5,8)));
+  if (foreignAccount || !rubleCode(field(header,"Валюта","КодВалюты")) ||
+      documents.some(doc=>!rubleCode(field(doc,"Валюта","КодВалюты")))) {
+    throw new Error("Для рублёвого анализа нужны выписки в рублях. Валютные суммы требуют отдельного расчёта.");
+  }
   const identity = deriveIdentity(documents, accounts, header);
   const dates = documents.map((doc) => normalizeDate(field(doc, "Дата"))).filter(Boolean).sort();
   const declaredFrom = [...accounts.map((item) => item.periodFrom), normalizeDate(field(header, "ДатаНачала"))].filter(Boolean).sort()[0];
@@ -510,12 +584,13 @@ export function inspectBankStatement(text: string, fileName = "bank.txt"): State
     fileName,
     companyInn: identity.inn,
     companyName: identity.name,
+    ownerEvidenceCount: identity.hits,
     bankName: bankNameFromDocuments(documents, accounts, header, fileName),
     accounts: [...new Set(accounts.map((item) => item.account).filter(Boolean))],
     periodFrom: dates[0] || normalizeDate(field(header, "ДатаНачала")),
     periodTo: dates[dates.length - 1] || normalizeDate(field(header, "ДатаКонца")),
-    coveragePeriodFrom: declaredFrom || dates[0] || undefined,
-    coveragePeriodTo: declaredTo || dates[dates.length - 1] || undefined,
+    coveragePeriodFrom: declaredFrom || undefined,
+    coveragePeriodTo: declaredTo || undefined,
     openingBalanceKnown: accounts.length > 0 && accounts.every((item) => item.openingBalance !== null),
     endingBalanceKnown: accounts.length > 0 && accounts.every((item) => item.endingBalance !== null),
   };
@@ -610,31 +685,42 @@ type CanonicalTransactionBatch = {
   normalization: NormalizationSummary;
 };
 
-function buildCanonicalTransactionBatch(inputs: StatementInput[]): CanonicalTransactionBatch {
+function buildCanonicalTransactionBatch(inputs: StatementInput[], resolutions: import("./credit-engine/normalization/conflicts.ts").ConflictResolution[] = []): CanonicalTransactionBatch {
   const canonical: CanonicalTransaction[] = [];
+  const reconciledSources = new Set<string>();
   for (const input of inputs) {
     const { header, accounts, documents } = parseExchange(input.text);
     const identity = deriveIdentity(documents, accounts, header);
     const bank = bankNameFromDocuments(documents, accounts, header, input.fileName);
     const sourceId = input.sourceId || `statement:${input.contentHash || input.fileName}`;
     const companyAccounts = accounts.map((item) => item.account).filter(Boolean);
+    const sourceStart = canonical.length;
     documents.forEach((document, ordinal) => {
-      canonical.push(normalizeTransaction(adaptOneCDocument(document, {
+      const item = normalizeTransaction(adaptOneCDocument(document, {
         companyInn: identity.inn,
         companyAccounts,
         bank,
         sourceId,
         sourceFileId: sourceId,
         sourceFileName: input.fileName,
-        sourceRow: null,
+        sourceRow: Number(document.__sourceRow),
         rawReference: sourceReference(input.contentHash || ""),
-        parserVersion: INFRASTRUCTURE_VERSIONS.statementParser,
+        parserVersion: input.parserVersion ?? INFRASTRUCTURE_VERSIONS.statementParser,
         ordinal,
-      })));
+      }));
+      if (input.fileHash) item.fileHash = true;
+      canonical.push(item);
     });
+    const observations = canonical.slice(sourceStart);
+    // Distinct entries can share a payment number. Treat them as bank postings
+    // only if every row jointly explains the bank's own totals and balances.
+    if (observations.every(t=>t.amount!==null && t.amount>0 && t.date) &&
+        reconcileStatementBalances(accounts, observations.map(canonicalToLegacyFacts), false, true).state==="VERIFIED") {
+      reconciledSources.add(sourceId);
+    }
   }
   const eligible = canonical.filter((item) => item.date && item.amount !== null && item.amount > 0);
-  const deduplication = deduplicateTransactions(eligible);
+  const deduplication = deduplicateTransactions(eligible, resolutions, reconciledSources);
   const links = linkInternalTransfersAndReversals(deduplication.retained);
   const summaryWarnings = [...new Set(canonical.flatMap((item) => item.quality.warnings))];
   const normalization: NormalizationSummary = {
@@ -660,7 +746,7 @@ function analyzeCombinedStatement(
   sourceFiles: string[],
   bankNames: string[],
   canonicalBatch: CanonicalTransactionBatch,
-): AnalysisWithMetricsV2Input {
+): AnalysisResult {
   const { header, accounts, documents } = parseExchange(text);
   const identity = deriveIdentity(documents, accounts, header);
   const warnings: string[] = [];
@@ -732,30 +818,34 @@ function analyzeCombinedStatement(
   const supplierMonths = new Set(outgoing.filter((item) => item.category === "supplier").map((item) => item.date.slice(0, 7))).size;
   const supplierPaymentRegularity = months ? supplierMonths / months : 0;
   const riskyOutflow = outgoing.filter((item) => ["personal", "cash"].includes(item.category)).reduce((sum, item) => sum + item.amount, 0);
-  const debtOutflow = outgoing.filter((item) => ["debt", "leasing"].includes(item.category)).reduce((sum, item) => sum + item.amount, 0);
+  const debtPayments = cashSeriesRows(classifyTransactions(transactions), "debtService");
+  const debtOutflow = debtPayments.reduce((sum, item) => sum + Math.round(item.amount * 100), 0) / 100;
   const riskyOutflowShare = outflow ? riskyOutflow / outflow : 0;
   const debtServiceShare = inflow ? debtOutflow / inflow : 0;
-  const endingBalances = accounts.map((item) => item.endingBalance).filter((value): value is number => value !== null);
-  const endingBalance = endingBalances.length ? endingBalances.reduce((sum, value) => sum + value, 0) : null;
+  const statementBalanceCheck = reconcileStatementBalances(accounts, transactions,
+    canonicalBatch.normalization.invalidCount > 0 || !!canonicalBatch.deduplication.conflicts?.length);
+  const endingBalance = statementBalanceCheck.state === "VERIFIED" ? statementBalanceCheck.closing : reportedEndpoint(accounts);
   const avgDailyOutflow = outflow / Math.max(1, months * 30.4);
   const liquidityDays = endingBalance === null || !avgDailyOutflow ? null : endingBalance / avgDailyOutflow;
 
-  const openingBalances = accounts.map((item) => item.openingBalance).filter((value): value is number => value !== null);
   let averageDailyBalance: number | null = null;
   let minimumDailyBalance: number | null = null;
   let cashGapDays: number | null = null;
   let negativeBalanceDays: number | null = null;
-  if (openingBalances.length && periodFrom && periodTo) {
-    let balance = openingBalances.reduce((sum, value) => sum + value, 0);
+  if (statementBalanceCheck.state === "VERIFIED") {
+    let balanceCents = Math.round(statementBalanceCheck.opening * 100);
     const byDay = new Map<string, number>();
-    for (const item of external) byDay.set(item.date, (byDay.get(item.date) ?? 0) + (item.direction === "in" ? item.amount : item.direction === "out" ? -item.amount : 0));
+    for (const item of transactions) {
+      const cents = Math.round(item.amount * 100);
+      byDay.set(item.date, (byDay.get(item.date) ?? 0) + (item.direction === "in" ? cents : -cents));
+    }
     const daily: number[] = [];
-    const cursor = new Date(`${periodFrom}T00:00:00Z`);
-    const end = new Date(`${periodTo}T00:00:00Z`);
-    while (cursor <= end && daily.length < 740) {
+    const cursor = new Date(statementBalanceCheck.from + "T00:00:00Z");
+    const end = new Date(statementBalanceCheck.to + "T00:00:00Z");
+    while (cursor <= end) {
       const key = cursor.toISOString().slice(0, 10);
-      balance += byDay.get(key) ?? 0;
-      daily.push(balance);
+      balanceCents += byDay.get(key) ?? 0;
+      daily.push(balanceCents / 100);
       cursor.setUTCDate(cursor.getUTCDate() + 1);
     }
     if (daily.length) {
@@ -818,7 +908,11 @@ function analyzeCombinedStatement(
 
   const hasCritical = factors.some((item) => item.severity === "critical");
   const readiness = hasCritical ? "Нужна подготовка" : score >= 720 ? "Высокая готовность" : score >= 600 ? "Готовность с оговорками" : "Низкая готовность";
-  const currentMonthlyDebtPayment = months ? debtOutflow / months : 0;
+  const coveredMonths = statementBalanceCheck.state === "VERIFIED"
+    ? (Number(statementBalanceCheck.to.slice(0, 4)) - Number(statementBalanceCheck.from.slice(0, 4))) * 12
+      + Number(statementBalanceCheck.to.slice(5, 7)) - Number(statementBalanceCheck.from.slice(5, 7)) + 1
+    : months;
+  const currentMonthlyDebtPayment = coveredMonths ? debtOutflow / coveredMonths : 0;
   const referenceAnnualRate = 0.26;
   const referenceTermMonths = 24;
   const concentrationStress = clamp((topOneConcentration - 0.25) * 0.35, 0, 0.22);
@@ -971,7 +1065,8 @@ function analyzeCombinedStatement(
   ];
 
   return {
-    [METRICS_V2_OPENING_BALANCE]: openingBalances.length ? openingBalances.reduce((sum, value) => sum + value, 0) : null,
+    statementBalanceCheck,
+
     id: globalThis.crypto?.randomUUID?.() ?? `analysis-${Date.now()}`,
     companyName: identity.name || field(header, "Отправитель") || "Компания",
     companyInn: identity.inn,
@@ -1017,7 +1112,7 @@ function analyzeCombinedStatement(
       estimatedLimitMin: round(estimatedLimitMin, -3),
       estimatedLimitMax: round(estimatedLimitMax, -3),
       stressLimitMax: round(stressLimitMax, -3),
-      currentMonthlyDebtPayment: round(currentMonthlyDebtPayment, -3),
+      currentMonthlyDebtPayment: round(currentMonthlyDebtPayment, 2),
       baseMonthlyPaymentCapacity: round(baseMonthlyPaymentCapacity, -3),
       stressMonthlyPaymentCapacity: round(stressMonthlyPaymentCapacity, -3),
       stressMonthlyInflow: round(stressMonthlyInflow, -3),
@@ -1035,6 +1130,7 @@ function analyzeCombinedStatement(
     productFits,
     transactions,
     deduplication: {
+      ...(canonicalBatch.deduplication.conflicts.length ? {conflicts:canonicalBatch.deduplication.conflicts} : {}),
       originalCount: canonicalBatch.eligibleOriginalCount,
       removedCount: canonicalBatch.eligibleOriginalCount - transactions.length,
       retainedCount: transactions.length,
@@ -1076,8 +1172,16 @@ export function analyzeBankStatement(text: string, fileName = "bank.txt"): Analy
   }]);
 }
 
-export function analyzeBankStatements(inputs: StatementInput[], options: { screeningResults?: StatementScreeningResult[] } = {}): AnalysisResult {
-  if (!inputs.length) throw new Error("Добавьте хотя бы одну банковскую выписку");
+export function analyzeBankStatements(submitted: StatementInput[], options: { screeningResults?: StatementScreeningResult[]; conflictResolutions?: import("./credit-engine/normalization/conflicts.ts").ConflictResolution[] } = {}): AnalysisResult {
+  if (!submitted.length) throw new Error("Добавьте хотя бы одну банковскую выписку");
+  // The HTTP route screens the batch. Direct callers may also pass a copy of
+  // the same journal. Keep it in the receipt, never in the posting population.
+  const seen = new Set<string>();
+  const inputs = submitted.filter(input => {
+    if (seen.has(input.text)) return false;
+    seen.add(input.text);
+    return true;
+  });
   const inspections = inputs.map((input) => inspectBankStatement(input.text, input.fileName));
   const owner = inspections.find((item) => item.companyInn);
   if (!owner) throw new Error("Не удалось определить ИНН владельца счетов");
@@ -1091,7 +1195,7 @@ export function analyzeBankStatements(inputs: StatementInput[], options: { scree
   const sourceFiles = inputs.map((item) => item.fileName);
   const bankNames = [...new Set(inspections.map((item) => item.bankName))];
   const label = inputs.length === 1 ? inputs[0].fileName : `${inputs.length} выписки · ${bankNames.join(", ")}`;
-  const result = analyzeCombinedStatement(combined, label, sourceFiles, bankNames, buildCanonicalTransactionBatch(inputs));
+  const result = analyzeCombinedStatement(combined, label, sourceFiles, bankNames, buildCanonicalTransactionBatch(inputs, options.conflictResolutions));
   const screeningResults = options.screeningResults ?? inspections.map((inspection, index): StatementScreeningResult => ({
     fileName: inspection.fileName,
     status: "ACCEPTED",
@@ -1105,6 +1209,18 @@ export function analyzeBankStatements(inputs: StatementInput[], options: { scree
     openingBalanceStatus: inspection.openingBalanceKnown ? "KNOWN" : "UNKNOWN",
     endingBalanceStatus: inspection.endingBalanceKnown ? "KNOWN" : "UNKNOWN",
   }));
+  if (!options.screeningResults && submitted.length !== inputs.length) {
+    const receiptsByText = new Map(inputs.map((input,index) => [input.text,screeningResults[index]]));
+    seen.clear();
+    const receipts = submitted.map(input => {
+      const original = receiptsByText.get(input.text)!;
+      if (seen.has(input.text)) return {...original, fileName:input.fileName, status:"DUPLICATE" as const,
+        reason:"Содержимое выписки уже присутствует в наборе."};
+      seen.add(input.text);
+      return original;
+    });
+    return addSourceFoundation(result, inputs, inspections, receipts);
+  }
   return addSourceFoundation(result, inputs, inspections, screeningResults);
 }
 
@@ -1123,13 +1239,17 @@ function addSourceFoundation(
       sourceId: input.sourceId || `statement:${input.contentHash || `${index + 1}:${input.fileName}`}`,
       sourceType: "BANK_STATEMENT" as const,
       status: "READY" as const,
+      periodBasis: inspection.coveragePeriodFrom && inspection.coveragePeriodTo ? "DECLARED" as const : "OBSERVED_ONLY" as const,
       companyInn: inspection.companyInn,
+      companyName: inspection.companyName,
+      ownerEvidence: {rule: "DECLARED_ACCOUNT_AND_PARTY_INN" as const, matchingSides: inspection.ownerEvidenceCount},
+      accountCoverage: parseExchange(input.text).accounts.map(a => ({account:a.account, periodFrom:a.periodFrom || inspection.coveragePeriodFrom, periodTo:a.periodTo || inspection.coveragePeriodTo})).filter(a => a.account),
       fileName: input.fileName,
       sourceName: inspection.bankName,
       periodFrom: inspection.coveragePeriodFrom ?? inspection.periodFrom,
       periodTo: inspection.coveragePeriodTo ?? inspection.periodTo,
       receivedAt: result.createdAt,
-      parserVersion: INFRASTRUCTURE_VERSIONS.statementParser,
+      parserVersion: input.parserVersion ?? INFRASTRUCTURE_VERSIONS.statementParser,
       normalizationVersion: INFRASTRUCTURE_VERSIONS.transactionNormalizer,
       classifierVersion: INFRASTRUCTURE_VERSIONS.transactionClassifier,
       integrityVersion: INFRASTRUCTURE_VERSIONS.integrity,
@@ -1156,11 +1276,17 @@ function addSourceFoundation(
   };
   const shadow = buildBankStatementMetricsV2({
     transactions: enriched.transactions,
+    conflicts: enriched.deduplication?.conflicts,
     integrity: enriched.integrity,
     sourceManifest: enriched.sourceManifest,
-    periodFrom: enriched.periodFrom,
-    periodTo: enriched.periodTo,
-    openingBalance: (result as AnalysisWithMetricsV2Input)[METRICS_V2_OPENING_BALANCE] ?? null,
+    // Calendar coverage is derived from statement coverage, not transaction extrema.
+    // Use the same source window for every canonical metric and daily reconstruction.
+    // This runs only on complete upload input; never repair persisted display rows here.
+    periodFrom: bankStatements.map(source => source.periodFrom).filter((date): date is string => !!date).sort()[0] ?? enriched.periodFrom,
+    periodTo: bankStatements.map(source => source.periodTo).filter((date): date is string => !!date).sort().at(-1) ?? enriched.periodTo,
+    openingBalance: result.statementBalanceCheck?.state==="VERIFIED" ? result.statementBalanceCheck.opening : null,
+    reportedEnding: reportedEndpoint(inputs.flatMap(input=>parseExchange(input.text).accounts)),
+    balanceEvidenceComplete: result.statementBalanceCheck?.state==="VERIFIED",
     legacyMetrics: enriched.metrics,
   });
   const canonical = { ...enriched, ...shadow };

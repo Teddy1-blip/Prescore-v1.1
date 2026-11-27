@@ -31,18 +31,30 @@ export type MetricResult = {
   warnings: string[];
 };
 
+export type CashSeries = "externalInflows" | "externalOutflows" | "operatingReceipts" | "otherReceipts" | "debtService" | "taxPayments" | "nonOperatingReceipts" | "unknownInflows" | "principal" | "interest" | "unsplit" | "leasing" | "taxOnly" | "social" | "netExternal" | "individualBusiness";
+
 export type MonthlyCashFlowV2 = {
   month: string;
   coverage: MonthCoverageStatus;
-  operatingReceipts: number;
-  externalInflows: number;
-  externalOutflows: number;
-  supplierPayments: number;
-  taxPayments: number;
-  payrollPayments: number;
-  debtService: number;
-  unclearIndividualAndCash: number;
-  unknownInflows: number;
+  operatingReceipts: number | null;
+  externalInflows: number | null;
+  externalOutflows: number | null;
+  otherReceipts?: number | null;
+  nonOperatingReceipts?: number | null;
+  principal?: number | null;
+  interest?: number | null;
+  unsplit?: number | null;
+  leasing?: number | null;
+  taxOnly?: number | null;
+  social?: number | null;
+  netExternal?: number | null;
+  individualBusiness?: number | null;
+  supplierPayments: number | null;
+  taxPayments: number | null;
+  payrollPayments: number | null;
+  debtService: number | null;
+  unclearIndividualAndCash: number | null;
+  unknownInflows: number | null;
   warnings: string[];
 };
 
@@ -189,6 +201,7 @@ export type BankStatementMetricsV2 = {
     classificationAmounts: Record<ClassificationConfidence, number>;
     warnings: string[];
   };
+  conflicts?: {version:string; groups:import("../normalization/conflicts.ts").TransactionConflict[]; undisputedOperatingReceipts:number; affectedMonthlyFields:Partial<Record<keyof MonthlyCashFlowV2,string[]>>};
   monthly: MonthlyCashFlowV2[];
 };
 

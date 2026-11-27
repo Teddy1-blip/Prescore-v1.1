@@ -28,6 +28,7 @@ export function canonicalToLegacyFacts(item: CanonicalTransaction): LegacyTransa
     sourceFileId: item.sourceFileId,
     sourceFileName: item.sourceFileName,
     bank: item.bank || undefined,
+    fileHash: item.fileHash,
     sourceRow: item.sourceRow ?? undefined,
     rawReference: item.rawReference || undefined,
     parserVersion: item.parserVersion,

@@ -147,7 +147,7 @@ const debtUnsplitRule: ClassificationRule = {
   evaluate(tx, signals) {
     if (!signals.flags.has("DEBT_UNSPLIT")) return null;
     const hasBreakdown = signals.principalAmount !== null && signals.interestAmount !== null;
-    return candidate(debtUnsplitRule, tx, "FINANCING", "DEBT_SERVICE_UNSPLIT", hasBreakdown ? "HIGH" : "MEDIUM", "PURPOSE_DEBT_PRINCIPAL_AND_INTEREST", {
+    return candidate(debtUnsplitRule, tx, "FINANCING", "DEBT_SERVICE_UNSPLIT", hasBreakdown ? "HIGH" : "MEDIUM", signals.flags.has("DEBT_COMPONENT_UNKNOWN")?"PURPOSE_DEBT_PAYMENT_WITHOUT_BREAKDOWN":"PURPOSE_DEBT_PRINCIPAL_AND_INTEREST", {
       tags: ["MIXED_PAYMENT", ...(signals.isFinancialInstitution ? ["FINANCIAL_INSTITUTION" as const] : [])],
       requiresReview: !hasBreakdown,
       ambiguityReasons: hasBreakdown ? [] : ["PRINCIPAL_INTEREST_BREAKDOWN_NOT_PROVEN"],

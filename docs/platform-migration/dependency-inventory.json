@@ -1,0 +1,863 @@
+[
+  {
+    "file": "app/api/admin/route.ts",
+    "line": 18,
+    "dependencies": [
+      "cloudflare:workers"
+    ]
+  },
+  {
+    "file": "app/api/admin/route.ts",
+    "line": 27,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/admin/route.ts",
+    "line": 28,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/admin/route.ts",
+    "line": 34,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/admin/route.ts",
+    "line": 38,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/admin/route.ts",
+    "line": 44,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/admin/route.ts",
+    "line": 48,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/admin/route.ts",
+    "line": 49,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/admin/route.ts",
+    "line": 50,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/admin/route.ts",
+    "line": 51,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/admin/route.ts",
+    "line": 59,
+    "dependencies": [
+      "INSERT OR IGNORE"
+    ]
+  },
+  {
+    "file": "app/api/admin/route.ts",
+    "line": 63,
+    "dependencies": [
+      "ALTER TABLE"
+    ]
+  },
+  {
+    "file": "app/api/admin/route.ts",
+    "line": 64,
+    "dependencies": [
+      "ALTER TABLE"
+    ]
+  },
+  {
+    "file": "app/api/agent/prospects/route.ts",
+    "line": 8,
+    "dependencies": [
+      "cloudflare:workers"
+    ]
+  },
+  {
+    "file": "app/api/agent/prospects/route.ts",
+    "line": 12,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/agent/prospects/route.ts",
+    "line": 13,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/agent/prospects/route.ts",
+    "line": 14,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/agent/prospects/route.ts",
+    "line": 15,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/agent/prospects/route.ts",
+    "line": 16,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/agent/prospects/route.ts",
+    "line": 24,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/agent/prospects/route.ts",
+    "line": 25,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/agent/prospects/route.ts",
+    "line": 57,
+    "dependencies": [
+      "INSERT OR IGNORE"
+    ]
+  },
+  {
+    "file": "app/api/agent/route.ts",
+    "line": 18,
+    "dependencies": [
+      "cloudflare:workers"
+    ]
+  },
+  {
+    "file": "app/api/agent/route.ts",
+    "line": 26,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/agent/route.ts",
+    "line": 34,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/agent/route.ts",
+    "line": 42,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/agent/route.ts",
+    "line": 48,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/agent/route.ts",
+    "line": 52,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/agent/route.ts",
+    "line": 60,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/agent/route.ts",
+    "line": 64,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/agent/route.ts",
+    "line": 68,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/agent/route.ts",
+    "line": 69,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/agent/route.ts",
+    "line": 77,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/agent/route.ts",
+    "line": 89,
+    "dependencies": [
+      "ALTER TABLE"
+    ]
+  },
+  {
+    "file": "app/api/agent/route.ts",
+    "line": 90,
+    "dependencies": [
+      "ALTER TABLE"
+    ]
+  },
+  {
+    "file": "app/api/agent/route.ts",
+    "line": 91,
+    "dependencies": [
+      "ALTER TABLE"
+    ]
+  },
+  {
+    "file": "app/api/agent/route.ts",
+    "line": 92,
+    "dependencies": [
+      "ALTER TABLE"
+    ]
+  },
+  {
+    "file": "app/api/agent/route.ts",
+    "line": 121,
+    "dependencies": [
+      "INSERT OR IGNORE"
+    ]
+  },
+  {
+    "file": "app/api/agent/route.ts",
+    "line": 277,
+    "dependencies": [
+      "INSERT OR REPLACE"
+    ]
+  },
+  {
+    "file": "app/api/ai-analyst/route.ts",
+    "line": 17,
+    "dependencies": [
+      "cloudflare:workers"
+    ]
+  },
+  {
+    "file": "app/api/ai-analyst/route.ts",
+    "line": 30,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/ai-analyst/route.ts",
+    "line": 36,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/ai-analyst/route.ts",
+    "line": 40,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/analysis/route.ts",
+    "line": 34,
+    "dependencies": [
+      "cloudflare:workers"
+    ]
+  },
+  {
+    "file": "app/api/analysis/route.ts",
+    "line": 37,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/analysis/route.ts",
+    "line": 42,
+    "dependencies": [
+      "ALTER TABLE"
+    ]
+  },
+  {
+    "file": "app/api/checko/route.ts",
+    "line": 29,
+    "dependencies": [
+      "cloudflare:workers"
+    ]
+  },
+  {
+    "file": "app/api/checko/route.ts",
+    "line": 37,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/checko/route.ts",
+    "line": 44,
+    "dependencies": [
+      "ALTER TABLE"
+    ]
+  },
+  {
+    "file": "app/api/communications/route.ts",
+    "line": 14,
+    "dependencies": [
+      "cloudflare:workers"
+    ]
+  },
+  {
+    "file": "app/api/communications/route.ts",
+    "line": 20,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/communications/route.ts",
+    "line": 25,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/communications/route.ts",
+    "line": 26,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/conclusion/route.ts",
+    "line": 19,
+    "dependencies": [
+      "cloudflare:workers"
+    ]
+  },
+  {
+    "file": "app/api/documents/route.ts",
+    "line": 14,
+    "dependencies": [
+      "cloudflare:workers"
+    ]
+  },
+  {
+    "file": "app/api/documents/route.ts",
+    "line": 20,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/documents/route.ts",
+    "line": 29,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/documents/route.ts",
+    "line": 30,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/documents/route.ts",
+    "line": 31,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/documents/route.ts",
+    "line": 35,
+    "dependencies": [
+      "ALTER TABLE"
+    ]
+  },
+  {
+    "file": "app/api/modules/route.ts",
+    "line": 13,
+    "dependencies": [
+      "cloudflare:workers"
+    ]
+  },
+  {
+    "file": "app/api/modules/route.ts",
+    "line": 15,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/offers/route.ts",
+    "line": 40,
+    "dependencies": [
+      "cloudflare:workers"
+    ]
+  },
+  {
+    "file": "app/api/orders/route.ts",
+    "line": 6,
+    "dependencies": [
+      "cloudflare:workers"
+    ]
+  },
+  {
+    "file": "app/api/orders/route.ts",
+    "line": 8,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/orders/route.ts",
+    "line": 16,
+    "dependencies": [
+      "ALTER TABLE"
+    ]
+  },
+  {
+    "file": "app/api/orders/route.ts",
+    "line": 17,
+    "dependencies": [
+      "ALTER TABLE"
+    ]
+  },
+  {
+    "file": "app/api/source-documents/route.ts",
+    "line": 37,
+    "dependencies": [
+      "cloudflare:workers"
+    ]
+  },
+  {
+    "file": "app/api/workspace/route.ts",
+    "line": 21,
+    "dependencies": [
+      "cloudflare:workers"
+    ]
+  },
+  {
+    "file": "app/api/workspace/route.ts",
+    "line": 39,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/workspace/route.ts",
+    "line": 53,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/workspace/route.ts",
+    "line": 69,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/workspace/route.ts",
+    "line": 77,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/workspace/route.ts",
+    "line": 85,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/workspace/route.ts",
+    "line": 89,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/workspace/route.ts",
+    "line": 94,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "app/api/workspace/route.ts",
+    "line": 102,
+    "dependencies": [
+      "ALTER TABLE"
+    ]
+  },
+  {
+    "file": "app/api/workspace/route.ts",
+    "line": 103,
+    "dependencies": [
+      "ALTER TABLE"
+    ]
+  },
+  {
+    "file": "app/api/workspace/route.ts",
+    "line": 104,
+    "dependencies": [
+      "ALTER TABLE"
+    ]
+  },
+  {
+    "file": "app/api/workspace/route.ts",
+    "line": 105,
+    "dependencies": [
+      "ALTER TABLE"
+    ]
+  },
+  {
+    "file": "app/api/workspace/route.ts",
+    "line": 106,
+    "dependencies": [
+      "ALTER TABLE"
+    ]
+  },
+  {
+    "file": "app/api/workspace/route.ts",
+    "line": 232,
+    "dependencies": [
+      "INSERT OR IGNORE"
+    ]
+  },
+  {
+    "file": "app/api/workspace/route.ts",
+    "line": 234,
+    "dependencies": [
+      "INSERT OR REPLACE"
+    ]
+  },
+  {
+    "file": "app/api/workspace/route.ts",
+    "line": 255,
+    "dependencies": [
+      "INSERT OR IGNORE"
+    ]
+  },
+  {
+    "file": "app/api/workspace/route.ts",
+    "line": 270,
+    "dependencies": [
+      "INSERT OR REPLACE"
+    ]
+  },
+  {
+    "file": "app/chatgpt-auth.ts",
+    "line": 10,
+    "dependencies": [
+      "oai-authenticated"
+    ]
+  },
+  {
+    "file": "app/chatgpt-auth.ts",
+    "line": 11,
+    "dependencies": [
+      "oai-authenticated"
+    ]
+  },
+  {
+    "file": "app/chatgpt-auth.ts",
+    "line": 13,
+    "dependencies": [
+      "oai-authenticated"
+    ]
+  },
+  {
+    "file": "app/chatgpt-auth.ts",
+    "line": 15,
+    "dependencies": [
+      "signin-with-chatgpt"
+    ]
+  },
+  {
+    "file": "app/chatgpt-auth.ts",
+    "line": 16,
+    "dependencies": [
+      "signout-with-chatgpt"
+    ]
+  },
+  {
+    "file": "app/report/[id]/page.tsx",
+    "line": 24,
+    "dependencies": [
+      "cloudflare:workers"
+    ]
+  },
+  {
+    "file": "lib/admin-controls.ts",
+    "line": 112,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "lib/admin-controls.ts",
+    "line": 122,
+    "dependencies": [
+      "INSERT OR IGNORE"
+    ]
+  },
+  {
+    "file": "lib/entitlements.ts",
+    "line": 25,
+    "dependencies": [
+      "CREATE TABLE"
+    ]
+  },
+  {
+    "file": "lib/entitlements.ts",
+    "line": 40,
+    "dependencies": [
+      "INSERT OR IGNORE"
+    ]
+  },
+  {
+    "file": "db/index.ts",
+    "line": 1,
+    "dependencies": [
+      "cloudflare:workers"
+    ]
+  },
+  {
+    "file": "scripts/build-verified.sh",
+    "line": 15,
+    "dependencies": [
+      "vinext"
+    ]
+  },
+  {
+    "file": "scripts/build-verified.sh",
+    "line": 16,
+    "dependencies": [
+      "vinext"
+    ]
+  },
+  {
+    "file": "scripts/build-verified.sh",
+    "line": 17,
+    "dependencies": [
+      "vinext"
+    ]
+  },
+  {
+    "file": "scripts/build-verified.sh",
+    "line": 21,
+    "dependencies": [
+      "vinext"
+    ]
+  },
+  {
+    "file": "scripts/build-verified.sh",
+    "line": 26,
+    "dependencies": [
+      "vinext"
+    ]
+  },
+  {
+    "file": "scripts/install-ci.sh",
+    "line": 81,
+    "dependencies": [
+      "vinext"
+    ]
+  },
+  {
+    "file": "scripts/install-ci.sh",
+    "line": 85,
+    "dependencies": [
+      "vinext"
+    ]
+  },
+  {
+    "file": "scripts/install-ci.sh",
+    "line": 86,
+    "dependencies": [
+      "vinext"
+    ]
+  },
+  {
+    "file": "scripts/install-ci.sh",
+    "line": 87,
+    "dependencies": [
+      "vinext"
+    ]
+  },
+  {
+    "file": "scripts/install-ci.sh",
+    "line": 89,
+    "dependencies": [
+      "vinext"
+    ]
+  },
+  {
+    "file": "scripts/install-ci.sh",
+    "line": 90,
+    "dependencies": [
+      "vinext"
+    ]
+  },
+  {
+    "file": "scripts/install-ci.sh",
+    "line": 93,
+    "dependencies": [
+      "vinext"
+    ]
+  },
+  {
+    "file": "scripts/install-ci.sh",
+    "line": 96,
+    "dependencies": [
+      "vinext"
+    ]
+  },
+  {
+    "file": "scripts/install-ci.sh",
+    "line": 97,
+    "dependencies": [
+      "vinext"
+    ]
+  },
+  {
+    "file": "scripts/install-ci.sh",
+    "line": 102,
+    "dependencies": [
+      "vinext"
+    ]
+  },
+  {
+    "file": "scripts/install-ci.sh",
+    "line": 103,
+    "dependencies": [
+      "vinext"
+    ]
+  },
+  {
+    "file": "scripts/install-ci.sh",
+    "line": 123,
+    "dependencies": [
+      "vinext"
+    ]
+  },
+  {
+    "file": "scripts/install-ci.sh",
+    "line": 126,
+    "dependencies": [
+      "vinext"
+    ]
+  },
+  {
+    "file": "scripts/install-ci.sh",
+    "line": 138,
+    "dependencies": [
+      "vinext"
+    ]
+  },
+  {
+    "file": "scripts/install-ci.sh",
+    "line": 151,
+    "dependencies": [
+      "vinext"
+    ]
+  },
+  {
+    "file": "scripts/install-ci.sh",
+    "line": 171,
+    "dependencies": [
+      "vinext"
+    ]
+  },
+  {
+    "file": "scripts/install-ci.sh",
+    "line": 172,
+    "dependencies": [
+      "vinext"
+    ]
+  },
+  {
+    "file": "scripts/install-ci.sh",
+    "line": 173,
+    "dependencies": [
+      "vinext"
+    ]
+  },
+  {
+    "file": "scripts/install-ci.sh",
+    "line": 189,
+    "dependencies": [
+      "vinext"
+    ]
+  },
+  {
+    "file": "scripts/sites-env.sh",
+    "line": 12,
+    "dependencies": [
+      "wrangler"
+    ]
+  },
+  {
+    "file": "scripts/sites-env.sh",
+    "line": 20,
+    "dependencies": [
+      "wrangler"
+    ]
+  },
+  {
+    "file": "scripts/sites-env.sh",
+    "line": 21,
+    "dependencies": [
+      "wrangler"
+    ]
+  }
+]

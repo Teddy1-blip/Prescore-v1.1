@@ -1,8 +1,13 @@
+import {updateActiveAnalysis} from "../../../lib/workspace/analysis-write.ts";
+import {validateZipBudget} from '../../../lib/release/archive-limits';
+import {safeErrorText} from '../../../lib/release/security';
+import {getRuntime} from "../../../lib/platform/runtime";
 import { buildRiskShadow } from "../../../lib/credit-engine/risk/integration";
 import { applyAnalysisControls, readControlState } from "../../../lib/admin-controls";
 import {
   INFRASTRUCTURE_VERSIONS,
   parseAuthoritativeCreditHistoryText,
+  parseAuthoritativeBfoText,
   parseAuthoritativeQuarterlyText,
   sha256Hex,
   sourceReference,
@@ -14,6 +19,7 @@ import { extractDocumentText } from "../../../lib/credit-engine/server/document-
 import { compareCreditPortfolio, type CreditSubjectRelationship } from "../../../lib/credit-history";
 import { analysisForStorage, type AnalysisResult } from "../../../lib/prescore";
 import { analysisView, resolveAnalysisTier } from "../../../lib/entitlements";
+import { financialSources } from "../../../lib/credit-engine/financial-analysis/source-selection";
 import { quarterlyFinancialShadow } from "../../../lib/credit-engine/financial-analysis/integration";
 import { reconciliationForAnalysis } from "../../../lib/credit-engine/reconciliation/integration";
 import { portfolioForAnalysis } from "../../../lib/credit-engine/credit-portfolio/integration";
@@ -34,8 +40,7 @@ const BKI_MAX_BYTES = 35 * 1024 * 1024;
 const QUARTERLY_MAX_BYTES = 25 * 1024 * 1024;
 
 async function database() {
-  const runtimeModule = "cloudflare:workers";
-  const { env } = await import(runtimeModule);
+  const env = getRuntime();
   return env.DB as unknown as Database;
 }
 
@@ -49,7 +54,9 @@ function manifestOf(analysis: AnalysisResult): AnalysisSourceManifest {
 
 function envelope(input: {
   sourceId: string;
-  sourceType: "BKI" | "QUARTERLY";
+  sourceType: "BKI" | "QUARTERLY" | "BFO";
+  periodFrom?: string;
+  periodTo?: string;
   companyInn: string;
   fileName: string;
   sourceName: string;
@@ -78,28 +85,34 @@ export async function POST(request: Request) {
     const relationship = String(form.get("relationship") || "Не указано") as CreditSubjectRelationship;
     const file = form.get("file");
     if (!analysisId || !(file instanceof File)) return Response.json({ error: "Не передан файл или анализ" }, { status: 400 });
-    if (sourceType !== "BKI" && sourceType !== "QUARTERLY") return Response.json({ error: "Неизвестный тип источника" }, { status: 400 });
+    if (sourceType !== "BKI" && sourceType !== "QUARTERLY" && sourceType !== "BFO") return Response.json({ error: "Неизвестный тип источника" }, { status: 400 });
     const maxBytes = sourceType === "BKI" ? BKI_MAX_BYTES : QUARTERLY_MAX_BYTES;
     if (!file.size || file.size > maxBytes) return Response.json({ error: "Файл пустой или превышает допустимый размер" }, { status: 413 });
     const lowerName = file.name.toLowerCase();
     if (sourceType === "BKI" && !lowerName.endsWith(".pdf")) return Response.json({ error: "Для БКИ поддерживается текстовый PDF" }, { status: 415 });
-    if (sourceType === "QUARTERLY" && !/\.(pdf|xlsx|csv)$/.test(lowerName)) return Response.json({ error: "Поддерживаются PDF, XLSX и CSV" }, { status: 415 });
+    if (sourceType !== "BKI" && !/\.(pdf|xls|xlsx|csv)$/.test(lowerName)) return Response.json({ error: "Поддерживаются PDF, XLS, XLSX и CSV" }, { status: 415 });
 
     const db = await database();
-    const row = await db.prepare("SELECT payload, owner_email AS ownerEmail FROM analyses WHERE id = ? LIMIT 1")
+    const row = await db.prepare("SELECT payload, owner_email AS ownerEmail FROM analyses WHERE archive_state = 'ACTIVE' AND id = ? LIMIT 1")
       .bind(analysisId).first<{ payload?: string; ownerEmail?: string }>();
     if (!row?.payload || (row.ownerEmail !== user.email && !user.isAdmin)) return Response.json({ error: "Анализ не найден в вашем кабинете" }, { status: 404 });
     const analysis = safeJson<AnalysisResult>(row.payload);
     if (!analysis) return Response.json({ error: "Сохранённый анализ повреждён" }, { status: 409 });
 
+    if(sourceType==='QUARTERLY' && await resolveAnalysisTier(db,{analysisId,userEmail:row.ownerEmail||user.email,companyInn:analysis.companyInn,privileged:user.isAdmin})!=='FULL')
+      return Response.json({error:'Для промежуточной отчётности нужен полный доступ.'},{status:403});
     const bytes = new Uint8Array(await file.arrayBuffer());
+    if(lowerName.endsWith('.xlsx'))validateZipBudget(bytes);if(file.name.length>180)return Response.json({error:'FILENAME_TOO_LONG'},{status:400});
     const contentHash = await sha256Hex(bytes);
-    const existingSource = sourceType === "BKI" ? analysis.sourceManifest?.bki : analysis.sourceManifest?.quarterly;
-    if (existingSource?.contentHash === contentHash) {
-      return Response.json({ error: "Этот исходный файл уже прикреплён к анализу", duplicate: true, source: existingSource }, { status: 409 });
+    const existingSource = sourceType === "BKI" ? analysis.sourceManifest?.bki : sourceType === "BFO" ? analysis.sourceManifest?.bfo : analysis.sourceManifest?.quarterly;
+    if (existingSource?.contentHash === contentHash || analysis.sourceManifest?.financialUploads?.some(s => s.contentHash === contentHash) || analysis.sourceManifest?.retiredFinancialUploads?.some(v => v.source.contentHash === contentHash)) {
+      return Response.json({ error: "Этот исходный файл уже прикреплён к анализу", duplicate: true }, { status: 409 });
     }
     const sourceId = `${sourceType.toLowerCase()}:${contentHash}`;
-    const text = await extractDocumentText(file.name, bytes);
+    let text: string;
+    try { text = await extractDocumentText(file.name, bytes, sourceType === "BKI" ? "bureau" : "financial"); }
+    catch { return Response.json({error:"Не удалось прочитать документ. Проверьте формат и целостность файла."}, {status:400}); }
+    if (!text.trim()) return Response.json({error:"В документе нет читаемого текста. Для скана нужен файл с текстовым слоем."}, {status:400});
     let updated: AnalysisResult;
     let verifiedReport: unknown;
     let verifiedSource: SourceEnvelope;
@@ -121,6 +134,7 @@ export async function POST(request: Request) {
         companyInn: analysis.companyInn,
         fileName: file.name,
         sourceName: report.source,
+        periodTo: report.reportDate || undefined,
         parserVersion: "PRESCORE-BKI-PARSER-1",
         confidence: report.parserConfidence,
         warnings: report.warnings,
@@ -143,7 +157,7 @@ export async function POST(request: Request) {
       });
       verifiedReport = report;
     } else {
-      const report = parseAuthoritativeQuarterlyText({ text, fileName: file.name, analysisInn: analysis.companyInn });
+      const report = (sourceType === "BFO" ? parseAuthoritativeBfoText : parseAuthoritativeQuarterlyText)({ text, fileName: file.name, analysisInn: analysis.companyInn });
       const fieldAvailability = Object.fromEntries(Object.entries(report.values).map(([key, value]) => [key, value === null ? "UNKNOWN" : "KNOWN"])) as Record<string, "KNOWN" | "UNKNOWN">;
       const warnings = [...report.warnings];
       if (!report.companyInn) warnings.push("ИНН не найден в файле; принадлежность подтверждена только выбранным досье и пользователем.");
@@ -152,18 +166,28 @@ export async function POST(request: Request) {
         sourceType,
         companyInn: analysis.companyInn,
         fileName: file.name,
-        sourceName: "Квартальная отчётность",
-        parserVersion: "PRESCORE-QUARTERLY-PARSER-1",
+        sourceName: sourceType === "BFO" ? "Бухгалтерская отчётность" : "Квартальная отчётность",
+        parserVersion: sourceType === "BFO" ? "PRESCORE-BFO-UPLOAD-1" : "PRESCORE-QUARTERLY-PARSER-1",
+        periodFrom: report.financialMetadataV2?.period.from ?? undefined,
+        periodTo: report.financialMetadataV2?.period.to ?? undefined,
         confidence: report.parserConfidence,
         warnings,
         contentHash,
         fieldAvailability,
       });
+      const financial = quarterlyFinancialShadow(report, verifiedSource, analysis.financialStatementsV2);
+      if (!financial.financialAnalysisV2 || !financial.financialStatementsV2) throw new Error("Не удалось проверить финансовую отчётность. Предыдущие данные сохранены.");
+      const retainedIds = new Set(financial.financialStatementsV2.map(s => s.sourceId));
+      const previous = financialSources(analysis.sourceManifest);
+      const financialUploads = [...previous.filter(s => retainedIds.has(s.sourceId)), verifiedSource];
+      const retired = previous.filter(s => s.sourceType === sourceType && !retainedIds.has(s.sourceId));
+      const history = [...(analysis.sourceManifest?.retiredFinancialUploads ?? []),
+        ...retired.map(source => ({source, replacedBy:sourceId, replacedAt:verifiedSource.receivedAt!}))];
       updated = withRefreshedIntegrity({
         ...analysis,
-        quarterlyReport: report,
-        ...quarterlyFinancialShadow(report, verifiedSource, analysis.financialStatementsV2),
-        sourceManifest: { ...manifestOf(analysis), quarterly: verifiedSource },
+        ...(sourceType === "QUARTERLY" ? { quarterlyReport: report } : {}),
+        ...financial,
+        sourceManifest: { ...manifestOf(analysis), [sourceType === "BFO" ? "bfo" : "quarterly"]: verifiedSource, financialUploads, ...(history.length ? {retiredFinancialUploads:history} : {}) },
       });
       verifiedReport = report;
     }
@@ -176,20 +200,17 @@ export async function POST(request: Request) {
     const riskAsOf = [updated.periodTo, updated.creditHistory?.reportDate ?? "", updated.financialAnalysisV2?.latestInterim?.snapshot.period.asOf ?? ""].filter(date => /^\d{4}-\d{2}-\d{2}$/.test(date)).sort().at(-1) ?? "";
     updated = { ...updated, ...buildRiskShadow({ analysis: updated, asOfDate: riskAsOf }) };
     const stored = analysisForStorage(updated);
-    await db.prepare("UPDATE analyses SET payload = ? WHERE id = ? AND owner_email = ?")
-      .bind(JSON.stringify(stored), analysisId, row.ownerEmail).run();
+    const saved = await updateActiveAnalysis(db, analysisId, row.ownerEmail, row.payload, JSON.stringify(stored));
+    if (!saved) return Response.json({error: "Анализ обновлён в другой вкладке. Повторите загрузку: предыдущие источники сохранены."}, {status: 409});
     const controls = await readControlState(db as unknown as Parameters<typeof readControlState>[0]);
     const tier = await resolveAnalysisTier(db, { analysisId, userEmail: row.ownerEmail || user.email, companyInn: stored.companyInn, privileged: user.isAdmin });
     return Response.json({
       analysis: analysisView(applyAnalysisControls(stored, controls), tier),
-      report: sourceType === "QUARTERLY" && tier === "FREE"
-        ? Object.fromEntries(Object.entries(verifiedReport as Record<string, unknown>).filter(([key]) => key !== "financialMetadataV2"))
-        : verifiedReport,
-      source: verifiedSource,
+      ...(tier === "FULL" ? {report:verifiedReport, source:verifiedSource} : {source:{sourceType,status:verifiedSource.status}}),
       processedBy: "server",
       originalFileStored: false,
     });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Не удалось обработать источник" }, { status: 400 });
+    return Response.json({ error: safeErrorText(error, "Не удалось обработать источник") }, { status: 400 });
   }
 }

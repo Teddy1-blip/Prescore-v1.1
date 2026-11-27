@@ -1,0 +1,26 @@
+{
+  "cutover": "2026-10-30T00:00:00.000Z",
+  "scope": {
+    "kind": "OWNER_EXPLICIT_IDS",
+    "ownerEmail": "dorogovab@yandex.ru",
+    "analysisIds": [
+      "4f95b8fa-d933-46d4-893b-992385b5d893",
+      "5c5ba503-1abb-46b6-a1bd-a835f9dbb750",
+      "6d30e530-bb6c-47a9-ac85-f32f34c1b9b5",
+      "95b312a4-2d85-4ec8-80e1-06d957b4f9a4",
+      "ac19eb41-46ce-4eac-b88c-aa8f442a00bd",
+      "ad26967b-568b-4153-8c5c-e80eb8133651",
+      "ad80031b-b5c4-48bf-9eab-7cc07c66a2a3",
+      "c168b6de-25bf-48ca-a6b1-c76b72078218",
+      "d1792edf-2881-4c10-927f-2a867cac3cf6",
+      "d1f868b5-53fc-493a-ab27-790043c8335e",
+      "ea1b95b5-ad8d-457c-8c79-c4c43ba9a054"
+    ],
+    "protectedAnalysisIds": [
+      "36527dc1-d7db-4fef-bd47-719a451b4d58",
+      "7ec7daeb-dfef-4f1f-9c9d-15ea86fe864c",
+      "992ab9e3-672e-4adf-955e-9a2c40e3ece3"
+    ],
+    "targetBaseUrl": "https://prescore-staging-dorogovab.msk1.amvera.tech"
+  }
+}

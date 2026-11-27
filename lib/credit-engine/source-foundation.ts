@@ -59,7 +59,7 @@ function nextMonth(month: string) {
   return date.toISOString().slice(0, 7);
 }
 
-export function analyzeCalendarCoverage(
+function sourceCalendarCoverage(
   sources: Array<Pick<SourceEnvelope, "sourceId" | "periodFrom" | "periodTo">>,
 ): MonthCoverage[] {
   const valid = sources.filter((item) => validIsoDate(item.periodFrom) && validIsoDate(item.periodTo) && item.periodFrom! <= item.periodTo!);
@@ -111,6 +111,30 @@ export function analyzeCalendarCoverage(
     });
   }
   return result;
+}
+
+// Company FULL requires all supplied accounts, not merely any account, on every day.
+// Same-account overlaps remain unresolved; distinct accounts are not duplicate sources.
+export function analyzeCalendarCoverage(sources: Array<Pick<SourceEnvelope, "sourceId" | "periodFrom" | "periodTo" | "accountCoverage" | "periodBasis">>): MonthCoverage[] {
+  // Observed postings establish activity only, never a complete calendar interval.
+  if (sources.some(s=>s.periodBasis==="OBSERVED_ONLY")) {
+    const declared=sources.filter(s=>s.periodBasis!=="OBSERVED_ONLY");
+    return analyzeCalendarCoverage(declared).map(m=>m.status==="FULL" ? {...m,status:"PARTIAL",warnings:[...m.warnings,"ACCOUNT_PERIOD_UNCONFIRMED"]} : m);
+  }
+  if (!sources.length || sources.some(s => !s.accountCoverage?.length)) return sourceCalendarCoverage(sources);
+  const accounts = new Map<string, Array<Pick<SourceEnvelope, "sourceId" | "periodFrom" | "periodTo">>>();
+  for (const s of sources) for (const a of s.accountCoverage!) {
+    const rows = accounts.get(a.account) ?? [];
+    rows.push({sourceId:s.sourceId, periodFrom:a.periodFrom, periodTo:a.periodTo}); accounts.set(a.account, rows);
+  }
+  const window = sourceCalendarCoverage(sources);
+  const calendars = [...accounts.values()].map(rows => new Map(sourceCalendarCoverage(rows).map(m => [m.month,m])));
+  return window.map(m => {
+    const rows = calendars.map(c => c.get(m.month));
+    const commonDays = Array.from({length:m.calendarDays},(_,i)=>`${m.month}-${String(i+1).padStart(2,'0')}`).filter(day=>[...accounts.values()].every(sources=>sources.some(s=>s.periodFrom&&s.periodTo&&s.periodFrom<=day&&day<=s.periodTo))).length;
+    const status = rows.some(r => r?.status === 'OVERLAP') ? 'OVERLAP' : rows.every(r => r?.status === 'FULL') ? 'FULL' : rows.every(r => !r || r.status === 'MISSING') ? 'MISSING' : 'PARTIAL';
+    return {...m, status, daysCovered: commonDays, warnings: [...(accounts.size>1 && rows.some(r=>!r||r.status==='MISSING') && rows.some(r=>r&&r.status!=='MISSING') ? ['UNOBSERVED_ACCOUNT_PERIOD'] : []), ...(status === 'FULL' ? [] : status === 'OVERLAP' ? ['Перекрытие выгрузок одного счёта; требуется проверка.'] : ['Покрытие одного или нескольких представленных счетов неполное.'])]};
+  });
 }
 
 export function buildDataIntegritySummary(
@@ -182,6 +206,7 @@ function allSources(manifest: AnalysisSourceManifest) {
     ...manifest.bankStatements,
     ...(manifest.bfo ? [manifest.bfo] : []),
     ...(manifest.quarterly ? [manifest.quarterly] : []),
+    ...(manifest.financialUploads ?? []).filter(s => s.sourceId !== manifest.bfo?.sourceId && s.sourceId !== manifest.quarterly?.sourceId),
     ...(manifest.bki ? [manifest.bki] : []),
     ...(manifest.external ?? []),
   ];
@@ -248,6 +273,7 @@ export function parseAuthoritativeCreditHistoryText(input: {
   const report = parseCreditHistoryText(input.text, input.fileName);
   const analysisInn = normalizedInn(input.analysisInn);
   const subjectInn = normalizedInn(report.subjectInn);
+  if (report.subjectType === "Юридическое лицо" && !subjectInn) throw new Error("В корпоративной кредитной истории не найден ИНН компании.");
   if (report.subjectType === "Юридическое лицо" && subjectInn && subjectInn !== analysisInn) {
     throw new Error("ИНН корпоративного БКИ не совпадает с компанией");
   }
@@ -268,7 +294,27 @@ export function parseAuthoritativeQuarterlyText(input: {
   const report = parseQuarterlyReportText(input.text, input.fileName);
   const analysisInn = normalizedInn(input.analysisInn);
   const reportInn = normalizedInn(report.companyInn);
+  if (!reportInn) throw new Error("В квартальной отчётности не найден ИНН компании.");
   if (reportInn && reportInn !== analysisInn) throw new Error("ИНН квартальной отчётности не совпадает с компанией");
+  return report;
+}
+
+export function parseAuthoritativeBfoText(input: { text: string; fileName: string; analysisInn: string }): QuarterlyFinancialReport {
+  const report = parseQuarterlyReportText(input.text, input.fileName);
+  if (!report.companyInn) throw new Error("В бухгалтерской отчётности не найден ИНН компании.");
+  if (normalizedInn(report.companyInn) !== normalizedInn(input.analysisInn)) throw new Error("ИНН бухгалтерской отчётности не совпадает с компанией");
+  if (report.financialMetadataV2?.period.kind !== "ANNUAL") throw new Error("Укажите годовой период в файле, например: за 2025 год. Для промежуточных данных используйте квартальную отчётность.");
+  // A single annual RAS report normally has current-year and comparative-year
+  // columns. Do not reject a legitimate report just because both headers say
+  // "За 2024" / "За 2023". Still reject concatenated annual forms and periods
+  // outside the current/two-prior reporting window: the text parser reads one period.
+  const year = report.financialMetadataV2.period.year;
+  const years = [...new Set([...input.text.matchAll(/(?:за\s+|на\s+31[.]12[.])(20\d{2})/gi)].map(match => Number(match[1])))];
+  const formCount = (input.text.match(/^\s*бухгалтерский баланс\s*$/gim) ?? []).length;
+  const incomeCount = (input.text.match(/^\s*отч[её]т о финансовых результатах\s*$/gim) ?? []).length;
+  if (!year || (years.length > 0 && !years.includes(year)) || years.some(y => y > year || y < year - 2)
+      || formCount > 1 || incomeCount > 1)
+    throw new Error("Файл содержит неоднозначные годовые периоды или несколько форм. Проверьте текущий и сравнительный год.");
   return report;
 }
 

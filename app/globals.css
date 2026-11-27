@@ -3105,3 +3105,11 @@ td small {
 .login-form input[type=email],
 .login-form input[type=password],
 .login-form input[type=text] { min-height: var(--ps-control-height-md); }
+
+/* Password visibility is a local display toggle, not authentication state. */
+.ps-password-control { position: relative; }
+.ps-password-control input[type="password"], .ps-password-control input[type="text"] { padding-right: 54px !important; }
+.ps-password-visibility { position: absolute; right: 7px; bottom: 6px; display: grid; place-items: center; width: 39px; height: 39px; padding: 0; border: 0; background: transparent; color: #415a69; cursor: pointer; }
+.ps-password-visibility svg { width: 19px; height: 19px; }
+.ps-password-visibility:focus-visible { outline: 2px solid #1d5577; outline-offset: 2px; border-radius: 8px; }
+.ps-password-visibility:disabled { opacity: .45; cursor: not-allowed; }

@@ -1,0 +1,75 @@
+import {reviewed,economicDigest} from './fixtures/client-report/stage5-baseline.mjs';
+import {historicalBusinessResult} from './fixtures/historical-bank-inputs.mjs';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import crypto from 'node:crypto';
+import './fixtures/client-report/render.mjs';
+import {createElement} from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
+const {AnalysisV3,Financing}=await import('../app/dashboard/report-v2/analysis-v3.tsx');
+const {PrintReport,printPresentation}=await import('../app/dashboard/report-v2/print-report.tsx');
+const {ClientReportShell}=await import('../app/dashboard/report-v2/client-report.tsx');
+const {SourceAppendix}=await import('../app/dashboard/report-v2/source-appendix.tsx');
+import {businessCatalog,loadBusiness} from '../lib/credit-engine/credit-lab/business-corpus.mjs';
+import {buildCanonicalCreditAnalysis} from '../lib/credit-engine/production/orchestrator.ts';
+import {publicCanonicalModel} from '../lib/credit-engine/production/public-model.ts';
+import {analysisV3Presentation} from '../lib/credit-engine/client-report/analysis-v3.ts';
+import {buildClientReportModel} from '../lib/credit-engine/client-report/adapter.ts';
+
+const cases=new Map();
+const render=m=>renderToStaticMarkup(createElement(AnalysisV3,{model:m,labId:'CL-RU-BUS-001'}));
+for(const c of businessCatalog()){
+ const input=loadBusiness(c.caseId).input,result=buildCanonicalCreditAnalysis(input),model=publicCanonicalModel(result.model,result);cases.set(c.caseId,{result,model});
+ test(c.caseId+' decision values and priorities reproduce the independently calculated Stage 4 parent',()=>assert.equal(economicDigest(result),reviewed[c.caseId].economics));
+ test(c.caseId+' saved staging bank input reproduces the full Stage 5 canonical golden',()=>assert.equal(crypto.createHash('sha256').update(JSON.stringify(historicalBusinessResult(c.caseId,input))).digest('hex'),reviewed[c.caseId].historical));
+ test(c.caseId+' renders real computed model and all internal links resolve',()=>{const h=render(model);assert.ok(h.includes('CLIENT-ANALYSIS-V3'));assert.ok(h.includes(model.company.inn));if(model.index.value?.value!==null&&model.index.value)assert.ok(h.includes(model.index.value.display));const ids=[...h.matchAll(/\bid="([^"]+)"/g)].map(x=>x[1]);assert.equal(new Set(ids).size,ids.length,'duplicate IDs');for(const [,id]of h.matchAll(/href="#([^"]+)"/g))assert.ok(ids.includes(id),'missing anchor '+id);assert.ok(!/NaN|Infinity|undefined/.test(h));});
+ test(c.caseId+' projection preserves scenario and portfolio semantics',()=>{const p=model.analysisV3;assert.ok(p);assert.equal(p.scenarios.length,result.debtCapacity.scenarioResults.length);for(let i=0;i<p.scenarios.length;i++){const s=result.debtCapacity.scenarioResults[i];assert.equal(p.scenarios[i].cautious,s.prudentialPrincipalEquivalent);assert.equal(p.scenarios[i].upper,s.maximumPolicyPrincipalEquivalent);assert.equal(p.scenarios[i].rate,s.annualRatePercent);assert.equal(p.scenarios[i].months,s.termMonths);}for(let i=0;i<p.portfolio.length;i++){const v=result.creditPortfolio.obligations[i].currentPosition.principalOutstanding;assert.equal(p.portfolio[i].principal.value,v.value);for(const k of ['knowledge','origin','verification','confidence'])assert.equal(p.portfolio[i].principal[k],v[k]);}assert.doesNotMatch(JSON.stringify(p),/rawValue|rawField|contractNumber|accountNumber|policyFingerprint|20_PERCENT|25_PERCENT/);});
+ test(c.caseId+' print uses deduplicated presentation and current source appendix',()=>{const old=publicCanonicalModel(result.model);const withoutExpertise={...model};delete withoutExpertise.expertise;const core=m=>renderToStaticMarkup(createElement(ClientReportShell,{model:m,print:true}));assert.equal(core(withoutExpertise),core(old));const print=renderToStaticMarkup(createElement(PrintReport,{model:withoutExpertise}));assert.ok(print.startsWith(core(printPresentation(old))));assert.ok(print.includes(renderToStaticMarkup(createElement(SourceAppendix,{model:withoutExpertise}))));assert.equal((print.match(/cr-source-appendix/g)??[]).length,1);});
+}
+const get=n=>cases.get('CL-RU-BUS-'+n);
+test('FREE projection and renderer never disclose paid fields',()=>{const r=get('001').result;const free=buildClientReportModel(r,{entitlement:'FREE'});assert.equal(analysisV3Presentation(r,free),undefined);const m=publicCanonicalModel(free,r),h=render(m);assert.equal(m.analysisV3,undefined);assert.ok(!h.includes('av-index-chart'));assert.ok(!h.includes('Срок меняет сумму'));assert.ok(!h.includes('Действующие обязательства'));assert.ok(!h.includes(get('001').model.capacity.headline.display));});
+test('unknown and global stop do not render fabricated curves',()=>{for(const n of ['011','016','017','022']){const h=render(get(n).model);assert.ok(!h.includes('class="av-index-chart"'),n);assert.ok(!h.includes('class="av-capacity-chart"'),n);assert.ok(!h.includes('class="av-scenario-upper"'),n);}});
+test('confirmed zero is rendered numerically, not UNKNOWN',()=>{const m=get('013').model;const factors=[...m.primaryFactors,...m.contextHighlights,...m.detailedSections.flatMap(s=>s.factors)];const zero=factors.flatMap(f=>f.metrics).find(v=>v.bindingCode==='BKI_HISTORY_DAYS');assert.ok(zero);assert.equal(zero.value,0);assert.ok(render(m).includes('0 дней'));});
+test('013 separates historic DAYS from current RUB',()=>{const h=render(get('013').model);assert.ok(h.includes('Исторический максимум просрочки, дней'));assert.ok(h.includes('Текущая просроченная сумма'));assert.ok(h.includes('0 дней'));assert.ok(/1[\s\u00a0\u202f]000/.test(h));});
+test('022 retains subtotal, conflict and independent portfolio without full turnover',()=>{const h=render(get('022').model);assert.ok(h.includes('Бесспорная часть операционных поступлений — не полный итог'));assert.ok(/11[\s\u00a0\u202f]800[\s\u00a0\u202f]000/.test(h));assert.ok(h.includes('Действующие обязательства'));assert.equal(get('022').model.capacity.headline.value,null);});
+test('print carries the authorized decision version, including legacy and BASIC projections', () => {
+ const {result, model} = get('001');
+ const markup = report => renderToStaticMarkup(createElement(PrintReport, {model: report}));
+ const id = model.meta.snapshot.snapshotId;
+ assert.ok(markup(model).includes(id));
+ const legacy = structuredClone(model);
+ delete legacy.meta.snapshot;
+ assert.doesNotMatch(markup(legacy), /Версия расчёта/);
+ const basic = buildClientReportModel(result, {entitlement: 'FREE'});
+ basic.meta.snapshot = model.meta.snapshot;
+ const redacted = publicCanonicalModel(basic, result);
+ assert.equal(redacted.meta.snapshot, undefined);
+ assert.ok(!markup(redacted).includes(id));
+});
+
+test('missing scenario inputs never default rate/term',()=>{const r=buildCanonicalCreditAnalysis({...loadBusiness('CL-RU-BUS-001').input,scenarios:undefined});const h=render(publicCanonicalModel(r.model,r));assert.ok(h.includes('Для сравнения сумм нужны параметры сценария'));assert.ok(!h.includes('20% годовых'));});
+test('basis is copied independently without combining recurring and near-term',()=>{const {result:r,model:m}=get('001');for(let i=0;i<2;i++){const v=[r.debtCapacity.recurringView,r.debtCapacity.nearTerm30dView][i],p=m.analysisV3.financing.views[i];assert.equal(p.current.value,v.existingDebtServiceAnchor.value);assert.equal(p.headroom,v.incrementalHeadroom.prudential);assert.equal(p.cautious,v.prudentialTotalMonthlyDebtService);assert.equal(p.upper,v.maximumPolicyMonthlyDebtService);}assert.ok(renderToStaticMarkup(createElement(Financing,{model:m})).includes('aria-pressed="true"'));});
+test('PARTIAL / estimated / conflicted provenance is not relabelled confirmed',()=>{const r=structuredClone(get('001').result),v=r.creditPortfolio.obligations[0].currentPosition.principalOutstanding;Object.assign(v,{knowledge:'PARTIAL',origin:'ESTIMATED',verification:'CONFLICTED'});const p=analysisV3Presentation(r,r.model);assert.equal(p.portfolio[0].principal.knowledge,'PARTIAL');const h=render({...r.model,analysisV3:p});assert.ok(h.includes('Неполные данные · Оценка · Конфликт источников'));});
+test('renderer escapes source labels and company names',()=>{const m=structuredClone(get('001').model);m.company.name='<script>alert(1)</script>';m.sources[0].label='<img src=x onerror=alert(2)>';const h=render(m);assert.ok(!h.includes('<script>'));assert.ok(h.includes('&lt;script&gt;'));assert.ok(!h.includes('<img src=x'));});
+test('reduced-motion disables all new animation and no loops or fake number counting',()=>{const css=fs.readFileSync('app/dashboard/report-v2/analysis-v3.css','utf8');assert.ok(css.includes('@media(prefers-reduced-motion:reduce)'));assert.ok(css.includes('animation:none!important;transition:none!important'));assert.doesNotMatch(css,/\binfinite\b/);const code=fs.readFileSync('app/dashboard/report-v2/analysis-v3.tsx','utf8');assert.doesNotMatch(code,/localStorage|setInterval|Math\.random|dangerouslySetInnerHTML|policy\.ts|\/engine/);assert.ok(code.includes('el.open=true'));});
+test('print and real route precedence/auth/FULL remain explicit',()=>{const s=fs.readFileSync('app/dashboard/report-v2/page.tsx','utf8');assert.ok(s.indexOf('if (query.analysisId)')<s.indexOf('if (query.lab)'));assert.ok(s.includes("result.fullAvailability === 'LOCKED'"));assert.ok(s.includes('<PrintReport model={result.full.report}'));assert.ok(s.includes("redirect('/dashboard?analysisId='"));assert.ok(s.includes("'&view=analysis'"));assert.ok(s.includes("catalog.some(c=>c.caseId === query.lab)"));});
+
+const {Value,Action}=await import('../app/dashboard/report-v2/analysis-v3.tsx');
+const valueHtml=v=>renderToStaticMarkup(createElement(Value,{value:{value:null,knowledge:'UNKNOWN',origin:'REPORTED',verification:'UNCONFIRMED',confidence:'LOW',asOf:null,...v}}));
+for(const [name,v,headline] of [
+ ['NOT_APPLICABLE',{knowledge:'NOT_APPLICABLE'},'Не применимо'],
+ ['UNKNOWN',{},'Недостаточно данных'],
+ ['KNOWN zero',{value:0,knowledge:'KNOWN'},'0 ₽'],
+ ['PARTIAL',{value:12,knowledge:'PARTIAL',origin:'ESTIMATED'},'12 ₽'],
+ ['CONFLICTED',{verification:'CONFLICTED'},'Недостаточно данных'],
+])test('Value headline preserves '+name,()=>{const h=valueHtml(v);assert.ok(h.includes('<strong>'+headline+'</strong>'));if(name==='NOT_APPLICABLE')assert.ok(!h.includes('Недостаточно данных'));});
+test('Value independently retains knowledge origin verification confidence',()=>{const h=valueHtml({value:0,knowledge:'PARTIAL',origin:'PROXY',verification:'CONFLICTED',confidence:'MEDIUM'});for(const s of ['0 ₽','Неполные данные','Косвенная оценка','Конфликт источников','Достоверность: Средняя'])assert.ok(h.includes(s));assert.ok(!h.includes('Подтверждено источниками'));});
+test('mobile and desktop print links retain exact lab or real analysis identifier',()=>{for(const props of [{labId:'CL-RU-BUS-022'},{realAnalysisId:'analysis-id-owned'}]){const h=renderToStaticMarkup(createElement(AnalysisV3,{model:get('001').model,...props}));const path=props.labId?'lab=CL-RU-BUS-022':'analysisId=analysis-id-owned';const links=[...h.matchAll(/href="([^"<>]*print=1)"/g)].map(m=>m[1]);assert.equal(links.length,2);assert.ok(links.every(l=>l.includes(path)));assert.ok(h.slice(h.indexOf('av-mobile-menu'),h.indexOf('<main')).includes('Печатная версия'));}});
+test('historical release preserves its exact snapshot in navigation and print links',()=>{const snapshot='sha256:'+'a'.repeat(64);const h=renderToStaticMarkup(createElement(AnalysisV3,{model:get('001').model,realAnalysisId:'analysis-id-owned',historicalSnapshotId:snapshot}));assert.ok(h.includes('Исторический выпуск · сохранённая модель · без пересчёта'));assert.ok(h.includes('section=history'));const links=[...h.matchAll(/href="([^"<>]*print=1)"/g)].map(m=>m[1]);assert.equal(links.length,2);assert.ok(links.every(l=>l.includes('analysisId=analysis-id-owned')&&l.includes('snapshotId=sha256%3A'+('a'.repeat(64)))));});
+test('real historical route reads immutable revision before any current recalculation',()=>{const page=fs.readFileSync('app/dashboard/report-v2/page.tsx','utf8');const history=page.indexOf('if(query.snapshotId)');const current=page.indexOf('const result = await loadWorkspaceModelV1');assert.ok(history>=0&&current>history);assert.ok(page.includes('readDecisionRevision'));assert.ok(page.includes('historicalSnapshotId={query.snapshotId}'));const client=fs.readFileSync('app/components/workspace/client-decision-history.tsx','utf8');assert.ok(client.includes('projection=decision-history'));assert.ok(client.includes('projection=decision-diff'));assert.ok(client.includes('snapshotId='));});
+test('partial Index status has visible dedicated marker without duplicate confidence',()=>{const m=structuredClone(get('001').model);m.index.status='Неполные данные';m.index.confidence='Неполные данные';const h=render(m),index=h.slice(h.indexOf('class="av-index"'),h.indexOf('class="av-situation"'));assert.ok(index.includes('class="av-index-status">Неполные данные'));assert.equal(index.split('Неполные данные').length-1,1);assert.ok(index.includes(m.index.value.display));});
+test('action collapses only literal copies and retains distinct steps evidence prerequisite and recheck',()=>{const a=structuredClone(get('001').model.actionPlan.horizons.flatMap(h=>h.items)[0]);Object.assign(a,{summary:'Одинаковый текст',why:'Одинаковый текст',steps:['Одинаковый текст','Отдельное действие','Отдельное действие'],evidence:['Уникальное подтверждение'],prerequisites:['prior'],recheck:'Уникальная перепроверка'});const h=renderToStaticMarkup(createElement(Action,{item:a,all:[{...a,id:'prior',title:'Предшествующее действие'}]}));assert.equal(h.split('Одинаковый текст').length-1,1);assert.equal(h.split('Отдельное действие').length-1,1);for(const s of ['Уникальное подтверждение','href="#prior"','Уникальная перепроверка'])assert.ok(h.includes(s));});
+test('client copy uses Russian recurring basis label',()=>{assert.ok(!render(get('001').model).includes('recurring'));});
+test('quick factor captions are grouped without losing any distinct factor link',()=>{const m=structuredClone(get('001').model);const factors=m.primaryFactors.slice(0,3);for(const f of factors)f.title='Общее название';const h=render(m),quick=h.slice(h.indexOf('class="av-quick-factors"'),h.indexOf('class="av-nav"'));assert.equal(quick.split('Общее название').length-1,1);for(const f of factors)assert.ok(quick.includes('href="#'+f.id+'"'));});
+test('action preserves distinct rationale and ordered unique steps',()=>{const a=structuredClone(get('001').model.actionPlan.horizons.flatMap(h=>h.items)[0]);Object.assign(a,{summary:'Краткий итог',why:'Отдельное основание',steps:['Первый шаг','Второй шаг']});const h=renderToStaticMarkup(createElement(Action,{item:a,all:[]}));for(const text of ['Краткий итог','Отдельное основание','Первый шаг','Второй шаг'])assert.ok(h.includes(text));assert.ok(h.indexOf('Первый шаг')<h.indexOf('Второй шаг'));});

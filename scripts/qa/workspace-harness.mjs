@@ -1,0 +1,89 @@
+// Isolated QA server: real production components and API handlers, synthetic data only.
+// No application route, deployment, external service, or production database.
+import fs from 'node:fs';
+import {createHash} from 'node:crypto';
+import {buildXlsx} from '../../lib/excel-export.ts';
+import {agentFixtureRoutes} from './agent-route-harness.mjs';
+import path from 'node:path';
+import http from 'node:http';
+import {createRequire} from 'node:module';
+import {createWorkspaceRuntime} from '../../tests/fixtures/workspace-runtime.mjs';
+import {statementFixture} from '../../tests/fixtures/block1-statements.mjs';
+import {loadBusiness} from '../../lib/credit-engine/credit-lab/business-corpus.mjs';
+if(process.env.BILLING_QA==='1'){process.env.BILLING_PROVIDER='FAKE';process.env.BILLING_ALLOW_FAKE='isolated-test';process.env.BILLING_OFFER_VERSION='qa-offer-v1';process.env.BILLING_PRIVACY_VERSION='qa-privacy-v1';process.env.BILLING_SETTLEMENT_PROVIDER='FAKE';process.env.PARTNER_SETTLEMENT_MODE='PAYOUT_API';}
+const root=process.cwd(),out=path.resolve(process.argv[2]??'build/workspace-qa'),port=Number(process.argv[3]??4187);
+process.env.PRESCORE_BASE_URL??='http://127.0.0.1:'+port;
+fs.mkdirSync(out,{recursive:true});
+process.env.PRESCORE_STORAGE_ROOT??=path.join(out,'private-originals');
+const matrixReceipts=process.env.PRESCORE_QA_MATRIX==='1'?{change:{finances:body=>({...body,data:Object.fromEntries(
+  [2017,2018,2019,2021,2022,2023,2024,2025].map((year,i)=>[year,{...body.data[2025],2110:700000+i*10000}]))})}}:{};
+const externalDouble=process.env.PRESCORE_QA_EXTERNAL==='1'?(await import('../../tests/fixtures/stage4-external.mjs')).checkoDouble(matrixReceipts):undefined;
+const req=createRequire(root+'/package.json'),rt=await createWorkspaceRuntime({checkoFetch:externalDouble?.fetcher});
+function fixtureEntry(sourceRoot){
+const routes=fs.existsSync(path.join(sourceRoot,'app/agent/_components/shell.tsx'))?agentFixtureRoutes(sourceRoot):"import Broker from './app/agent/page.tsx';async function agentFixture(){return <Broker/>;}";
+return `import './app/globals.css';import './app/landing-ru.css';import './app/components/ui-v2/product-system.css';import React from 'react';import{createRoot}from'react-dom/client';import Client from './app/dashboard/page.tsx';import Admin from './app/admin/admin-dashboard.tsx';import {PaymentReturn} from './app/components/workspace/billing.tsx';import{AnalysisV3}from'./app/dashboard/report-v2/analysis-v3.tsx';import './app/dashboard/report-v2/analysis-v3.css';import './app/dashboard/report-v2/report-v2.css';import {DossierPrint} from './app/dashboard/report-v2/dossier-print.tsx';import {PrintReport} from './app/dashboard/report-v2/print-report.tsx';${routes};const q=new URLSearchParams(location.search);if(location.pathname==='/agent'||location.pathname.startsWith('/agent/')){agentFixture().then(el=>{if(el)createRoot(document.getElementById('root')).render(el);}); }else if(location.pathname==='/dashboard/report-v2'&&q.has('dossierId')){fetch('/api/dossier?'+new URLSearchParams({id:q.get('dossierId'),snapshotId:q.get('snapshotId')??''})).then(r=>r.json()).then(data=>createRoot(document.getElementById('root')).render(data.model?<DossierPrint inn={data.company.inn} result={data.model}/>:<p>Версия отчёта недоступна.</p>));}else if(location.pathname==='/dashboard/report-v2'){fetch('/api/workspace-model?analysisId='+encodeURIComponent(q.get('analysisId'))).then(r=>r.json()).then(m=>createRoot(document.getElementById('root')).render(q.get('print')==='1'?<PrintReport model={m.full.report} realAnalysisId={m.analysisId}/>:<AnalysisV3 model={m.full.report} realAnalysisId={m.analysisId}/>));}else createRoot(document.getElementById('root')).render(location.pathname==='/billing/return'?<PaymentReturn/>:location.pathname==='/prescore-control'?<Admin/>:<Client/>);`;
+}
+async function bundle(sourceRoot,filename){const entry=fixtureEntry(sourceRoot);await req('esbuild').build({stdin:{contents:entry,resolveDir:sourceRoot,sourcefile:'workspace-qa.tsx',loader:'tsx'},external:['/report-v2/*'],conditions:['style','browser'],bundle:true,jsx:'automatic',platform:'browser',outfile:out+'/'+filename+'.js',define:{'process.env.NODE_ENV':'"production"'},plugins:[{name:'root-css',setup(b){b.onLoad({filter:/globals\.css$/},async args=>({contents:(await req('postcss')([req('@tailwindcss/postcss')()]).process(fs.readFileSync(args.path,'utf8'),{from:args.path})).css,loader:'css',resolveDir:path.dirname(args.path)}));}},{name:'isolated-next-link',setup(b){b.onResolve({filter:/^next\/navigation$/},()=>({path:'navigation',namespace:'qa-nav'}));b.onLoad({filter:/.*/,namespace:'qa-nav'},()=>({contents:"export const useRouter=()=>({push:path=>location.assign(path),replace:path=>location.replace(path)});export const useSearchParams=()=>new URLSearchParams(location.search);export const usePathname=()=>location.pathname;export const redirect=path=>{location.replace(path);return null;};",loader:'js'}));b.onResolve({filter:/^next\/link$/},()=>({path:'link',namespace:'qa'}));b.onLoad({filter:/.*/,namespace:'qa'},()=>({contents:"import React from 'react';export default function Link({children,...props}){return React.createElement('a',props,children)}",loader:'js',resolveDir:root}));}}]});}
+await bundle(root,'bundle');
+if(process.env.WORKSPACE_QA_BASELINE_ROOT)await bundle(process.env.WORKSPACE_QA_BASELINE_ROOT,'before');
+if(process.env.AGENT_PRODUCT_QA==='1'){
+ const columns=['Номер извещения','Победитель','ИНН','Обеспечение исполнения','Предмет тендера','Телефон','Лот'];
+ const entries=Array.from({length:51},(_,i)=>['QA-'+String(i).padStart(2,'0'),'Синтетический лид '+i,
+   String(9905000000+i),1000000+i,'Тестовый договор','','1']);
+ fs.writeFileSync(out+'/agent-leads.xlsx',buildXlsx([{name:'Контракты',rows:[columns,...entries]}]));
+}
+fs.writeFileSync(out+'/statement.txt',statementFixture({openingBalance:null,endingBalance:null}));
+const html='<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/bundle.css"><title>Workspace isolated QA</title></head><body class="prescore-v2"><div id="root"></div><script src="/bundle.js"></script></body></html>';
+async function seed(caseId='CL-RU-BUS-001',unavailable=false,stage5Ready=false){if(!['001','011','013','016','017','022'].some(n=>caseId==='CL-RU-BUS-'+n))throw Error('Unknown synthetic case');let b=loadBusiness(caseId);
+  if(process.env.PRESCORE_QA_PASSPORT==='1'){
+    // The analytical corpus deliberately uses unchecked INNs. Adapt only its isolated UI copy.
+    const prefix='9909'+caseId.slice(-3).padStart(5,'0');
+    const checksum=[2,4,10,3,5,9,4,6,8].reduce((sum,w,i)=>sum+w*Number(prefix[i]),0)%11%10;
+    const sourceInn=b.input.analysis.companyInn,displayInn=prefix+checksum;
+    let normalized=JSON.stringify(b.input).replaceAll(sourceInn,displayInn);
+    const statements=b.statements.map(statement=>{
+      const text=statement.text.replaceAll(sourceInn,displayInn),contentHash=createHash('sha256').update(text).digest('hex');
+      normalized=normalized.replaceAll(statement.contentHash,contentHash);
+      return {...statement,text,contentHash,sourceId:statement.sourceId.replace(statement.contentHash,contentHash)};
+    });
+    b={...b,statements,input:JSON.parse(normalized)};
+  }
+  const r=await rt.request('/api/analysis',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({statements:b.statements})});const payload=await r.json();if(!r.ok)throw Error(JSON.stringify(payload));// Attach normalized synthetic BFO/BKI source bundle; all metrics were computed by the corpus pipeline.
+const saved={...b.input.analysis,id:payload.analysis.id,createdAt:payload.analysis.createdAt};if(stage5Ready) saved.financingRequestV1={receivedAt:saved.periodTo,purpose:'WORKING_CAPITAL',product:'CREDIT_LINE',amount:300000,termMonths:12,annualRatePercent:18,urgency:'WITHIN_30_DAYS'};
+if(unavailable)saved.sourceManifest.bfo.companyInn='0000000000';await rt.db.prepare('UPDATE analyses SET payload = ? WHERE id = ?').bind(JSON.stringify(saved),saved.id).run();await rt.full(payload.analysis.id);if(unavailable)return payload.analysis;await rt.assign(payload.analysis);if(b.input.companyProfile)await rt.db.prepare('INSERT INTO checko_profiles (inn,payload,fetched_at) VALUES (?,?,?) ON CONFLICT(inn) DO UPDATE SET payload=excluded.payload').bind(payload.analysis.companyInn,JSON.stringify(b.input.companyProfile),new Date().toISOString()).run();if(process.env.PRESCORE_QA_PASSPORT==='1'&&b.input.companyProfile){
+  // Synthetic Checko profile only; no live provider and no production database.
+  const savedDossier=await rt.request('/api/dossier',{
+    method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({action:'save',inn:payload.analysis.companyInn,attachPublic:true}),
+  });
+  if(!savedDossier.ok)throw Error('Passport fixture not saved: '+await savedDossier.text());
+ }
+ const apps=await rt.request('/api/workspace',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({type:'applications',analysisId:payload.analysis.id,companyInn:payload.analysis.companyInn,companyName:payload.analysis.companyName,consentAt:new Date().toISOString(),applications:[{bank:'Партнёр по финансированию',product:'Оборотный кредит',amount:3000000}]})});if(!apps.ok)throw Error(await apps.text());return payload.analysis;}
+const server=http.createServer(async(req,res)=>{try{const u=new URL(req.url,'http://127.0.0.1:'+port);if(process.env.BILLING_QA==='1'&&u.pathname==='/__qa/billing-seed'){const a=await seed();await rt.db.prepare("UPDATE analysis_entitlements SET tier='FREE',revoked_at=? WHERE analysis_id=?").bind(new Date().toISOString(),a.id).run();await rt.db.prepare("INSERT INTO agent_accounts(user_email,agent_code,name) VALUES('curator@qa.test','qa-curator','Куратор QA') ON CONFLICT(user_email) DO NOTHING").run();await rt.db.prepare("INSERT INTO agent_partners(agent_code,curator_code,name,agency,city,phone,email,status,consent_at) VALUES('qa-broker','qa-curator','Брокер QA','','','','broker@workspace.test','ACTIVE','qa') ON CONFLICT(agent_code) DO NOTHING").run();
+await rt.pg.query(`INSERT INTO "user"(id,email,name,"emailVerified") VALUES('qa-curator','curator@qa.test','QA Curator',true) ON CONFLICT(email) DO NOTHING`);
+// Synthetic preaccepted invitation; owner still confirms a separate commercial grant.
+await rt.pg.query(`INSERT INTO audit_log(id,entity_type,entity_id,action,actor_role,actor_email,metadata,created_at) VALUES('qa-accepted-invite','AGENT_ACCOUNT','qa-broker','SELF_CONNECT','CLIENT','broker@workspace.test','{}',CURRENT_TIMESTAMP) ON CONFLICT(id) DO NOTHING`);
+const referral=await rt.authorize(a,{purpose:'REFERRAL'});if(referral.status!==201)throw Error(await referral.text());
+res.setHeader('content-type','application/json');res.end(JSON.stringify(a));return;}
+if(process.env.BILLING_QA==='1'&&u.pathname==='/__qa/billing-state'){
+const providers=rt.load('lib/billing/providers.ts'),payments=rt.load('lib/billing/payments.ts'),settlements=rt.load('lib/billing/settlements.ts');const provider=providers.paymentProvider(),orderId=u.searchParams.get('orderId'),state=u.searchParams.get('state');const p=orderId?await rt.db.prepare('SELECT * FROM billing_payments WHERE order_id=?').bind(orderId).first():null;
+if(state==='confirm'||state==='fail'){await payments.notification(rt.db,provider,provider.notification(p.provider_payment_id,state==='confirm'?'CONFIRMED':'REJECTED'),settlements.confirmCommercial);await settlements.runPayoutWorker(rt.db,settlements.settlementProvider(),20,'PAYOUT_API');}
+if(state==='expire'){await rt.pg.query("UPDATE billing_subscriptions SET access_until=now()-interval '1 day'");await rt.pg.query("UPDATE billing_periods SET starts_at=now()-interval '31 days',ends_at=now()-interval '1 day'");}
+if(state==='verified'){await rt.pg.query("INSERT INTO billing_payout_profiles(beneficiary_code,beneficiary_type,recipient_id,verification_status,masked_destination,created_at,updated_at) VALUES('qa-broker','BROKER','qa-tokenized-recipient','VERIFIED','•••• 1234',now(),now()) ON CONFLICT(beneficiary_code) DO UPDATE SET verification_status='VERIFIED'");await rt.pg.query("UPDATE billing_outbox SET next_attempt_at=now() WHERE status<>'DONE'");await settlements.runPayoutWorker(rt.db,settlements.settlementProvider(),20,'PAYOUT_API');}
+if(state==='paid'){const payout=await rt.db.prepare("SELECT * FROM billing_payouts WHERE beneficiary_code='qa-broker' AND status='PROCESSING' LIMIT 1").first();const sp=settlements.settlementProvider();sp.complete(payout.provider_payout_id);await settlements.finishPayout(rt.db,payout.id,await sp.getPayoutState(payout.provider_payout_id));}
+if(state==='refund'){await rt.load('lib/billing/refunds.ts').requestRefund(rt.db,p.id,p.amount_minor-p.refunded_minor,'qa-refund-'+p.id,'QA full refund',rt.admin.email,provider);}
+res.setHeader('content-type','application/json');res.end(JSON.stringify({ok:true}));return;}
+if(externalDouble&&u.pathname==='/__qa/external-calls'){res.setHeader('content-type','application/json');res.end(JSON.stringify(externalDouble.calls));return;}
+if(u.pathname==='/__qa/seed'){res.setHeader('content-type','application/json');res.end(JSON.stringify(await seed(u.searchParams.get('case')??'CL-RU-BUS-001',u.searchParams.get('unavailable')==='1',u.searchParams.get('stage5Case')==='ready')));return;}if(u.pathname==='/__qa/admin-seed'){
+ const a=await seed();const now=new Date().toISOString();
+ const app=await rt.db.prepare('SELECT id FROM deals WHERE analysis_id=?').bind(a.id).first();
+ await rt.db.prepare('INSERT INTO client_documents(id,company_inn,analysis_id,application_id,category,file_name,mime_type,size_bytes,content_base64,uploaded_by,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)').bind('admin-doc',a.companyInn,a.id,app.id,'OTHER','admin-test.txt','text/plain',4,'c2FmZQ==',rt.owner.email,now).run();
+ await rt.db.prepare('INSERT INTO audit_log(id,entity_type,entity_id,action,actor_role,actor_email,metadata,created_at) VALUES(?,?,?,?,?,?,?,?)').bind('admin-audit','ANALYSIS',a.id,'QA_OBSERVATION','ADMIN',rt.admin.email,JSON.stringify({analysisId:a.id,token:'SECRET_AUDIT_SENTINEL',password:'SECRET_AUDIT_SENTINEL',payload:'SECRET_AUDIT_SENTINEL'}),now).run();
+ await rt.db.prepare('INSERT INTO ai_usage(id,conversation_id,owner_email,provider,model,input_tokens,output_tokens,latency_ms,success,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)').bind('admin-ai','private-conversation',rt.owner.email,'synthetic','test-model',10,20,50,1,now).run();
+ await rt.request('/api/admin?resource=canonical&analysisId='+a.id,{},rt.admin);
+ res.setHeader('content-type','application/json');res.end(JSON.stringify({...a,applicationId:app.id}));return;}
+ if(u.pathname==='/__qa/assign'){const row=await rt.db.prepare('SELECT payload FROM analyses WHERE id = ?').bind(u.searchParams.get('id')).first();await rt.assign(JSON.parse(row.payload));if(u.searchParams.get('full')==='1')await rt.full(u.searchParams.get('id'));res.end('{}');return;}
+ if(u.pathname.startsWith('/api/')){if(u.pathname==='/api/admin'&&req.headers.cookie?.includes('qa-admin-unavailable=1')){res.writeHead(503,{'content-type':'application/json'});res.end(JSON.stringify({error:'Не удалось прочитать данные системы'}));return;}const chunks=[];for await(const chunk of req)chunks.push(chunk);const body=Buffer.concat(chunks);const user=req.headers.cookie?.includes('qa-role=admin')?rt.admin:req.headers.cookie?.includes('qa-role=anonymous')?null:req.headers.cookie?.includes('qa-role=broker')?rt.broker:req.headers.cookie?.includes('qa-role=stranger')?rt.stranger:rt.owner;const response=await rt.request(u.pathname+u.search,{method:req.method,headers:req.headers,...(body.length?{body}: {})},user);res.writeHead(response.status,Object.fromEntries(response.headers));res.end(Buffer.from(await response.arrayBuffer()));return;}
+ const file=u.pathname.startsWith('/report-v2/')?path.join(root,'public',u.pathname):path.join(out,path.basename(u.pathname));if(fs.existsSync(file)&&fs.statSync(file).isFile()){res.setHeader('content-type',file.endsWith('.css')?'text/css':file.endsWith('.js')?'text/javascript':file.endsWith('.woff2')?'font/woff2':'text/plain');res.end(fs.readFileSync(file));return;}res.setHeader('content-type','text/html');res.end(u.searchParams.has('qa-before')?html.replaceAll('/bundle.','/before.'):html);
+ }catch(e){console.error(e);res.writeHead(500);res.end(String(e));}}).listen(port,'127.0.0.1',()=>console.log('Workspace QA listening '+port));
+process.on('SIGTERM',()=>server.close(async()=>{await rt.close();process.exit(0);}));

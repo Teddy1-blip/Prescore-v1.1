@@ -1,6 +1,7 @@
 export type CanonicalDirection = "IN" | "OUT" | "UNKNOWN";
 
 export type DirectionEvidenceRule =
+  | "OWN_TRANSFER_POSTING_SIDE"
   | "COMPANY_PAYER_ACCOUNT"
   | "COMPANY_RECIPIENT_ACCOUNT"
   | "COMPANY_PAYER_INN"
@@ -36,6 +37,8 @@ export type CanonicalTransactionQuality = {
 
 export type RawTransactionValues = {
   date: string | null;
+  /** Original document date when a separate bank posting date was selected. */
+  documentDate?: string | null;
   amount: string | null;
   currency: string | null;
   payerName: string | null;
@@ -73,6 +76,7 @@ export type CanonicalTransaction = {
   sourceFileId: string;
   sourceFileName: string;
   sourceRow: number | null;
+  fileHash?: boolean;
   rawReference: string | null;
   parserVersion: string;
   normalizationVersion: string;

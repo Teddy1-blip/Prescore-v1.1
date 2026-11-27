@@ -1,3 +1,5 @@
+import {applyConflictKnowledge} from "./conflicts.ts";
+import type {TransactionConflict} from "../normalization/conflicts.ts";
 import type { NormalizedTransaction } from "../../prescore.ts";
 import type { EconomicCategory, ClassificationConfidence, ClassificationTag } from "../contracts/classification.ts";
 import type { AnalysisIntegritySummary, AnalysisSourceManifest, MonthCoverageStatus } from "../contracts/sources.ts";
@@ -11,21 +13,26 @@ import {
   type MetricsComparisonReasonCode,
   type MetricsComparisonSummary,
   type MonthlyCashFlowV2,
+  type CashSeries,
 } from "../contracts/metrics.ts";
 
 type LegacyMetrics = Record<string, number | null>;
 
 export type MetricsEngineInput = {
   transactions: NormalizedTransaction[];
+  conflicts?: TransactionConflict[];
   integrity?: AnalysisIntegritySummary;
   sourceManifest?: AnalysisSourceManifest;
   periodFrom?: string | null;
   periodTo?: string | null;
   openingBalance?: number | null;
+  reportedEnding?: number | null;
+  balanceEvidenceComplete?: boolean;
   legacyMetrics?: LegacyMetrics;
 };
 
 type ClassifiedTransaction = NormalizedTransaction & {
+  postedAmount?: number;
   economicCategory: EconomicCategory;
   economicConfidence: ClassificationConfidence;
   economicTags: ClassificationTag[];
@@ -71,7 +78,7 @@ function fallbackCategory(transaction: NormalizedTransaction): EconomicCategory 
   return "UNKNOWN_DIRECTION";
 }
 
-function classifyTransactions(items: NormalizedTransaction[]): ClassifiedTransaction[] {
+export function classifyTransactions(items: NormalizedTransaction[]): ClassifiedTransaction[] {
   const seen = new Set<string>();
   const retained: ClassifiedTransaction[] = [];
   for (const item of items) {
@@ -123,7 +130,7 @@ type MetricOptions = {
   value?: number | null;
   unit?: MetricResult["unit"];
   status?: MetricResult["status"];
-  confidence?: MetricConfidence;
+  confidence?: MetricResult["confidence"];
   basis: string;
   included: EconomicCategory[];
   excluded?: EconomicCategory[];
@@ -173,7 +180,47 @@ function monthKey(date: string | undefined) {
   return /^\d{4}-\d{2}/.test(date ?? "") ? (date ?? "").slice(0, 7) : null;
 }
 
-function calendarSeries(items: ClassifiedTransaction[], input: MetricsEngineInput): MonthlyCashFlowV2[] {
+/** Shared membership rules for monthly bank metrics and their operation drilldowns. */
+function verifiedDebtComponents(item: ClassifiedTransaction) {
+  const components = item.classification?.components ?? [];
+  if (components.length<2 || components.some(c=>(c.category!=="INTEREST_PAYMENT" && c.category!=="LOAN_PRINCIPAL_PAYMENT")
+      || c.amount==null || !Number.isFinite(c.amount) || c.amount<0)) return null;
+  const cents=components.reduce((sum,c)=>sum+Math.round(c.amount!*100),0);
+  return cents===Math.round(item.amount*100) ? components : null;
+}
+
+export function cashSeriesRows(rows: ClassifiedTransaction[], series: CashSeries): ClassifiedTransaction[] {
+  switch (series) {
+    case "externalInflows": return rows.filter(t => t.economicCategory !== "INTERNAL_TRANSFER" && t.direction === "in");
+    case "externalOutflows": return rows.filter(t => t.economicCategory !== "INTERNAL_TRANSFER" && t.direction === "out");
+    case "operatingReceipts": return rows.filter(t => OPERATING_RECEIPTS.includes(t.economicCategory));
+    case "otherReceipts": return rows.filter(t => t.direction === "in" && t.economicCategory !== "INTERNAL_TRANSFER" && !OPERATING_RECEIPTS.includes(t.economicCategory));
+    case "netExternal": return rows.filter(t=>t.economicCategory!=="INTERNAL_TRANSFER" && (t.direction==="in" || t.direction==="out")).map(t=>({...t,amount:t.direction==="in" ? t.amount : -t.amount}));
+    case "individualBusiness": return rows.filter(t=>t.economicCategory==="INDIVIDUAL_BUSINESS_PAYMENT");
+    case "unknownInflows": return rows.filter(t=>t.economicCategory==="UNKNOWN_INFLOW");
+    case "nonOperatingReceipts": return cashSeriesRows(rows,"otherReceipts").filter(t=>t.economicCategory!=="UNKNOWN_INFLOW");
+    case "principal":
+    case "interest": {
+      const category=series==="principal" ? "LOAN_PRINCIPAL_PAYMENT" : "INTEREST_PAYMENT";
+      return rows.flatMap(item=>{
+        if(item.economicCategory===category) return [item];
+        if(item.economicCategory!=="DEBT_SERVICE_UNSPLIT") return [];
+        const amounts=verifiedDebtComponents(item)?.filter(c=>c.category===category);
+        if(!amounts?.length) return [];
+        const partial=amounts.reduce((sum,c)=>sum+Math.round(c.amount!*100),0)/100;
+        return [{...item,amount:partial,postedAmount:item.amount}];
+      });
+    }
+    case "unsplit": return rows.filter(t=>t.economicCategory==="DEBT_SERVICE_UNSPLIT" && !verifiedDebtComponents(t));
+    case "leasing": return rows.filter(t=>t.economicCategory==="LEASING_PAYMENT");
+    case "taxOnly": return rows.filter(t=>t.economicCategory==="TAX_PAYMENT");
+    case "social": return rows.filter(t=>t.economicCategory==="SOCIAL_CONTRIBUTION");
+    case "taxPayments": return rows.filter(t => t.economicCategory === "TAX_PAYMENT" || t.economicCategory === "SOCIAL_CONTRIBUTION");
+    case "debtService": return rows.filter(t => DEBT_SERVICE.includes(t.economicCategory));
+  }
+}
+
+function calendarSeries(items: ClassifiedTransaction[], input: MetricsEngineInput): Array<MonthlyCashFlowV2 & {operatingReceipts:number}> {
   const coverage = input.integrity?.calendarCoverage ?? [];
   const coverageByMonth = new Map(coverage.map((item) => [item.month, item]));
   const transactionMonths = [...new Set(items.map((item) => monthKey(item.date)).filter((item): item is string => Boolean(item)))];
@@ -181,18 +228,29 @@ function calendarSeries(items: ClassifiedTransaction[], input: MetricsEngineInpu
   return months.map((month) => {
     const rows = items.filter((item) => monthKey(item.date) === month);
     const categoryAmount = (categories: EconomicCategory[]) => aggregate(rows, categories).amount;
-    const external = rows.filter((item) => item.economicCategory !== "INTERNAL_TRANSFER");
-    const observedCoverage: MonthCoverageStatus = coverageByMonth.get(month)?.status ?? "PARTIAL";
+    const seriesAmount = (series: CashSeries) => aggregate(cashSeriesRows(rows, series)).amount;
+    const supplied = coverageByMonth.get(month)?.status;
+    const observedCoverage: MonthCoverageStatus = supplied==="MISSING" && rows.length ? "PARTIAL" : supplied ?? "PARTIAL";
     return {
       month,
       coverage: observedCoverage,
-      operatingReceipts: categoryAmount(OPERATING_RECEIPTS),
-      externalInflows: round(external.filter((item) => item.direction === "in").reduce((sum, item) => sum + item.amount, 0), 2),
-      externalOutflows: round(external.filter((item) => item.direction === "out").reduce((sum, item) => sum + item.amount, 0), 2),
+      operatingReceipts: seriesAmount("operatingReceipts"),
+      externalInflows: seriesAmount("externalInflows"),
+      externalOutflows: seriesAmount("externalOutflows"),
+      otherReceipts: seriesAmount("otherReceipts"),
+      nonOperatingReceipts: seriesAmount("nonOperatingReceipts"),
+      principal: seriesAmount("principal"),
+      interest: seriesAmount("interest"),
+      unsplit: seriesAmount("unsplit"),
+      leasing: seriesAmount("leasing"),
+      taxOnly: seriesAmount("taxOnly"),
+      social: seriesAmount("social"),
+      netExternal: seriesAmount("netExternal"),
+      individualBusiness: seriesAmount("individualBusiness"),
       supplierPayments: categoryAmount(["SUPPLIER_PAYMENT"]),
-      taxPayments: categoryAmount(["TAX_PAYMENT", "SOCIAL_CONTRIBUTION"]),
+      taxPayments: seriesAmount("taxPayments"),
       payrollPayments: categoryAmount(["PAYROLL"]),
-      debtService: categoryAmount(DEBT_SERVICE),
+      debtService: seriesAmount("debtService"),
       unclearIndividualAndCash: categoryAmount(["INDIVIDUAL_UNCLEAR_PAYMENT", "CASH_WITHDRAWAL"]),
       unknownInflows: categoryAmount(["UNKNOWN_INFLOW"]),
       warnings: [
@@ -204,13 +262,14 @@ function calendarSeries(items: ClassifiedTransaction[], input: MetricsEngineInpu
   });
 }
 
-function monthlyMetrics(monthly: MonthlyCashFlowV2[], operating: Aggregate, input: MetricsEngineInput, unknownShare: number) {
+function monthlyMetrics(monthly: Array<MonthlyCashFlowV2 & {operatingReceipts:number}>, operating: Aggregate, input: MetricsEngineInput, unknownShare: number) {
   const observed = monthly.filter((item) => item.coverage !== "MISSING");
   const full = monthly.filter((item) => item.coverage === "FULL");
   const observedAverage = observed.length ? observed.reduce((sum, item) => sum + item.operatingReceipts, 0) / observed.length : null;
-  const fullAverage = full.length ? full.reduce((sum, item) => sum + item.operatingReceipts, 0) / full.length : null;
+  const unobservedAccount = input.integrity?.calendarCoverage?.some(m=>m.warnings.includes('UNOBSERVED_ACCOUNT_PERIOD')) ?? false;
+  const fullAverage = !unobservedAccount && full.length ? full.reduce((sum, item) => sum + item.operatingReceipts, 0) / full.length : null;
   let trend: number | null = null;
-  if (full.length >= 4) {
+  if (!unobservedAccount && full.length >= 4) {
     const split = Math.floor(full.length / 2);
     const first = full.slice(0, split);
     const last = full.slice(-split);
@@ -228,7 +287,7 @@ function monthlyMetrics(monthly: MonthlyCashFlowV2[], operating: Aggregate, inpu
   const missingWarning = monthly.some((item) => item.coverage === "MISSING") ? ["MISSING_MONTH_NOT_ZERO"] : [];
   return {
     observedAverage: metric("BSM-OPER-010", input, { value: observedAverage, confidence: metricConfidence(operating, input.integrity, { unknownShare }), basis: "Operating cash receipts divided by observed non-missing months", included: OPERATING_RECEIPTS, aggregate: operating, warnings: missingWarning }),
-    fullAverage: metric("BSM-OPER-011", input, { value: fullAverage, confidence: metricConfidence(operating, input.integrity, { unknownShare }), basis: "Operating cash receipts divided by FULL calendar months only", included: OPERATING_RECEIPTS, aggregate: operating, warnings: [...partialWarning, ...missingWarning] }),
+    fullAverage: metric("BSM-OPER-011", input, { value: fullAverage, confidence: metricConfidence(operating, input.integrity, { unknownShare }), basis: "Operating cash receipts divided by FULL calendar months only", included: OPERATING_RECEIPTS, aggregate: operating, warnings: [...partialWarning, ...missingWarning, ...(unobservedAccount ? ["UNOBSERVED_ACCOUNT_PERIOD"] : [])] }),
     trend: metric("BSM-OPER-012", input, { value: trend, unit: "PERCENT", status: trend === null ? "UNKNOWN" : "KNOWN", basis: "Difference between average operating receipts in first and second halves of at least four FULL months", included: OPERATING_RECEIPTS, aggregate: operating, warnings: trend === null ? ["INSUFFICIENT_FULL_MONTHS_FOR_TREND"] : [] }),
     volatility: metric("BSM-OPER-013", input, { value: volatility, unit: "RATIO", status: volatility === null ? "UNKNOWN" : "KNOWN", basis: "Coefficient of variation across at least three FULL months", included: OPERATING_RECEIPTS, aggregate: operating, warnings: volatility === null ? ["INSUFFICIENT_FULL_MONTHS_FOR_VOLATILITY"] : [] }),
     peakToAverage: metric("BSM-OPER-014", input, { value: peakToAverage, unit: "RATIO", status: peakToAverage === null ? "UNKNOWN" : "KNOWN", basis: "Peak FULL-month operating receipts divided by FULL-month average; not a seasonality conclusion", included: OPERATING_RECEIPTS, aggregate: operating }),
@@ -342,34 +401,49 @@ function buildSuppliers(items: ClassifiedTransaction[], input: MetricsEngineInpu
 }
 
 function buildLiquidity(items: ClassifiedTransaction[], input: MetricsEngineInput, qualityWarnings: string[]) {
-  const endingBalance = input.legacyMetrics?.endingBalance ?? null;
-  const openingBalance = input.openingBalance ?? null;
+  const finiteBalance = (value: number | null | undefined) => typeof value === "number" && Number.isFinite(value) ? value : null;
+  const endingBalance = finiteBalance(input.reportedEnding === undefined ? input.legacyMetrics?.endingBalance : input.reportedEnding);
+  const openingBalance = finiteBalance(input.openingBalance);
   const external = items.filter((item) => item.economicCategory !== "INTERNAL_TRANSFER");
   const outgoing = external.filter((item) => item.direction === "out");
-  const allEndingBalancesKnown = Boolean(input.sourceManifest?.bankStatements.length)
-    && input.sourceManifest!.bankStatements.every((source) => source.fieldAvailability?.endingBalance === "KNOWN");
-  const complete = openingBalance !== null && endingBalance !== null && input.periodFrom && input.periodTo && allEndingBalancesKnown;
-  const confidence: MetricConfidence = !complete ? "UNKNOWN" : qualityWarnings.includes("INCOMPLETE_BALANCE_COVERAGE") ? "LOW" : "MEDIUM";
+  const sources = input.sourceManifest?.bankStatements ?? [];
+  const allBalancesKnown = sources.length > 0 && sources.every((source) =>
+    source.fieldAvailability?.openingBalance === "KNOWN" && source.fieldAvailability?.endingBalance === "KNOWN");
+  const dateMillis = (date: string | null | undefined) => {
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+    const ms = Date.parse(date + "T00:00:00Z");
+    return Number.isFinite(ms) && new Date(ms).toISOString().slice(0, 10) === date ? ms : null;
+  };
+  const from = dateMillis(input.periodFrom), to = dateMillis(input.periodTo);
+  const periodDays = from !== null && to !== null && to >= from ? (to - from) / 86400000 + 1 : null;
+  const complete = openingBalance !== null && endingBalance !== null && periodDays !== null && allBalancesKnown && input.balanceEvidenceComplete!==false;
+  const periodTooLong = periodDays !== null && periodDays > 740;
+  const movementsIncomplete = items.some((item) => {
+    const date = dateMillis(item.date);
+    return date === null || from === null || to === null || date < from || date > to
+      || !["in", "out"].includes(item.direction) || !Number.isFinite(item.amount) || item.amount < 0;
+  });
   const dailyBalances: number[] = [];
   let balanceReconciliationMismatch = false;
-  if (complete) {
+  if (complete && !periodTooLong && !movementsIncomplete) {
     const netByDay = new Map<string, number>();
-    for (const item of external) {
-      const date = item.date;
-      if (!date) continue;
-      const signed = item.direction === "in" ? item.amount : item.direction === "out" ? -item.amount : 0;
-      netByDay.set(date, (netByDay.get(date) ?? 0) + signed);
+    // Balances cover supplied accounts, not just company-external cash flow.
+    // Retain both observed internal-transfer legs: they cancel only when both
+    // are in this perimeter on the same posting day. Revenue still excludes them.
+    for (const item of items) {
+      const signed = item.direction === "in" ? item.amount : -item.amount;
+      netByDay.set(item.date, (netByDay.get(item.date) ?? 0) + signed);
     }
     let balance = openingBalance;
-    const cursor = new Date(`${input.periodFrom}T00:00:00Z`);
-    const end = new Date(`${input.periodTo}T00:00:00Z`);
-    while (cursor <= end && dailyBalances.length < 740) {
-      const key = cursor.toISOString().slice(0, 10);
-      balance += netByDay.get(key) ?? 0;
+    for (let day = 0; day < periodDays; day++) {
+      const key = new Date(from! + day * 86400000).toISOString().slice(0, 10);
+      balance = round(balance + (netByDay.get(key) ?? 0), 2);
       dailyBalances.push(balance);
-      cursor.setUTCDate(cursor.getUTCDate() + 1);
     }
-    balanceReconciliationMismatch = Math.abs(balance - endingBalance) > Math.max(1, Math.abs(endingBalance) * 0.0001);
+    balanceReconciliationMismatch = Math.round(balance*100) !== Math.round(endingBalance*100);
+    // A failed conservation check is not a measured negative balance or cash gap.
+    // Preserve the reported endpoint, but publish no unsupported daily statistics.
+    if (balanceReconciliationMismatch) dailyBalances.length = 0;
   }
   const average = dailyBalances.length ? dailyBalances.reduce((sum, value) => sum + value, 0) / dailyBalances.length : null;
   const minimum = dailyBalances.length ? Math.min(...dailyBalances) : null;
@@ -377,20 +451,27 @@ function buildLiquidity(items: ClassifiedTransaction[], input: MetricsEngineInpu
   const averageDailyOutflow = days ? outgoing.reduce((sum, item) => sum + item.amount, 0) / days : 0;
   const lowThreshold = averageDailyOutflow * 3;
   const nearZeroThreshold = Math.max(1, averageDailyOutflow * 0.25);
-  const commonWarnings = complete ? [] : ["ENDING_BALANCE_OR_PERIOD_NOT_CONFIRMED"];
+  const commonWarnings = [
+    ...(!complete ? ["ENDING_BALANCE_OR_PERIOD_NOT_CONFIRMED"] : []),
+    ...(complete && periodTooLong ? ["BALANCE_PERIOD_TOO_LONG"] : []),
+    ...(complete && movementsIncomplete ? ["BALANCE_MOVEMENTS_INCOMPLETE"] : []),
+    ...(balanceReconciliationMismatch ? ["BALANCE_RECONCILIATION_MISMATCH"] : []),
+  ];
   const factualMetric = (code: string, value: number | null, basis: string, unit: MetricResult["unit"] = "RUB") => metric(code, input, {
     value,
     unit,
     status: value === null ? "UNKNOWN" : "KNOWN",
-    confidence,
+    confidence: value === null || !complete ? "UNKNOWN" : qualityWarnings.includes("INCOMPLETE_BALANCE_COVERAGE") ? "LOW" : "MEDIUM",
     basis,
-    included: [...new Set(external.map((item) => item.economicCategory))],
-    excluded: ["INTERNAL_TRANSFER"],
-    warnings: [...commonWarnings, "ACCOUNT_COVERAGE_NOT_PROVEN", ...(balanceReconciliationMismatch ? ["BALANCE_RECONCILIATION_MISMATCH"] : []), ...(qualityWarnings.includes("INCOMPLETE_BALANCE_COVERAGE") ? ["INCOMPLETE_ACCOUNT_OR_BALANCE_COVERAGE"] : [])],
+    included: [...new Set(items.map((item) => item.economicCategory))],
+    excluded: items.some((item) => item.economicCategory === "INTERNAL_TRANSFER") ? [] : ["INTERNAL_TRANSFER"],
+    warnings: [...commonWarnings, "ACCOUNT_COVERAGE_NOT_PROVEN", ...(qualityWarnings.includes("INCOMPLETE_BALANCE_COVERAGE") ? ["INCOMPLETE_ACCOUNT_OR_BALANCE_COVERAGE"] : [])],
   });
   return {
     endingBalance: factualMetric("BSM-LIQ-001", endingBalance, "Aggregate confirmed ending balance across supplied statements"),
-    averageDailyBalance: factualMetric("BSM-LIQ-002", average, "Daily company balance reconstructed forward from confirmed opening balance using external cash movements and reconciled against confirmed ending balance."),
+    averageDailyBalance: factualMetric("BSM-LIQ-002", average, items.some((item) => item.economicCategory === "INTERNAL_TRANSFER")
+      ? "Daily balance of supplied accounts reconstructed from confirmed opening balance and all retained account cash movements, including internal transfers, and reconciled against confirmed ending balance."
+      : "Daily company balance reconstructed forward from confirmed opening balance using external cash movements and reconciled against confirmed ending balance."),
     minimumDailyBalance: factualMetric("BSM-LIQ-003", minimum, "Minimum reconstructed aggregate daily balance"),
     lowLiquidityDays: factualMetric("BSM-LIQ-004", dailyBalances.length ? dailyBalances.filter((value) => value < lowThreshold).length : null, "Days with reconstructed balance below three days of average external outflow", "DAYS"),
     nearZeroBalanceDays: factualMetric("BSM-LIQ-005", dailyBalances.length ? dailyBalances.filter((value) => value <= nearZeroThreshold).length : null, "Days with reconstructed balance at or below 25% of average daily external outflow", "DAYS"),
@@ -410,13 +491,10 @@ function splitDebt(items: ClassifiedTransaction[]) {
   const splitInterestConfidence = emptyBreakdown();
   const warnings: string[] = [];
   for (const item of items.filter((row) => row.economicCategory === "DEBT_SERVICE_UNSPLIT")) {
-    const components = item.classification?.components ?? [];
-    const amounts = components.map((component) => component.amount);
-    const valid = amounts.length >= 2 && amounts.every((amount): amount is number => amount !== null && Number.isFinite(amount) && amount >= 0)
-      && Math.abs(amounts.reduce((sum, amount) => sum + amount, 0) - item.amount) <= Math.max(0.01, item.amount * 0.000001);
-    if (!valid) {
+    const components = verifiedDebtComponents(item);
+    if (!components) {
       unsplitRows.push(item);
-      if (components.length) warnings.push(`INVALID_DEBT_COMPONENT_SPLIT:${item.canonicalTransactionId || item.id}`);
+      if (item.classification?.components?.length) warnings.push(`INVALID_DEBT_COMPONENT_SPLIT:${item.canonicalTransactionId || item.id}`);
       continue;
     }
     for (const component of components) {
@@ -662,7 +740,11 @@ export function buildBankStatementMetricsV2(input: MetricsEngineInput): { metric
       classificationAmounts: Object.fromEntries(Object.entries(lowAndUnknown).map(([key, value]) => [key, round(value, 2)])) as Record<ClassificationConfidence, number>,
       warnings: [...new Set(qualityWarnings)],
     },
-    monthly,
+    monthly: monthly.map(row=>{
+      if (row.coverage!=="MISSING") return row;
+      return Object.fromEntries(Object.entries(row).map(([key,value])=>[key,typeof value==="number" ? null : value])) as MonthlyCashFlowV2;
+    }),
   };
+  applyConflictKnowledge(metricsV2, input.conflicts ?? []);
   return { metricsV2, metricsComparison: buildComparison(input.legacyMetrics, metricsV2, reasons) };
 }

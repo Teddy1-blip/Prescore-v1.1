@@ -1,6 +1,6 @@
-import type { RiskFact, RiskShadowInput } from "../../contracts/risk.ts";
+import type { RiskFact, ProfileRiskInput } from "../../contracts/risk.ts";
 import { fact, freshness, RISK_SOURCE_FRESHNESS_DAYS as age, id, unique } from "../common.ts";
-export function portfolioFacts({ analysis: a, asOfDate }: RiskShadowInput): RiskFact[] {
+export function portfolioFacts({ analysis: a, asOfDate }: ProfileRiskInput): RiskFact[] {
   const p = a.creditPortfolioV1; if (!p || p.companyInn !== a.companyInn) return [];
   const current = p.asOfDate === asOfDate;
   const active = p.obligations.filter(o => o.status.value !== "CLOSED"), funded = active.filter(o => ["FUNDED_DEBT", "CREDIT_LIMIT"].includes(o.exposureClass));

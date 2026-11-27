@@ -1,6 +1,7 @@
 import type { CanonicalDirection, DirectionEvidence, DirectionEvidenceRule } from "../contracts/transactions.ts";
 
 type DirectionInput = {
+  postingSide?: "IN" | "OUT";
   companyInn: string | null;
   companyAccounts: Set<string>;
   payerInn: string | null;
@@ -26,6 +27,13 @@ export function determineDirection(input: DirectionInput): { direction: Canonica
   add("OUT", "COMPANY_PAYER_INN", Boolean(input.companyInn && input.payerInn === input.companyInn));
   add("IN", "COMPANY_RECIPIENT_INN", Boolean(input.companyInn && input.recipientInn === input.companyInn));
   candidates.sort((a, b) => PRIORITY.indexOf(a.rule) - PRIORITY.indexOf(b.rule));
+  // Both sides belong to this statement. A single bank posting date identifies
+  // the ledger leg even when a transfer uses the same document number twice.
+  if (input.postingSide && input.payerAccount && input.recipientAccount &&
+      input.companyAccounts.has(input.payerAccount) && input.companyAccounts.has(input.recipientAccount)) {
+    candidates.unshift({direction: input.postingSide, rule: "OWN_TRANSFER_POSTING_SIDE"});
+    return {direction: input.postingSide, evidence: {selectedRule: "OWN_TRANSFER_POSTING_SIDE", candidates, conflict: false}, warnings: []};
+  }
   const selected = candidates[0];
   const conflict = new Set(candidates.map((item) => item.direction)).size > 1;
   const direction = selected?.direction ?? "UNKNOWN";

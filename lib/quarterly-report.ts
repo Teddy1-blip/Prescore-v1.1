@@ -54,13 +54,13 @@ const labels: Record<keyof QuarterlyFinancialReport["values"], RegExp[]> = {
   revenue: [/^выручка\b/i, /выручка\s*\(нетто\)/i],
   netProfit: [/чистая прибыль/i, /чистый убыток/i, /чистая прибыль.*убыток/i],
   assets: [/^баланс\b.*актив/i, /^итого.*актив/i, /^активы всего/i],
-  nonCurrentAssets: [/внеоборотные активы/i],
+  nonCurrentAssets: [/^внеоборотные активы/i],
   currentAssets: [/оборотные активы/i],
   receivables: [/дебиторская задолженность/i],
   cash: [/денежные средства/i],
   equity: [/капитал и резервы/i, /собственный капитал/i],
   netAssets: [/чистые активы/i],
-  longTermLiabilities: [/долгосрочные обязательства/i],
+  longTermLiabilities: [/^долгосрочные обязательства/i],
   currentLiabilities: [/краткосрочные обязательства/i],
   payables: [/кредиторская задолженность/i],
 };
@@ -82,8 +82,19 @@ function parseNumber(token: string) {
 function firstFinancialValue(value: string) {
   const dash = value.match(/^\s*[-–—](?=\s|$)/);
   if (dash) return 0;
-  const token = value.match(/\(\s*\d{1,3}(?:[ \u00a0]\d{3})*(?:[,.]\d+)?\s*\)|-?\d{1,3}(?:[ \u00a0]\d{3})+(?:[,.]\d+)?|-?\d+(?:[,.]\d+)?/)?.[0];
-  return token ? parseNumber(token) : null;
+  const match = value.match(/\(\s*-?\d+(?:[ \u00a0]\d{3})*(?:[,.]\d+)?\s*\)|-?\d{1,3}(?:[ \u00a0]\d{3})+(?:[,.]\d+)?|-?\d+(?:[,.]\d+)?/);
+  if (!match) return null;
+  const token = match[0];
+  // An incomplete accounting-negative token must not become positive profit.
+  if (!token.startsWith("(") && (/\(\s*$/.test(value.slice(0, match.index))
+    || /^\s*\)/.test(value.slice((match.index ?? 0) + token.length)))) return null;
+  return parseNumber(token);
+}
+
+// A wrapped value may occupy the next line. A different labelled financial
+// row is never a substitute for a missing value in the current row.
+function standaloneFinancialLine(value: string) {
+  return /^[\s()\d.,+\-–—₽]+(?:\s*(?:руб(?:лей|ля|ль)?\.?|RUB))?\s*$/iu.test(value);
 }
 
 function valueAfterCode(lines: string[], code: string) {
@@ -93,24 +104,48 @@ function valueAfterCode(lines: string[], code: string) {
   const line = lines[index];
   const codeIndex = line.search(new RegExp(`\\b${code}\\b`));
   const tail = line.slice(Math.max(0, codeIndex + code.length));
-  const sameLine = firstFinancialValue(tail);
-  if (sameLine !== null) return sameLine;
+  if (line.includes("\t") && tail.startsWith("\t")) {
+    const current = tail.split("\t")[1].trim().replace(/^"(.*)"$/, "$1");
+    if (/^[-–—]$/.test(current)) return 0;
+    if (!/^(?:-?\d+(?:[ \u00a0]\d{3})*(?:[.,]\d+)?|\(\s*\d+(?:[ \u00a0]\d{3})*(?:[.,]\d+)?\s*\))$/.test(current)) return null;
+    return parseNumber(current);
+  }
+  if (tail.trim()) {
+    const firstColumn = tail.trim().split(/ {2,}/)[0];
+    if (!standaloneFinancialLine(firstColumn)) return null;
+    return firstFinancialValue(firstColumn);
+  }
   for (let offset = 1; offset <= 2; offset += 1) {
     const nextLine = lines[index + offset] ?? "";
-    if (/\b(?:1[1-7]|2[1-4])\d{2}\b/.test(nextLine)) break;
+    if (!standaloneFinancialLine(nextLine)) break;
     const next = firstFinancialValue(nextLine);
     if (next !== null) return next;
   }
   return null;
 }
 
-function valueAfterLabel(lines: string[], patterns: RegExp[]) {
+function valueAfterLabel(lines: string[], patterns: RegExp[], expectedCode?: string) {
   const index = lines.findIndex((line) => patterns.some((pattern) => pattern.test(line.trim())));
   if (index < 0) return null;
   const candidates = [lines[index], lines[index + 1] ?? ""];
-  for (const candidate of candidates) {
-    const withoutCode = candidate.replace(/\b(?:1[1-7]|2[1-4])\d{2}\b/, "");
-    const value = firstFinancialValue(withoutCode.replace(/^.*?(?=\(?-?\d|[-–—])/u, ""));
+  for (const [offset, candidate] of candidates.entries()) {
+    if (offset > 0 && !standaloneFinancialLine(candidate)) break;
+    // Remove only this row's expected standalone code, not an amount such as
+    // (1234), nor a code-shaped number in a label-only net-assets disclosure.
+    if (offset === 0 && expectedCode) {
+      // In a simplified form the displayed code can be the largest component.
+      // Its number is never an amount. Only the exact aggregate label establishes equity.
+      const coded = candidate.match(/^(.+?)\s+(1[1-7]\d0|2[1-4]\d0)\s{2,}(.+)$/u);
+      if (coded && coded[2] !== expectedCode) {
+        return expectedCode === "1300" && /^капитал и резервы$/iu.test(coded[1].trim())
+          ? firstFinancialValue(coded[3].trim().split(/\s{2,}/)[0]) : null;
+      }
+    }
+    const withoutCode = expectedCode && offset === 0
+      ? candidate.replace(new RegExp(`(?:^|\\s)${expectedCode}(?=\\s|$)`), " ")
+      : candidate;
+    if (offset === 0 && expectedCode && new RegExp(`(?:^|\\s)${expectedCode}(?=\\s|$)`).test(candidate)) return null;
+    const value = firstFinancialValue(withoutCode.replace(/^.*?(?=\(\s*-?\d|-?\d|[-–—])/u, ""));
     if (value !== null) return value;
   }
   return null;
@@ -145,20 +180,34 @@ function money(value: number | null) {
 }
 
 export function parseQuarterlyReportText(text: string, fileName: string): QuarterlyFinancialReport {
-  const normalized = text.replace(/\u00a0/g, " ").replace(/\r/g, "");
-  const lines = normalized.split("\n").map((line) => line.replace(/\t/g, "    ").trim()).filter(Boolean);
+  // PDF/Excel text can use thin grouping spaces and typographic minus signs.
+  // Only a sign attached to a numeric amount is normalized; bare dash cells
+  // retain their existing meaning. Parentheses are handled as a signed token.
+  const normalized = text.replace(/[\u00a0\u202f\u2009]/g, " ")
+    .replace(/[\u2212\ufe63\uff0d][ \t]*(?=\d)|[\u2012\u2013\u2014](?=\d)/g, "-")
+    .replace(/\r/g, "");
+  const lines = normalized.split("\n").map((line) => line.trimStart().replace(/[ ]+$/, "")).filter(Boolean);
   const markerCount = ["баланс", "актив", "выруч", "прибыл", "дебитор", "кредитор"].filter((marker) => normalized.toLowerCase().includes(marker)).length;
   if (normalized.replace(/\s/g, "").length < 180 || markerCount < 2) {
     throw new Error("В файле не найден читаемый финансовый текст. PDF, вероятно, является сканом или фотографией. Выгрузите текстовый PDF либо Excel (.xlsx/.csv). OCR в этом модуле не используется.");
   }
   const lower = normalized.toLowerCase();
   const subject = detectCompany(normalized);
-  const unitScale = /млн\.?\s*руб/.test(lower) ? 1_000_000 : /тыс\.?\s*руб|код\s*по\s*океи\s*384/.test(lower) ? 1_000 : 1;
+  const declaredScales = new Set<number>();
+  if (/млн\.?\s*руб|океи\s*[:|]?\s*385/.test(lower)) declaredScales.add(1_000_000);
+  if (/тыс\.?\s*руб|океи\s*[:|]?\s*384/.test(lower)) declaredScales.add(1_000);
+  if (/единица измерения\s*[:|]?\s*(?:в\s+)?руб|океи\s*[:|]?\s*383/.test(lower)) declaredScales.add(1);
+  const unitDeclarations = lower.split("\n").filter(line => /единица измерения|валюта отч[её]тности|^валюта\s*[:|]/.test(line));
+  const unsupportedDeclaration = unitDeclarations.some(line => !/руб|₽|rub\b|океи\s*[:|]?\s*38[345]\b/.test(line)
+    || /доллар|евро|франк|фунт|тенге|юан|гривн|\b(?:usd|eur|kzt|cny|chf|gbp|byn|uah)\b/.test(line)
+    || /белорусск|миллиард|млрд/.test(line));
+  const scaleConfirmed = declaredScales.size === 1 && !unsupportedDeclaration;
+  const unitScale = [...declaredScales][0] ?? 1;
   const unitLabel = unitScale === 1_000_000 ? "млн ₽" : unitScale === 1_000 ? "тыс. ₽" : "₽";
   const values = {} as QuarterlyFinancialReport["values"];
   for (const key of Object.keys(labels) as Array<keyof typeof labels>) {
     const raw = codes[key] ? valueAfterCode(lines, codes[key] as string) : null;
-    const fallback = raw ?? valueAfterLabel(lines, labels[key]);
+    const fallback = raw ?? valueAfterLabel(lines, labels[key], codes[key]);
     values[key] = fallback == null ? null : fallback * unitScale;
   }
   if (values.netAssets == null && values.equity != null) values.netAssets = values.equity;
@@ -231,7 +280,7 @@ export function parseQuarterlyReportText(text: string, fileName: string): Quarte
     ? (values.equity ?? 0) + (values.longTermLiabilities ?? 0) + (values.currentLiabilities ?? 0) : null;
   const balanceGap = values.assets != null && balanceLiabilities != null && values.assets !== 0 ? Math.abs(values.assets - balanceLiabilities) / Math.abs(values.assets) : null;
   const warnings: string[] = [];
-  if (unitScale === 1) warnings.push("Единица измерения не найдена явно; проверьте масштаб сумм.");
+  if (!scaleConfirmed) warnings.push("Единица измерения не найдена явно; проверьте масштаб сумм.");
   if (balanceGap != null && balanceGap > 0.03) warnings.push(`Баланс не сошёлся на ${Math.round(balanceGap * 100)}%; требуется проверить распознанные колонки и исходный файл.`);
   const hasFormalStop = (values.netAssets ?? values.equity ?? 0) <= 0;
   const criticalCount = factors.filter((factor) => factor.severity === "critical").length;
@@ -253,7 +302,7 @@ export function parseQuarterlyReportText(text: string, fileName: string): Quarte
     companyInn: subject.companyInn,
     period: detectPeriod(normalized), extractedAt: new Date().toISOString(), parserConfidence, unitScale, unitLabel,
     financialMetadataV2: {
-      scaleConfirmed: /млн\.?\s*руб|тыс\.?\s*руб|океи\s*384|единица измерения\s*:\s*(?:в\s+)?руб|океи\s*383/.test(lower),
+      scaleConfirmed,
       rawScale: unitScale,
       rawLines: Object.fromEntries([...Object.values(BALANCE_CODES), ...Object.values(INCOME_CODES)].map((code) => [code, valueAfterCode(lines, code)])),
       labelValues: Object.fromEntries(Object.entries(codes).flatMap(([key, code]) => {
@@ -262,7 +311,7 @@ export function parseQuarterlyReportText(text: string, fileName: string): Quarte
         const patterns = key === "revenue" ? [/^выручка(?=\s|$|\()/i, ...labels.revenue]
           : key === "currentAssets" ? [/^оборотные активы/i]
           : labels[key as keyof typeof labels];
-        const rawValue = valueAfterLabel(lines, patterns);
+        const rawValue = valueAfterLabel(lines, patterns, code);
         const line = lines.find((line) => patterns.some((pattern) => pattern.test(line.trim())));
         const rawLabel = line?.trim().match(patterns.find((pattern) => pattern.test(line.trim()))!)?.[0];
         return rawValue !== null && rawLabel ? [[code, { rawValue, rawLabel }]] : [];

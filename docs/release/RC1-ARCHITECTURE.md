@@ -1,0 +1,7 @@
+# Prescore RC1 architecture
+
+Frozen CLIENT/BROKER/ADMIN/Billing V1, unchanged canonical Credit Engine. One versioned standalone Next artifact; app and outbox worker are separate non-root processes. PostgreSQL15 is persistent domain/ledger/auth/provider-Fake truth; local UUID storage is a persistent volume. No Redis/RabbitMQ/Amvera dependency. App starts only after environment/DB/checksummed-schema/storage/outbox checks. /api/health is liveness; /api/ready validates local critical dependencies. External payment availability is not a readiness dependency when Disabled is configured correctly.
+
+Modes: development, test, release-candidate, production. RC uses NODE_ENV=production + actual PostgreSQL + real migrations + standalone server + independent continuous worker + persistent Fake providers. Fake requires explicit release-candidate opt-in and secret; production rejects it. No RC application QA routes/session spoofing/scoring shortcuts. Synthetic source documents enter actual authenticated ingestion. External optional sources are unavailable in RC; local canonical AI fallback is used.
+
+Operational state migration0007 supplements0001–0006. Immutable order attribution/append-only ledger/policy rates/price/period remain unchanged. This release deliberately blocks older registries against unknown newer schemas; no destructive downgrade. Read-only system metrics expose recorded counts/worker heartbeat/queue state and public build versions without connection/filesystem secrets.

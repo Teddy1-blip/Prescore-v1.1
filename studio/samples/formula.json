@@ -1,0 +1,88 @@
+{
+  "schema": "prescore-studio/1",
+  "state": "VALIDATED",
+  "base": "cef0145f890a91fe8be58d5c740e7c7d250f4af8",
+  "engine": {
+    "baseCommit": "cef0145f890a91fe8be58d5c740e7c7d250f4af8",
+    "wiring": "PRESCORE-CANONICAL-WIRING-1.1.0",
+    "implementation": "8702fba89ab8a5a3becdc216864844959df268aea149b1e893fb6b039238c9e0"
+  },
+  "version": "4b3ebad2bac34e97bf5045e471f8c3835ef7a7ee1a7575c2434640d24deb2861",
+  "draft": {
+    "name": "Ликвидность без дебиторской задолженности",
+    "revision": 1,
+    "mode": "method",
+    "method": {
+      "expression": "(CURRENT_ASSETS - RECEIVABLES) / SHORT_TERM_LIABILITIES",
+      "rule": {
+        "enabled": true,
+        "op": "LT",
+        "high": 0.8,
+        "threshold": 1,
+        "severity": "MEDIUM",
+        "applicability": "ALL",
+        "input": "FIN_CURRENT_RATIO"
+      },
+      "actions": []
+    },
+    "scenario": {
+      "company": "integration-b",
+      "financial": true,
+      "bki": true,
+      "lines": {
+        "1200": 6000000,
+        "1210": 2000000,
+        "1230": 3500000,
+        "1250": 500000,
+        "1500": 3000000
+      }
+    },
+    "baseScenario": {
+      "company": "integration-b",
+      "financial": true,
+      "bki": true,
+      "lines": {
+        "1200": 6000000,
+        "1210": 2000000,
+        "1230": 3500000,
+        "1250": 500000,
+        "1500": 3000000
+      }
+    }
+  },
+  "checks": {
+    "runId": "d5fb5fd1-5c58-4b43-b107-b0f2d9ef8fc4",
+    "before": "683620ccdb0102316e059b3cc9d5733f6f406843a3c34ee4ca91875287567b98",
+    "after": "db4371604a40a96d90d88b552d075593056801fdebb62efc1e2ff233d7139f8a",
+    "changed": [
+      "index",
+      "raw",
+      "ceiling",
+      "capped",
+      "components",
+      "metric",
+      "fact",
+      "rule",
+      "risks",
+      "contributions",
+      "assessment",
+      "recommendations",
+      "plan",
+      "facts",
+      "evaluations"
+    ]
+  },
+  "dependencies": [
+    "Financial Analysis v2",
+    "Risk",
+    "Recommendations",
+    "Canonical orchestration"
+  ],
+  "approval": {
+    "by": null,
+    "at": null
+  },
+  "rollback": "Вернуть базовую методологию из сохранённого снимка",
+  "createdAt": "2026-11-14T03:39:01.677Z",
+  "checksum": "3aead855aa584828916378acf660e58ed06e59b86b2627c8f0b3b7e86b08e6d0"
+}

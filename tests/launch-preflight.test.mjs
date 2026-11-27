@@ -1,0 +1,9 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {assess} from '../scripts/launch/preflight.mjs';
+const source={plan:"export const PLAN= Object.freeze({code:'PRESCORE_COMPANY_30D',amountMinor:650000,durationDays:30});",offer:'Доступ к подписке на 30 дней',privacy:'Обработка данных подписки',consent:'Подписка и данные компании'};
+test('notifies about existing legacy one-off offer',()=>{const s=assess({...source,offer:'Услуга не является подпиской. Разовая услуга.'});assert.equal(s.ready,false);assert.ok(s.blockers.some(x=>x.code==='OFFER_CONTRADICTS_SUBSCRIPTION'));});
+test('does not pretend live launch is ready without payment and domain prerequisites',()=>{const s=assess({...source,mode:'live'});assert.equal(s.ready,false);assert.ok(s.blockers.some(x=>x.code==='APP_ORIGIN_MISMATCH'));assert.ok(s.blockers.some(x=>x.code==='FISCALIZATION_NOT_APPROVED'));});
+test('local preview can be ready without a payment credential',()=>{const s=assess(source);assert.equal(s.ready,true);});
+test('live approval requires all named safeguards, never logs secrets',()=>{const env={PRESCORE_BASE_URL:'https://app.prescore.ru',BILLING_SITE_ORIGIN:'https://app.prescore.ru',NEXT_PUBLIC_PRESCORE_APP_ORIGIN:'https://app.prescore.ru',BILLING_PROVIDER:'TBANK',BILLING_LIVE_ENABLED:'true',TBANK_TERMINAL_KEY:'sensitive',TBANK_PASSWORD:'sensitive',DATABASE_URL:'sensitive',AUTH_SECRET:'sensitive',SMTP_HOST:'smtp',SMTP_FROM:'test@example.test',BILLING_OFFER_VERSION:'approved',BILLING_PRIVACY_VERSION:'approved',BILLING_FISCALIZATION_APPROVED:'true',PARTNER_SETTLEMENT_MODE:'ACCRUAL_ONLY',BILLING_SETTLEMENT_PROVIDER:'DISABLED',PRESCORE_LAUNCH_LEGAL_OWNER_APPROVED:'true'};
+ const s=assess({...source,mode:'live',env});assert.equal(s.ready,true);assert.doesNotMatch(JSON.stringify(s),/sensitive/);});

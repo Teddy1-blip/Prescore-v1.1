@@ -56,9 +56,9 @@ export function normalizeTransactionDate(input: string | null | undefined): Norm
 
 export function normalizeAccountValue(input: string | null | undefined): NormalizedValue<string> {
   if (!input?.trim()) return { value: null, warning: "ACCOUNT_UNKNOWN" };
-  const value = input.replace(/\D/g, "");
-  if (!value) return { value: null, warning: "ACCOUNT_MALFORMED" };
-  return { value };
+  const value = input.replace(/[\s-]/g, "");
+  if (!/^\d+$/.test(value)) return { value: null, warning: "ACCOUNT_MALFORMED" };
+  return value.length===20 ? {value} : {value,warning:"ACCOUNT_MALFORMED"};
 }
 
 export function normalizePurpose(input: string | null | undefined): NormalizedValue<string> {
@@ -68,8 +68,8 @@ export function normalizePurpose(input: string | null | undefined): NormalizedVa
 
 export function normalizeCurrency(input: string | null | undefined): NormalizedValue<string> {
   if (!input?.trim()) return { value: "RUB" };
-  const value = input.trim().toUpperCase().replace("РУБ", "RUB");
+  const value = input.trim().toUpperCase();
+  if (/^(?:РУБ\.?|RUB|RUR|643|810|РОССИЙСКИЙ РУБЛЬ)$/.test(value)) return { value: "RUB" };
   if (/^[A-Z]{3}$/.test(value)) return { value };
-  if (value === "643") return { value: "RUB" };
   return { value: null, warning: "CURRENCY_UNKNOWN" };
 }

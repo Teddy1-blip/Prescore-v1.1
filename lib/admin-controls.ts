@@ -16,7 +16,7 @@ export type ControlDefinition = {
 export type ControlSetting = ControlDefinition & { enabled: number; updatedAt?: string };
 export type ControlState = { enabled: Record<string, boolean>; disabled: Set<string> };
 
-type PreparedStatement = { bind: (...values: unknown[]) => PreparedStatement; run: () => Promise<unknown> };
+type PreparedStatement = { bind: (...values: unknown[]) => PreparedStatement; run: () => Promise<unknown>; first: <T = unknown>() => Promise<T | null> };
 type RuntimeDatabase = { prepare: (query: string) => PreparedStatement; batch: (statements: PreparedStatement[]) => Promise<Array<{ results: unknown[] }>> };
 
 function slug(value: string) {

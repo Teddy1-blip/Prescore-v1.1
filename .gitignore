@@ -15,6 +15,7 @@
 
 # next.js
 /.next/
+/.prescore-build/
 /out/
 
 # misc
@@ -41,3 +42,14 @@ next-env.d.ts
 /.sites-runtime/
 /outputs/
 /work/
+
+!.env.example
+
+# GitHub staging builds from source, never transport archives.
+source.tar.gz
+amvera-staging-upload/
+/.vinext/
+/output/
+/drizzle-postgres-review/
+
+!.env.rc.example

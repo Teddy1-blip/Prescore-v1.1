@@ -3,14 +3,17 @@ import { sourceConfidence, weakest } from "./normalizer.ts";
 
 const coreBalance: BalanceField[] = ["ASSETS_TOTAL", "CURRENT_ASSETS", "NON_CURRENT_ASSETS", "EQUITY", "LONG_TERM_LIABILITIES", "SHORT_TERM_LIABILITIES"];
 const coreIncome: IncomeField[] = ["REVENUE", "COST_OF_SALES", "GROSS_PROFIT", "OPERATING_PROFIT", "NET_PROFIT"];
+/** Values and rounding scale must be expressed in the same unit. */
+export function withinReportingTolerance(values:number[],residual:number,scale:number){
+  return Math.abs(residual)<=Math.max(2*scale,Math.max(...values.map(Math.abs))*0.001);
+}
 export function financialIntegrity(s: FinancialStatementSnapshot): FinancialPeriodQuality {
   const b = s.balance, i = s.income;
   const test = (values: FinancialStatementValue[], calculate: (numbers: number[]) => number): boolean | null => {
     if (values.some((v) => v.value === null || v.status !== "KNOWN")) return null;
     const n = values.map(v => v.value!);
     // Two source units allow reporting-rounding differences; 0.1% relative tolerance.
-    const tolerance = Math.max(2 * (s.confirmedScale ?? 1), Math.max(...n.map(Math.abs)) * 0.001);
-    return Math.abs(calculate(n)) <= tolerance;
+    return withinReportingTolerance(n,calculate(n),s.confirmedScale ?? 1);
   };
   const checks = [
     test([b.NON_CURRENT_ASSETS, b.CURRENT_ASSETS, b.ASSETS_TOTAL], ([a, c, t]) => a + c - t),

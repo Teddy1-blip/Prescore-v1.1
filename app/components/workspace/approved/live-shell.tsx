@@ -1,0 +1,193 @@
+'use client';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import type { WorkspaceModelV1 } from '../../../../lib/workspace/model';
+import type { Deal, StoredAnalysis } from '../client-operations';
+import { ApprovedShell } from './shell';
+import { CompanyReportButton } from '../company-report-button';
+import { ClientOverview } from '../client-launch-overview';
+import { ApprovedPage } from './pages';
+import { ApplicationForm, type RequestInput } from './application-form';
+import { liveView } from './adapter';
+import { focusLabels, pages, type Page } from './types';
+import { date } from '../presentation';
+import './client.css';
+type Workspace = {
+  view: string;
+  choose: (v: string, section?: string) => void;
+  availableViews: string[];
+  selected?: StoredAnalysis;
+  dossier?: {id:string;inn:string};
+  analyses: StoredAnalysis[];
+  companies?: {id:string;inn:string}[];
+  model: WorkspaceModelV1 | null;
+  retry: () => void;
+  locked: boolean;
+  renderPage: boolean;
+  onAddCompany?: () => void;
+  buyerBalances?: ReturnType<typeof liveView>['buyerBalances'];
+  deals: Deal[];
+  select: (id: string) => void;
+  add: (input: Omit<Deal, 'id'>) => Promise<void>;
+  context: ReactNode;
+  children: ReactNode;
+};
+type ContentProps = Pick<Workspace, 'view' | 'renderPage' | 'choose' | 'availableViews'> & {
+  model: Workspace['model'];
+  retry: Workspace['retry'];
+  data: ReturnType<typeof liveView>;
+  focus: string;
+  apps: Deal[];
+  readOnly: boolean;
+  reportAction?: ReactNode;
+  ownedDossier: boolean;
+  open?: (product?: string) => void;
+};
+const ScreenContext = createContext<ContentProps | null>(null);
+export function ClientShell(p: Workspace) {
+  const [month, setMonth] = useState(''),
+    [focus, setFocus] = useState(focusLabels[0]),
+    [application, setApplication] = useState<string | null>(null);
+  const months = p.model?.basic.bankingFacts.monthly ?? [];
+  useEffect(() => {
+    function sync() {
+      setMonth(new URLSearchParams(location.search).get('bankMonth') ?? '');
+      setApplication(null);
+    }
+    sync();
+    window.addEventListener('popstate', sync);
+    return () => window.removeEventListener('popstate', sync);
+  }, [p.selected?.id]);
+  const period = months.some((m) => m.month === month) ? month : '';
+  const chooseMonth = (v: string) => {
+    setMonth(v);
+    const u = new URL(location.href);
+    if (v) u.searchParams.set('bankMonth', v);
+    else u.searchParams.delete('bankMonth');
+    history.pushState(null, '', u);
+  };
+  const company = p.model?.basic.analysis.company.name || p.selected?.companyName || (p.dossier?.inn?'ИНН '+p.dossier.inn:'Кабинет компании');
+  const data = {...liveView(p.model, company, period),buyerBalances:p.buyerBalances};
+  const synthetic=(inn:string,name:string)=>inn.startsWith('009111')||/синтетическ|учебн/i.test(name);
+  const allDirectory=p.companies??[];
+  const nameOf=(inn:string)=>p.analyses.find(a=>a.companyInn===inn)?.companyName||'';
+  const directory=allDirectory.filter(d=>d.id===p.dossier?.id||!synthetic(d.inn,nameOf(d.inn)));
+  const options=directory.map(d=>({id:'dossier:'+d.id,label:nameOf(d.inn)||'ИНН '+d.inn}));
+  for(const a of p.analyses.filter(a=>(a.historyPurpose!=='QA'||a.id===p.selected?.id)&&!allDirectory.some(d=>d.inn===a.companyInn)&&(a.id===p.selected?.id||!synthetic(a.companyInn,a.companyName)))){
+    options.push({id:a.id,label:a.companyName+' · '+date(a.periodTo)});
+  }
+  if(!p.dossier&&!p.selected)options.unshift({id:'',label:'Выберите компанию'});
+  const open =
+    p.selected && !p.locked && p.availableViews.includes('applications')
+      ? (product = '') => setApplication(product)
+      : undefined;
+  async function save(v: RequestInput) {
+    if (!p.selected || !open) throw Error('Запись недоступна');
+    const id = p.selected.id;
+    await p.add({
+      analysisId: id,
+      companyName: p.selected.companyName,
+      product: v.product,
+      amount: v.amount,
+      status: 'Черновик',
+      owner: 'Не назначен',
+      nextAction: v.next,
+    });
+    if (new URLSearchParams(location.search).get('analysisId') === id) p.choose('applications');
+  }
+  return (
+    <ApprovedShell
+      context={p.context}
+      page={p.view}
+      company={company}
+      companyId={p.dossier?'dossier:'+p.dossier.id:p.selected?.id??''}
+      analysisId={p.selected?.id}
+      dossierId={p.dossier?.id}
+      companies={options}
+      onAddCompany={p.onAddCompany}
+      onCompany={id=>{const item=directory.find(d=>'dossier:'+d.id===id);
+        if(item){if(item.id!==p.dossier?.id)location.assign('/dashboard?'+new URLSearchParams({dossierId:item.id,view:p.view}));}
+        else if(id)p.select(id);
+      }}
+      periods={[
+        {
+          id: '',
+          label: p.model
+            ? date(p.model.basic.analysis.period.from) + ' — ' + date(p.model.basic.analysis.period.to)
+            : p.dossier?'По источникам компании':'Период выписки',
+        },
+        ...months.map((r) => ({ id: r.month, label: r.month })),
+      ]}
+      period={period}
+      onPeriod={chooseMonth}
+      focus={focus}
+      onFocus={setFocus}
+      date={data.asOf ? 'Срез · ' + data.asOf : ''}
+      sources={[...new Set(data.sources.filter((s) => s.status === 'Обработан').map((s) => s.label))]}
+      choose={p.choose}
+      available={p.availableViews}
+      readOnly={p.locked}
+      onApplication={open}
+    >
+      <ScreenContext.Provider
+        value={{
+          view: p.view,
+          renderPage: p.renderPage,
+          model: p.model,
+          retry: p.retry,
+          availableViews: p.availableViews,
+          choose: p.choose,
+          data,
+          focus,
+          open,
+          readOnly: p.locked,
+          ownedDossier: Boolean(p.dossier && !p.locked),
+          reportAction: p.view === 'home' && p.dossier && !p.locked && p.model?.full?.revisionAvailable
+            ? <CompanyReportButton dossierId={p.dossier.id} model={p.model} label="Открыть отчёт PDF"/> : undefined,
+          apps: p.deals.filter((v) => v.analysisId === p.selected?.id),
+        }}
+      >
+        {p.children}
+      </ScreenContext.Provider>
+      {application !== null && open && (
+        <ApplicationForm
+          product={application}
+          company={company}
+          close={() => setApplication(null)}
+          save={save}
+        />
+      )}
+    </ApprovedShell>
+  );
+}
+export function LivePage({ children }: { children: ReactNode }) {
+  const c = useContext(ScreenContext);
+  if (!c?.renderPage || !Object.hasOwn(pages, c.view)) return <>{children}</>;
+  if (c.view === 'home' && c.model)
+    return <ClientOverview model={c.model} choose={c.choose} retry={c.retry} />;
+  const page = c.view as Page;
+  const billing = page === 'billing',
+    ar = page === 'counterparties';
+  return (
+    <ApprovedPage
+      key={page}
+      page={page}
+      availableViews={c.availableViews}
+      data={c.data}
+      focus={c.focus}
+      reportAction={c.reportAction}
+      ownedDossier={c.ownedDossier}
+      go={c.choose}
+      onUpload={() => c.choose('upload')}
+      apps={c.apps.map((d) => ({
+        id: d.id,
+        amount: d.amount,
+        product: d.product,
+        status: d.status,
+        next: d.nextAction,
+      }))}
+      newApp={c.open}
+      operations={billing ? children : undefined}
+      details={billing || ar ? undefined : page === 'home' ? undefined : <div className="ws">{children}</div>}
+    />
+  );
+}

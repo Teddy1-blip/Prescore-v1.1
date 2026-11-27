@@ -1,0 +1,205 @@
+[
+  {
+    "route": "/admin",
+    "file": "app/admin/page.tsx",
+    "class": "ADMIN",
+    "parity": "PENDING",
+    "visualQA": "PENDING"
+  },
+  {
+    "route": "/agent",
+    "file": "app/agent/page.tsx",
+    "class": "AGENT",
+    "parity": "PENDING",
+    "visualQA": "PENDING"
+  },
+  {
+    "route": "/agent/prospects",
+    "file": "app/agent/prospects/page.tsx",
+    "class": "AGENT",
+    "parity": "PENDING",
+    "visualQA": "PENDING"
+  },
+  {
+    "route": "/agent-ref/[code]",
+    "file": "app/agent-ref/[code]/page.tsx",
+    "class": "PUBLIC",
+    "parity": "PENDING",
+    "visualQA": "PENDING"
+  },
+  {
+    "route": "/agents",
+    "file": "app/agents/page.tsx",
+    "class": "PUBLIC",
+    "parity": "PENDING",
+    "visualQA": "PENDING"
+  },
+  {
+    "route": "/checkout",
+    "file": "app/checkout/page.tsx",
+    "class": "PUBLIC",
+    "parity": "PENDING",
+    "visualQA": "PENDING"
+  },
+  {
+    "route": "/consent",
+    "file": "app/consent/page.tsx",
+    "class": "PUBLIC",
+    "parity": "PENDING",
+    "visualQA": "PENDING"
+  },
+  {
+    "route": "/dashboard",
+    "file": "app/dashboard/page.tsx",
+    "class": "CLIENT",
+    "parity": "PENDING",
+    "visualQA": "PENDING"
+  },
+  {
+    "route": "/dashboard/report-v2",
+    "file": "app/dashboard/report-v2/page.tsx",
+    "class": "CLIENT",
+    "parity": "PENDING",
+    "visualQA": "PENDING"
+  },
+  {
+    "route": "/login",
+    "file": "app/login/page.tsx",
+    "class": "PUBLIC",
+    "parity": "PENDING",
+    "visualQA": "PENDING"
+  },
+  {
+    "route": "/offer",
+    "file": "app/offer/page.tsx",
+    "class": "PUBLIC",
+    "parity": "PENDING",
+    "visualQA": "PENDING"
+  },
+  {
+    "route": "/",
+    "file": "app/page.tsx",
+    "class": "PUBLIC",
+    "parity": "PENDING",
+    "visualQA": "PENDING"
+  },
+  {
+    "route": "/privacy",
+    "file": "app/privacy/page.tsx",
+    "class": "PUBLIC",
+    "parity": "PENDING",
+    "visualQA": "PENDING"
+  },
+  {
+    "route": "/ref/[code]",
+    "file": "app/ref/[code]/page.tsx",
+    "class": "PUBLIC",
+    "parity": "PENDING",
+    "visualQA": "PENDING"
+  },
+  {
+    "route": "/report/[id]",
+    "file": "app/report/[id]/page.tsx",
+    "class": "PUBLIC",
+    "parity": "PENDING",
+    "visualQA": "PENDING"
+  },
+  {
+    "route": "/api/admin",
+    "file": "app/api/admin/route.ts",
+    "class": "API",
+    "parity": "PENDING",
+    "visualQA": "NOT_APPLICABLE"
+  },
+  {
+    "route": "/api/agent/prospects",
+    "file": "app/api/agent/prospects/route.ts",
+    "class": "API",
+    "parity": "PENDING",
+    "visualQA": "NOT_APPLICABLE"
+  },
+  {
+    "route": "/api/agent",
+    "file": "app/api/agent/route.ts",
+    "class": "API",
+    "parity": "PENDING",
+    "visualQA": "NOT_APPLICABLE"
+  },
+  {
+    "route": "/api/ai-analyst",
+    "file": "app/api/ai-analyst/route.ts",
+    "class": "API",
+    "parity": "PENDING",
+    "visualQA": "NOT_APPLICABLE"
+  },
+  {
+    "route": "/api/analysis",
+    "file": "app/api/analysis/route.ts",
+    "class": "API",
+    "parity": "PENDING",
+    "visualQA": "NOT_APPLICABLE"
+  },
+  {
+    "route": "/api/checko",
+    "file": "app/api/checko/route.ts",
+    "class": "API",
+    "parity": "PENDING",
+    "visualQA": "NOT_APPLICABLE"
+  },
+  {
+    "route": "/api/communications",
+    "file": "app/api/communications/route.ts",
+    "class": "API",
+    "parity": "PENDING",
+    "visualQA": "NOT_APPLICABLE"
+  },
+  {
+    "route": "/api/conclusion",
+    "file": "app/api/conclusion/route.ts",
+    "class": "API",
+    "parity": "PENDING",
+    "visualQA": "NOT_APPLICABLE"
+  },
+  {
+    "route": "/api/documents",
+    "file": "app/api/documents/route.ts",
+    "class": "API",
+    "parity": "PENDING",
+    "visualQA": "NOT_APPLICABLE"
+  },
+  {
+    "route": "/api/modules",
+    "file": "app/api/modules/route.ts",
+    "class": "API",
+    "parity": "PENDING",
+    "visualQA": "NOT_APPLICABLE"
+  },
+  {
+    "route": "/api/offers",
+    "file": "app/api/offers/route.ts",
+    "class": "API",
+    "parity": "PENDING",
+    "visualQA": "NOT_APPLICABLE"
+  },
+  {
+    "route": "/api/orders",
+    "file": "app/api/orders/route.ts",
+    "class": "API",
+    "parity": "PENDING",
+    "visualQA": "NOT_APPLICABLE"
+  },
+  {
+    "route": "/api/source-documents",
+    "file": "app/api/source-documents/route.ts",
+    "class": "API",
+    "parity": "PENDING",
+    "visualQA": "NOT_APPLICABLE"
+  },
+  {
+    "route": "/api/workspace",
+    "file": "app/api/workspace/route.ts",
+    "class": "API",
+    "parity": "PENDING",
+    "visualQA": "NOT_APPLICABLE"
+  }
+]

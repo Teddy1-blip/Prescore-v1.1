@@ -1,3 +1,4 @@
+import {isolateTransactionConflicts, type ConflictResolution} from "./conflicts.ts";
 import type { CanonicalTransaction } from "../contracts/transactions.ts";
 
 export const EXACT_DUPLICATE_RULE = "account+documentId+date+amount+currency+direction+counterpartyInn+normalizedPurpose";
@@ -33,7 +34,8 @@ export type DeduplicationCandidate = {
   sourceRefs: string[];
 };
 
-export function deduplicateTransactions(items: CanonicalTransaction[]) {
+export function deduplicateTransactions(items: CanonicalTransaction[], resolutions: ConflictResolution[] = [], reconciledSources:ReadonlySet<string>=new Set()) {
+  const {eligible, conflicts} = isolateTransactionConflicts(items, resolutions, reconciledSources);
   const retained: CanonicalTransaction[] = [];
   const exact = new Map<string, CanonicalTransaction>();
   const probable = new Map<string, CanonicalTransaction[]>();
@@ -46,8 +48,13 @@ export function deduplicateTransactions(items: CanonicalTransaction[]) {
     else candidatesTruncated = true;
   };
 
-  for (const original of items) {
-    const exactKey = exactFingerprint(original);
+  const occurrences = new Map<string,number>();
+  for (const original of eligible) {
+    const fingerprint = exactFingerprint(original);
+    const sourceKey = JSON.stringify([original.sourceId,fingerprint]);
+    const ordinal = reconciledSources.has(original.sourceId) ? (occurrences.get(sourceKey) ?? 0)+1 : 1;
+    occurrences.set(sourceKey,ordinal);
+    const exactKey = JSON.stringify([fingerprint,ordinal]);
     const priorExact = exact.get(exactKey);
     if (priorExact) {
       original.duplicateStatus = "EXACT";
@@ -85,5 +92,5 @@ export function deduplicateTransactions(items: CanonicalTransaction[]) {
     probable.set(probableKey, group);
   }
 
-  return { retained, candidates, candidatesTruncated, exactDuplicateCount, probableDuplicateCount };
+  return { retained, conflicts, candidates, candidatesTruncated, exactDuplicateCount, probableDuplicateCount };
 }

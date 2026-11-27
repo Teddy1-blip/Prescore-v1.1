@@ -115,7 +115,7 @@ test('golden changes require case and pack revision',()=>{const p=structuredClon
 test('reviewed revision and new pack version allowed',()=>{const p=structuredClone(golden);p.version+='-NEXT';p.revision=2;p.entries[0].caseDefinition.revision=2;p.entries[0].caseDefinition.changeReason='Reviewed fixture correction';p.entries[0].caseDefinition.title='Reviewed scenario';assert.deepEqual(validateGoldenRevision(golden,p),[]);});
 test('case membership change requires pack revision',()=>{const p=structuredClone(golden);p.entries.pop();assert.ok(validateGoldenRevision(golden,p).includes('PACK_VERSION_REVISION_REQUIRED'));});
 for(const[status,key]of [['TRIGGERED','triggeredCaseIds'],['NOT_TRIGGERED','notTriggeredCaseIds'],['INSUFFICIENT_DATA','insufficientCaseIds'],['NOT_APPLICABLE','notApplicableCaseIds']])test(`coverage ${status} does not double-count same case`,()=>{const r=structuredClone(goldenRun.results[0]);r.coverage=[{ruleCode:'TEST',status},{ruleCode:'TEST',status}];assert.deepEqual(ruleCoverage([r],[{code:'TEST'}])[0][key],[r.caseId]);});
-test('coverage includes all forty rules with warnings for gaps',()=>{assert.equal(goldenRun.ruleCoverage.length,40);assert.ok(goldenRun.ruleCoverage.some(r=>r.coverageWarnings.includes('NO_GOLDEN_TRIGGER')));});
+test('coverage includes all 41 rules with warnings for gaps',()=>{assert.equal(goldenRun.ruleCoverage.length,41);assert.ok(goldenRun.ruleCoverage.some(r=>r.coverageWarnings.includes('NO_GOLDEN_TRIGGER')));});
 for(const[key,value]of [['email','private@example.com'],['phone','79991234567'],['accountNumber','12345678901234567890'],['directorName','Private Person'],['contractNumber','REAL-CONTRACT']])test(`privacy rejects ${key}`,()=>{const e=entry();e.caseDefinition[key]=value;assert.ok(validateSyntheticFixture(e).length);});
 test('privacy rejects foreign INN namespace',()=>{const e=entry();e.material.facts[0].companyInn='7701234567';assert.ok(validateSyntheticFixture(e).includes('NON_SYNTHETIC_INN'));});
 test('privacy rejects nested portfolio account value',()=>{const e=entry(21);e.material.analysis.creditPortfolioV1.obligations[0].identity.accountNumber.value='12345678901234567890';assert.ok(validateSyntheticFixture(e).includes('PRIVATE_IDENTITY_FIELD'));});
@@ -144,7 +144,7 @@ test('representative Credit Lab performance: 1000 direct, 200 source, 1000-run c
    start=performance.now();const a=assertCreditCase(e.caseDefinition,risk,facts);timings.assertionsMs+=performance.now()-start;assert.equal(a.mismatches.length,0);
    results.push({caseId:e.caseDefinition.caseId,status:'GOLDEN',coverage:risk.evaluations.map(x=>({ruleCode:x.ruleCode,status:x.status}))});
   }
-  const start=performance.now();const coverage=ruleCoverage(results,RISK_RULE_REGISTRY);timings.coverageMs=performance.now()-start;assert.equal(coverage.length,40);measured.push(timings);
+  const start=performance.now();const coverage=ruleCoverage(results,RISK_RULE_REGISTRY);timings.coverageMs=performance.now()-start;assert.equal(coverage.length,41);measured.push(timings);
  }
  const entries=Array.from({length:1000},(_,i)=>{const e=entry();e.caseDefinition.caseId=`CL-COMPARE-${i}`;return e;});
  const a=runCreditLabPack(pack(entries)),b=structuredClone(a);const start=performance.now();const delta=compareCreditLabRuns(a,b),comparisonMs=performance.now()-start;

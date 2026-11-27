@@ -1,3 +1,31 @@
+# Prescore — standalone staging
+
+The deployment branch is **staging** in `Teddy1-blip/Prescore-v1.1`.
+Deploy the repository source directly. No `source.tar.gz` upload is required.
+
+- Node >=22.13; Docker pins the Node 22 major release.
+- Install: `npm ci`; build: `npm run build`.
+- Docker runtime: `node server.js`, port 3000, writable persistent `/data`.
+- Configure runtime secrets and SMTP in Amvera, never in Git or Docker build arguments.
+- Push application changes only to `staging`; leave `main` and production unchanged.
+
+One-time Amvera setup is required: connect only **prescore-staging** to this GitHub
+repository and select **staging** as the deployment branch. Verify that the integration
+filters pushes to this branch and uses the root `Dockerfile` and `amvera.yml`.
+Once connected, ordinary updates are `git push origin staging`; Amvera builds the
+checked-out source. Creating the branch alone does not configure the integration.
+
+See [staging deployment](docs/platform-migration/GITHUB-STAGING.md) for exact build,
+runtime, validation and deployment boundaries. SMTP/live auth acceptance remains a
+separate operational gate.
+
+---
+
+## Historical Sites starter documentation
+
+The material below is retained for legacy reference. Its Sites lifecycle, auth-header
+and build guidance does not describe the current standalone runtime above.
+
 # vinext-starter
 
 A clean full-stack starter running on

@@ -1,7 +1,15 @@
+import {clientStatuses,applicationStatuses,closedStatuses} from '../../../lib/agent/workflow';
+import {clientSelect,applicationSelect} from '../../../lib/agent/scoped-sql';
+import {agentWorkspaceProjection} from '../../../lib/agent/workspace-query';
+import {brokerApplicationSQL} from '../../../lib/auth/broker-authorizations';
+import {boundedPage} from '../../../lib/release/pagination';
+import {safeErrorText} from '../../../lib/release/security';
+import {createHash} from "node:crypto";
+import {getRuntime} from "../../../lib/platform/runtime";
 import { averagePartnerCommissionRate, partnerCommissions } from "../../../lib/partner-commissions";
 import { bankControlKey, productControlKey, readControlState } from "../../../lib/admin-controls";
-import { matchGuaranteePolicies } from "../../../lib/bank-guarantees";
-import { ADMIN_EMAIL, requireApiUser, unauthorized } from "../api-auth";
+import { guaranteePolicies,matchGuaranteePolicies } from "../../../lib/bank-guarantees";
+import { requireApiUser, unauthorized, readableAnalysis } from "../api-auth";
 
 type PreparedStatement = {
   bind: (...values: unknown[]) => PreparedStatement;
@@ -15,11 +23,9 @@ type RuntimeDatabase = {
 };
 
 async function getDatabase() {
-  const { env } = await import("cloudflare:workers");
+  const env = getRuntime();
   return env.DB as unknown as RuntimeDatabase;
 }
-
-const OWNER_AGENT = "AGENT-ANTON-001";
 
 async function ensureSchema(db: RuntimeDatabase) {
   await db.batch([
@@ -100,13 +106,51 @@ function normalizeCode(value: string | null) {
   return (value || "").trim().toUpperCase().replace(/[^A-ZА-Я0-9-]/g, "").slice(0, 48);
 }
 
-async function accountFor(db: RuntimeDatabase, user: { email: string; displayName: string; isAdmin: boolean }) {
-  const existing = await db.prepare("SELECT agent_code AS agentCode, name FROM agent_accounts WHERE user_email = ? LIMIT 1").bind(user.email).first<{ agentCode: string; name: string }>();
-  if (existing) return existing;
-  const agentCode = user.isAdmin || user.email === ADMIN_EMAIL ? OWNER_AGENT : `AGENT-${crypto.randomUUID().replace(/-/g, "").slice(0, 10).toUpperCase()}`;
-  const name = user.displayName || "Партнёр Прескор";
-  await db.prepare("INSERT INTO agent_accounts (user_email, agent_code, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").bind(user.email, agentCode, name, new Date().toISOString(), new Date().toISOString()).run();
-  return { agentCode, name };
+async function accountFor(db: RuntimeDatabase, user: { email: string }) {
+  return db.prepare("SELECT agent_code AS agentCode, name FROM agent_accounts WHERE lower(user_email) = ? LIMIT 1").bind(user.email).first<{ agentCode: string; name: string }>();
+}
+
+// Explicit self-enrollment only. requireApiUser accepts verified native sessions;
+// neither GET, a requested role nor a submitted email can create this account.
+async function connectAccount(request: Request, db: RuntimeDatabase, user: NonNullable<Awaited<ReturnType<typeof requireApiUser>>>, body: Record<string, unknown>) {
+  try {
+    const base = process.env.PRESCORE_BASE_URL;
+    if (!base || request.headers.get("origin") !== new URL(base).origin || request.headers.get("sec-fetch-site") === "cross-site") {
+      return Response.json({ error: "Не удалось подтвердить источник запроса. Обновите страницу." }, { status: 403 });
+    }
+  } catch { return Response.json({ error: "Подключение временно недоступно" }, { status: 503 }); }
+  const existing = await accountFor(db, user);
+  if (existing) return Response.json({ ok: true, agent: existing, alreadyConnected: true });
+  if (body.offerAccepted !== true || body.consent !== true) {
+    return Response.json({ error: "Примите условия партнёрской программы и отдельно подтвердите согласие на обработку данных" }, { status: 400 });
+  }
+  if (body.invitation !== undefined && typeof body.invitation !== "string") return Response.json({ error: "Некорректное приглашение" }, { status: 400 });
+  const rawInvitation = typeof body.invitation === "string" ? body.invitation.trim().toUpperCase() : "";
+  const invitation = normalizeCode(rawInvitation);
+  if (invitation !== rawInvitation) return Response.json({ error: "Некорректное приглашение" }, { status: 400 });
+  const agentCode = invitation || `AGENT-${crypto.randomUUID().replace(/-/g, "").slice(0, 20).toUpperCase()}`;
+  const name = user.displayName || "Партнёр Прескор", now = new Date().toISOString();
+  const insert = invitation
+    ? db.prepare(`INSERT INTO agent_accounts (user_email, agent_code, name, created_at, updated_at)
+        SELECT ?, agent_code, ?, ?, ? FROM agent_partners
+        WHERE agent_code = ? AND lower(email) = ? AND status IN ('На подключении', 'Активен')
+        ON CONFLICT (user_email) DO NOTHING`).bind(user.email, name, now, now, invitation, user.email)
+    : db.prepare(`INSERT INTO agent_accounts (user_email, agent_code, name, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?) ON CONFLICT (user_email) DO NOTHING`).bind(user.email, agentCode, name, now, now);
+  await db.batch([
+    insert,
+    db.prepare(`UPDATE agent_partners SET status = 'Активен', consent_at = ?, updated_at = ?
+      WHERE agent_code = ? AND lower(email) = ? AND EXISTS
+      (SELECT 1 FROM agent_accounts WHERE user_email = ? AND agent_code = ?)`)
+      .bind(now, now, agentCode, user.email, user.email, agentCode),
+    db.prepare(`INSERT INTO audit_log (id, entity_type, entity_id, action, actor_role, actor_email, metadata, created_at)
+      SELECT ?, 'AGENT_ACCOUNT', agent_code, 'SELF_CONNECT', 'CLIENT', user_email, ?, ?
+      FROM agent_accounts WHERE user_email = ? AND agent_code = ? ON CONFLICT (id) DO NOTHING`)
+      .bind('agent-connect-' + agentCode, JSON.stringify({ offer: '/offer', consent: '/consent', privacy: '/privacy', documentRevision: '2026-08-20', offerAccepted: true, consentAccepted: true }), now, user.email, agentCode),
+  ]);
+  const account = await accountFor(db, user);
+  if (!account) return Response.json({ error: "Приглашение не связано с подтверждённой почтой этой учётной записи. Подключение не выполнено." }, { status: 409 });
+  return Response.json({ ok: true, agent: account }, { status: 201 });
 }
 
 async function createMatchedGuaranteeDraft(db: RuntimeDatabase, input: { agentCode: string; leadId: string; analysisId?: string; companyName: string; consentAt?: string; prospectId: string; noticeNumber: string; amount: number; ownerEmail: string }) {
@@ -127,34 +171,38 @@ async function createMatchedGuaranteeDraft(db: RuntimeDatabase, input: { agentCo
 export async function GET(request: Request) {
   const user = await requireApiUser();
   if (!user) return unauthorized();
+  if (!user.roles.includes("AGENT") && !user.isAdmin) return Response.json({error:"Нет доступа к кабинету агента"},{status:403});
   try {
+    const paging=boundedPage(request.url);
     const db = await getDatabase();
     await ensureSchema(db);
     const controls = await readControlState(db);
     const account = await accountFor(db, user);
+    if (!account) return Response.json({ error: "Сначала подключите агентский профиль в /agent" }, { status: 409 });
     const prospectsModule = await db.prepare("SELECT enabled FROM module_settings WHERE module_key = 'prospects' LIMIT 1").first<{ enabled: number }>();
     const requestedCode = normalizeCode(new URL(request.url).searchParams.get("code"));
     const code = requestedCode && requestedCode === account.agentCode ? requestedCode : account.agentCode;
+    const params = new URL(request.url).searchParams;
+    if (params.has('surface')) {
+      const offerOptions = partnerCommissions.filter(item =>
+        !controls.disabled.has(bankControlKey(item.bank)) && !controls.disabled.has(productControlKey(item.product))
+      ).map(({id,bank,product,kind})=>({id,bank,product,kind}));
+      const info = {agent:{code,name:account.name,referralPath:`/ref/${encodeURIComponent(code)}`},
+        modules:{prospects:prospectsModule == null || Boolean(prospectsModule.enabled)},offerOptions,
+        guaranteePolicies:params.get('surface')==='partners' && !controls.disabled.has(productControlKey('Банковская гарантия'))
+          ? guaranteePolicies.filter(p=>p.providerConfirmed&&!controls.disabled.has(bankControlKey(p.provider))) : undefined};
+      return await agentWorkspaceProjection(db,user.email,code,params,paging,info);
+    }
     const [leadResult, applicationResult, partnerResult] = await db.batch([
-      db.prepare(`SELECT l.id, l.company_name AS companyName, l.company_inn AS companyInn,
-        l.contact_name AS contactName, l.phone, l.email, l.source, l.status,
-        l.subscription_status AS subscriptionStatus, l.consent_at AS consentAt,
-        l.created_at AS createdAt, l.updated_at AS updatedAt,
-        (SELECT COUNT(*) FROM payment_orders po WHERE po.company_inn = l.company_inn AND po.status = 'Оплачен') AS paidFullOrders,
-        (SELECT a.id FROM analyses a WHERE a.company_inn = l.company_inn ORDER BY a.created_at DESC LIMIT 1) AS analysisId
-        FROM agent_leads l WHERE l.agent_code = ? ORDER BY l.updated_at DESC LIMIT 200`).bind(code),
-      db.prepare(`SELECT id, lead_id AS leadId, analysis_id AS analysisId, company_name AS companyName,
-        bank, product, requested_amount AS requestedAmount, calculated_limit AS calculatedLimit,
-        CASE WHEN status IN ('Подготовка', 'Подготовка документов') THEN 'Подготовка заявки' ELSE status END AS status, next_action AS nextAction,
-        created_at AS createdAt, updated_at AS updatedAt
-        FROM agent_applications WHERE agent_code = ? ORDER BY updated_at DESC LIMIT 300`).bind(code),
+      db.prepare(clientSelect+' ORDER BY l.updated_at DESC,l.id DESC LIMIT ? OFFSET ?').bind(user.email,code,paging.limit,paging.offset),
+      db.prepare(applicationSelect+' ORDER BY updated_at DESC,id DESC LIMIT ? OFFSET ?').bind(user.email,code,paging.limit,paging.offset),
       db.prepare(`SELECT p.agent_code AS agentCode, p.name, p.agency, p.city, p.status, p.created_at AS createdAt,
         COUNT(l.id) AS clientsCount,
-        COALESCE(SUM((SELECT COUNT(*) FROM payment_orders po WHERE po.company_inn = l.company_inn AND po.status = 'Оплачен')), 0) AS activeSubscriptions
+        (SELECT COUNT(*) FROM billing_orders po WHERE po.broker_code=p.agent_code AND po.curator_code=p.curator_code AND po.status='PAID') AS activeSubscriptions
         FROM agent_partners p LEFT JOIN agent_leads l ON l.agent_code = p.agent_code
         WHERE p.curator_code = ?
-        GROUP BY p.agent_code, p.name, p.agency, p.city, p.status, p.created_at
-        ORDER BY activeSubscriptions DESC, p.created_at DESC LIMIT 100`).bind(code),
+        GROUP BY p.agent_code, p.curator_code, p.name, p.agency, p.city, p.status, p.created_at
+        ORDER BY "activeSubscriptions" DESC, p.created_at DESC,p.agent_code DESC LIMIT ? OFFSET ?`).bind(code,paging.limit,paging.offset),
     ]);
     const partners = (partnerResult.results as Array<Record<string, unknown>>).map((item) => ({
       ...item,
@@ -165,6 +213,7 @@ export async function GET(request: Request) {
     const applications = applicationResult.results as Array<Record<string, unknown>>;
     const applicationForecast = applications.reduce((sum, item) => sum + (Number(item.calculatedLimit) || 0) * averagePartnerCommissionRate, 0);
     return Response.json({
+      pagination:{page:paging.page,limit:paging.limit,hasNext:[leadResult,applicationResult,partnerResult].some(r=>r.results.length===paging.limit)},
       agent: { code, name: account.name, referralPath: `/ref/${encodeURIComponent(code)}`, isAdmin: user.isAdmin },
       modules: { prospects: prospectsModule == null || Boolean(prospectsModule.enabled) },
       leads: leadResult.results,
@@ -181,20 +230,23 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Не удалось загрузить агентский кабинет" }, { status: 500 });
+    return Response.json({ error: safeErrorText(error, "Не удалось загрузить агентский кабинет") }, { status: 500 });
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const db = await getDatabase();
-    await ensureSchema(db);
     const body = await request.json() as Record<string, unknown>;
     const type = String(body.type || "lead");
     const publicReferral = type === "subagent" || (type === "lead" && String(body.source || "") === "Реферальная ссылка");
     const user = publicReferral ? null : await requireApiUser();
     if (!publicReferral && !user) return unauthorized();
+    const db = await getDatabase();
+    if (type === "connect") return await connectAccount(request, db, user!, body);
+    if (user && !user.roles.includes("AGENT") && !user.isAdmin) return Response.json({error:"Нет доступа к кабинету агента"},{status:403});
+    await ensureSchema(db);
     const account = user ? await accountFor(db, user) : null;
+    if (user && !account) return Response.json({ error: "Сначала подключите агентский профиль в /agent" }, { status: 409 });
     const agentCode = account?.agentCode || normalizeCode(String(body.agentCode || ""));
     if (!agentCode) return Response.json({ error: "Некорректная реферальная ссылка" }, { status: 400 });
     if (publicReferral) {
@@ -259,54 +311,66 @@ export async function POST(request: Request) {
       }
       const controls = await readControlState(db);
       if ((!guarantee && controls.disabled.has(bankControlKey(bank))) || controls.disabled.has(productControlKey(product))) return Response.json({ error: "Маршрут отключён администратором" }, { status: 409 });
-      const id = crypto.randomUUID();
       const analysisId = String(body.analysisId || "");
       const requestedAmount = Number(body.requestedAmount) || 0;
       const nextAction = String(body.nextAction || "Проверить комплект документов");
-      const lead = await db.prepare("SELECT consent_at AS consentAt FROM agent_leads WHERE id = ? AND agent_code = ? LIMIT 1").bind(leadId, agentCode).first<{ consentAt?: string }>();
+      const lead = await db.prepare("SELECT consent_at AS consentAt, company_inn AS companyInn, company_name AS companyName FROM agent_leads WHERE id = ? AND agent_code = ? LIMIT 1").bind(leadId, agentCode).first<{ consentAt?: string; companyInn:string; companyName:string }>();
       if (!lead) return Response.json({ error: "Клиент не принадлежит вашему кабинету" }, { status: 403 });
+      if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) return Response.json({error:"Укажите положительную сумму заявки"},{status:400});
+      if (companyName !== lead.companyName) return Response.json({error:"Компания не соответствует клиенту"},{status:400});
+      if (analysisId) {
+        const access = await readableAnalysis(db, analysisId, user!);
+        if (!access) return Response.json({error:"Нет доступа к анализу"},{status:403});
+        const source = await db.prepare("SELECT company_inn AS inn FROM analyses WHERE id = ? LIMIT 1").bind(analysisId).first<{inn:string}>();
+        if (source?.inn !== lead.companyInn) return Response.json({error:"Анализ относится к другой компании"},{status:400});
+      }
+      const id = "broker-" + createHash("sha256").update(JSON.stringify([agentCode,leadId,analysisId,bank,product,requestedAmount,guarantee?[body.law,body.guaranteeType,body.noticeNumber,body.termDays]:null])).digest("hex");
+      const existing = await db.prepare("SELECT id FROM agent_applications WHERE id = ? AND agent_code = ? LIMIT 1").bind(id,agentCode).first();
+      if(existing) return Response.json({id,ok:true,duplicate:true});
       const analysisOwner = analysisId ? await db.prepare("SELECT owner_email AS ownerEmail FROM analyses WHERE id = ? LIMIT 1").bind(analysisId).first<{ ownerEmail?: string }>() : null;
       const dealOwner = analysisOwner?.ownerEmail || user?.email || "";
-      await db.batch([db.prepare(`INSERT INTO agent_applications
+      await db.batch([db.prepare(`INSERT OR IGNORE INTO agent_applications
         (id, agent_code, lead_id, analysis_id, company_name, bank, product, requested_amount, calculated_limit, reward_rate_bps, status, next_action, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(
           id, agentCode, leadId, analysisId, companyName, bank, product,
           requestedAmount, Number(body.calculatedLimit) || 0,
           Math.round(averagePartnerCommissionRate * 10_000), "Подготовка заявки",
           nextAction, now, now,
-        ), db.prepare(`INSERT OR REPLACE INTO deals (id, analysis_id, company_name, product, amount, status, owner, next_action, bank, application_group_id, consent_at, owner_email, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'Подготовка документов', 'Брокер', ?, ?, ?, ?, ?, ?, ?)`)
+        ), db.prepare(`INSERT OR IGNORE INTO deals (id, analysis_id, company_name, product, amount, status, owner, next_action, bank, application_group_id, consent_at, owner_email, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'Подготовка документов', 'Брокер', ?, ?, ?, ?, ?, ?, ?)`)
           .bind(id, analysisId, companyName, product, requestedAmount, nextAction, bank, id, lead?.consentAt || now, dealOwner, now, now),
-        db.prepare("INSERT INTO application_status_history (id, application_id, from_status, to_status, actor_role, actor_email, public_comment, created_at) VALUES (?, ?, '', 'Подготовка документов', 'AGENT', ?, 'Брокер создал заявку', ?)").bind(crypto.randomUUID(), id, user?.email || "", now),
-        db.prepare("INSERT INTO audit_log (id, entity_type, entity_id, action, actor_role, actor_email, metadata, created_at) VALUES (?, 'APPLICATION', ?, 'CREATE', 'AGENT', ?, ?, ?)").bind(crypto.randomUUID(), id, user?.email || "", JSON.stringify({ bank, product, applicationType: guarantee ? "guarantee" : "credit", law: body.law, guaranteeType: body.guaranteeType, noticeNumber: body.noticeNumber, termDays: body.termDays }), now),
+        db.prepare("INSERT OR IGNORE INTO application_status_history (id, application_id, from_status, to_status, actor_role, actor_email, public_comment, created_at) VALUES (?, ?, '', 'Подготовка документов', 'AGENT', ?, 'Агент создал заявку', ?)").bind(id+"-created", id, user?.email || "", now),
+        db.prepare("INSERT OR IGNORE INTO audit_log (id, entity_type, entity_id, action, actor_role, actor_email, metadata, created_at) VALUES (?, 'APPLICATION', ?, 'CREATE', 'AGENT', ?, ?, ?)").bind(id+"-audit", id, user?.email || "", JSON.stringify({ bank, product, applicationType: guarantee ? "guarantee" : "credit", law: body.law, guaranteeType: body.guaranteeType, noticeNumber: body.noticeNumber, termDays: body.termDays }), now),
       ]);
       return Response.json({ id, ok: true }, { status: 201 });
     }
     return Response.json({ error: "Неизвестный тип операции" }, { status: 400 });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Не удалось сохранить данные" }, { status: 500 });
+    return Response.json({ error: safeErrorText(error, "Не удалось сохранить данные") }, { status: 500 });
   }
 }
 
 export async function PATCH(request: Request) {
   const user = await requireApiUser();
   if (!user) return unauthorized();
+  if (!user.roles.includes("AGENT") && !user.isAdmin) return Response.json({error:"Нет доступа к кабинету агента"},{status:403});
   try {
     const db = await getDatabase();
     await ensureSchema(db);
     const account = await accountFor(db, user);
+    if (!account) return Response.json({ error: "Сначала подключите агентский профиль в /agent" }, { status: 409 });
     const body = await request.json() as { id?: string; entity?: string; status?: string };
     if (!body.id || !body.status) return Response.json({ error: "Нужны id и статус" }, { status: 400 });
     if (body.entity === "lead") {
-      const allowedLead = ["Новый клиент", "Анализ готов", "Подготовка заявки"];
+      const allowedLead = clientStatuses;
       if (!allowedLead.includes(body.status)) return Response.json({ error: "Недопустимый этап клиента" }, { status: 400 });
       await db.prepare("UPDATE agent_leads SET status = ?, updated_at = ? WHERE id = ? AND agent_code = ?").bind(body.status, new Date().toISOString(), body.id, account.agentCode).run();
       return Response.json({ ok: true });
     }
-    const allowed = ["Подготовка заявки", "Подготовка документов", "Требуются документы", "На рассмотрении у финансового партнёра", "Предварительное решение", "Одобрена", "Выдана", "Отклонена", "Закрыта"];
+    const allowed = applicationStatuses;
     if (!allowed.includes(body.status)) return Response.json({ error: "Недопустимый статус заявки" }, { status: 400 });
-    const current = await db.prepare("SELECT status FROM agent_applications WHERE id = ? AND agent_code = ? LIMIT 1").bind(body.id, account.agentCode).first<{ status?: string }>();
+    const current = await db.prepare(`SELECT COALESCE((SELECT d.status FROM deals d WHERE d.id = agent_applications.id), status) AS status FROM agent_applications CROSS JOIN (SELECT ?::text AS email) actor WHERE id = ? AND agent_code = ? AND ${brokerApplicationSQL('agent_applications','actor.email')} LIMIT 1`).bind(user.email, body.id, account.agentCode).first<{ status?: string }>();
     if (!current?.status) return Response.json({ error: "Заявка не найдена" }, { status: 404 });
-    const terminal = ["Выдана", "Отклонена", "Закрыта", "Отменена клиентом"];
+    const terminal = closedStatuses;
     if (terminal.includes(current.status) && current.status !== body.status) return Response.json({ error: "Завершённый статус нельзя изменить" }, { status: 409 });
     const clientStatus = body.status === "Подготовка заявки" ? "Подготовка документов" : body.status;
     const nextAction: Record<string, string> = {
@@ -328,6 +392,6 @@ export async function PATCH(request: Request) {
     ]);
     return Response.json({ ok: true });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Не удалось обновить статус" }, { status: 500 });
+    return Response.json({ error: safeErrorText(error, "Не удалось обновить статус") }, { status: 500 });
   }
 }

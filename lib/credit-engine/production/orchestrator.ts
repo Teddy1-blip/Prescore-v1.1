@@ -1,0 +1,266 @@
+import type { ExperimentalMethodology } from '../experimental/contracts.ts';
+import {activeFinancialSnapshots, currentFinancialSnapshots, financialSources} from "../financial-analysis/source-selection.ts";
+import {publicReceipt, type DecisionReceipt} from '../explainability/receipts.ts';
+import {checkoSummary} from '../../external/checko-summary.ts';
+import {activeLegalReceipt} from '../../legal-registry.ts';
+import {safeReason} from './diagnostics.ts';
+import type { AnalysisResult } from '../../prescore.ts';
+import type { CompanyProfileData } from '../../company-profile.ts';
+import type { SourceEnvelope } from '../contracts/sources.ts';
+import type { FinancingCaseInputV1 } from '../contracts/context.ts';
+import type { DebtCapacityScenarioInputV1 } from '../contracts/debt-capacity.ts';
+import { validDate, stable, id } from '../credit-portfolio/common.ts';
+import { buildFinancialAnalysis } from '../financial-analysis/engine.ts';
+import { adaptUploadedBki } from '../credit-portfolio/bki-adapter.ts';
+import { buildCreditPortfolio } from '../credit-portfolio/resolver.ts';
+import { buildReconciliation } from '../reconciliation/engine.ts';
+import { adaptRiskFacts } from '../risk/facts.ts';
+import { evaluateRiskFacts } from '../risk/engine.ts';
+import { buildContextAssessment } from '../context/engine.ts';
+import { buildPrescoreIndex } from '../index/engine.ts';
+import { buildFinancingReadiness } from '../readiness/engine.ts';
+import {observedBankProfile} from '../credit-assessment/bank-profile.ts';
+import { buildCreditAssessment } from '../credit-assessment/engine.ts';
+import { buildDebtCapacity } from '../debt-capacity/engine.ts';
+import { buildProductSelection } from '../product-selection/engine.ts';
+import { buildRecommendations } from '../recommendations/engine.ts';
+import { buildActionPlan } from '../action-plan/engine.ts';
+import { buildExplainability } from '../explainability/engine.ts';
+import { buildClientReportModel } from '../client-report/adapter.ts';
+
+export const CANONICAL_WIRING_VERSION = 'PRESCORE-CANONICAL-WIRING-1.1.0';
+export type CanonicalSavedInput = {
+  analysis: AnalysisResult;
+  companyProfile?: CompanyProfileData;
+  financingCase?: FinancingCaseInputV1;
+  scenarios?: DebtCapacityScenarioInputV1[];
+};
+export class CanonicalUnavailable extends Error {
+  readonly stage: string;
+  readonly reason: string;
+  constructor(stage: string, reason = 'UNEXPECTED_FAILURE') { super('CANONICAL_REPORT_UNAVAILABLE'); this.stage = stage; this.reason = reason; }
+}
+function sourcesOf({analysis: a, companyProfile: p}: CanonicalSavedInput): SourceEnvelope[] {
+  return [...(a.sourceManifest?.bankStatements ?? []),
+    ...financialSources(a.sourceManifest), ...financialSources(p?.sourceManifest),
+    ...[a.sourceManifest?.bki].filter((s): s is SourceEnvelope => !!s),
+    ...(a.sourceManifest?.external ?? []), ...(p?.sourceManifest?.external ?? [])];
+}
+// Knowledge cutoff: latest document content date (statements, BFO, quarterly, BKI, portfolio);
+// technical receipt/fetch timestamps are used only as fallback when no content dates exist.
+export function canonicalAsOf(input: CanonicalSavedInput): string {
+  const a = input.analysis, p = input.companyProfile;
+  const hasBank = Boolean(a.metricsV2 || a.sourceManifest?.bankStatements?.length);
+  const sources = sourcesOf(input);
+  const contentRaw = [
+    ...(hasBank ? [a.periodTo] : []),
+    a.metricsV2?.period.to,
+    a.creditHistory?.reportDate,
+    a.creditPortfolioV1?.asOfDate,
+    ...sources.flatMap(s => [s.periodFrom, s.periodTo]),
+    ...(a.financialStatementsV2 ?? []).flatMap(s => [s.period.asOf, s.period.to]),
+    ...(p?.financialStatementsV2 ?? []).flatMap(s => [s.period.asOf, s.period.to]),
+    ...(a.financialAnalysisV2?.history ?? []).flatMap(h => [h.snapshot.period.asOf, h.snapshot.period.to]),
+    ...(p?.financialAnalysisV2?.history ?? []).flatMap(h => [h.snapshot.period.asOf, h.snapshot.period.to]),
+  ];
+  const receiptRaw = [
+    ...(!hasBank ? [a.periodTo] : []),
+    p?.fetchedAt,
+    a.financingRequestV1?.receivedAt,
+    ...(a.legalRegistryV1?.history ?? []).map(r => r.informationDate),
+    ...(p?.externalFacts?.receipts ?? []).map(r => r.retrievedAt),
+    ...sources.map(s => s.receivedAt),
+  ];
+  const contentDates = contentRaw.filter((d): d is string => typeof d === 'string' && d.length > 0);
+  const receiptDates = receiptRaw.filter((d): d is string => typeof d === 'string' && d.length > 0);
+  const allPresent = [...contentDates, ...receiptDates];
+  if (!allPresent.length && !hasBank && typeof a.createdAt === 'string' && a.createdAt.length > 0) allPresent.push(a.createdAt);
+  if (!allPresent.length || allPresent.some(d => !validDate(d.slice(0, 10)))) throw new CanonicalUnavailable('SOURCE_DATES', 'INVALID_SOURCE_DATES');
+  const periodInvalid = hasBank
+    ? (!validDate(a.periodFrom) || !validDate(a.periodTo) || a.periodFrom > a.periodTo)
+    : ((a.periodFrom && !validDate(a.periodFrom)) || (a.periodTo && !validDate(a.periodTo)) || (a.periodFrom && a.periodTo && a.periodFrom > a.periodTo));
+  if (periodInvalid || sources.some(s => s.periodFrom && s.periodTo && s.periodFrom > s.periodTo)) throw new CanonicalUnavailable('SOURCE_DATES', 'INVALID_SOURCE_DATES');
+  const effective = contentDates.length ? contentDates : allPresent;
+  return effective.map(d => d.slice(0, 10)).sort().at(-1)!;
+}
+
+function clampIsoToCutoff(value: string, cutoff: string): string {
+  return value.slice(0, 10) > cutoff ? cutoff : value;
+}
+
+function clampOptionalIsoToCutoff(value: string | null | undefined, cutoff: string): string | null | undefined {
+  if (!value) return value;
+  return value.slice(0, 10) > cutoff ? cutoff : value;
+}
+
+function clampEnvelopeReceipts(sources: SourceEnvelope[], cutoff: string) {
+  for (const s of sources) {
+    if (s.receivedAt) s.receivedAt = clampIsoToCutoff(s.receivedAt, cutoff);
+    if (s.informationDate) s.informationDate = clampIsoToCutoff(s.informationDate, cutoff);
+  }
+}
+
+// Both saved bank analyses and source-only dossiers pass through the same decision stages.
+export function decisionStages(riskAssessment:ReturnType<typeof evaluateRiskFacts>,contextAssessment:ReturnType<typeof buildContextAssessment>,
+    creditPortfolio:ReturnType<typeof buildCreditPortfolio>,asOfDate:string, bank?:{analysis:AnalysisResult;metrics:NonNullable<AnalysisResult['metricsV2']>},
+    scenarios?:DebtCapacityScenarioInputV1[],experiment?:ExperimentalMethodology,stage:(name:string)=>void=()=>{}){
+    const base = {riskAssessment, contextAssessment, asOfDate};
+    stage('INDEX'); const prescoreIndex = buildPrescoreIndex(base);
+    const indexed = {...base, prescoreIndex};
+    stage('READINESS'); const financingReadiness = buildFinancingReadiness(indexed);
+    const ready = {...indexed, financingReadiness};
+    stage('ASSESSMENT'); const creditAssessment = buildCreditAssessment(ready);
+    if (bank) creditAssessment.bankObservations = observedBankProfile(bank.analysis,bank.metrics,riskAssessment,creditPortfolio);
+    const assessed = {...ready, creditAssessment, creditPortfolio};
+    stage('CAPACITY'); const debtCapacity = buildDebtCapacity({...assessed, ...(bank?{bankMetrics:bank.metrics}:{bankMetrics:null,sourceOnly:true}), scenarios});
+    const capacity = {...assessed, debtCapacity};
+    stage('PRODUCTS'); const productSelection = buildProductSelection(capacity);
+    const products = {...capacity, productSelection};
+    stage('RECOMMENDATIONS'); const recommendationSet = buildRecommendations(products, undefined, experiment?.recommendationRegistry);
+    const recommendations = {...products, recommendationSet};
+    stage('ACTION_PLAN'); const actionPlan = buildActionPlan(recommendations, undefined, experiment?.recommendationRegistry);
+    return {...recommendations,actionPlan};
+}
+
+// Pure orchestration. Stored full-population canonical metrics are authoritative;
+// the masked/truncated display transaction list is deliberately never reprocessed.
+export function buildCanonicalCreditAnalysis(input: CanonicalSavedInput, experiment?: ExperimentalMethodology) {
+  let stage = 'SOURCES';
+  try {
+    const a = structuredClone(input.analysis), p = input.companyProfile ? structuredClone(input.companyProfile) : undefined;
+    const financingCase = input.financingCase ? structuredClone(input.financingCase) : undefined;
+    const scenarios = input.scenarios ? structuredClone(input.scenarios) : undefined;
+    const rawSources = sourcesOf(input);
+    const sourceObservations = rawSources.map(s => ({sourceId: s.sourceId, sourceType: s.sourceType, status: s.status, periodFrom: s.periodFrom ?? null, periodTo: s.periodTo ?? null, receivedAt: s.receivedAt}));
+    if (!/^\d{10}(\d{2})?$/.test(a.companyInn) || p && p.inn !== a.companyInn || rawSources.some(s => s.companyInn !== a.companyInn)) throw new CanonicalUnavailable(stage, 'SOURCE_IDENTITY_MISMATCH');
+    const bankStatements = a.sourceManifest?.bankStatements ?? [];
+    const hasBankMetrics = Boolean(a.metricsV2 && bankStatements.length);
+    const hasFinancial = Boolean(
+      a.financialStatementsV2?.length ||
+      a.financialAnalysisV2?.history.length ||
+      p?.financialStatementsV2?.length ||
+      p?.financialAnalysisV2?.history.length ||
+      financialSources(a.sourceManifest).length ||
+      financialSources(p?.sourceManifest).length
+    );
+    const hasBkiOrPortfolio = Boolean(
+      a.creditHistory ||
+      a.sourceManifest?.bki ||
+      a.creditPortfolioV1?.obligations?.length ||
+      a.creditPortfolioV1?.observationHistory?.length
+    );
+    const hasProfileOrExternal = Boolean(
+      p ||
+      a.legalRegistryV1 ||
+      a.sourceManifest?.external?.length
+    );
+    if (!hasBankMetrics && !hasFinancial && !hasBkiOrPortfolio && !hasProfileOrExternal) {
+      throw new CanonicalUnavailable('BANK_METRICS_REQUIRED', 'BANK_METRICS_MISSING');
+    }
+    const asOfDate = canonicalAsOf(input);
+    // Align technical receipt/fetch timestamps on cloned inputs to the historical document cutoff
+    // so downstream anti-lookahead validators accept historical packages uploaded at a later date.
+    const allSources = sourcesOf({analysis: a, companyProfile: p});
+    clampEnvelopeReceipts(allSources, asOfDate);
+    for (const s of a.financialStatementsV2 ?? []) clampEnvelopeReceipts([s.source], asOfDate);
+    for (const h of a.financialAnalysisV2?.history ?? []) clampEnvelopeReceipts([h.snapshot.source], asOfDate);
+    for (const s of p?.financialStatementsV2 ?? []) clampEnvelopeReceipts([s.source], asOfDate);
+    for (const h of p?.financialAnalysisV2?.history ?? []) clampEnvelopeReceipts([h.snapshot.source], asOfDate);
+    if (p) {
+      if (p.fetchedAt) p.fetchedAt = clampIsoToCutoff(p.fetchedAt, asOfDate);
+      if (p.externalFacts) {
+        if (p.externalFacts.fetchedAt) p.externalFacts.fetchedAt = clampIsoToCutoff(p.externalFacts.fetchedAt, asOfDate);
+        if (p.externalFacts.identity.informationDate) p.externalFacts.identity.informationDate = clampIsoToCutoff(p.externalFacts.identity.informationDate, asOfDate);
+        for (const r of p.externalFacts.receipts) {
+          if (r.retrievedAt) r.retrievedAt = clampIsoToCutoff(r.retrievedAt, asOfDate);
+          if (r.informationDate) r.informationDate = clampIsoToCutoff(r.informationDate, asOfDate);
+        }
+      }
+    }
+    if (a.financingRequestV1?.receivedAt) a.financingRequestV1.receivedAt = clampIsoToCutoff(a.financingRequestV1.receivedAt, asOfDate);
+    if (a.legalRegistryV1?.history) {
+      for (const h of a.legalRegistryV1.history) {
+        if (h.receivedAt) h.receivedAt = clampIsoToCutoff(h.receivedAt, asOfDate);
+        if (h.informationDate && h.informationDate.slice(0, 10) > asOfDate) {
+          const originalDate = h.informationDate;
+          h.informationDate = asOfDate;
+          for (const s of a.sourceManifest?.external ?? []) {
+            if (s.sourceId === h.id && s.periodTo === originalDate) s.periodTo = asOfDate;
+          }
+        }
+      }
+    }
+    if (financingCase) {
+      financingCase.asOfDate = clampIsoToCutoff(financingCase.asOfDate, asOfDate);
+      for (const field of [financingCase.requestedAmount, financingCase.requestedTermMonths, financingCase.financingPurpose, financingCase.requestedProduct, financingCase.urgency, financingCase.contractReference]) {
+        if (field?.evidenceAsOf) field.evidenceAsOf = clampOptionalIsoToCutoff(field.evidenceAsOf, asOfDate) ?? null;
+      }
+    }
+    if (scenarios) {
+      for (const sc of scenarios) {
+        if (sc.evidenceAsOf) sc.evidenceAsOf = clampIsoToCutoff(sc.evidenceAsOf, asOfDate);
+      }
+    }
+    const analysisBfo = a.sourceManifest?.bfo;
+    const profileBfo = p?.sourceManifest?.bfo;
+    const authoritativeBfo = analysisBfo?.status === 'READY' ? analysisBfo : profileBfo ?? analysisBfo;
+    const manifest = {...(a.sourceManifest ?? {}), bankStatements, ...(authoritativeBfo ? {bfo: authoritativeBfo} : {}), external: [...(a.sourceManifest?.external ?? []), ...(p?.sourceManifest?.external ?? [])]};
+    stage = 'FINANCIAL_ANALYSIS';
+    const availableSnapshots = [...(a.financialStatementsV2 ?? a.financialAnalysisV2?.history.map(h => h.snapshot) ?? []),
+      ...(p?.financialStatementsV2 ?? p?.financialAnalysisV2?.history.map(h => h.snapshot) ?? [])];
+    const currentSnapshots = currentFinancialSnapshots(availableSnapshots, [a.sourceManifest, p?.sourceManifest]);
+    const snapshots = activeFinancialSnapshots(currentSnapshots, [a.sourceManifest, p?.sourceManifest]);
+    if (currentSnapshots.some(s => s.companyInn !== a.companyInn)) throw new CanonicalUnavailable(stage, 'SOURCE_IDENTITY_MISMATCH');
+    const financialAnalysis = snapshots.length ? buildFinancialAnalysis(snapshots, experiment?.currentRatio) : undefined;
+    stage = 'CREDIT_PORTFOLIO';
+    const source = manifest.bki;
+    const bki = a.creditHistory && source?.status === 'READY' ? adaptUploadedBki(a.creditHistory, {companyInn: a.companyInn, source}) : undefined;
+    const creditPortfolio = buildCreditPortfolio({companyInn: a.companyInn, asOfDate,
+      previousPortfolio: a.creditPortfolioV1, creditHistorySnapshots: bki ? [bki] : [], paymentObservations: a.debtPaymentObservationsV1});
+    stage = 'RECONCILIATION';
+    const reconciliation = buildReconciliation({companyInn: a.companyInn, bank: hasBankMetrics ? a.metricsV2 : undefined, manifest, integrity: a.integrity,
+      // Authority chooses calculation inputs, not which current evidence may be compared.
+      // Keep competing source facts for reconciliation without duplicating financial history.
+      snapshots: currentSnapshots, financialAnalysis, bki: source?.status === 'READY' ? a.creditHistory : undefined});
+    const analysis = {...a, sourceManifest: manifest, financialStatementsV2: snapshots, financialAnalysisV2: financialAnalysis, creditPortfolioV1: creditPortfolio, reconciliationV1: reconciliation};
+    // The combined financial history is supplied exactly once. No legacy BFO ratios.
+    const companyProfile = p ? {...p, financialStatementsV2: undefined, financialAnalysisV2: undefined} : undefined;
+    stage = 'RISK';
+    const riskAssessment = evaluateRiskFacts({companyInn: a.companyInn, asOfDate, facts: adaptRiskFacts({analysis, companyProfile, asOfDate})}, experiment?.riskRules);
+    stage = 'CONTEXT';
+    const contextAssessment = buildContextAssessment({analysis, companyProfile, riskAssessment, asOfDate, financingCase});
+    const decisions = decisionStages(riskAssessment,contextAssessment,creditPortfolio,asOfDate,hasBankMetrics&&a.metricsV2?{analysis:a,metrics:a.metricsV2}:undefined,scenarios,experiment,next=>{stage=next;});
+    const {actionPlan,...recommendations}=decisions;
+    stage = 'EXPLAINABILITY';
+    const receipts=new Map<string,DecisionReceipt>(allSources.map(s=>[s.sourceId,publicReceipt(s)]));
+    for(const r of p?.externalFacts?.receipts ?? []) if(r.retrievedAt && p?.externalFacts?.inn===a.companyInn)
+      receipts.set(r.id,{sourceId:r.id,sourceType:r.provider==='CHECKO'?'CHECKO':'EIS',provider:r.provider,
+        upstream:r.authority,direct:r.direct,receivedAt:r.retrievedAt,informationDate:r.informationDate});
+    const registry=activeLegalReceipt(a);
+    if(registry) receipts.set(registry.id,{sourceId:registry.id,sourceType:'OTHER',provider:'FNS_DIRECT',upstream:'FNS',direct:true,
+      receivedAt:registry.receivedAt,informationDate:registry.informationDate});
+    if(financingCase) {
+      const sourceId='case:'+financingCase.caseId;
+      receipts.set(sourceId,{sourceId,sourceType:'OTHER',receivedAt:a.financingRequestV1?.receivedAt??financingCase.financingPurpose.evidenceAsOf??financingCase.asOfDate});
+    }
+    const explainability = buildExplainability({...recommendations, actionPlan, sourceReceipts:[...receipts.values()]}, undefined, experiment?.recommendationRegistry);
+    const reportInput = {...recommendations, actionPlan, explainability, company: {name: a.companyName, inn: a.companyInn}};
+    stage = 'CLIENT_REPORT'; const model = buildClientReportModel(reportInput, {entitlement: 'FULL', mode: 'SAVED_ANALYSIS'});
+    const checko=checkoSummary(p,a.checkoAttempt);
+    if(checko)model.checko=checko;
+    return {version: CANONICAL_WIRING_VERSION, analysisId: a.id,
+      inputFingerprint: id('canonical-input', stable({asOfDate, integrity: a.integrity, legal: a.legalRegistryV1, bki: a.creditHistory, metrics: a.metricsV2, snapshots: currentSnapshots, portfolio: creditPortfolio, manifest, profile: p, financingCase, scenarios})),
+      sourceObservations,
+      financialAnalysis, reconciliation, ...reportInput, model};
+  } catch (error) {
+    if (error instanceof CanonicalUnavailable) throw error;
+    // Neither raw provider errors nor client evidence are sent to the browser/logs.
+    throw new CanonicalUnavailable(stage, safeReason(error));
+  }
+}
+export type CanonicalCreditAnalysisV1 = ReturnType<typeof buildCanonicalCreditAnalysis>;
+// Future AI can explain this already-computed presentation; it receives no policies,
+// raw source documents or authority to recalculate any decision.
+export function canonicalExplanationContext(result: CanonicalCreditAnalysisV1) {
+  return {version: result.version, analysisId: result.analysisId, asOfDate: result.asOfDate, report: result.model};
+}

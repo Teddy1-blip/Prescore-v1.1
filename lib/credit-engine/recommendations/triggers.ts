@@ -1,9 +1,43 @@
 import type {RecommendationInputV1 as Input,RecommendationDefinitionV1 as Definition,RecommendationLineageV1 as Lineage} from '../contracts/recommendations.ts';
 import type {RiskConfidence,RiskSeverity,RiskFinding} from '../contracts/risk.ts';
+import {id as riskId, usable} from '../risk/common.ts';
 import {unique,weakest,id} from './common.ts';
 export const emptyLineage=():Lineage=>({riskFindingIds:[],riskFactIds:[],contextRelationIds:[],contextFactIds:[],assessmentDriverIds:[],assessmentLimitationIds:[],capacityReferenceIds:[],productFamilies:[],productDataRequirementCodes:[],portfolioObligationIds:[],sourceIds:[]});
-export type TriggerHit={code:string;subjectKey:string|null;lineage:Lineage;confidence:RiskConfidence;severity:RiskSeverity;value:unknown;finding?:RiskFinding};
+export type TriggerHit={code:string;subjectKey:string|null;lineage:Lineage;confidence:RiskConfidence;severity:RiskSeverity;value:unknown;finding?:Pick<RiskFinding,'scope'|'origin'|'factIds'|'reasonCodes'>};
 function findingHit(x:Input,f:RiskFinding):TriggerHit{const fs=x.riskAssessment.facts.filter(v=>f.factIds.includes(v.factId)),rels=x.contextAssessment.relations.filter(r=>r.targetRiskFindingIds.includes(f.findingId));return {code:f.code,subjectKey:f.subjectKey??f.portfolioObligationId??null,confidence:weakest(f.evidenceConfidence,...f.evidence.map(e=>e.confidence)),severity:f.severity,value:f.actualValue,finding:f,lineage:{...emptyLineage(),riskFindingIds:[f.findingId],riskFactIds:[...f.factIds],contextRelationIds:rels.map(r=>r.relationId),contextFactIds:unique(rels.flatMap(r=>r.contextFactIds)),assessmentDriverIds:x.creditAssessment.drivers.filter(d=>d.riskFindingId===f.findingId).map(d=>d.driverId),assessmentLimitationIds:x.creditAssessment.limitations.filter(l=>l.riskFindingIds?.includes(f.findingId)).map(l=>l.limitationId),portfolioObligationIds:unique([...(f.portfolioObligationId?[f.portfolioObligationId]:[]),...fs.flatMap(v=>v.portfolioObligationId?[v.portfolioObligationId]:[])]),sourceIds:unique([...fs.flatMap(v=>v.sourceIds),...f.evidence.flatMap(e=>e.sourceId?[e.sourceId]:[])])}};}
+// These pairs remove a duplicate penalty, while each observed source still has its own verification work.
+const supportingRisk = new Map([
+  ['RISK-CF-OPERATING-RECEIPTS-DECLINE', {primary: 'RISK-FIN-REVENUE-DECLINE', observation: 'BANK_OPERATING_TREND'}],
+  ['RISK-FIN-NET-ASSETS-PROXY-NEGATIVE', {primary: 'RISK-FIN-EQUITY-NON-POSITIVE', observation: 'FIN_NET_ASSETS_PROXY'}],
+]);
+function supportingHit(x: Input, ruleCode: string): TriggerHit | undefined {
+  const pair = supportingRisk.get(ruleCode);
+  if (!pair) return;
+  const risk = x.riskAssessment;
+  const evaluation = risk.evaluations?.find(e => e.ruleCode === ruleCode && e.status === 'TRIGGERED' && e.suppressedBy);
+  if (!evaluation) return;
+  const primary = risk.findings.find(f => f.findingId === evaluation.suppressedBy && f.code === pair.primary);
+  if (!primary) return;
+
+  // Recover the exact observation recorded by Risk, including for already saved assessments.
+  // Ambiguous or missing operands cannot establish that this observation belonged to this rule.
+  const facts = evaluation.requiredFactCodes.flatMap(code => risk.facts.filter(f => f.semanticCode === code));
+  if (!facts.length || new Set(facts.map(f => f.semanticCode)).size !== evaluation.requiredFactCodes.length
+      || facts.length !== evaluation.requiredFactCodes.length
+      || facts.some(f => f.companyInn !== risk.companyInn || !usable(f))) return;
+  const factIds = facts.map(f => f.factId).sort();
+  if (riskId('risk-finding', ruleCode, evaluation.ruleVersion, risk.companyInn, risk.asOfDate, evaluation.subjectKey, factIds) !== evaluation.findingId) return;
+  const observation = facts.find(f => f.semanticCode === pair.observation);
+  if (!observation) return;
+  const sourceIds = unique(facts.flatMap(f => [...f.sourceIds, ...f.evidence.flatMap(e => e.sourceId ? [e.sourceId] : [])]));
+  if (!sourceIds.length) return;
+  return {
+    code: ruleCode, subjectKey: evaluation.subjectKey ?? null, value: observation.value,
+    severity: primary.severity, confidence: weakest(...facts.map(f => f.confidence), ...facts.flatMap(f => f.evidence.map(e => e.confidence))),
+    finding: {scope: evaluation.scope, origin: observation.origin, factIds, reasonCodes: evaluation.reasonCodes},
+    lineage: {...emptyLineage(), riskFindingIds: [primary.findingId], riskFactIds: factIds, sourceIds},
+  };
+}
 const simple=(code:string,value:unknown,confidence:RiskConfidence,subjectKey:string|null=null,lineage:Partial<Lineage>={}):TriggerHit=>({code,value,confidence,severity:'INFO',subjectKey,lineage:{...emptyLineage(),...lineage}});
 export function isVerifiedOverdue(x:Input,h:TriggerHit):boolean{const f=x.riskAssessment.facts.find(v=>h.lineage.riskFactIds.includes(v.factId)&&v.semanticCode==='BKI_OVERDUE');return !!f&&f.status==='KNOWN'&&f.origin==='REPORTED'&&Number(f.value)>0&&h.confidence==='HIGH'&&f.confidence==='HIGH'&&!!(f.portfolioObligationId||f.subjectKey)&&!f.warnings.some(w=>/CONFLICT|UNCONFIRMED|STALE/.test(w))&&!x.riskAssessment.findings.some(v=>['RISK-DATA-COMPANY-IDENTITY-CONFLICT','RISK-DATA-PORTFOLIO-CONFLICT'].includes(v.code)&&(!v.subjectKey||v.subjectKey===h.subjectKey));}
 function guard(x:Input,d:Definition,h:TriggerHit){const contract=x.contextAssessment.relations.some(r=>r.code==='CTX-CONCENTRATION-CONTRACT'&&r.targetRiskFindingIds.some(f=>h.lineage.riskFindingIds.includes(f)));
@@ -21,7 +55,14 @@ function guard(x:Input,d:Definition,h:TriggerHit){const contract=x.contextAssess
 }
 export function matchRecommendationTriggers(x:Input,d:Definition):TriggerHit[]{const hits:TriggerHit[]=[];
  for(const t of d.triggerSpecification){switch(t.kind){
- case 'RISK_FINDING_CODE':case 'DATA_REVIEW_CODE':case 'RISK_REASON_CODE':for(const f of x.riskAssessment.findings)if(t.kind==='RISK_REASON_CODE'?f.reasonCodes.includes(t.code):f.code===t.code)hits.push(findingHit(x,f));break;
+ case 'RISK_FINDING_CODE':case 'DATA_REVIEW_CODE':case 'RISK_REASON_CODE':{
+   for(const f of x.riskAssessment.findings)if(t.kind==='RISK_REASON_CODE'?f.reasonCodes.includes(t.code):f.code===t.code)hits.push(findingHit(x,f));
+   if(t.kind==='RISK_FINDING_CODE'){
+     const support=supportingHit(x,t.code);
+     if(support)hits.push(support);
+   }
+   break;
+ }
  case 'CONTEXT_RELATION_CODE':for(const r of x.contextAssessment.relations)if(r.code===t.code)hits.push(simple(t.code,r.effect,r.evidenceConfidence,null,{contextRelationIds:[r.relationId],contextFactIds:[...r.contextFactIds]}));break;
  case 'CONTEXT_FACT_CONDITION':for(const f of x.contextAssessment.facts)if(f.sourceClass==='CLIENT_DECLARED'&&f.status==='KNOWN'&&['CASE_contractReference','CASE_collateralInformation','CASE_clientExplanation'].includes(f.semanticCode))hits.push(simple(t.code,f.value,f.confidence,f.semanticCode,{contextFactIds:[f.factId],sourceIds:[...f.sourceIds]}));break;
  case 'FINANCING_CASE_MISSING_FIELD':{const f=x.financingReadiness.caseDefinition.facts.find(f=>f.semanticCode==='CASE_'+t.code);if(!f||f.status!=='KNOWN'||f.value===null||f.value==='UNKNOWN'||f.value==='')hits.push(simple(t.code,f?.value??null,f?.confidence??'UNKNOWN',null,{contextFactIds:f?[f.factId]:[]}));break;}

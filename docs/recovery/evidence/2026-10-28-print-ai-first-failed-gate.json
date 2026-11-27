@@ -1,0 +1,15 @@
+{
+  "version": "PRESCORE-RECOVERY-BUILD-GATE-1",
+  "lockSha256": "8fc1937ff193da2f1cd7504442f2dd64e44559306a0f77d2775af83e17f9deb1",
+  "scope": "BUILD_REGRESSION_ONLY",
+  "browserAccepted": false,
+  "liveAccepted": false,
+  "status": "FAILED",
+  "checks": [
+    {
+      "stage": "REGRESSION",
+      "status": "FAILED",
+      "exitCode": 1
+    }
+  ]
+}

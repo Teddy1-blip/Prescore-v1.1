@@ -1,0 +1,230 @@
+import { annualPeriod, parseFinancialPeriod } from '../credit-engine/financial-analysis/periods.ts';
+import { date, field, issue, type Field, type Input, type Line } from './fields.ts';
+const months = ['январ', 'феврал', 'март', 'апрел', 'ма', 'июн', 'июл', 'август', 'сентябр', 'октябр', 'ноябр', 'декабр'];
+type Span = {
+  start: string;
+  end: string;
+};
+function monthNumber(s: string) {
+  return months.findIndex(m => s.toLowerCase().startsWith(m)) + 1;
+}
+function calendarDay(s: string) {
+  const plain = date(s.trim());
+  if (plain) return plain;
+  const m = s.trim().match(/^(\d{1,2})\s+([а-яё]+)\s+((?:19|20)\d\d)(?:\s*г\.?)?$/i);
+  return m ? date(m[3] + '-' + String(monthNumber(m[2])).padStart(2, '0') + '-' + m[1].padStart(2, '0')) : null;
+}
+function reportingSpan(text: string): Span | null {
+  const raw = text.replace(/[–—]/g, '-').trim();
+  // Russian interim/annual statements label columns with cumulative month ranges.
+  const monthsRange=raw.match(/^(?:за\s+)?январь\s*-\s*([а-яё]+)\s+(20\d{2})(?:\s*г\.?)?$/i);
+  if(monthsRange){
+    const month=monthNumber(monthsRange[1]),year=Number(monthsRange[2]);
+    if([3,6,9,12].includes(month))return {start:year+'-01-01',end:new Date(Date.UTC(year,month,0)).toISOString().slice(0,10)};
+  }
+  const range = raw.match(/(?:^|за\s+)(\d\d\.\d\d\.\d{4})\s*-\s*([а-яё]+)\s+(\d{4})/i);
+  if (range) {
+    const start = date(range[1]),
+      month = monthNumber(range[2]);
+    if (!start || !month) return null;
+    const end = new Date(Date.UTC(Number(range[3]), month, 0)).toISOString().slice(0, 10);
+    return start <= end ? {
+      start,
+      end
+    } : null;
+  }
+  const parsed = parseFinancialPeriod(raw);
+  if (parsed.from && parsed.to) return {
+    start: parsed.from,
+    end: parsed.to
+  };
+  const y = raw.match(/^(?:за\s+)?((?:19|20)\d{2})(?:\s*(?:г\.?|год))?$/i);
+  if (!y) return null;
+  const a = annualPeriod(Number(y[1]));
+  return {
+    start: a.from!,
+    end: a.to!
+  };
+}
+type Observation = {
+  line: Line;
+  value: string | null;
+};
+function choose(input: Input, observed: Observation[], conflict: string): Field<string> {
+  if (!observed.length) return field(input.id);
+  const first = observed[0];
+  if (observed.some(x => x.value === null || x.line.confidence === 'LOW' || x.value !== first.value)) {
+    issue(input, 'REVIEW', conflict, first.line.page);
+    return field(input.id, {
+      ...first.line,
+      confidence: 'LOW'
+    });
+  }
+  return field(input.id, first.line, first.value);
+}
+function readUnit(s: string) {
+  const words = s.match(/(?:тыс(?:яч[аи]?)?\.?\s*(?:руб(?:лей|ля|ль)?\.?|₽)|млн\.?\s*(?:руб(?:лей|ля|ль)?\.?|₽)|руб(?:лей|ля|ль)?\.?|₽)/gi) ?? [];
+  const units = new Set(words.map(word => /тыс/i.test(word) ? 'тыс. ₽' : /млн/i.test(word) ? 'млн ₽' : '₽'));
+  if (units.size > 1) return null;
+  const okei = s.match(/(?:ОКЕИ\W*|^\s*)(3\s*8\s*[345])(?:\s|$)/i)?.[1]?.replace(/\s/g, '');
+  const byWord = [...units][0] ?? null;
+  const byCode = okei ? ({
+    '383': '₽',
+    '384': 'тыс. ₽',
+    '385': 'млн ₽'
+  } as Record<string, string>)[okei] : null;
+  return byWord && byCode && byWord !== byCode ? null : byWord ?? byCode;
+}
+export function financialMetadata(input: Input) {
+  const dates: Observation[] = [],
+    periods: Observation[] = [],
+    starts: Observation[] = [],
+    ends: Observation[] = [],
+    priors: Observation[] = [],
+    units: Observation[] = [];
+  const forms = new Map<string, Line>();
+  function addSpan(line: Line, raw: string) {
+    const span = reportingSpan(raw);
+    periods.push({
+      line,
+      value: span ? span.start + '/' + span.end : null
+    });
+    starts.push({
+      line,
+      value: span?.start ?? null
+    });
+    ends.push({
+      line,
+      value: span?.end ?? null
+    });
+  }
+  for (const [lineIndex, line] of input.lines.entries()) {
+    const t = line.text.trim();
+    // Financial form headings frequently wrap on image-only OCR pages.
+    // Restore ONLY adjacent printed words from the SAME physical page,
+    // without joining unrelated rows, different pages or client entities.
+    const following=input.lines.slice(lineIndex+1,lineIndex+3);
+    const samePage=following.filter(l=>l.page===line.page&&l.confidence!=='LOW').map(l=>l.text.trim());
+    const titleCandidates=[t, t+' '+(samePage[0]??''),t+' '+samePage.join(' ')].map(s=>s.replace(/\s+/g,' ').trim());
+    const title=titleCandidates.map(s=>s.match(/^(бухгалтерский баланс|отч[её]т о финансовых результатах|balance sheet|income statement)(?=\s|$)/i)).find(Boolean)??null;
+    const okud = t.match(/форма по ОКУД\s*[:|]?\s*(071000[12])\b/i);
+    if (okud) forms.set(okud[1] === '0710001' ? 'Бухгалтерский баланс' : 'Отчёт о финансовых результатах', line);
+    if (title) forms.set(/баланс|balance/i.test(title[1]) ? 'Бухгалтерский баланс' : 'Отчёт о финансовых результатах', line);
+    const unit = t.match(/^(?:единица измерения|ед\.?\s*изм\.?|unit)\s*[:|]?\s*(.*)$/i);
+    if (unit) {
+      let rawUnit = unit[1].trim();
+      let source = line;
+      if (!rawUnit) {
+        // Sparse OCR can split the printed unit into label, words and OKEI code.
+        // Only contiguous same-page evidence may restore the missing line.
+        const next = input.lines[lineIndex + 1];
+        const candidate = next?.text.trim().replace(/\s+/g, ' ') ?? '';
+        const standalone = /^(?:в\s+)?(?:(?:тыс(?:\.|яч[аи]?)?|млн\.?)\s*)?(?:руб(?:лей|ля|ль)?\.?|₽)$/iu;
+        if (next?.page === line.page && next.confidence !== 'LOW' && standalone.test(candidate)) {
+          rawUnit = candidate;
+          const qualifier = input.lines[lineIndex + 2];
+          const qualifierText = qualifier?.text.trim() ?? '';
+          if (qualifier?.page === line.page && /^по\s+ОКЕИ(?:\s|:|$)/iu.test(qualifierText)) {
+            const inlineCode = /^по\s+ОКЕИ\s*:?\s*3\s*8\s*[345]$/iu.test(qualifierText);
+            const detachedCode = input.lines[lineIndex + 3];
+            const codeSeparate = /^по\s+ОКЕИ\s*:?$/iu.test(qualifierText) &&
+              detachedCode?.page === line.page && detachedCode.confidence !== 'LOW' &&
+              /^3\s*8\s*[345]$/.test(detachedCode.text.trim());
+            if (qualifier.confidence === 'LOW' || !inlineCode && !codeSeparate) rawUnit = '';
+            else rawUnit += ' ' + qualifierText + (codeSeparate ? ' ' + detachedCode!.text.trim() : '');
+          }
+          if (rawUnit) source = {...line, text:line.text.trim() + ' ' + rawUnit};
+        }
+      }
+      units.push({line:source,value:readUnit(rawUnit)});
+    }
+    const label = t.match(/^(?:отч[её]тная дата|на дату|reporting date)\s*[:|]\s*(.+)$/i);
+    const heading = t.split(/\s+коды\s*$/i)[0].trim();
+    const on = heading.match(/^на\s+(.+)$/i);
+    if (label) dates.push({
+      line,
+      value: calendarDay(label[1])
+    });else if (on && (calendarDay(on[1]) || /^\d{1,2}\s+[а-яё]+\s+\d{4}(?:\s*г\.?)?$/i.test(on[1]))) dates.push({
+      line,
+      value: calendarDay(on[1])
+    });
+    const explicit = t.match(/^(?:отч[её]тный период|reporting period)\s*[:|]\s*(.+)$/i);
+    if (explicit) addSpan(line, explicit[1]);else if (/^за\s/i.test(heading) && !/(?:\sза\s|\sна\s)/i.test(heading) && reportingSpan(heading)) addSpan(line, heading);
+    const prior = t.match(/^(?:предыдущая дата|предыдущий период|previous date)\s*[:|]\s*(.+)$/i);
+    if (prior) priors.push({
+      line,
+      value: calendarDay(prior[1])
+    });
+    // Historical FNS/KND 0710099 codes: 21/31/33 (quarter/half-year/
+    // nine months), 34 (year). Later formats also use 91/92/93.
+    // Only an explicit code AND a printed year can establish a period:
+    // https://www.garant.ru/products/ipo/prime/doc/70007791/
+    // https://base.garant.ru/414388745/f7ee959fd36b5699076b35abf4f52c5c/
+    const fns = t.match(/отч[её]тный период\s*\(код\)\*?\s+([239]\s*\d)\s+отч[её]тный год\s+((?:\d\s*){4})$/i);
+    if (fns) {
+      const code = fns[1].replace(/\s/g, '');
+      const year = fns[2].replace(/\s/g, '');
+      const monthsByCode: Record<string, number> = {
+        '21': 3, '31': 6, '33': 9, '34': 12,
+        '91': 3, '92': 6, '93': 9,
+      };
+      const month = monthsByCode[code];
+      if (month && /^(?:19|20)\d{2}$/.test(year)) {
+        const end = new Date(Date.UTC(Number(year), month, 0)).toISOString().slice(0, 10);
+        const endMonth = ({3:'Март',6:'Июнь',9:'Сентябрь',12:'Декабрь'} as Record<number,string>)[month];
+        addSpan(line, month === 12 ? year : 'Январь - ' + endMonth + ' ' + year);
+        dates.push({line, value:end});
+      }
+    }
+  }
+  const formLines = [...forms.values()];
+  const form = field(input.id, formLines[0], [...forms.keys()].join(' / ') || null);
+  if (!dates.length && forms.size === 1 && forms.has('Отчёт о финансовых результатах')) dates.push(...ends);
+  const asOf = choose(input, dates, 'REPORTING_DATE_AMBIGUOUS'),
+    period = choose(input, periods, 'REPORTING_PERIOD_AMBIGUOUS');
+  const start = choose(input, starts, 'REPORTING_PERIOD_AMBIGUOUS'),
+    end = choose(input, ends, 'REPORTING_PERIOD_AMBIGUOUS');
+  const unit = choose(input, units, 'UNIT_AMBIGUOUS');
+  if (!form.value) issue(input, 'REVIEW', 'FORM_UNKNOWN');
+  if (!asOf.value) issue(input, 'REVIEW', 'REPORTING_DATE_MISSING');
+  if (!unit.value) issue(input, 'REVIEW', 'UNIT_UNKNOWN');
+  if (!period.value && (!asOf.value || forms.has('Отчёт о финансовых результатах'))) issue(input, 'REVIEW', 'REPORTING_PERIOD_MISSING');
+  if (asOf.value && end.value && asOf.value !== end.value) issue(input, 'INVALID', 'REPORTING_PERIOD_CONFLICT');
+  return {
+    form,
+    forms: [...forms].map(([name, line]) => field(input.id, line, name)),
+    reporting_date: asOf,
+    reporting_period: periods.length ? period : asOf,
+    period_start: start,
+    period_end: ends.length ? end : asOf,
+    previous_period: choose(input, priors, 'COMPARATIVE_DATE_AMBIGUOUS'),
+    unit,
+    raw_unit: field(input.id, units[0]?.line, unit.value ? units[0]?.line.text.replace(/^.*?[:|]\s*/, '') : null)
+  };
+}
+export function columnPeriod(header: string, asOf: string | null) {
+  const explicit = calendarDay(header.replace(/^(?:на|current|previous)\s+/i, ''));
+  if (explicit) return {
+    start: null,
+    end: explicit
+  };
+  const span = reportingSpan(header.replace(/^на\s+(?=\d{4})/i, 'за '));
+  if (span) return span;
+  if (!asOf) return null;
+  if (/отч[её]тную дату/i.test(header)) return {
+    start: null,
+    end: asOf
+  };
+  if (/предыдущего года/i.test(header) && /31 декабря/i.test(header)) return {
+    start: null,
+    end: Number(asOf.slice(0, 4)) - 1 + '-12-31'
+  };
+  if (/^за (?:отч[её]тный|предыдущий) год/i.test(header)) {
+    const y = Number(asOf.slice(0, 4)) - (header.toLowerCase().includes('предыдущий') ? 1 : 0);
+    return {
+      start: y + '-01-01',
+      end: y + '-12-31'
+    };
+  }
+  return null;
+}

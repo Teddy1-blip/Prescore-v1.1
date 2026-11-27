@@ -1,0 +1,79 @@
+name: Deliver Prescore RC3 staging to Amvera
+on:
+  push:
+    branches: [staging]
+permissions:
+  contents: read
+concurrency:
+  group: prescore-amvera-staging-live-v3
+  cancel-in-progress: true
+env:
+  NEXT_TELEMETRY_DISABLED: '1'
+jobs:
+  validate-and-deliver:
+    if: github.repository == 'Teddy1-blip/Prescore-v1.1' && github.ref == 'refs/heads/staging'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Python runtime
+        run: python3 --version
+      - name: Authenticated read-only Amvera access check
+        env:
+          AMVERA_USERNAME: ${{ secrets.AMVERA_USERNAME }}
+          AMVERA_PASSWORD: ${{ secrets.AMVERA_PASSWORD }}
+          AMVERA_GIT_URL: ${{ secrets.AMVERA_GIT_URL }}
+        run: python3 scripts/deploy/amvera.py access
+      - name: Delivery script tests
+        run: python3 -m unittest discover -s tests/deploy -p 'test_*.py'
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build exact staging tree
+        run: |
+          npm run build
+          node scripts/release/package-runtime.mjs
+      - name: Validate deployable artifact
+        run: npm run validate:artifact
+      - name: Read Amvera history and prepare exact source tree
+        env:
+          AMVERA_USERNAME: ${{ secrets.AMVERA_USERNAME }}
+          AMVERA_PASSWORD: ${{ secrets.AMVERA_PASSWORD }}
+          AMVERA_GIT_URL: ${{ secrets.AMVERA_GIT_URL }}
+          GH_READ_TOKEN: ${{ github.token }}
+        run: python3 scripts/deploy/amvera.py prepare
+      - name: Verify staging rollback bundle
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP']) / 'prescore-delivery' / 'backup'
+          manifest = root / 'manifest.json'
+          bundle = root / 'amvera-history.bundle'
+          if not manifest.is_file() or not bundle.is_file() or bundle.stat().st_size == 0:
+              raise SystemExit('Amvera rollback bundle missing; deployment blocked')
+          print('STAGING_HISTORY_BACKUP_VERIFIED')
+          PY
+      - name: Fast-forward Amvera master only
+        env:
+          AMVERA_USERNAME: ${{ secrets.AMVERA_USERNAME }}
+          AMVERA_PASSWORD: ${{ secrets.AMVERA_PASSWORD }}
+          AMVERA_GIT_URL: ${{ secrets.AMVERA_GIT_URL }}
+          GH_READ_TOKEN: ${{ github.token }}
+        run: python3 scripts/deploy/amvera.py push
+      - name: Verify live staging runtime
+        env:
+          GH_READ_TOKEN: ${{ github.token }}
+          AMVERA_USERNAME: ${{ secrets.AMVERA_USERNAME }}
+          AMVERA_PASSWORD: ${{ secrets.AMVERA_PASSWORD }}
+          AMVERA_GIT_URL: ${{ secrets.AMVERA_GIT_URL }}
+        run: python3 scripts/deploy/amvera.py live

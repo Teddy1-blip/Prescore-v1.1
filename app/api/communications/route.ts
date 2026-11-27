@@ -1,3 +1,6 @@
+import {brokerApplicationSQL, documentAccessSQL} from '../../../lib/auth/broker-authorizations';
+import {safeErrorText} from '../../../lib/release/security';
+import {getRuntime} from "../../../lib/platform/runtime";
 import { requireApiUser, unauthorized } from "../api-auth";
 
 type PreparedStatement = {
@@ -11,7 +14,7 @@ type RuntimeDatabase = {
 };
 
 async function database() {
-  const { env } = await import("cloudflare:workers");
+  const env = getRuntime();
   return env.DB as unknown as RuntimeDatabase;
 }
 
@@ -37,8 +40,8 @@ export async function GET(request: Request) {
     const db = await database();
     await ensureSchema(db);
     if (!user.isAdmin) {
-      const access = await db.batch([db.prepare(`SELECT d.id FROM deals d WHERE d.id = ? AND d.owner_email = ?
-        UNION SELECT a.id FROM agent_applications a JOIN agent_accounts u ON u.agent_code = a.agent_code WHERE a.id = ? AND u.user_email = ? LIMIT 1`).bind(applicationId, user.email, applicationId, user.email)]);
+      const access = await db.batch([db.prepare(`SELECT d.id FROM deals d JOIN analyses owner_analysis ON owner_analysis.id=d.analysis_id AND owner_analysis.owner_email=d.owner_email AND owner_analysis.archive_state='ACTIVE' WHERE d.id = ? AND d.owner_email = ?
+        UNION SELECT a.id FROM agent_applications a CROSS JOIN (SELECT ?::text AS email) actor WHERE a.id = ? AND ${brokerApplicationSQL('a','actor.email')} LIMIT 1`).bind(applicationId, user.email, user.email, applicationId)]);
       if (!access[0]?.results?.length) return Response.json({ error: "Нет доступа к чату заявки" }, { status: 403 });
     }
     const result = await db.batch([db.prepare(`SELECT id, application_id AS applicationId, author_role AS authorRole,
@@ -46,7 +49,7 @@ export async function GET(request: Request) {
       FROM application_messages WHERE application_id = ? ORDER BY created_at ASC LIMIT 500`).bind(applicationId)]);
     return Response.json({ messages: result[0]?.results ?? [] });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Не удалось загрузить сообщения" }, { status: 500 });
+    return Response.json({ error: safeErrorText(error, "Не удалось загрузить сообщения") }, { status: 500 });
   }
 }
 
@@ -56,24 +59,25 @@ export async function POST(request: Request) {
   try {
     const body = await request.json() as { applicationId?: string; authorRole?: string; authorName?: string; message?: string; documentId?: string };
     const applicationId = String(body.applicationId || "").trim();
-    const authorRole = ["client", "broker", "admin"].includes(String(body.authorRole)) ? String(body.authorRole) : "client";
-    const authorName = String(body.authorName || (authorRole === "broker" ? "Брокер" : "Клиент")).trim().slice(0, 120);
-    const message = String(body.message || "").trim().slice(0, 4000);
+    const authorRole = user.isAdmin ? "admin" : user.roles.includes("AGENT") ? "broker" : "client";
+    const authorName = String(user.displayName || user.email).trim().slice(0, 120);
+    const message = String(body.message || "").trim();if(message.length>4000)return Response.json({error:"MESSAGE_TOO_LONG"},{status:413});
     const documentId = String(body.documentId || "").trim();
     if (!applicationId || (!message && !documentId)) return Response.json({ error: "Введите сообщение или прикрепите документ" }, { status: 400 });
     const db = await database();
     await ensureSchema(db);
     if (!user.isAdmin) {
-      const access = await db.batch([db.prepare(`SELECT d.id FROM deals d WHERE d.id = ? AND d.owner_email = ?
-        UNION SELECT a.id FROM agent_applications a JOIN agent_accounts u ON u.agent_code = a.agent_code WHERE a.id = ? AND u.user_email = ? LIMIT 1`).bind(applicationId, user.email, applicationId, user.email)]);
+      const access = await db.batch([db.prepare(`SELECT d.id FROM deals d JOIN analyses owner_analysis ON owner_analysis.id=d.analysis_id AND owner_analysis.owner_email=d.owner_email AND owner_analysis.archive_state='ACTIVE' WHERE d.id = ? AND d.owner_email = ?
+        UNION SELECT a.id FROM agent_applications a CROSS JOIN (SELECT ?::text AS email) actor WHERE a.id = ? AND ${brokerApplicationSQL('a','actor.email')} LIMIT 1`).bind(applicationId, user.email, user.email, applicationId)]);
       if (!access[0]?.results?.length) return Response.json({ error: "Нет доступа к чату заявки" }, { status: 403 });
     }
+    if(documentId){const linked=await db.batch([db.prepare(`SELECT d.id FROM client_documents d CROSS JOIN (SELECT ?::text AS email) actor WHERE d.id=? AND d.application_id=? AND (?=1 OR ${documentAccessSQL('d','actor.email')})`).bind(user.email,documentId,applicationId,user.isAdmin?1:0)]);if(!linked[0]?.results.length)return Response.json({error:'DOCUMENT_ASSOCIATION_REQUIRED'},{status:403});}
     const id = crypto.randomUUID();
     const createdAt = new Date().toISOString();
     await db.prepare(`INSERT INTO application_messages (id, application_id, author_role, author_name, message, document_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`)
       .bind(id, applicationId, authorRole, authorName, message, documentId, createdAt).run();
     return Response.json({ message: { id, applicationId, authorRole, authorName, message, documentId, createdAt } }, { status: 201 });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Не удалось отправить сообщение" }, { status: 500 });
+    return Response.json({ error: safeErrorText(error, "Не удалось отправить сообщение") }, { status: 500 });
   }
 }

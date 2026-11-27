@@ -49,6 +49,56 @@ test("parses a modern SB BKI obligation into the normalized portfolio", () => {
   assert.equal(report.summary.debtServiceQuality, "Без просрочек");
 });
 
+test("marks SB positional outstanding amounts as estimated provenance", () => {
+  const report = parseCreditHistoryText(`
+Иванов Иван Иванович
+Рейтинг и портрет заёмщика
+Главное о кредитной истории
+Банк: Тест Банк  Действующий
+Потребительский кредит
+Взяли на таких условиях
+200 000.00 ₽ с 01.01.2025 по 01.01.2028
+Выплатили
+80 000.00 ₽
+Осталось выплатить
+120 000.00 ₽
+120 000.00 ₽
+Полная стоимость кредита
+19.5 % годовых или 30 000.00 ₽
+Среднемесячный платёж
+9 000.00 ₽
+Текущая просрочка
+нет
+Своевременность платежей по договору
+2026 0 0 0
+Закрытые кредиты, займы, карты
+Отчёт от 2 августа 2026
+ИНН 123456789012
+`, "sb.pdf");
+  const obligation = report.obligations[0];
+  assert.equal(obligation.outstandingPrincipal, 120000);
+  assert.equal(obligation.fieldProvenance?.principalOutstanding?.origin, "ESTIMATED");
+  assert.match(obligation.fieldProvenance?.principalOutstanding?.reference ?? "", /позиционная эвристика/i);
+});
+
+test("lowers BKI parser confidence when an obligation is found but key fields are missing", () => {
+  const report = parseCreditHistoryText(`
+Иванов Иван Иванович
+Рейтинг и портрет заёмщика
+Главное о кредитной истории
+Банк: Тест Банк  Действующий
+Потребительский кредит
+Текущая просрочка
+нет данных
+Закрытые кредиты, займы, карты
+Отчёт от 2 августа 2026
+ИНН 123456789012
+`, "sb-incomplete.pdf");
+  assert.equal(report.obligations.length, 1);
+  assert.ok(report.parserConfidence < 94);
+  assert.ok(report.warnings.some((warning) => /не распознан/i.test(warning)));
+});
+
 test("keeps unavailable legacy NBKI balance, payment and rate as missing", () => {
   const report = parseCreditHistoryText(`
 Субъект: Кредитная история юридического лица

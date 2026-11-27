@@ -1,0 +1,146 @@
+{
+  "CL-RU-BUS-001": {
+    "historical": "74a2f216bee7ec7c5016bbce52d8a51c91cae43e85e50b7f6f3a4cdecde5077d",
+    "fresh": "8cb3621b86e9bcbd2b11fc10a72dcfc628b675c9b26546541791177cb14967da",
+    "model": "c557788a7629eaa6644bea9ee609de4d1e4297ac96ae25406669aee76bc939f3",
+    "historicalModel": "c557788a7629eaa6644bea9ee609de4d1e4297ac96ae25406669aee76bc939f3"
+  },
+  "CL-RU-BUS-002": {
+    "historical": "07b6f82a5b9d54cffb91e7499b5298a9e46e64a1dae004b3f5cda32c80f581fd",
+    "fresh": "a21a6a56bdcd06837c0c22911983b226c158d52549492bf70ac6a5acca74df05",
+    "model": "1846c67460ccf18984f257b7b281f90a34fd25c0ee4fea82a970655329f27452",
+    "historicalModel": "1846c67460ccf18984f257b7b281f90a34fd25c0ee4fea82a970655329f27452"
+  },
+  "CL-RU-BUS-003": {
+    "historical": "12d0a2feaebedea0de67b1443248d3f43302de9e17f62694dca397de3f9b4542",
+    "fresh": "cec56297db112bc39c75aea298ef66e2b68d0823bb3fa754539aad0e9641e065",
+    "model": "cd32ac00c60d6999d090e344ccbf9b039a8ab2989dfec39ff7506b8bdd00d748",
+    "historicalModel": "cd32ac00c60d6999d090e344ccbf9b039a8ab2989dfec39ff7506b8bdd00d748"
+  },
+  "CL-RU-BUS-004": {
+    "historical": "5293a5f988250b1fd9051aa770f75b823fa28979664cdd12affbc5223b5fc664",
+    "fresh": "783afafbb29b8ddcbf67a5edd476b2fa2d8b26fe5d767263ca1225fd8de01650",
+    "model": "8b4e16860b8d3b17be9dbd4d59ab8d94d6719668f80024ddb4acc4d6529d9ec4",
+    "historicalModel": "8b4e16860b8d3b17be9dbd4d59ab8d94d6719668f80024ddb4acc4d6529d9ec4"
+  },
+  "CL-RU-BUS-005": {
+    "historical": "b5ba9a4c9db541c9d27a6d811fe52d374199aadd69cd1f12988422ea16962483",
+    "fresh": "0cce834c069e3065882ce024b61c7071ee366b85206adbc7d89c0c1e058c9287",
+    "model": "e6ef4fe1d70e76d9324342a93471bc5e00c41366c3267715c079ea30acc2036b",
+    "historicalModel": "e6ef4fe1d70e76d9324342a93471bc5e00c41366c3267715c079ea30acc2036b"
+  },
+  "CL-RU-BUS-006": {
+    "historical": "9b9d3cb3b118b7a14f2ba3ca30cb0798ea563b72dbc3d192947e1af0837a32ef",
+    "fresh": "bcf823937173a49753cd38e91323f2e90839410cf6f7dfce2f85389a31bbfa7b",
+    "model": "d29496d890052fd9a9c07b586df7d103e5ef5d21518481eb71c6e090f4ad66cb",
+    "historicalModel": "d29496d890052fd9a9c07b586df7d103e5ef5d21518481eb71c6e090f4ad66cb"
+  },
+  "CL-RU-BUS-007": {
+    "historical": "634cefec9f505d16c0d94db855acd91e0e1c6cba98a667d39e394cc78c31a36f",
+    "fresh": "520b3930bb3bd2c8a1a22f281e923fcd0f46bb810b80f5cb1147eb9e5d396cc8",
+    "model": "c92008cf16f230348ee33f94f1be3da5a5109600a7b121d687d061a2f0e71f95",
+    "historicalModel": "c92008cf16f230348ee33f94f1be3da5a5109600a7b121d687d061a2f0e71f95"
+  },
+  "CL-RU-BUS-008": {
+    "historical": "c65f0b64087093086c3ea20404017a53b63d149efed8ca8c59d31d02d2e64eb5",
+    "fresh": "251eb203defe55da7c68743f183e36c33380ecb2c828b2a50d6ad1c99c996a02",
+    "model": "66e8bebd75ed1261d1093171e981d588ed045829d72bfcce97c1a94fe009e0da",
+    "historicalModel": "66e8bebd75ed1261d1093171e981d588ed045829d72bfcce97c1a94fe009e0da"
+  },
+  "CL-RU-BUS-009": {
+    "historical": "1cbf225fc111215c3841d6ba6adc5e1d606a6b0304062e0e2809f835831f5809",
+    "fresh": "b4084cae0d1a0582da9153e8cc32afb0f58d5559ef33af715e9ba6f51dce3888",
+    "model": "4193b7a7b34cfade314774dd5bcb27c10e339579f443b0b4a6a3eab33653789d",
+    "historicalModel": "4193b7a7b34cfade314774dd5bcb27c10e339579f443b0b4a6a3eab33653789d"
+  },
+  "CL-RU-BUS-010": {
+    "historical": "1bb307a847ae84172b8fc4d50dfad6585f2bd9de344de7f0595ef50313436bc8",
+    "fresh": "bf71a0ea78de44b9c2590b4982d0cd4cae9dfe31f1568afdb84ee1a6f4d7902b",
+    "model": "6f446aebba681951bcadcc7fac0cf60a03febeb713c35f52cb312f1ce1652813",
+    "historicalModel": "6f446aebba681951bcadcc7fac0cf60a03febeb713c35f52cb312f1ce1652813"
+  },
+  "CL-RU-BUS-011": {
+    "historical": "63271fe3a50815a19300901a294fbfeade87eb21bf5e6e01bd9a71445161d47a",
+    "fresh": "22f12d87d5d0576603331cb79a1823a8c903f828f139425107e44744c46266bc",
+    "model": "87db956509eb51dcd6de1978253ac589787e2b35581544c283a25d53b4aa79d7",
+    "historicalModel": "87db956509eb51dcd6de1978253ac589787e2b35581544c283a25d53b4aa79d7"
+  },
+  "CL-RU-BUS-012": {
+    "historical": "3727a7f53510665d530b22f99cc1e5b134a931da6bbba573b8295178c443d320",
+    "fresh": "f0123d97f008fae42efffc9cf04d344002fc206e6ff0cdd02ff7aa5983035540",
+    "model": "2dfab725a7da9068fa8441b89a9062910e10af85a037039060cc194fb3c4ed44",
+    "historicalModel": "2dfab725a7da9068fa8441b89a9062910e10af85a037039060cc194fb3c4ed44"
+  },
+  "CL-RU-BUS-013": {
+    "historical": "14fbe70b7678d5f7a1f144ec0113830e77e70ba1bdccc9eea6fe0dd693da1795",
+    "fresh": "bca9ba1aa7045669e25e9198581a6573b7a7d455749c5e52952add6bc4d77575",
+    "model": "a87690928b0abf652e20815d9f6e3991a7811c50ee365134415f09eb9e607b3f",
+    "historicalModel": "a87690928b0abf652e20815d9f6e3991a7811c50ee365134415f09eb9e607b3f"
+  },
+  "CL-RU-BUS-014": {
+    "historical": "5717d9f1f9dc20f3dad95f8dbbc78b0e7e0f89c0cdc426e9013abc1579d0e404",
+    "fresh": "420c795ce1d16504fb305d9a9b0893c2319f4246752fa2acc58120fc1b77222e",
+    "model": "e529f75a97a976437ddeba7b3e37071d9941faed194d5011cbf1938d7b8f1392",
+    "historicalModel": "e529f75a97a976437ddeba7b3e37071d9941faed194d5011cbf1938d7b8f1392"
+  },
+  "CL-RU-BUS-015": {
+    "historical": "1641cffa744676e3aafc23eff5c1ac60cd9979bc0f3fdb9f4597362e9cda6a08",
+    "fresh": "0fd25204e2b46c67a62ed97e94555a59a289b2036fb2a8a1607d43c4d576cd1e",
+    "model": "34dd615708e6b5da2a8c254fa0c843ee78354b5b4866512bca6e445b2c5751bb",
+    "historicalModel": "34dd615708e6b5da2a8c254fa0c843ee78354b5b4866512bca6e445b2c5751bb"
+  },
+  "CL-RU-BUS-016": {
+    "historical": "e2c255b3aa21406e2bbe5be9abb0c662fa914d37de55b2839fd260ef6ca49c14",
+    "fresh": "eadb7c6ee7b5c53ab7ab9281f8e6fe34b432da22fe996237d95bcb665f150b74",
+    "model": "6e447d4ffee9d729865f1e02ef293b8dbadada835257d4749e79c80d57df3eda",
+    "historicalModel": "6e447d4ffee9d729865f1e02ef293b8dbadada835257d4749e79c80d57df3eda"
+  },
+  "CL-RU-BUS-017": {
+    "historical": "eb0c97d82201ba7dc7baf699caeede6b443dbc3d6a4ddae0b5faf3216d32fd17",
+    "fresh": "c7311291d63d3008f89e06da97be3e554157572d424cecf41a952e99eeee9f6f",
+    "model": "dae2e1a18afff2fb0095239fccad67335f76d57d580a652af94e38b7248061f2",
+    "historicalModel": "dae2e1a18afff2fb0095239fccad67335f76d57d580a652af94e38b7248061f2"
+  },
+  "CL-RU-BUS-018": {
+    "historical": "16b6b157d1c6493acc121aa8bf03f9ff1a6787ac112767769b0cea46c9c91e2b",
+    "fresh": "ba183822408c7f8e0f961ef1d5cfa7d2de4f15cc995824ee424b83c09b5a20f6",
+    "model": "d60815e5d9610b7d5e7604e49df003c0bcb3c975c43bee53bc985ea6c231b486",
+    "historicalModel": "d60815e5d9610b7d5e7604e49df003c0bcb3c975c43bee53bc985ea6c231b486"
+  },
+  "CL-RU-BUS-019": {
+    "historical": "488251954250ce3a8e7b73f0dbfa5a55a7ffcebe92bf9b9690611feed94de138",
+    "fresh": "ceb8990821783ebb747c3a25881e72a13e1414fa9f54fc840b394db32a5a0d7b",
+    "model": "16c02e2ee1a4ac91b92cccb64bbcd5c66d4683a6ad7fe06bfa6b23700fa21c00",
+    "historicalModel": "16c02e2ee1a4ac91b92cccb64bbcd5c66d4683a6ad7fe06bfa6b23700fa21c00"
+  },
+  "CL-RU-BUS-020": {
+    "historical": "68da6b091fe63c6608312017c0a89b47a6b6a1e15b53c3b7e7652bbfb17832c1",
+    "fresh": "6ac50345c52f3f1af13b2abcccbb5fbadb43bcda060b5036c7565cd8abf3be02",
+    "model": "823f79f6036e63a3c50cb5428f59a7d7fc6f2cd73ff1942c162ea5067c703358",
+    "historicalModel": "823f79f6036e63a3c50cb5428f59a7d7fc6f2cd73ff1942c162ea5067c703358"
+  },
+  "CL-RU-BUS-021": {
+    "historical": "5d0df4c06e3ea04d25a2d6415cb7c18f9a0706d925a8d2430af5e228c18103bb",
+    "fresh": "f8547f3dad26439839c9387d2f1ccea60facb1aa67eefb908cde2df814452f1a",
+    "model": "44097d2eff79d1800a54c5d88c7057255d5ead9433847b030bbd03a25f6099e8",
+    "historicalModel": "44097d2eff79d1800a54c5d88c7057255d5ead9433847b030bbd03a25f6099e8"
+  },
+  "CL-RU-BUS-022": {
+    "historical": "84cb664731c8a57d608f90756b23d709ca66f2aff0150408119d2426b955f677",
+    "fresh": "2afd713940b217e748254e03d2026949c07590533cac7aa0a72ef0fd53c60cef",
+    "model": "eec3302992645d5a03010490f213c1172dd52d2a304be15c0af768c9fa1b5d3b",
+    "historicalModel": "eec3302992645d5a03010490f213c1172dd52d2a304be15c0af768c9fa1b5d3b"
+  },
+  "CL-RU-BUS-023": {
+    "historical": "48a4afa603522a11a98fd845ea620c4931b2f21ed0ffe29e3fe90dbc9b74cd98",
+    "fresh": "307d80ea0dfffb1ecd9196a9d540092dc8b9e6db28b1c8f38e411bfa16f2dca0",
+    "model": "272702edf17059f27c5558b28b9a774dc8ba016ee3dd0be8a3c7262dfa1e92fd",
+    "historicalModel": "272702edf17059f27c5558b28b9a774dc8ba016ee3dd0be8a3c7262dfa1e92fd"
+  },
+  "CL-RU-BUS-024": {
+    "historical": "3e8dd193060741a068e58507b6ef07d06cb26ac62e7ac12585beecb940f4e8ae",
+    "fresh": "7485985cb54b9b1121a7ccc2a4299b5a8aedf61749b972f2fd9c71750e2a4a51",
+    "model": "17c745694a16d99dc84d3c22a0546a287d165f5386e040052ba70b7554d8eb32",
+    "historicalModel": "17c745694a16d99dc84d3c22a0546a287d165f5386e040052ba70b7554d8eb32"
+  }
+}

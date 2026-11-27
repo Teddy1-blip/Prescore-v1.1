@@ -40,4 +40,4 @@ export function entries(){const es=[];const add=(n,title,mutate,expected)=>{cons
  const defect=prior(16);es.push({caseId:'IDX-RU-DEFECT-001',revision:1,title:'Current overdue with reported historical zero',input:defect,expected:{invariants:true,value:849,requiredContributions:['RISK-BKI-CURRENT-OVERDUE'],forbiddenContributions:['RISK-BKI-HISTORICAL-DELINQUENCY'],defect:true}});
  return es;
 }
-export function loadIndexPack(){return {version:INDEX_PACK_VERSION,entries:entries(),fingerprints:JSON.parse(readFileSync(new URL('./fingerprints-v1.json',import.meta.url),'utf8'))};}
+export function loadIndexPack(){return {version:INDEX_PACK_VERSION,entries:entries(),fingerprints:JSON.parse(readFileSync(new URL('./fingerprints-stage5.json',import.meta.url),'utf8'))};}

@@ -1,0 +1,36 @@
+/* Scoped to the existing /dashboard source screen; no new shell or global UI rules. */
+.ws .pc-passport{--passport-ink:#143847;--passport-teal:#087e79;--passport-line:#dfebe6;--passport-soft:#f4f9f6;max-width:100%;display:grid;gap:18px;color:var(--passport-ink)}
+.ws .pc-passport-heading{display:flex;justify-content:space-between;align-items:center;gap:22px;padding:28px 28px 25px;background:linear-gradient(112deg,#143b45 0%,#124b4e 67%,#16635a 100%);color:#fff;border-radius:15px;box-shadow:0 12px 30px rgba(9,51,55,.12)}
+.ws .pc-passport-heading h2{color:#fff;font-size:clamp(24px,3vw,34px);font-weight:660;line-height:1.2;letter-spacing:-.04em;margin:6px 0 0}
+.ws .pc-passport-eyebrow{font-size:10px;color:#b2e5dc;font-weight:760;letter-spacing:.15em}
+.ws .pc-passport-heading p{color:#d4e7e6;margin:8px 0 0;font-size:13px;line-height:1.45}
+.ws .pc-passport-tags{display:flex;flex-wrap:wrap;gap:7px;margin-top:17px}
+.ws .pc-passport-tag{font-size:11px;padding:5px 10px;border-radius:6px;background:#ffffff1e;color:#dcf1eb;border:1px solid #ffffff25}
+.ws .pc-passport-tag.attention{background:#fff2d821;color:#ffecc1}
+.ws .pc-passport-upload{color:#124448;background:#e0fff6;border:1px solid #c5f3e7;border-radius:8px;font-size:13px;font-weight:730;white-space:nowrap;min-height:44px;padding:10px 17px}
+.ws .pc-passport-upload:hover{background:white}
+.ws .pc-passport-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.ws .pc-passport-section{background:#fff;border:1px solid var(--passport-line);border-radius:12px;padding:23px 23px 21px;min-width:0;box-shadow:0 4px 15px rgba(6,41,49,.025)}
+.ws .pc-passport-section-title{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin-bottom:15px}
+.ws .pc-passport-section-title h3{margin:0;font-weight:700;font-size:17px;line-height:1.3;color:#193c49}
+.ws .pc-passport-section-title>span{font-size:10px;background:#e9f4ef;color:#34786b;border-radius:100px;padding:5px 9px;white-space:nowrap}
+.ws .pc-passport-facts{margin:0;display:grid;gap:0}
+.ws .pc-passport-facts>div{display:grid;grid-template-columns:minmax(120px,38%) 1fr;gap:12px;padding:10px 0;border-bottom:1px solid #edf3f0;font-size:12px}
+.ws .pc-passport-facts>div:last-child{border-bottom:0}
+.ws .pc-passport-facts dt{color:#72878e}
+.ws .pc-passport-facts dd{font-weight:620;color:#234956;margin:0;overflow-wrap:anywhere}
+.ws .pc-passport-section p{font-size:13px;color:#516b76;line-height:1.65;max-width:none;margin:7px 0}
+.ws .pc-passport-section .pc-passport-lead{font-weight:540;color:#294d59}
+.ws .pc-passport-section .pc-passport-muted{font-size:12px;color:#70848c}
+.ws .pc-passport-attentions{display:grid;gap:9px;margin-top:14px}
+.ws .pc-passport-attentions article{border-left:3px solid #dca553;padding:7px 0 7px 12px;background:#fffbf6}
+.ws .pc-passport-attentions strong{font-size:12px;color:#604b2b}
+.ws .pc-passport-attentions small{font-size:10px;color:#988465}
+.ws .pc-passport-actions{counter-reset:passport;list-style:none;padding:0;margin:0;display:grid;gap:10px}
+.ws .pc-passport-actions li{counter-increment:passport;position:relative;padding:4px 0 8px 32px;border-bottom:1px solid #edf3f0}
+.ws .pc-passport-actions li:last-child{border-bottom:0}
+.ws .pc-passport-actions li:before{content:counter(passport);position:absolute;left:0;top:4px;border-radius:6px;background:#e8f4f0;color:#206e61;font-size:11px;font-weight:750;width:22px;height:22px;display:grid;place-items:center}
+.ws .pc-passport-actions strong{font-size:13px;color:#224552}
+.ws .pc-passport-actions small{font-size:11px;color:#78918f}
+@media(max-width:780px){.ws .pc-passport-heading{flex-direction:column;align-items:flex-start;padding:23px 20px}.ws .pc-passport-grid{grid-template-columns:1fr}.ws .pc-passport-section{padding:19px 16px}}
+@media(max-width:420px){.ws .pc-passport-heading h2{font-size:24px}}

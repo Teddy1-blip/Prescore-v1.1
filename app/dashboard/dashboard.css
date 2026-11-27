@@ -930,3 +930,98 @@
   .ps-metric-grid > .ps-card:last-child { border-bottom: 0; }
   .ps-report-tabs { gap: 16px; }
 }
+
+/* Powens corporate theme: client workspace surface */
+.ps-shell,
+.approved-client {
+  --ps-canvas: #f8fafc;
+  --ps-surface: #ffffff;
+  --ps-deep: #0f172a;
+  --ps-primary: #2563eb;
+  --ps-primary-hover: #1d4ed8;
+  --ps-accent: #2563eb;
+  --ps-accent-soft: #eff6ff;
+  --ps-text: #0f172a;
+  --ps-text-secondary: #475569;
+  --ps-text-tertiary: #64748b;
+  --ps-border: #e2e8f0;
+  --ps-border-strong: #cbd5e1;
+  --ps-success: #059669;
+  --ps-success-soft: #ecfdf5;
+  --ps-warning: #d97706;
+  --ps-danger: #dc2626;
+  --ps-radius-md: 12px;
+  --ps-radius-lg: 12px;
+  --ps-shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.05), 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+.ps-shell {
+  background: #f8fafc;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+.ps-sidebar {
+  background: #0f172a;
+  color: #94a3b8;
+}
+.ps-sidebar nav button {
+  color: #94a3b8;
+}
+.ps-sidebar nav button:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+}
+.ps-sidebar nav button.active {
+  background: rgba(37, 99, 235, 0.16);
+  color: #ffffff;
+}
+.ps-sidebar nav button.active::before {
+  background: #3b82f6;
+}
+.ps-sidebar nav button.active svg {
+  color: #3b82f6;
+}
+.ps-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05), 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+.ps-content table,
+.ps-content table th,
+.ps-content table td,
+.ps-kpi > strong,
+.ps-metric-grid strong {
+  font-variant-numeric: tabular-nums;
+}
+.ps-ai-shell {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05), 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+.ps-ai-shell > header {
+  background: #0f172a;
+}
+.ps-ai-shell > header > svg {
+  color: #3b82f6;
+}
+.ps-ai-messages {
+  background: #f8fafc;
+}
+.ps-ai-messages article.user {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+.ps-ai-shell form button {
+  background: #2563eb;
+}
+.ps-ai-shell form button:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+.ps-warning {
+  border-left-color: #d97706;
+  color: #b45309;
+}
+.ps-critical-banner {
+  border-left-color: #dc2626;
+  color: #b91c1c;
+}

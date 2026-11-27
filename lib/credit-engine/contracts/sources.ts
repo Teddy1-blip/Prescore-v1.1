@@ -22,6 +22,10 @@ export type KnownValue<T> =
   | { status: "UNKNOWN"; value: null };
 
 export type SourceEnvelope = {
+  provider?: "CHECKO" | "EIS_DIRECT" | "FNS_DIRECT";
+  upstream?: import("../../external/records.ts").Authority;
+  direct?: boolean;
+  informationDate?: string|null;
   sourceId: string;
   sourceType: SourceType;
   status: SourceStatus;
@@ -39,6 +43,10 @@ export type SourceEnvelope = {
   warnings: string[];
   rawReference?: string;
   contentHash?: string;
+  companyName?: string;
+  periodBasis?: "DECLARED" | "OBSERVED_ONLY";
+  ownerEvidence?: {rule:"DECLARED_ACCOUNT_AND_PARTY_INN";matchingSides:number};
+  accountCoverage?: Array<{ account: string; periodFrom?: string; periodTo?: string }>;
   fieldAvailability?: Record<string, ValueKnowledge>;
 };
 
@@ -79,6 +87,7 @@ export type StatementScreeningResult = {
 };
 
 export type DeduplicationDiagnostic = {
+  conflicts?: import("../normalization/conflicts.ts").TransactionConflict[];
   originalCount: number;
   removedCount: number;
   retainedCount: number;
@@ -121,6 +130,10 @@ export type DataIntegritySummary = {
 export type AnalysisSourceManifest = {
   bankStatements: SourceEnvelope[];
   bfo?: SourceEnvelope;
+  /** Active uploaded financial periods; replacement retires only the matching period. */
+  financialUploads?: SourceEnvelope[];
+  /** Inactive versions retained for source receipts, never passed to calculation. */
+  retiredFinancialUploads?: {source: SourceEnvelope; replacedBy: string; replacedAt: string}[];
   quarterly?: SourceEnvelope;
   bki?: SourceEnvelope;
   external?: SourceEnvelope[];
@@ -147,7 +160,7 @@ export type InfrastructureVersions = {
 };
 
 export const INFRASTRUCTURE_VERSIONS: InfrastructureVersions = {
-  statementParser: "PRESCORE-STATEMENT-PARSER-1",
+  statementParser: "PRESCORE-STATEMENT-PARSER-2",
   transactionNormalizer: "PRESCORE-TX-NORMALIZER-1",
   transactionClassifier: "PRESCORE-TX-CLASSIFIER-1",
   economicClassifier: "PRESCORE-TX-CLASSIFIER-2.0.0-SHADOW",

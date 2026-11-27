@@ -10,7 +10,7 @@ export const identityRule: ReconciliationRule = { code: "REC-ID", evaluate(data)
   // Snapshot identity may disagree with its envelope. Preserve that conflict too.
   const seen = new Set(identities.map(f => stableId(f.sourceIds, f.companyInn)));
   for (const f of data.facts) {
-    if (f.sourceType === "BKI" || !f.companyInn || seen.has(stableId(f.sourceIds, f.companyInn))) continue;
+    if (f.semanticCode === "BANK_CUSTOMER_ADVANCES" || f.sourceType === "BKI" || !f.companyInn || seen.has(stableId(f.sourceIds, f.companyInn))) continue;
     seen.add(stableId(f.sourceIds, f.companyInn));
     identities.push({ ...f, factId: stableId(f.sourceIds, "SNAPSHOT_COMPANY_INN", f.companyInn), semanticCode: "COMPANY_INN", value: f.companyInn, unit: "TEXT" });
   }

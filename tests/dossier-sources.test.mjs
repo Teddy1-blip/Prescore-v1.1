@@ -1,0 +1,228 @@
+import test from 'node:test';
+import {createHash} from 'node:crypto';
+import {zipSync,strToU8} from 'fflate';
+import assert from 'node:assert/strict';
+import {mkdtemp,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import path from 'node:path';
+import {createWorkspaceRuntime} from './fixtures/workspace-runtime.mjs';
+import {financialFile,corporateBkiFile} from './fixtures/polish-sources.mjs';
+import {syntheticPdf} from '../scripts/release/pdf-fixture.mjs';
+import {readDossierReport} from '../lib/workspace/dossier-report.ts';
+import {statementFixture} from './fixtures/block1-statements.mjs';
+import {corporation,checkoDouble} from './fixtures/stage4-external.mjs';
+
+test('Private company dossier, independent inputs and canonical combined analysis',async t=>{
+ const old=process.env.PRESCORE_STORAGE_ROOT,root=await mkdtemp(path.join(tmpdir(),'prescore-source-test-'));
+ process.env.PRESCORE_STORAGE_ROOT=root;
+ const provider=checkoDouble(),rt=await createWorkspaceRuntime({checkoFetch:provider.fetcher});
+ const inn=corporation;
+ async function post(body,user){
+   return rt.request('/api/dossier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)},user);
+ }
+ await t.test('ordinary accounts cannot opt into the owner workspace via request data',async()=>{
+   const result=await rt.request('/api/dossier?ownerTestWorkspace=true',{headers:{'x-owner-test':'true'}},rt.stranger);
+   assert.equal(result.status,200);
+   assert.equal((await result.json()).ownerTestWorkspace,false);
+ });
+ async function attach(id,kind,file,user){
+   const form=new FormData();form.set('id',id);form.set('kind',kind);form.set('file',file);
+   return rt.request('/api/dossier',{method:'POST',body:form},user);
+ }
+ async function read(id,user){const r=await rt.request('/api/dossier?id='+id,{},user);assert.equal(r.status,200);return r.json();}
+ async function save(user){const r=await post({action:'save',inn},user);assert.equal(r.status,200);return (await r.json()).company.id;}
+ const bank=async(dossierId,user)=>rt.request('/api/analysis',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({dossierId,statements:[{fileName:'bank.txt',text:statementFixture({inn})}]})},user);
+ function enablePersonalPreview(t,user){
+   const settings={PRESCORE_RUNTIME_MODE:'release-candidate',PRESCORE_OWNER_FULL_PREVIEW:'1',PRESCORE_BASE_URL:'https://prescore.ru',PRESCORE_OWNER_PREVIEW_EMAIL_SHA256:createHash('sha256').update(user.email).digest('hex')};
+   for(const [key,value] of Object.entries(settings)){const old=process.env[key];process.env[key]=value;t.after(()=>{if(old===undefined)delete process.env[key];else process.env[key]=old;});}
+ }
+ const actor=n=>({roles:['CLIENT'],email:'source'+n+'@workspace.test'});
+ try{
+  let id,publicOwner=actor(1);
+  await t.test('authenticated INN-only preview does not create a private record',async()=>{
+    const r=await post({action:'preview',inn},publicOwner);assert.equal(r.status,200);const result=await r.json();
+    assert.equal(result.profile.inn,inn);assert.ok(result.profile.company.name);assert.equal(result.profile.finances,undefined);
+    assert.deepEqual((await (await rt.request('/api/dossier',{},publicOwner)).json()).companies,[]);
+    id=(await (await post({action:'save',inn,attachPublic:true},publicOwner)).json()).company.id;
+    assert.equal((await read(id,publicOwner)).publicProfile.inn,inn);
+  });
+  await t.test('BFO-only supports two periods and authentic originals without bank rows',async()=>{
+    const user=actor(2);let id='';
+    for(const year of [2024,2025]){
+      const file=financialFile(inn,'csv',{period:year+' год'});const r=await attach(id,'BFO',file,user);assert.equal(r.status,201,await r.clone().text());id=(await r.json()).dossierId;assert.ok(id);
+      assert.equal((await attach(id,'BFO',file,user)).status,200);
+    }
+    const d=await read(id,user);assert.equal(d.versions.length,0);assert.equal(d.sources.length,2);assert.equal(d.financial.history.length,2);assert.equal(d.entitlement,'BASIC');
+    assert.equal(d.financial.history[0].groups[0].metrics.find(m=>m.key==='REVENUE').value,1200000);
+    const issued=await post({action:'issue-report',id},user);assert.equal(issued.status,200,await issued.clone().text());
+    const snapshot=(await issued.json()).snapshot,company={id,inn},pool={query:(q,v)=>rt.pg.query(q,v)};
+    const model=await readDossierReport(pool,{email:user.email,isAdmin:false},company,snapshot);assert.equal(model.financial.history.length,2);
+    assert.equal(await readDossierReport(pool,{email:publicOwner.email,isAdmin:false},company,snapshot),undefined);
+    await attach(id,'BFO',financialFile(inn,'csv',{period:'2023 год'}),user);
+    assert.equal((await readDossierReport(pool,{email:user.email,isAdmin:false},company,snapshot)).financial.history.length,2);
+    const url='/api/documents?download='+d.sources[0].documentId;
+    assert.equal((await rt.request(url,{},publicOwner)).status,404);
+    const bytes=await (await rt.request(url,{},user)).text();assert.match(bytes,/2024/);
+    assert.equal((await attach(id,'BFO',financialFile('500100732259'),user)).status,400);
+  });
+  await t.test('the report pins the selected decision and rechecks company, owner and entitlement on reopening',async()=>{
+    const user=rt.owner,companyId=await save(user);
+    const analysis=(await (await bank(companyId,user)).json()).analysis;
+    await rt.full(analysis.id);
+    const workspace=async()=> (await rt.request('/api/workspace-model?analysisId='+analysis.id,{},user)).json();
+    const ws=await workspace();
+    assert.ok(ws.full?.revisionAvailable);
+    const decision={analysisId:analysis.id,snapshotId:ws.full.report.meta.snapshot.snapshotId};
+    const request={action:'issue-report',id:companyId,decision};
+    const response=await post(request,user);
+    assert.equal(response.status,200,await response.clone().text());
+    const snapshot=(await response.json()).snapshot;
+    const url='/api/dossier?id='+companyId+'&snapshotId='+snapshot;
+    const {model}=await (await rt.request(url,{},user)).json();
+    assert.deepEqual(model.decision,decision);
+    assert.deepEqual(model.claims,[]);
+    const company={id:companyId,inn};
+    const {ownedReportDecision}=rt.load('lib/workspace/dossier-report.ts');
+    const owner={...user,isAdmin:false};
+    const original=await ownedReportDecision(rt.db,owner,company,decision);
+    assert.deepEqual(original.model,ws.full.report);
+    assert.ok(original.banking?.facts.length);
+    const page=rt.load('app/dashboard/report-v2/page.tsx').default;
+    const responsePage=()=>rt.asUser(user,()=>page({searchParams:Promise.resolve({dossierId:companyId,snapshotId:snapshot,print:'1'})}));
+    const printed=await responsePage();
+    assert.equal(printed.props.model.meta.snapshot.snapshotId,decision.snapshotId);
+    assert.equal(printed.props.banking.facts.length,original.banking.facts.length);
+    assert.deepEqual(printed.props.appendix.decision,decision);
+    await attach(companyId,'BFO',financialFile(inn,'csv',{period:'2024 год'}),user);
+    const updated=await workspace();
+    assert.notEqual(updated.full.report.meta.snapshot.snapshotId,decision.snapshotId);
+    assert.equal((await ownedReportDecision(rt.db,owner,company,decision)).model.meta.snapshot.snapshotId,decision.snapshotId);
+    assert.deepEqual((await (await rt.request(url,{},user)).json()).model,model);
+    const company2=(await (await post({action:'save',inn:'500100732259'},user)).json()).company;
+    assert.equal((await post({...request,id:company2.id},user)).status,404);
+    assert.equal((await post(request,rt.stranger)).status,404);
+    assert.equal((await post({...request,decision:{...decision,snapshotId:'sha256:'+'0'.repeat(64)}},user)).status,404);
+    assert.equal((await rt.request('/api/dossier?id='+company2.id+'&analysisId='+analysis.id,{},user)).status,404);
+    assert.deepEqual((await (await rt.request('/api/dossier?id='+companyId+'&analysisId='+analysis.id,{},user)).json()).claims,[]);
+    await rt.db.prepare("UPDATE analysis_entitlements SET tier='FREE' WHERE analysis_id=?").bind(analysis.id).run();
+    assert.equal(await ownedReportDecision(rt.db,owner,company,decision),null);
+    await assert.rejects(responsePage,/NOT_FOUND/);
+  });
+  await t.test('BFO-only recommendations and 7/30/60 keep claim, source and approved rule',async()=>{
+    const user={email:'full-source@workspace.test',roles:['CLIENT','ADMIN']},id=await save(user);
+    const year=new Date().getUTCFullYear()-1;
+    await attach(id,'BFO',financialFile(inn,'csv',{period:year+' год',profit:'-250'}),user);
+    const d=await read(id,user);assert.equal(d.entitlement,'FULL');
+    for(const stage of ['expert','recommendation','plan']){
+      const c=d.claims.find(c=>c.stage===stage&&c.ruleIds.length&&c.sourceIds.some(s=>d.sources.some(r=>r.id===s)));
+      assert.ok(c,'missing BFO '+stage);assert.ok(c.id);assert.ok(c.text);
+    }
+    assert.ok(!d.claims.some(c=>c.stage==='stop'));
+  });
+  await t.test('BANK-only keeps version identity and uses existing cash analysis',async()=>{
+    const user=actor(3),r=await bank(undefined,user);assert.equal(r.status,200,await r.clone().text());
+    const a=(await r.json()).analysis,d=await read(await save(user),user);
+    assert.equal(d.versions[0].id,a.id);assert.ok(d.sources.some(s=>s.kind==='BANK_STATEMENT'));
+  });
+  await t.test('accepted bank originals preserve their exact bytes once per eligible dossier',async t=>{
+    const user=actor(31),id=await save(user);
+    t.mock.method(rt.load('lib/platform/staging-access.ts'),'stagingOwnerWorkspace',email=>email===user.email);
+    const bytes=Buffer.from('\uFEFF'+statementFixture({inn}),'utf8');
+    const submit=(who,dossierId,statements)=>rt.request('/api/analysis',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({dossierId,statements})},who);
+    const accepted={fileName:'original.txt',base64:bytes.toString('base64')};
+    for (let attempt=0;attempt<2;attempt++){
+      const result=await submit(user,id,[accepted,{...accepted,fileName:'renamed.txt'},{fileName:'invalid.txt',base64:'YWJj'}]);
+      assert.equal(result.status,200,await result.clone().text());
+    }
+    const sources=(await read(id,user)).sources.filter(s=>s.kind==='BANK_STATEMENT');
+    assert.equal(sources.length,1);
+    assert.ok(sources[0].documentId);
+    const download='/api/documents?download='+sources[0].documentId;
+    assert.deepEqual(Buffer.from(await (await rt.request(download,{},user)).arrayBuffer()),bytes);
+    assert.equal((await rt.request(download,{},rt.stranger)).status,404);
+    assert.equal((await rt.pg.query('SELECT id FROM client_documents WHERE owner_email=$1',[user.email])).rows.length,1);
+    const ordinary=actor(32),ordinaryId=await save(ordinary);
+    assert.equal((await submit(ordinary,ordinaryId,[accepted])).status,200);
+    assert.equal((await read(ordinaryId,ordinary)).sources[0].documentId,null);
+    assert.equal((await submit(user,ordinaryId,[accepted])).status,409);
+  });
+  await t.test('BKI-only resolves contractual debt through BLK-06.5 without capacity',async t=>{
+    const user=actor(4),id=await save(user),r=await attach(id,'BKI',corporateBkiFile(inn),user);assert.equal(r.status,201,await r.clone().text());
+    assert.deepEqual((await read(id,user)).obligations,[]);
+    enablePersonalPreview(t,user);
+    const d=await read(id,user);assert.equal(d.obligations.length,1);assert.equal(d.obligations[0].principal,120000);assert.equal(d.capacity,undefined);assert.equal(d.versions.length,0);
+  });
+  await t.test('credit agreement review and calendar persist with ownership, provenance and idempotency',async t=>{
+    const user=actor(6),id=await save(user),doc=new File([syntheticPdf(['Кредитный договор','Кредитор: Банк Тест','Заёмщик: Компания Тест','ИНН заёмщика: '+inn,'Номер договора: Т-001','Дата договора: 2025-01-01','Валюта: RUB','Кредитный лимит: 100000','Вид кредита: кредитная линия'])],'credit.pdf');
+    assert.equal((await post({action:'calendar',id},user)).status,403);
+    enablePersonalPreview(t,user);
+    const before=await attach(id,'CREDIT_DOCUMENT',doc,user);assert.equal(before.status,201,await before.clone().text());
+    let d=await read(id,user);assert.equal(d.obligations.length,0);const review=d.reviews[0];assert.equal(review.status,'READY_FOR_REVIEW');assert.ok(review.documentId);
+    const recognize={action:'recognize',id,sourceId:review.id,layout:'SINGLE'};
+    assert.equal((await post(recognize,publicOwner)).status,404);
+    for(const key of ['borrower','borrower_inn','creditor','agreement_number','agreement_date','currency','credit_limit','product_type']){
+      const f=review.fields.find(f=>f.key===key);assert.ok(f?.value,key);
+      const change={action:'verify-field',id,sourceId:review.id,field:key,value:f.value};
+      assert.equal((await post(change,publicOwner)).status,404);
+      const approved=await post(change,user);assert.equal(approved.status,200,await approved.clone().text());
+    }
+    d=await read(id,user);assert.equal(d.obligations.length,1);assert.equal(d.obligations[0].principal,null);assert.equal(d.obligations[0].limit,100000);
+    assert.equal((await post(recognize,user)).status,409);
+    assert.equal(d.reviews[0].verified.credit_limit.page,1);assert.equal((await attach(id,'CREDIT_DOCUMENT',doc,user)).status,200);
+    const hdr='ИНН организации;Дата остатка;Счёт;Контрагент;Договор;Дебет, руб.;Кредит, руб.;Вид задолженности';
+    await attach(id,'DEBT_LEDGER',new File([hdr+'\n'+inn+';2026-01-31;66.01;Банк Тест;Т-001;;80000;Основной долг'],'debt.csv'),user);
+    const enriched=await read(id,user);assert.equal(enriched.obligations.length,1);assert.equal(enriched.obligations[0].limit,100000);assert.equal(enriched.ledger[0].credit,80000);
+    const event={action:'calendar',id,key:crypto.randomUUID(),entry:{direction:'IN',amount:500,date:'2027-01-02',purpose:'Поставка',source:'Договор Т',certainty:'SCENARIO'}};
+    assert.equal((await post(event,publicOwner)).status,404);assert.equal((await post(event,user)).status,200);assert.equal((await post(event,user)).status,200);
+    assert.equal((await post({...event,entry:{...event.entry,amount:600}},user)).status,409);assert.equal((await read(id,user)).calendar.length,1);
+  });
+  await t.test('Word agreements preserve native paragraph evidence without treating paragraphs as PDF pages',async t=>{
+    const user=actor(8),id=await save(user);enablePersonalPreview(t,user);
+    const lines=['Кредитный договор','Кредитор: Банк Тест','Заёмщик: Компания Тест','ИНН заёмщика: '+inn,'Номер договора: 12345','Дата договора: 01.01.2025','Валюта: RUB','Лимит кредита: 100000'];
+    const xml='<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'+lines.map(s=>'<w:p><w:r><w:t>'+s+'</w:t></w:r></w:p>').join('')+'</w:body></w:document>';
+    const doc=new File([zipSync({'word/document.xml':strToU8(xml)})],'agreement.docx');
+    const upload=await attach(id,'CREDIT_DOCUMENT',doc,user);assert.equal(upload.status,201,await upload.clone().text());
+    const data=await read(id,user),review=data.reviews[0];assert.equal(review.anchor,'paragraph');
+    const field=review.fields.find(f=>f.key==='creditor');assert.equal(field.page,2);assert.equal(field.fragment,lines[1]);
+    assert.equal(data.obligations.length,0);
+    assert.equal((await post({action:'recognize',id,sourceId:review.id,layout:'SINGLE'},user)).status,400);
+  });
+  await t.test('confirmed financial rows require identity, dates, unit and source evidence',async()=>{
+    const {reviewedFinancial}=await import('../lib/workspace/reviewed-financial.ts');
+    const verified=Object.fromEntries(Object.entries({company_inn:inn,period_start:'2025-01-01',period_end:'2025-12-31',statement_date:'2025-12-31',statement_unit:'тыс. ₽','2110':'1250'}).map(([k,value])=>[k,{value,page:1,fragment:k+' '+value}]));
+    const input={envelope:{sourceType:'OTHER',sourceId:'fixture:review',companyInn:inn,status:'PROCESSING',receivedAt:'2026-02-01'},review:{status:'READY_FOR_REVIEW',version:'fixture',fields:Object.entries(verified).map(([key,value])=>({key,label:key,value:value.value,unit:'',page:value.page,fragment:value.fragment,status:'READ'}))},verified};
+    const result=reviewedFinancial(input,inn);assert.equal(result.income.REVENUE.value,1250000);assert.equal(result.income.NET_PROFIT.value,null);
+    assert.equal(reviewedFinancial(input,'500100732259'),undefined);assert.equal(reviewedFinancial({...input,verified:{...verified,statement_unit:undefined}},inn),undefined);
+    assert.equal(reviewedFinancial({...input,review:{status:'READY_FOR_REVIEW',version:'fixture'}},inn),undefined);
+  });
+  const ledger=new File(['ИНН организации;Дата остатка;Счёт;Контрагент;Договор;Дебет, руб.;Кредит, руб.\n'+inn+';2025-12-31;62.01;Покупатель;Д-1;1800;'],'balances.csv');
+  await t.test('OSV-only preserves missing credit balance and tenant boundaries',async()=>{
+    const user=actor(5),id=await save(user);const r=await attach(id,'COUNTERPARTIES',ledger,user);assert.equal(r.status,201);
+    const d=await read(id,user);assert.equal(d.ledger[0].debit,1800);assert.equal(d.ledger[0].credit,null);assert.equal(d.versions.length,0);
+    assert.equal((await rt.request('/api/dossier?id='+id,{},publicOwner)).status,404);
+    assert.equal((await attach(id,'COUNTERPARTIES',ledger,publicOwner)).status,404);
+  });
+  await t.test('combine in a single owner dossier, reload and keep historical report sources',async t=>{
+    enablePersonalPreview(t,publicOwner);
+    for(const [kind,file] of [['BFO',financialFile(inn)],['BKI',corporateBkiFile(inn)],['COUNTERPARTIES',ledger]]){
+      const r=await attach(id,kind,file,publicOwner);assert.equal(r.status,201,await r.clone().text());
+    }
+    const r=await bank(id,publicOwner);assert.equal(r.status,200,await r.clone().text());const analysis=(await r.json()).analysis;
+    const d=await read(id,publicOwner);assert.equal(d.versions[0].id,analysis.id);assert.equal(d.obligations.length,1);assert.equal(d.ledger.length,1);
+    assert.deepEqual(new Set(d.sources.map(s=>s.kind)),new Set(['CHECKO','BANK_STATEMENT','BFO','BKI','COUNTERPARTIES']));
+    const saved=JSON.parse((await rt.pg.query('SELECT payload FROM analyses WHERE id=$1',[analysis.id])).rows[0].payload);
+    assert.ok(saved.financialAnalysisV2.history.length);assert.equal(saved.creditPortfolioV1.obligations.length,1);
+    assert.equal((await save(publicOwner)),id);
+  });
+ }finally{await rt.close();if(old===undefined)delete process.env.PRESCORE_STORAGE_ROOT;else process.env.PRESCORE_STORAGE_ROOT=old;await rm(root,{recursive:true,force:true});}
+});
+
+test('overview uses only unambiguous receivables from the selected register',async()=>{
+ const {buyerBalanceSummary}=await import('../lib/workspace/settlement-events.ts');
+ const one={side:'buyers',remaining:1800,conflict:false,paid:0,asOf:'2025-12-31'};
+ assert.equal(buyerBalanceSummary([{...one,side:'suppliers'}]),null);
+ assert.equal(buyerBalanceSummary([one]).amount,1800);
+ assert.equal(buyerBalanceSummary([{...one,remaining:0}]).amount,0);
+ assert.equal(buyerBalanceSummary([{...one,conflict:true}]).amount,null);
+ assert.equal(buyerBalanceSummary([one,{...one,asOf:'2025-01-01'}]).amount,null);
+});

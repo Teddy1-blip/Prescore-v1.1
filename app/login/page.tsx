@@ -1,14 +1,16 @@
+import {safeReturnPath} from "../../lib/auth/contracts";
+import {Credentials} from "./credentials";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowLeft, ArrowRight, BriefcaseBusiness, Check, LockKeyhole, ShieldCheck, UserRound } from "lucide-react";
-import { chatGPTSignInPath, getChatGPTUser } from "../chatgpt-auth";
+import { getChatGPTUser } from "../chatgpt-auth";
 import "../prescore-ui-v1.css";
 
 export const dynamic = "force-dynamic";
 
-export default async function LoginPage({ searchParams }: { searchParams?: Promise<{ returnTo?: string; role?: string }> }) {
+export default async function LoginPage({ searchParams }: { searchParams?: Promise<{ returnTo?: string; role?: string; verified?: string; error?: string }> }) {
   const params = await searchParams;
-  const requested = params?.returnTo === "/agent" || params?.role === "agent" ? "/agent" : params?.returnTo === "/admin" ? "/admin" : "/dashboard";
+  const requested = safeReturnPath(params?.returnTo || (params?.role === "agent" ? "/agent" : "/dashboard"));
   const user = await getChatGPTUser();
   const hasExplicitDestination = Boolean(params?.returnTo || params?.role);
   if (user && hasExplicitDestination) redirect(requested);
@@ -25,9 +27,9 @@ export default async function LoginPage({ searchParams }: { searchParams?: Promi
         <div className="login-role">
           <Link className={requested === "/dashboard" ? "active" : ""} href="/dashboard"><UserRound /><span><b>Кабинет клиента</b><small>Анализ, отчёты и заявки</small></span><ArrowRight /></Link>
           <Link className={requested === "/agent" ? "active" : ""} href="/agent"><BriefcaseBusiness /><span><b>Кабинет агента</b><small>CRM, воронка, клиенты и куратор</small></span><ArrowRight /></Link>
-          <Link className={requested === "/admin" ? "active admin" : "admin"} href="/admin"><ShieldCheck /><span><b>ЛК администратора</b><small>Модули, показатели, доступы и заявки</small></span><ArrowRight /></Link>
         </div>
-        <Link className="button button-primary login-submit" href={user ? requested : chatGPTSignInPath(requested)}>{user ? "Открыть выбранный кабинет" : "Продолжить безопасный вход"} <ArrowRight /></Link>
+        {(requested.split(/[?#]/)[0] === "/agent" || requested.startsWith("/agent/")) && <p>Уже есть клиентский аккаунт? Войдите с той же почтой и паролем. Затем подтвердите подключение агентского профиля. Повторная регистрация не нужна.</p>}
+        {user ? <Link className="button button-primary login-submit" href={requested}>Открыть выбранный кабинет <ArrowRight /></Link> : <Credentials returnTo={requested} verified={params?.verified === "1" && !params?.error} verificationError={Boolean(params?.error)}/> }
         {user && <p className="login-session-note"><ShieldCheck /> Вы уже авторизованы. Выберите нужный кабинет выше.</p>}
         <div className="demo-note"><ShieldCheck /><span><b>Доступ изолирован.</b> Данные одного пользователя не выдаются другому кабинету.</span></div>
         <small className="login-legal">Продолжая, вы подтверждаете ознакомление с <Link href="/privacy">Политикой конфиденциальности</Link>. Согласия на обработку данных и получение БКИ запрашиваются отдельно в соответствующих сценариях.</small>

@@ -1,7 +1,9 @@
+import {cachedProfile} from "../../../lib/external/checko-profile";
+import {safeErrorText} from '../../../lib/release/security';
+import {getRuntime} from "../../../lib/platform/runtime";
 import { evaluateBankRoutes, type BankRoute } from "../../../lib/bank-offers";
 import { buildUnifiedRiskContext } from "../../../lib/risk-context";
 import type { AnalysisResult } from "../../../lib/prescore";
-import type { CompanyProfileData } from "../../../lib/company-profile";
 import type { FinancingNeed, FundingKind } from "../../../lib/financing-types";
 import { productTermsDate } from "../../../lib/financing-offers";
 import { applyAnalysisControls, filterOfferProducts, readControlState } from "../../../lib/admin-controls";
@@ -37,7 +39,7 @@ export async function GET(request: Request) {
   const need = allowedNeeds.has(rawNeed) ? rawNeed : "auto";
   if (!analysisId) return Response.json({ error: "Не указан анализ" }, { status: 400 });
   try {
-    const { env } = await import("cloudflare:workers");
+    const env = getRuntime();
     const db = env.DB as unknown as Database;
     const access = await readableAnalysis<{ payload: string; companyInn: string; ownerEmail: string }>(db, analysisId, user);
     if (!access) return Response.json({ error: "Анализ не найден в вашем кабинете" }, { status: 404 });
@@ -47,7 +49,7 @@ export async function GET(request: Request) {
     const controls = await readControlState(db);
     const profileRow = await db.prepare("SELECT payload FROM checko_profiles WHERE inn = ? LIMIT 1").bind(row.companyInn).first<{ payload: string }>();
     const analysis = applyAnalysisControls(JSON.parse(row.payload) as AnalysisResult, controls);
-    const profile = profileRow ? JSON.parse(profileRow.payload) as CompanyProfileData : null;
+    const profile = profileRow ? cachedProfile(profileRow.payload,row.companyInn)??null : null;
     const evaluated = evaluateBankRoutes(analysis, profile, need);
     const risk = profile ? buildUnifiedRiskContext(profile, analysis, controls) : null;
     const blocked = Boolean(risk?.finalConclusion.hardStop);
@@ -55,6 +57,6 @@ export async function GET(request: Request) {
     const routes = blocked ? [] : chooseRoutes(controlledRoutes, need);
     return Response.json({ ...evaluated, routes, fullRouteCount: controlledRoutes.length, adminExcludedCount: evaluated.routes.length - controlledRoutes.length, blocked, blockedBy: risk?.globalStops.map((item) => item.title).slice(0, 5) ?? [], termsDate: productTermsDate, riskCode: risk?.finalConclusion.code ?? "PREPARE", readOnly: access.access === "agent" });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Не удалось подобрать маршруты" }, { status: 500 });
+    return Response.json({ error: safeErrorText(error, "Не удалось подобрать маршруты") }, { status: 500 });
   }
 }

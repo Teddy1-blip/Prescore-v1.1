@@ -1,0 +1,5 @@
+{
+  "policyVersion": "PRESCORE-CLIENT-REPORT-POLICY-1.0.0",
+  "policyFingerprint": "client-report-policy:6eadb01baf09441e06eb6ca573980894",
+  "purpose": "Presentation policy governance; semantic expectations are independently authored in the Golden pack."
+}
