@@ -4,6 +4,7 @@ import type { WorkspaceModelV1 } from '../../../../lib/workspace/model';
 import type { Deal, StoredAnalysis } from '../client-operations';
 import { ApprovedShell } from './shell';
 import { CompanyReportButton } from '../company-report-button';
+import { ClientOverview } from '../client-launch-overview';
 import { ApprovedPage } from './pages';
 import { ApplicationForm, type RequestInput } from './application-form';
 import { liveView } from './adapter';
@@ -19,6 +20,7 @@ type Workspace = {
   analyses: StoredAnalysis[];
   companies?: {id:string;inn:string}[];
   model: WorkspaceModelV1 | null;
+  retry: () => void;
   locked: boolean;
   renderPage: boolean;
   onAddCompany?: () => void;
@@ -30,6 +32,8 @@ type Workspace = {
   children: ReactNode;
 };
 type ContentProps = Pick<Workspace, 'view' | 'renderPage' | 'choose' | 'availableViews'> & {
+  model: Workspace['model'];
+  retry: Workspace['retry'];
   data: ReturnType<typeof liveView>;
   focus: string;
   apps: Deal[];
@@ -128,6 +132,8 @@ export function ClientShell(p: Workspace) {
         value={{
           view: p.view,
           renderPage: p.renderPage,
+          model: p.model,
+          retry: p.retry,
           availableViews: p.availableViews,
           choose: p.choose,
           data,
@@ -156,6 +162,8 @@ export function ClientShell(p: Workspace) {
 export function LivePage({ children }: { children: ReactNode }) {
   const c = useContext(ScreenContext);
   if (!c?.renderPage || !Object.hasOwn(pages, c.view)) return <>{children}</>;
+  if (c.view === 'home' && c.model)
+    return <ClientOverview model={c.model} choose={c.choose} retry={c.retry} />;
   const page = c.view as Page;
   const billing = page === 'billing',
     ar = page === 'counterparties';

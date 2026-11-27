@@ -203,7 +203,7 @@ test('Overlapping requests share the viewer quota, and an in-flight answer is wi
         entered();
         await hold;
         return {
-          text: '{"firstEvidence":null}',
+          text: '{"firstEvidence":null,"firstAction":null}',
           inputTokens: 4,
           outputTokens: 1
         };

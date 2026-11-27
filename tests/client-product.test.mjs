@@ -116,3 +116,27 @@ test('the dashboard keeps the incomplete FULL decision visible and limits cash d
   assert.doesNotMatch(render(ClientOverview,props),/data-client-route=/);
  } finally { await rt.close(); }
 });
+
+test('the active client home uses Client dashboard UI and cashflow with Atlas data',async()=>{
+ const rt=await createWorkspaceRuntime();
+ try {
+  const {ClientShell,LivePage}=rt.load('app/components/workspace/approved/live-shell.tsx');
+  const {model}=conclusionFixture();
+  const html=render(ClientShell,{
+   view:'home',choose:()=>{},availableViews:['home','banking','analysis','documents'],
+   selected:undefined,analyses:[],companies:[],model,retry:()=>{},locked:false,renderPage:true,
+   deals:[],select:()=>{},add:async()=>{},context:null,children:React.createElement(LivePage,{
+    children:React.createElement('p',null,'LEGACY_HOME_SHOULD_NOT_RENDER'),
+   }),
+   period:'',periods:[{id:'',label:'Весь период'}],date:'',sources:[],focus:'Собственник',
+   onFocus:()=>{},onCompany:()=>{},onPeriod:()=>{},
+  });
+  assert.match(html,/data-prescore-dashboard="v2"/);
+  assert.match(html,/Главные показатели/);
+  assert.match(html,/Движение денег/);
+  assert.doesNotMatch(html,/LEGACY_HOME_SHOULD_NOT_RENDER/);
+  const client=fs.readFileSync('app/components/workspace/client.tsx','utf8');
+  assert.match(client,/view!=='documents'&&view!=='home'&&sourcesWidget/);
+  assert.doesNotMatch(client,/showApproved&&model&&\(\['home'/);
+ } finally { await rt.close(); }
+});

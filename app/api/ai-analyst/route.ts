@@ -88,14 +88,16 @@ function publicMessage(row: AiMessage) {
   return row;
 }
 
-// A model may prioritize an existing Block 17 claim. Provider prose is never published.
-function evidenceChoice(raw:string, count:number): number | null {
+// The provider can only prioritize existing evidence and a financially grounded report action.
+function analystChoices(raw:string, evidenceCount:number, actionCount:number): {firstEvidence:number|null;firstAction:number|null} {
   const value:unknown=JSON.parse(raw);
-  if (!value || typeof value !== "object" || Object.keys(value).length!==1 || !("firstEvidence" in value)) throw Error("AI_RESPONSE_INVALID");
-  const n=value.firstEvidence;
-  if(n===null)return null;
-  if(typeof n!=="number" || !Number.isSafeInteger(n) || n<0 || n>=count)throw Error("AI_RESPONSE_INVALID");
-  return n;
+  if (!value || typeof value !== "object" || Object.keys(value).length!==2 || !("firstEvidence" in value) || !("firstAction" in value)) throw Error("AI_RESPONSE_INVALID");
+  const index=(n:unknown,count:number):number|null=>{
+    if(n===null)return null;
+    if(typeof n!=="number" || !Number.isSafeInteger(n) || n<0 || n>=count)throw Error("AI_RESPONSE_INVALID");
+    return n;
+  };
+  return {firstEvidence:index(value.firstEvidence,evidenceCount),firstAction:index(value.firstAction,actionCount)};
 }
 
 export async function GET(request: Request) {
@@ -175,10 +177,10 @@ export async function POST(request: Request) {
       {role:"user",content:ANALYST_QUESTIONS[analystTopic(question)]},
     ], () => buildLocalAnalystAnswer(question, workspace),request.signal);
     request.signal.throwIfAborted();
-    let firstEvidence:number|null=null;
+    let firstEvidence:number|null=null,firstAction:number|null=null;
     let mode=generated.mode, failure=generated.failure;
     if(mode==="provider" && financialProjection){
-      try { firstEvidence=evidenceChoice(generated.text,financialProjection.context.explanations.length); }
+      try { const choices=analystChoices(generated.text,financialProjection.context.explanations.length,financialProjection.context.actions?.length??0);firstEvidence=choices.firstEvidence;firstAction=choices.firstAction; }
       catch { mode="rules"; failure="AI_RESPONSE_UNGROUNDED"; }
     }
     if (provider && financialProjection) {
@@ -191,7 +193,8 @@ export async function POST(request: Request) {
       }
     }
     const selectedExplanationIndex = firstEvidence == null ? undefined : financialProjection?.sourceExplanationIndexes[firstEvidence];
-    const answer=buildLocalAnalystAnswer(question,workspace,selectedExplanationIndex);
+    const selectedAction=firstAction==null?undefined:financialProjection?.context.actions?.[firstAction];
+    const answer=buildLocalAnalystAnswer(question,workspace,selectedExplanationIndex,selectedAction);
     const responseExplanations = financialProjection
       ? financialProjection.context.explanations
       : analystTopic(question)==="boundary" ? [] : sanitized.explanations;

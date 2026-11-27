@@ -6,7 +6,7 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import {createWorkspaceRuntime} from './fixtures/workspace-runtime.mjs';
 import {conclusionFixture} from './fixtures/credit-conclusion.mjs';
 
-test('approved core pages expose canonical detail without hidden disclosure', async()=>{
+test('client-first pages keep full source detail available without duplicating every technical section', async()=>{
  const rt=await createWorkspaceRuntime();
  try {
   const {ApprovedPage}=rt.load('app/components/workspace/approved/pages.tsx');
@@ -16,24 +16,26 @@ test('approved core pages expose canonical detail without hidden disclosure', as
   const detail=React.createElement('div',{'data-testid':'canonical-evidence'},'CANONICAL_EVIDENCE_SENTINEL');
   const renderWith = (page, viewData, details=detail) => renderToStaticMarkup(React.createElement(ApprovedPage,{page,data:viewData,focus:'Финансист',go:()=>{},apps:[],details}));
   const render = (page) => renderWith(page, data);
-  for(const page of ['analysis','banking','financing','documents','applications','actions']){
+  for(const page of ['analysis','analyst','financing','documents','applications','actions']){
    const html=render(page);
    assert.match(html,/CANONICAL_EVIDENCE_SENTINEL/,page);
    assert.match(html,/class="approved-canonical-section"/,page);
    assert.doesNotMatch(html,/class="details"/,page);
    assert.match(html,/id="approved-source-operations"/,page);
+   if(page==='analysis')assert.match(html,/Финансово-кредитное заключение Prescore/);
+   if(page==='actions')assert.match(html,/План ближайших действий/);
   }
-  for(const [page,heading] of [
-   ['bfo','Бухгалтерская отчётность'],
-   ['obligations','Кредитный портфель'],
-   ['calendar','Подтверждённые даты платежей'],
-   ['analyst','Кредитный эксперт'],
+  for(const [page,heading,summary] of [
+   ['banking','Движение денег','Показать помесячные показатели, операции и сверку'],
+   ['bfo','Бухгалтерская отчётность','Показать все периоды и показатели БФО'],
+   ['obligations','Кредитный портфель','Показать обязательства, договоры и основания'],
+   ['calendar','Подтверждённые даты платежей','Показать подробный график платежей'],
   ]){
    const html=render(page);
    assert.match(html,new RegExp(heading),page);
-   assert.match(html,/class="approved-canonical-section"/,page);
+   assert.match(html,/class="details"/,page);
+   assert.match(html,new RegExp(summary),page);
    assert.match(html,/CANONICAL_EVIDENCE_SENTINEL/,page);
-   assert.doesNotMatch(html,/class="details"/,page);
   }
   assert.match(render('home'),/class="details"/);
   const analysis=renderWith('analysis',data,null);

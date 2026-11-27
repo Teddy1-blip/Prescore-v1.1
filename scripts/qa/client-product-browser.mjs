@@ -33,7 +33,10 @@ async function verifyApprovedClient(seed){
       await page.locator('.approved-client .head h1').waitFor();
       await page.waitForFunction(()=>!document.body.innerText.includes('Загружаем кабинет'));
       assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'overflow '+view+' '+width);
-      if(view==='home')await page.locator('.client-hero').waitFor();
+      if(view==='home'){
+        await page.locator('[data-prescore-dashboard="v2"]').waitFor();
+        await page.getByRole('heading',{name:'Движение денег'}).waitFor();
+      }
       if(view==='analysis'){
         await page.getByRole('heading',{name:'Финансово-кредитное заключение Prescore',exact:true}).waitFor();
         await page.getByRole('heading',{name:'Риски и стоп-факторы',exact:true}).waitFor();
@@ -47,23 +50,29 @@ async function verifyApprovedClient(seed){
       checks.push('approved '+view+' '+width);
     }
   }
-  for(const [view,action,section,tab] of [
-    ['home','Стоп-факторы','factors','Стоп-факторы и риски'],
-    ['bfo','Рекомендации','recommendations','Рекомендации'],
-    ['obligations','Экспертность','obligations','Кредитный портфель'],
+  await page.setViewportSize({width:1440,height:1000});
+  for(const [view,action,target,tab] of [
+    ['home','Кредитный профиль →','analysis','Кредитный профиль'],
+    ['bfo','Открыть кредитный профиль →','analysis','Кредитный профиль'],
+    ['obligations','Открыть платёжный календарь →','calendar','Платёжный календарь'],
   ]){
     await page.goto(origin+'/dashboard?analysisId='+seed.id+'&view='+view);
-    const button=page.getByRole('button',{name:'Открыть: '+action,exact:true});
+    const button=page.getByRole('button',{name:action,exact:true});
     await button.waitFor();
     const dossierId=new URL(page.url()).searchParams.get('dossierId');
     assert.ok(dossierId);
     await button.click();
-    const active=page.getByRole('navigation',{name:'Разделы анализа',exact:true}).getByRole('button',{name:tab,exact:true});
-    await active.waitFor();
-    assert.equal(await active.getAttribute('aria-current'),'page');
+    await page.waitForFunction(expected=>new URL(location.href).searchParams.get('view')===expected,target);
+    if(target==='analysis'){
+      const active=page.getByRole('navigation',{name:'Разделы кабинета',exact:true}).getByRole('link',{name:tab,exact:true});
+      await active.waitFor();
+      assert.equal(await active.getAttribute('aria-current'),'page');
+    }else{
+      await page.getByRole('heading',{name:'Подтверждённые даты платежей',exact:true}).waitFor();
+    }
     const selected=new URL(page.url()).searchParams;
-    assert.deepEqual([selected.get('dossierId'),selected.get('analysisId'),selected.get('section')],[dossierId,seed.id,section]);
-    checks.push('аналитический переход '+view+' → '+section);
+    assert.deepEqual([selected.get('dossierId'),selected.get('analysisId'),selected.get('view')],[dossierId,seed.id,target]);
+    checks.push('переход '+view+' → '+target);
   }
   await page.goto(origin+'/dashboard?analysisId='+seed.id+'&view=documents#source-quarterly');
   await page.locator('#source-quarterly input[type=file]').waitFor();
@@ -86,7 +95,7 @@ async function verifyApprovedClient(seed){
   await page.goto(origin+'/dashboard?analysisId='+seed.id+'&view=home');
   const toggle=page.getByRole('button',{name:'Открыть меню'});
   await toggle.click();
-  await page.getByRole('navigation',{name:'Разделы кабинета'}).getByRole('link',{name:'Досье клиента',exact:true}).click();
+  await page.getByRole('navigation',{name:'Разделы кабинета'}).getByRole('link',{name:'Документы',exact:true}).click();
   assert.equal(await toggle.getAttribute('aria-expanded'),'false');
   checks.push('approved mobile menu navigation');
   const basic=structuredClone(full);

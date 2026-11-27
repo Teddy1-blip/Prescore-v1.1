@@ -30,7 +30,7 @@ export function ApprovedPage(p: ScreenProps) {
   const detailsRef = useRef<HTMLDetailsElement>(null);
   const hasDetails = Boolean(p.details);
   // Canonical conclusions and document operations remain visible on their actual product pages.
-  const inlineCanonical = (['banking', 'bfo', 'analysis', 'obligations', 'calendar', 'analyst', 'financing', 'documents', 'applications', 'actions'] as Page[]).includes(page);
+  const inlineCanonical = (['analysis', 'analyst', 'financing', 'documents', 'applications', 'actions'] as Page[]).includes(page);
   const canonicalHeadings: Partial<Record<Page, string>> = {
     banking: 'Подробные банковские показатели и отчётность',
     bfo: 'Показатели и динамика бухгалтерской отчётности',
@@ -42,6 +42,13 @@ export function ApprovedPage(p: ScreenProps) {
     documents: 'Источники, загрузка и проверка документов',
     applications: 'Работа с заявками и документами',
     actions: 'Обоснованный план 7 / 30 / 60',
+  };
+  const detailSummaries: Partial<Record<Page, string>> = {
+    banking: 'Показать помесячные показатели, операции и сверку',
+    bfo: 'Показать все периоды и показатели БФО',
+    obligations: 'Показать обязательства, договоры и основания',
+    calendar: 'Показать подробный график платежей',
+    counterparties: 'Показать подробные сведения по контрагентам',
   };
   useEffect(() => {
     if (!hasDetails || inlineCanonical || !location.hash) return;
@@ -612,7 +619,7 @@ export function ApprovedPage(p: ScreenProps) {
         </div>
       </>
     );
-  if (page === 'actions' && !p.details)
+  if (page === 'actions')
     content = (
       <div className="grid two">
         <Card
@@ -668,7 +675,7 @@ export function ApprovedPage(p: ScreenProps) {
     <>
       {page === 'documents' && p.ownedDossier
         ? <details className="pc-credit-recap"><summary>Источники сохранённого банковского анализа</summary>{content}</details>
-        : !(page === 'analysis' && hasDetails) && content}
+        : content}
       {p.details && (inlineCanonical ? (
         <section className="approved-canonical-section" id="approved-source-operations" aria-label={canonicalHeadings[page]}>
           <div className="approved-canonical-heading">
@@ -679,7 +686,7 @@ export function ApprovedPage(p: ScreenProps) {
         </section>
       ) : (
         <details ref={detailsRef} className="details">
-          <summary id="approved-source-operations">Подробности, источники и доступные операции</summary>
+          <summary id="approved-source-operations">{detailSummaries[page] ?? 'Подробные показатели, источники и действия'}</summary>
           {p.details}
         </details>
       ))}

@@ -153,7 +153,7 @@ export default function ClientWorkspace(){
  const currentMatrix=sourcesVisible&&financialDossier?.matrix&&
    (!dossierId||financialDossier.company.id===dossierId)&&(!selected||financialDossier.company.inn===selected.companyInn)&&
    (dossierId||selected)?financialDossier.matrix:null;
- return <DossierMatrixContext.Provider value={currentMatrix}><ClientShell buyerBalances={ownerTestWorkspace&&buyerData?.id===dossierId?buyerData.balances:null} onAddCompany={openCompanyEntry} key={dossierId||selectedId} companies={companies} dossier={dossierId?{id:dossierId,inn:dossierInn}:undefined} selected={selected} analyses={unavailable||error?[]:analyses} model={model} locked={locked||loading||modulesLoading} select={chooseAnalysis} add={addDeal} deals={deals??[]}
+ return <DossierMatrixContext.Provider value={currentMatrix}><ClientShell buyerBalances={ownerTestWorkspace&&buyerData?.id===dossierId?buyerData.balances:null} onAddCompany={openCompanyEntry} key={dossierId||selectedId} companies={companies} dossier={dossierId?{id:dossierId,inn:dossierInn}:undefined} selected={selected} analyses={unavailable||error?[]:analyses} model={model} retry={refresh} locked={locked||loading||modulesLoading} select={chooseAnalysis} add={addDeal} deals={deals??[]}
  renderPage={showApproved} view={view} choose={choose} availableViews={availableViews} context={<div className="pc-company"><b>{companyName}</b><span>{selected?'ИНН '+(model?.basic.analysis.company.inn??selected.companyInn):'Кредитный профиль компании'}{model?' · '+date(model.basic.analysis.period.from)+' — '+date(model.basic.analysis.period.to):''}{locked?' · Режим просмотра':''}</span></div>}>
 
  {(error.startsWith('Сессия завершена')||state.error.startsWith('Сессия завершена')||operationsError.startsWith('Сессия завершена'))&&<p role="alert">Сессия завершена. <a href={'/login?returnTo='+encodeURIComponent(window.location.pathname+window.location.search+window.location.hash)}>Войти снова</a></p>}
@@ -187,7 +187,7 @@ export default function ClientWorkspace(){
  {view==='applications'&&operationsReady&&!operationsError&&<><div className="pc-page-title"><div><h1>Заявки</h1><p>Сохранённые заявки, статусы и переписка</p></div><button disabled={operationsLoading} onClick={()=>void refresh()}>{operationsLoading?'Обновляем…':'Обновить'}</button></div><Crm key={selectedId} readOnly={locked} deals={deals.filter(d=>d.analysisId===selectedId)} analyses={[selected]} selected={selected} addDeal={addDeal} updateDeal={updateDeal}/>{!locked&&<RecipientApplications key={selectedId} analysis={selected} saved={refresh}/>}</>}
  {view==='analyst'&&model&&(model.full?<AiAnalyst key={selectedId} analysisId={selectedId}/>:<FullAccessNotice model={model} retry={refresh} diagnosticMessage={state.diagnostic}/>)}
  </>}</LivePage>
- {view!=='documents'&&(view!=='home'||(model&&companyEntry===0))&&sourcesWidget}
- {showApproved&&model&&(['home','counterparties','obligations'] as string[]).includes(view)&&<ClientAnalyticPipeline key={'pipeline:'+selectedId+':'+view} model={model} scope={view as 'home'|'bfo'|'counterparties'|'obligations'} choose={choose}/>}
+ {view!=='documents'&&view!=='home'&&sourcesWidget}
+ {showApproved&&model&&(['counterparties','obligations'] as string[]).includes(view)&&<ClientAnalyticPipeline key={'pipeline:'+selectedId+':'+view} model={model} scope={view as 'home'|'bfo'|'counterparties'|'obligations'} choose={choose}/>}
  </ClientShell></DossierMatrixContext.Provider>;
 }
